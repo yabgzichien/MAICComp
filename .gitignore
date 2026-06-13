@@ -1,0 +1,69 @@
+# ─── Dependencies ─────────────────────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+
+# ─── Build output / caches ────────────────────────────────────────────────────
+dist/
+build/
+out/
+web-build/
+.next/
+.expo/
+.expo-shared/
+*.tsbuildinfo
+next-env.d.ts
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ─── OS / editor ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+
+# ─── Claude Code workspace & agent memory (private) ───────────────────────────
+.claude/
+
+# ─── Internal design bundles / prototypes ─────────────────────────────────────
+.design/
+
+# ─── Specs, plans, internal handoff & overview docs (not for the public repo) ──
+# (leading **/ so it matches at any depth, e.g. PipComp/docs/superpowers/)
+**/docs/superpowers/
+HANDOFF.md
+handoff.md
+functionality_overview.md
+
+# ─── Raw / sensitive data — NEVER publish (real bank transactions, etc.) ──────
+dataset/
+*.csv
+
+# ─── Scratch notes ────────────────────────────────────────────────────────────
+*.txt
+
+# ─── Documents (statements, test scans, decks) ───────────────────────────────
+*.pdf
+
+# ─── Tests (excluded by request) ──────────────────────────────────────────────
+__tests__/
+*.test.ts
+*.test.tsx
+
+# ─── Environment & secrets (the .env.example template stays committed) ────────
+.env
+.env.*
+!.env.example
+
+# ─── Keys / certificates / deploy ─────────────────────────────────────────────
+*.keystore
+*.jks
+*.p8
+*.p12
+*.key
+*.pem
+*.mobileprovision
+.vercel

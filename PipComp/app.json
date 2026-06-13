@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "Pip",
+    "slug": "pip-expenses-tracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "pip",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#1f8a5b",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.yabg.pipexpensestracker"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Pip needs access to your photos so you can attach a transaction screenshot.",
+          "cameraPermission": "Pip needs the camera so you can snap a receipt to log."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Pip needs the camera to scan your IC or passport for identity verification."
+        }
+      ],
+      "expo-secure-store",
+      "expo-sqlite",
+      "expo-font"
+    ]
+  }
+}

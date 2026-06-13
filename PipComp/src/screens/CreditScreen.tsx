@@ -1,0 +1,231 @@
+// src/screens/CreditScreen.tsx
+import React, { useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
+import { CoinMascot } from '../components/CoinMascot';
+import { FadeIn } from '../components/Motion';
+import { CreditGauge } from '../components/CreditGauge';
+import { Icon } from '../components/Icon';
+import { Card, TopBar } from '../components/ui';
+import { getProvider, llmErrorMessage } from '../llm';
+import { buildCreditPrompt, CREDIT_COACH_SYSTEM_PROMPT } from '../llm/creditPrompt';
+import { configFor, loadSettings } from '../settings/settingsStore';
+import { useCreditProfile } from '../state/useCreditProfile';
+import { colors, numFont, uiFont } from '../theme';
+
+const TICK = colors.accent;
+const CROSS = colors.red;
+
+function verifiedLabel(c: number): string {
+  if (c >= 0.7) return 'Verified';
+  if (c >= 0.4) return 'Partially Verified';
+  return 'Unverified';
+}
+
+function factorColor(score: number): string {
+  if (score >= 70) return colors.accent;
+  if (score >= 50) return colors.amber;
+  return colors.red;
+}
+
+export function CreditScreen({ onBack, onOpenLoans = () => {}, onOpenPassport = () => {} }: { onBack: () => void; onOpenLoans?: () => void; onOpenPassport?: () => void }) {
+  const insets = useSafeAreaInsets();
+  const { score, dataConfidence, coverage } = useCreditProfile();
+  const capped = score.confidenceCapped;
+  const confidence = dataConfidence.confidence;
+
+  const [cachedAdvice, setCachedAdvice] = useState<{ scoreAt: number; text: string } | null>(null);
+  const [adviceBusy, setAdviceBusy] = useState(false);
+  const [adviceErr, setAdviceErr] = useState('');
+  const advice = cachedAdvice?.scoreAt === score.score ? cachedAdvice.text : null;
+
+  const askPip = async (force = false) => {
+    setAdviceErr('');
+    if (!force && cachedAdvice?.scoreAt === score.score) return;
+    setAdviceBusy(true);
+    try {
+      const c = configFor(await loadSettings(), 'general');
+      const text = await getProvider(c.provider).coach({
+        apiKey: c.apiKey,
+        model: c.model,
+        system: CREDIT_COACH_SYSTEM_PROMPT,
+        prompt: buildCreditPrompt(score),
+      });
+      setCachedAdvice({ scoreAt: score.score, text });
+    } catch (e) {
+      setAdviceErr(llmErrorMessage(e));
+    } finally {
+      setAdviceBusy(false);
+    }
+  };
+
+  const avg = Math.round(score.factors.reduce((s, f) => s + f.subScore, 0) / Math.max(score.factors.length, 1));
+  const barColor = confidence >= 0.4 ? colors.accent : colors.red;
+
+  return (
+    <FadeIn style={styles.root}>
+      <View style={{ paddingTop: insets.top + 4 }}>
+        <TopBar
+          title="Credit Profile"
+          onBack={onBack}
+          right={
+            <Pressable onPress={onOpenPassport} style={styles.navIcon} hitSlop={6}>
+              <Icon name="scan" size={18} color={colors.accent} />
+            </Pressable>
+          }
+        />
+      </View>
+
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 24 }} showsVerticalScrollIndicator={false}>
+        {/* Gauge + confidence */}
+        <Card style={styles.gaugeCard}>
+          <View style={{ alignItems: 'center', paddingTop: 6 }}>
+            <CreditGauge score={score.score} band={score.band} size={300} />
+          </View>
+          <View style={styles.confBadge}>
+            <View style={styles.confHead}>
+              <Svg width={19} height={21} viewBox="0 0 19 21" fill="none">
+                <Path d="M9.5 1L1.5 5v6.5C1.5 16 5 19.5 9.5 20c4.5-.5 8-4 8-8.5V5L9.5 1z" fill={colors.accentSoft} stroke={colors.accent} strokeWidth={1.5} strokeLinejoin="round" />
+                <Path d="M6.5 11l2.5 2.5L13 8.5" stroke={colors.accent} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+              <View style={{ flex: 1 }}>
+                <View style={styles.confTitleRow}>
+                  <Text style={styles.confTitle}>{verifiedLabel(confidence)}</Text>
+                  <Text style={styles.confPct}>{Math.round(confidence * 100)}%</Text>
+                </View>
+                <View style={styles.confTrack}>
+                  <View style={{ height: '100%', width: `${Math.round(confidence * 100)}%`, borderRadius: 5, backgroundColor: barColor }} />
+                </View>
+              </View>
+            </View>
+            <Text style={styles.confCaption}>
+              {coverage.daysCovered}/90 days covered. Add more sources to raise confidence.
+            </Text>
+            {capped && (
+              <Text style={styles.cappedNote}>ⓘ Your band is limited by data confidence — verify more to unlock your full score.</Text>
+            )}
+            <View style={{ marginTop: 10, gap: 6 }}>
+              {dataConfidence.reasons.map((r) => (
+                <View key={r.key} style={styles.reasonRow}>
+                  <Icon name={r.ok ? 'check' : 'x'} size={14} color={r.ok ? TICK : CROSS} stroke={2.2} />
+                  <Text style={styles.reasonText}>{r.detail}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        </Card>
+
+        {/* Loans + Passport entry points (kept) */}
+        <Pressable onPress={onOpenLoans} style={({ pressed }) => [{ opacity: pressed ? 0.95 : 1 }]}>
+          <Card style={styles.cta}>
+            <View style={styles.ctaIcon}><Icon name="wallet" size={22} color={colors.accent} /></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.ctaTitle}>Loans</Text>
+              <Text style={styles.ctaSub}>See offers, apply, and track repayments</Text>
+            </View>
+            <Icon name="chevronRight" size={18} color={colors.ink3} />
+          </Card>
+        </Pressable>
+        <Pressable onPress={onOpenPassport} style={({ pressed }) => [{ opacity: pressed ? 0.95 : 1 }]}>
+          <Card style={styles.cta}>
+            <View style={styles.ctaIcon}><Icon name="scan" size={22} color={colors.accent} /></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.ctaTitle}>Credit Passport</Text>
+              <Text style={styles.ctaSub}>Generate a signed credential to share with lenders</Text>
+            </View>
+            <Icon name="chevronRight" size={18} color={colors.ink3} />
+          </Card>
+        </Pressable>
+
+        {/* Factors */}
+        <Card style={styles.factorsCard}>
+          <View style={styles.factorsHead}>
+            <Text style={styles.factorsHeadLabel}>Score Factors · {score.factors.length}</Text>
+            <Text style={styles.factorsHeadAvg}>Avg {avg}/100</Text>
+          </View>
+          {score.factors.map((f, idx) => {
+            const c = factorColor(f.subScore);
+            return (
+              <View key={f.key} style={[styles.factorRow, idx < score.factors.length - 1 && styles.factorDivider]}>
+                <View style={styles.factorLabelRow}>
+                  <Text style={styles.factorLabel}>{f.label}</Text>
+                  <Text style={[styles.factorScore, { color: c }]}>
+                    {Math.round(f.subScore)}
+                    <Text style={styles.factorScoreDenom}>/100</Text>
+                  </Text>
+                </View>
+                <View style={styles.factorTrack}>
+                  <View style={{ height: '100%', width: `${Math.round(f.subScore)}%`, borderRadius: 5, backgroundColor: c }} />
+                </View>
+                <Text style={styles.factorEvidence}>{f.evidence}</Text>
+                <Text style={styles.factorExplanation}>{f.explanation}</Text>
+              </View>
+            );
+          })}
+        </Card>
+      </ScrollView>
+
+      {/* Ask Pip bar (live coach) */}
+      <View style={[styles.askBar, { paddingBottom: insets.bottom + 12 }]}>
+        <CoinMascot size={40} float />
+        <View style={{ flex: 1 }}>
+          {advice ? (
+            <Text style={styles.askAdvice} numberOfLines={3}>{advice}</Text>
+          ) : (
+            <>
+              <Text style={styles.askTitle}>Ask Pip for personalised advice</Text>
+              <Text style={styles.askSub}>{adviceErr ? adviceErr : 'Powered by your real financial data'}</Text>
+            </>
+          )}
+        </View>
+        <Pressable onPress={() => askPip(!!advice)} style={styles.askBtn} disabled={adviceBusy}>
+          {adviceBusy ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.askBtnText}>{advice ? 'Refresh' : 'Get a tip'}</Text>}
+        </Pressable>
+      </View>
+    </FadeIn>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.bg },
+  navIcon: { width: 36, height: 36, borderRadius: 999, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+
+  gaugeCard: { borderRadius: 26, padding: 0, paddingTop: 18, overflow: 'hidden' },
+  confBadge: { margin: 16, marginTop: 8, borderRadius: 16, backgroundColor: colors.accentSoft, padding: 14 },
+  confHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  confTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  confTitle: { fontFamily: uiFont(700), fontSize: 13, color: colors.accentInk },
+  confPct: { fontFamily: numFont(700), fontSize: 13, color: colors.accent },
+  confTrack: { height: 5, borderRadius: 5, backgroundColor: 'rgba(20,40,30,0.10)', overflow: 'hidden' },
+  confCaption: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, marginTop: 9, lineHeight: 16 },
+  cappedNote: { fontFamily: uiFont(600), fontSize: 11.5, color: '#a05c00', marginTop: 8, lineHeight: 16 },
+  reasonRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  reasonText: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, flex: 1 },
+
+  cta: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, marginTop: 12 },
+  ctaIcon: { width: 46, height: 46, borderRadius: 14, backgroundColor: colors.accentTint, alignItems: 'center', justifyContent: 'center' },
+  ctaTitle: { fontFamily: uiFont(700), fontSize: 15, color: colors.ink },
+  ctaSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink3, marginTop: 1 },
+
+  factorsCard: { marginTop: 12, paddingHorizontal: 18, paddingBottom: 8, overflow: 'hidden' },
+  factorsHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: colors.line },
+  factorsHeadLabel: { fontFamily: uiFont(600), fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: colors.ink3 },
+  factorsHeadAvg: { fontFamily: numFont(600), fontSize: 12, color: colors.ink3 },
+  factorRow: { paddingVertical: 11 },
+  factorDivider: { borderBottomWidth: 1, borderBottomColor: colors.line },
+  factorLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 },
+  factorLabel: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink, flex: 1, marginRight: 8 },
+  factorScore: { fontFamily: numFont(700), fontSize: 12.5 },
+  factorScoreDenom: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink3 },
+  factorTrack: { height: 5, borderRadius: 5, backgroundColor: colors.line, overflow: 'hidden', marginBottom: 5 },
+  factorEvidence: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, lineHeight: 16 },
+  factorExplanation: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, marginTop: 2, lineHeight: 16 },
+
+  askBar: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.line, paddingHorizontal: 16, paddingTop: 12 },
+  askTitle: { fontFamily: uiFont(700), fontSize: 13, color: colors.accentInk, marginBottom: 1 },
+  askSub: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink3 },
+  askAdvice: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink, lineHeight: 17 },
+  askBtn: { backgroundColor: colors.accent, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 9, minWidth: 76, alignItems: 'center', justifyContent: 'center' },
+  askBtnText: { fontFamily: uiFont(700), fontSize: 12, color: colors.onAccent },
+});
