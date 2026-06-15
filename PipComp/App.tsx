@@ -35,6 +35,7 @@ import { RecapScreen } from './src/screens/RecapScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { AccentProvider } from './src/state/accent';
 import { AppDataProvider, useAppData } from './src/state/store';
+import { useNow } from './src/state/useNow';
 import { colors, uiFont } from './src/theme';
 
 type Screen = 'home' | 'add' | 'settings' | 'categories' | 'transactions' | 'breakdown' | 'budget' | 'recap' | 'networth' | 'credit' | 'loans' | 'passport' | 'lender' | 'kyc';
@@ -76,7 +77,7 @@ function PhoneFrame({ children }: { children: React.ReactNode }) {
       <View style={webStyles.phone}>
         <View style={webStyles.statusBar} pointerEvents="none">
           <View style={webStyles.statusRow}>
-            <Text style={webStyles.clock}>9:41</Text>
+            <StatusClock />
             <View style={webStyles.rightIcons}>
               {/* cellular signal */}
               <View style={webStyles.signal}>
@@ -105,6 +106,14 @@ function PhoneFrame({ children }: { children: React.ReactNode }) {
       </View>
     </View>
   );
+}
+
+/** Live status-bar clock for the web phone-frame (24h H:MM, ticks each minute). */
+function StatusClock() {
+  const now = useNow(30_000);
+  const hh = now.getHours();
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  return <Text style={webStyles.clock}>{`${hh}:${mm}`}</Text>;
 }
 
 function Root({ fontsLoaded }: { fontsLoaded: boolean }) {

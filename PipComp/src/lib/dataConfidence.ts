@@ -1,6 +1,6 @@
 // src/lib/dataConfidence.ts
 // Pure, deterministic data-authenticity scoring. No UI/DB imports — unit-tested.
-import type { TxnSource } from './types';
+import type { TxnSource, TxnType } from './types';
 import { extractFraudFeatures } from './fraudFeatures';
 import { scoreFraud } from './fraudModel';
 
@@ -18,6 +18,15 @@ export interface ConfidenceTxn {
   source: TxnSource;
   merchantKey?: string;
   date?: string | null;
+  /** income vs expense — required for the asymmetric-fraud integrity rings (Section 4 of the
+   *  confidence-hardening plan). Optional for back-compat: when absent on every row the rings
+   *  are inert and confidence is computed exactly as before. */
+  type?: TxnType;
+  /** Raw payer/merchant string, used by the merchant-to-income entity-alignment check. */
+  merchantRaw?: string;
+  /** Running-account balance after this row, when the source document carries one. Drives the
+   *  ledger reconciliation ring; inert (no balance) for screenshots and manual entry. */
+  balance?: number | null;
 }
 
 export interface ConfidenceReason {
@@ -29,6 +38,9 @@ export interface ConfidenceReason {
 export interface DataConfidence {
   confidence: number; // 0..1
   reasons: ConfidenceReason[];
+  /** True when a structural income-integrity check failed badly enough that the downstream
+   *  loans engine should DECLINE outright (not merely REFER). Optional/false by default. */
+  integrityFloorBreached?: boolean;
 }
 
 const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
@@ -78,6 +90,273 @@ function duplicateRatio(txns: ConfidenceTxn[]): number {
     if (c > 1) dups++;
   }
   return dups / txns.length;
+}
+
+// ── Asymmetric-fraud integrity rings ──────────────────────────────────────────
+// These attack the income stream specifically — row-by-row and by provenance — the axes
+// the global aggregates above ignore. A fraudster who leaves 90% of genuine transactions
+// intact and injects a few fabricated high-income rows barely moves Benford / round / dup /
+// entropy / CV, but those few rows are loud here. See docs/confidence-hardening.md.
+
+const VERIFIED_SOURCES: ReadonlySet<TxnSource> = new Set(['extracted', 'imported', 'verified']);
+
+/** Payer strings that identify a real commercial/statutory income source (registered company
+ *  suffixes, payment gateways, platform payouts, payroll/statutory markers, government). */
+const VERIFIED_PAYER_TOKENS = [
+  'sdn bhd', 'berhad', ' bhd', ' plt', 'enterprise', 'holdings', 'corporation', ' corp', ' inc',
+  'payroll', 'salary', 'gaji', 'wages', 'kwsp', 'epf', 'socso', 'perkeso', 'lhdn',
+  'stripe', 'ipay88', 'billplz', 'senangpay', 'toyyibpay', 'molpay',
+  'grab', 'shopee', 'foodpanda', 'lazada', 'government', 'kerajaan', 'jabatan', 'kementerian',
+];
+
+/** Payer strings that mark an undocumented peer-to-peer transfer masquerading as income. */
+const GENERIC_PAYER_TOKENS = [
+  'duitnow', 'funds transfer', 'fund transfer', 'instant transfer', 'ibg', 'interbank',
+  '3rd party', 'third party', 'transfer from', 'cash deposit',
+];
+
+/** Below 0.40 the loans engine cannot auto-approve (its MIN_CONFIDENCE_TO_APPROVE is 0.50),
+ *  so capping here forces a REFER through machinery that already exists. */
+const HARD_CAP_CEILING = 0.39;
+const MIN_INCOME_FOR_MAD = 5;
+const MIN_INCOME_MONTHS = 3;
+
+function median(xs: number[]): number {
+  if (xs.length === 0) return 0;
+  const s = [...xs].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+/** Median absolute deviation — robust to the very outlier we are hunting (unlike σ, which the
+ *  outlier itself inflates, hiding the fraud behind a threshold it then clears). */
+function mad(xs: number[], med: number): number {
+  if (xs.length === 0) return 0;
+  return median(xs.map((x) => Math.abs(x - med)));
+}
+
+/** True when an income row's payer cannot be matched to a verified commercial source. A blank
+ *  string or a bare personal name is treated as generic — we cannot verify it as a real payer. */
+export function isGenericIncomePayer(t: ConfidenceTxn): boolean {
+  const raw = (t.merchantRaw ?? t.merchantKey ?? '').toLowerCase().trim();
+  if (raw === '') return true;
+  if (VERIFIED_PAYER_TOKENS.some((tok) => raw.includes(tok))) return false;
+  if (GENERIC_PAYER_TOKENS.some((tok) => raw.includes(tok))) return true;
+  return true;
+}
+
+/**
+ * Ring 1.1 — running-balance reconciliation. For rows that carry a balance and a date, the
+ * ledger must satisfy balance[t] = balance[t-1] + signedAmount[t] (income +, expense −). A pair
+ * that violates this (beyond a rounding tolerance) is a "discontinuous step-function" — the
+ * fingerprint of a row pasted in without recomputing surrounding balances. Income-coincident
+ * breaks are the injected-salary signature. Inert when no balances are present.
+ */
+export function reconcileBalances(txns: ConfidenceTxn[]): {
+  breaks: number;
+  incomeCoincidentBreaks: number;
+  reconcilablePairs: number;
+} {
+  const rows = txns
+    .map((t, i) => ({ t, i }))
+    .filter(({ t }) => typeof t.balance === 'number' && !!t.date && (t.type === 'income' || t.type === 'expense'))
+    .sort((a, b) => (a.t.date! < b.t.date! ? -1 : a.t.date! > b.t.date! ? 1 : a.i - b.i));
+
+  let breaks = 0;
+  let incomeCoincidentBreaks = 0;
+  let pairs = 0;
+  for (let k = 1; k < rows.length; k++) {
+    const prev = rows[k - 1].t;
+    const cur = rows[k].t;
+    const signed = cur.type === 'income' ? cur.amount : -cur.amount;
+    const expected = (prev.balance as number) + signed;
+    const tol = Math.max(0.01, Math.abs(cur.balance as number) * 0.001);
+    pairs++;
+    if (Math.abs((cur.balance as number) - expected) > tol) {
+      breaks++;
+      if (cur.type === 'income') incomeCoincidentBreaks++;
+    }
+  }
+  return { breaks, incomeCoincidentBreaks, reconcilablePairs: pairs };
+}
+
+/**
+ * Ring 1.2 — robust income point-anomaly. Modified z-score (Iglewicz–Hoaglin) of each income
+ * amount against the income stream's own median/MAD. Returns the worst score and whether that
+ * outlier row also entered through a weak door (manual source or a generic/undocumented payer).
+ */
+export function incomePointAnomaly(txns: ConfidenceTxn[]): { maxModZ: number; weakSource: boolean } {
+  const income = txns.filter((t) => t.type === 'income' && t.amount > 0);
+  if (income.length < MIN_INCOME_FOR_MAD) return { maxModZ: 0, weakSource: false };
+  const amounts = income.map((t) => Math.abs(t.amount));
+  const med = median(amounts);
+  const md = mad(amounts, med);
+  if (md === 0) return { maxModZ: 0, weakSource: false };
+
+  let maxModZ = 0;
+  let argmax: ConfidenceTxn | null = null;
+  for (const t of income) {
+    const z = (0.6745 * (Math.abs(t.amount) - med)) / md;
+    if (z > maxModZ) {
+      maxModZ = z;
+      argmax = t;
+    }
+  }
+  const weakSource = !!argmax && (argmax.source === 'manual' || isGenericIncomePayer(argmax));
+  return { maxModZ, weakSource };
+}
+
+/** Ring 2.2 — share of income *value* from generic/undocumented payers (0..1). */
+export function p2pIncomeValueRatio(txns: ConfidenceTxn[]): number {
+  const income = txns.filter((t) => t.type === 'income' && t.amount > 0);
+  const total = income.reduce((s, t) => s + t.amount, 0);
+  if (total <= 0) return 0;
+  const generic = income.filter(isGenericIncomePayer).reduce((s, t) => s + t.amount, 0);
+  return clamp(generic / total, 0, 1);
+}
+
+/**
+ * Ring 2.1 — income-to-expense skew. Flags a month whose income spikes past 2.5× its peers'
+ * median while spending stays flat (real income growth comes with some spending response).
+ */
+export function incomeMonthlySkew(txns: ConfidenceTxn[]): boolean {
+  const byMonth = new Map<string, { inc: number; exp: number }>();
+  for (const t of txns) {
+    if (!t.date || t.date.length < 7) continue;
+    const mk = t.date.slice(0, 7);
+    const cell = byMonth.get(mk) ?? { inc: 0, exp: 0 };
+    if (t.type === 'income') cell.inc += t.amount;
+    else if (t.type === 'expense') cell.exp += t.amount;
+    byMonth.set(mk, cell);
+  }
+  const incMonths = [...byMonth.values()].filter((m) => m.inc > 0);
+  if (incMonths.length < MIN_INCOME_MONTHS) return false;
+
+  let peak = incMonths[0];
+  for (const m of incMonths) if (m.inc > peak.inc) peak = m;
+  const others = incMonths.filter((m) => m !== peak);
+  if (others.length === 0) return false;
+
+  const medInc = median(others.map((m) => m.inc));
+  const medExp = median(others.map((m) => m.exp));
+  if (medInc <= 0) return false;
+  const incomeSpike = peak.inc > 2.5 * medInc;
+  const expenseFlat = peak.exp <= 1.2 * Math.max(medExp, 1);
+  return incomeSpike && expenseFlat;
+}
+
+/**
+ * Ring 3.1 — source isolation gap. The verified-pipeline share of expense *value* minus that of
+ * income *value*. Large when the cheap-to-fake healthy points (expenses) are authentically
+ * captured but the valuable income leans on the weakest manual pipeline.
+ */
+export function sourceIsolationGap(txns: ConfidenceTxn[]): number {
+  const income = txns.filter((t) => t.type === 'income' && t.amount > 0);
+  const expense = txns.filter((t) => t.type === 'expense' && t.amount > 0);
+  const incTotal = income.reduce((s, t) => s + t.amount, 0);
+  const expTotal = expense.reduce((s, t) => s + t.amount, 0);
+  if (incTotal <= 0 || expTotal <= 0) return 0;
+  const incVer = income.filter((t) => VERIFIED_SOURCES.has(t.source)).reduce((s, t) => s + t.amount, 0) / incTotal;
+  const expVer = expense.filter((t) => VERIFIED_SOURCES.has(t.source)).reduce((s, t) => s + t.amount, 0) / expTotal;
+  return clamp(expVer - incVer, -1, 1);
+}
+
+export interface IncomeIntegrity {
+  penalty: number; // multiplicative soft penalty 0..0.6
+  hardCap: boolean; // cap confidence at HARD_CAP_CEILING (forces REFER)
+  floorBreached: boolean; // forces DECLINE downstream
+  reasons: ConfidenceReason[];
+}
+
+/**
+ * Ring 3.2 — orchestrate the rings into a soft penalty, a hard cap, and a DECLINE floor.
+ * Soft penalties dampen; a single hard condition caps to REFER; two or more (or a broken income
+ * balance chain) breach the floor → DECLINE. Pure and deterministic.
+ */
+export function assessIncomeIntegrity(txns: ConfidenceTxn[]): IncomeIntegrity {
+  const reasons: ConfidenceReason[] = [];
+  let penalty = 0;
+  let hardConditions = 0;
+  let floorBreached = false;
+
+  // Ring 1.1 — running-balance reconciliation
+  const recon = reconcileBalances(txns);
+  if (recon.reconcilablePairs > 0) {
+    if (recon.incomeCoincidentBreaks > 0) {
+      hardConditions++;
+      floorBreached = true;
+      reasons.push({
+        key: 'integrity_balance',
+        ok: false,
+        detail: `running balance fails to reconcile on ${recon.incomeCoincidentBreaks} income row(s)`,
+      });
+    } else if (recon.breaks > 0) {
+      penalty += 0.15;
+      reasons.push({ key: 'integrity_balance', ok: false, detail: `${recon.breaks} running-balance mismatch(es)` });
+    } else {
+      reasons.push({ key: 'integrity_balance', ok: true, detail: 'running balance reconciles' });
+    }
+  }
+
+  // Ring 1.2 — robust income point-anomaly
+  const anom = incomePointAnomaly(txns);
+  if (anom.maxModZ > 3.5) {
+    if (anom.weakSource) {
+      hardConditions++;
+      reasons.push({
+        key: 'integrity_income_outlier',
+        ok: false,
+        detail: `isolated high income (${anom.maxModZ.toFixed(1)} MAD) from a weak/undocumented source`,
+      });
+    } else {
+      penalty += 0.2;
+      reasons.push({ key: 'integrity_income_outlier', ok: false, detail: `isolated high income (${anom.maxModZ.toFixed(1)} MAD)` });
+    }
+  }
+
+  // Ring 2.2 — merchant-to-income entity alignment
+  const p2p = p2pIncomeValueRatio(txns);
+  if (p2p > 0.5) {
+    penalty += clamp((p2p - 0.5) / 0.5, 0, 1) * 0.2;
+    reasons.push({
+      key: 'integrity_income_payer',
+      ok: false,
+      detail: `${Math.round(p2p * 100)}% of income from generic/undocumented payers`,
+    });
+  }
+
+  // Ring 2.1 — income-to-expense skew
+  if (incomeMonthlySkew(txns)) {
+    penalty += 0.15;
+    reasons.push({ key: 'integrity_income_skew', ok: false, detail: 'an income spike is not mirrored by any spending response' });
+  }
+
+  // Ring 3.1 — source isolation
+  const iso = sourceIsolationGap(txns);
+  if (iso > 0.6) {
+    hardConditions++;
+    reasons.push({
+      key: 'integrity_source_isolation',
+      ok: false,
+      detail: `income relies on much weaker pipelines than expenses (gap ${Math.round(iso * 100)}%)`,
+    });
+  } else if (iso > 0.4) {
+    penalty += clamp((iso - 0.4) / 0.2, 0, 1) * 0.2;
+    reasons.push({
+      key: 'integrity_source_isolation',
+      ok: false,
+      detail: `income relies on weaker pipelines than expenses (gap ${Math.round(iso * 100)}%)`,
+    });
+  }
+
+  if (hardConditions >= 2) floorBreached = true;
+
+  return {
+    penalty: clamp(penalty, 0, 0.6),
+    hardCap: hardConditions > 0 || floorBreached,
+    floorBreached,
+    reasons,
+  };
 }
 
 /**
@@ -135,7 +414,19 @@ export function computeDataConfidence(
   const plausibility = clamp(expRatio / PLAUSIBLE_EXPENSE_FLOOR, 0, 1);
   const plausibilityPenalty = plausibilityProvided ? (1 - plausibility) * 0.25 : 0;
 
-  const confidence = clamp(heuristicConfidence * (1 - mlPenalty) * (1 - plausibilityPenalty), 0, 1);
+  // Asymmetric-fraud integrity rings — inert (no penalty, no reasons) unless rows carry `type`,
+  // so back-compat callers behave exactly as before.
+  const hasTypeData = txns.some((t) => t.type === 'income' || t.type === 'expense');
+  const integrity: IncomeIntegrity = hasTypeData
+    ? assessIncomeIntegrity(txns)
+    : { penalty: 0, hardCap: false, floorBreached: false, reasons: [] };
+
+  let confidence = clamp(
+    heuristicConfidence * (1 - mlPenalty) * (1 - plausibilityPenalty) * (1 - integrity.penalty),
+    0,
+    1
+  );
+  if (integrity.hardCap) confidence = Math.min(confidence, HARD_CAP_CEILING);
 
   const reasons: ConfidenceReason[] = [
     { key: 'provenance', ok: trust >= 0.7, detail: `source trust ${Math.round(trust * 100)}%` },
@@ -167,6 +458,9 @@ export function computeDataConfidence(
     });
   }
 
+  // Integrity-ring reasons (only present when type-bearing rows exist).
+  reasons.push(...integrity.reasons);
+
   // Append top 2 ML fraud contributions as reasons (only when enough data)
   if (txns.length >= 10) {
     const top2 = fraudScore.contributions.slice(0, 2);
@@ -179,5 +473,5 @@ export function computeDataConfidence(
     }
   }
 
-  return { confidence, reasons };
+  return { confidence, reasons, integrityFloorBreached: integrity.floorBreached };
 }

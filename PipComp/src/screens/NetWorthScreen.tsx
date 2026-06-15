@@ -1,13 +1,13 @@
 // src/screens/NetWorthScreen.tsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import Svg, { Polyline } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, type IconName } from '../components/Icon';
 import { HoldingScanScreen } from './HoldingScanScreen';
 import { ScanBalanceButton } from '../components/ScanBalanceButton';
 import { TickerSearchModal } from '../components/TickerSearchModal';
-import { Amount, BtnLabel, Card, Eyebrow, PrimaryButton, TopBar, ValueToggle, type ValueMode } from '../components/ui';
+import { BtnLabel, Card, Eyebrow, PrimaryButton, type ValueMode } from '../components/ui';
 import { shortDate } from '../lib/dates';
 import { fmt } from '../lib/format';
 import {
@@ -18,7 +18,7 @@ import {
   netWorthSeries,
   type ClassGroup,
 } from '../lib/networth';
-import { groupHoldings, holdingProfit, isHolding, subFromType, typeFromSub, type TickerResult } from '../lib/prices';
+import { groupHoldings, holdingProfit, isHolding, subFromType, toQuantityUnitPrice, typeFromSub, type HoldingGroup, type TickerResult } from '../lib/prices';
 import { todayISO } from '../lib/duplicates';
 import { searchInvestments } from '../prices';
 import type { Account, AccountKind, PriceQuote } from '../lib/types';
@@ -33,6 +33,15 @@ function timeOf(iso: string | null): string {
 }
 
 const RED = '#c5402f';
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const fmtPx = (n: number): string => (n >= 1000 ? fmt(n) : String(Math.round(n * 100) / 100));
+
+/** Ticker badge style + label by holding sub-type (and Bursa vs US for stocks). */
+function badgeFor(sub: string, symbol: string): { bg: string; clr: string; lbl: string } {
+  if (sub === 'crypto') return { bg: '#f0f0ff', clr: '#4a4ad8', lbl: 'Crypto' };
+  if (sub === 'commodity') return { bg: '#fdf6e8', clr: '#7a6200', lbl: 'Gold' };
+  return symbol.endsWith('.KL') ? { bg: '#eff7f4', clr: '#1c6b48', lbl: 'BM' } : { bg: '#fff8ee', clr: '#b86a00', lbl: 'US' };
+}
 
 function lastMonths(n: number): string[] {
   const out: string[] = [];
@@ -86,6 +95,9 @@ export function NetWorthScreen({ onBack, onOpenSettings = () => {} }: { onBack: 
   );
 
   const empty = accounts.length === 0;
+  const monthShorts = useMemo(() => lastMonths(6).map((k) => MONTHS_SHORT[parseInt(k.slice(5, 7), 10) - 1]), []);
+  const delta = series.length >= 2 ? nw.net - series[series.length - 2] : null;
+  const prevMonth = monthShorts[monthShorts.length - 2] ?? '';
 
   // Safe to branch here — all hooks above have run unconditionally.
   if (scanning) {
@@ -94,81 +106,67 @@ export function NetWorthScreen({ onBack, onOpenSettings = () => {} }: { onBack: 
 
   return (
     <View style={styles.root}>
-      <View style={{ paddingTop: insets.top + 4 }}>
-        <TopBar
-          title="Net worth"
-          onBack={onBack}
-          right={
-            <Pressable onPress={() => setScanning(true)} hitSlop={8} style={styles.scanBtn}>
-              <Icon name="scan" size={18} color={colors.accent} />
-              <Text style={styles.scanText}>Scan</Text>
-            </Pressable>
-          }
-        />
+      {/* Nav */}
+      <View style={[styles.nav, { paddingTop: insets.top + 6 }]}>
+        <Pressable onPress={onBack} style={styles.navBtn} hitSlop={6}>
+          <Icon name="chevronLeft" size={18} color={colors.ink2} />
+        </Pressable>
+        <Text style={styles.navTitle}>Net Worth</Text>
+        <View style={styles.navBtn} />
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: 18, paddingBottom: insets.bottom + 100 }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           hasHoldings ? <RefreshControl refreshing={refreshing} onRefresh={doRefresh} tintColor={colors.accent} /> : undefined
         }
       >
-        {/* hero */}
-        <Card style={styles.hero}>
-          <View style={styles.heroHead}>
-            <Eyebrow>Net worth</Eyebrow>
-            {hasHoldings && (
-              <View style={styles.profitToggle}>
-                <Text style={styles.profitToggleLabel}>Profit</Text>
-                <ValueToggle mode={profitMode} onChange={setProfitMode} />
-              </View>
-            )}
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 8 }}>
-            <Text style={[styles.heroSign, { color: nw.net >= 0 ? colors.accent : RED }]}>{nw.net < 0 ? '−' : ''}</Text>
-            <Amount value={Math.abs(nw.net)} size={40} weight={700} color={nw.net >= 0 ? colors.accent : RED} />
-          </View>
-          {series.length >= 2 && (
-            <View style={{ marginTop: 12 }}>
-              <Sparkline values={series} color={nw.net >= 0 ? colors.accent : RED} />
-              <Text style={styles.sparkLabel}>Last 6 months</Text>
-            </View>
-          )}
-          <View style={styles.splitRow}>
-            <View>
-              <Text style={styles.splitLabel}>Assets</Text>
-              <Text style={[styles.splitVal, { color: colors.accent }]}>RM {fmt(nw.assets)}</Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.splitLabel}>Liabilities</Text>
-              <Text style={[styles.splitVal, { color: RED }]}>RM {fmt(nw.liabilities)}</Text>
-            </View>
-          </View>
-        </Card>
+        <HeroCard nw={nw} series={series} months={monthShorts} delta={delta} prevMonth={prevMonth} mode={profitMode} setMode={setProfitMode} />
+        <ScanRow onScan={() => setScanning(true)} onAdd={() => { setPresetCoin(null); setAdding(true); }} />
 
         {empty && (
-          <Card style={{ padding: 22, alignItems: 'center', marginTop: 16 }}>
+          <Card style={{ padding: 22, alignItems: 'center', margin: 16 }}>
             <Icon name="scale" size={40} color={colors.accent} />
             <Text style={styles.emptyTitle}>Track what you own and owe</Text>
             <Text style={styles.emptySub}>Add cash, investments, and loans to see your net worth grow over time.</Text>
           </Card>
         )}
 
-        <ClassSections title="Assets" groups={groups.assets} accountValues={accountValues} profitMode={profitMode} onTap={setEditingId} onTapGroup={setGroupSymbol} />
-        <ClassSections title="Liabilities" groups={groups.liabilities} accountValues={accountValues} profitMode={profitMode} onTap={setEditingId} onTapGroup={setGroupSymbol} />
+        {/* Assets */}
+        {groups.assets.length > 0 && <GroupHeader label="Assets" total={nw.assets} color={colors.accent} />}
+        {groups.assets.map((g) => (
+          <AssetClassCard
+            key={g.cls}
+            g={g}
+            accountValues={accountValues}
+            prices={prices}
+            pricesAsOf={pricesAsOf}
+            profitMode={profitMode}
+            refreshing={refreshing}
+            onRefresh={doRefresh}
+            onTapManual={setEditingId}
+            onTapGroup={setGroupSymbol}
+          />
+        ))}
 
-        {hasHoldings && pricesAsOf && (
-          <Text style={styles.asOf}>Prices as of {timeOf(pricesAsOf)} · pull to refresh</Text>
+        {/* Liabilities */}
+        {groups.liabilities.length > 0 && <GroupHeader label="Liabilities" total={nw.liabilities} color={colors.red} />}
+        {groups.liabilities.length > 0 && (
+          <View style={styles.classCard}>
+            {flattenLiabs(groups.liabilities).map((row, i, arr) => (
+              <LiabilityRowD
+                key={row.account.id}
+                name={row.account.name}
+                cls={row.clsLabel}
+                value={row.value}
+                isLast={i === arr.length - 1}
+                onPress={() => setEditingId(row.account.id)}
+              />
+            ))}
+          </View>
         )}
       </ScrollView>
-
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-        <PrimaryButton onPress={() => { setPresetCoin(null); setAdding(true); }} height={54}>
-          <Icon name="plus" size={20} color="#fff" stroke={2.4} />
-          <BtnLabel>Add account</BtnLabel>
-        </PrimaryButton>
-      </View>
 
       <AddAccountModal visible={adding} preset={presetCoin} onClose={() => { setAdding(false); setPresetCoin(null); }} />
       <AccountSheet account={editing} onClose={() => setEditingId(null)} />
@@ -185,22 +183,320 @@ export function NetWorthScreen({ onBack, onOpenSettings = () => {} }: { onBack: 
   );
 }
 
-function Sparkline({ values, color }: { values: number[]; color: string }) {
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = max - min || 1;
-  const pts = values
-    .map((v, i) => {
-      const x = (i / (values.length - 1)) * 100;
-      const y = 34 - ((v - min) / span) * 28;
-      return `${x.toFixed(2)},${y.toFixed(2)}`;
-    })
-    .join(' ');
+// ── Gradient hero ───────────────────────────────────────────────────────────
+function HeroCard({
+  nw,
+  series,
+  months,
+  delta,
+  prevMonth,
+  mode,
+  setMode,
+}: {
+  nw: { net: number; assets: number; liabilities: number };
+  series: number[];
+  months: string[];
+  delta: number | null;
+  prevMonth: string;
+  mode: ValueMode;
+  setMode: (m: ValueMode) => void;
+}) {
+  const deltaUp = (delta ?? 0) >= 0;
   return (
-    <Svg width="100%" height={40} viewBox="0 0 100 38" preserveAspectRatio="none">
-      <Polyline points={pts} fill="none" stroke={color} strokeWidth={1.6} strokeLinejoin="round" strokeLinecap="round" />
+    <View style={styles.hero}>
+      {/* gradient fill */}
+      <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+        <Defs>
+          <LinearGradient id="nwHero" x1="0" y1="0" x2="0.7" y2="1">
+            <Stop offset="0" stopColor="#25845e" />
+            <Stop offset="0.52" stopColor="#1b6b48" />
+            <Stop offset="1" stopColor="#0e3d27" />
+          </LinearGradient>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="100%" fill="url(#nwHero)" />
+      </Svg>
+      <View style={styles.heroCircle} pointerEvents="none" />
+
+      <View style={styles.heroHead}>
+        <Text style={styles.heroLabel}>Net Worth · 6-month</Text>
+        <View style={styles.heroToggle}>
+          {(['amount', 'percent'] as ValueMode[]).map((m) => {
+            const on = mode === m;
+            return (
+              <Pressable key={m} onPress={() => setMode(m)} style={[styles.heroToggleBtn, on && styles.heroToggleBtnOn]}>
+                <Text style={[styles.heroToggleText, on && styles.heroToggleTextOn]}>{m === 'amount' ? 'RM' : '%'}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: 9 }}>
+        <Text style={styles.heroSign}>{nw.net < 0 ? '−' : ''}</Text>
+        <Text style={styles.heroNum}>RM {fmt(Math.abs(nw.net))}</Text>
+      </View>
+
+      {delta !== null && (
+        <View style={styles.deltaChip}>
+          <Svg width={10} height={10} viewBox="0 0 12 12" fill="none">
+            <Path
+              d={deltaUp ? 'M6 10V2M6 2L3 5M6 2L9 5' : 'M6 2v8M6 10L3 7M6 10L9 7'}
+              stroke="#42e893"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </Svg>
+          <Text style={styles.deltaText}>
+            {deltaUp ? '+' : '−'}RM {fmt(Math.abs(delta))} vs {prevMonth}
+          </Text>
+        </View>
+      )}
+
+      <View style={styles.heroTiles}>
+        <View style={styles.heroTile}>
+          <Text style={styles.heroTileLabel}>Total assets</Text>
+          <Text style={[styles.heroTileVal, { color: '#42e893' }]}>RM {fmt(nw.assets)}</Text>
+        </View>
+        <View style={styles.heroTile}>
+          <Text style={styles.heroTileLabel}>Total liabilities</Text>
+          <Text style={[styles.heroTileVal, { color: '#ff8a80' }]}>RM {fmt(nw.liabilities)}</Text>
+        </View>
+      </View>
+
+      {series.length >= 2 && (
+        <>
+          <HeroSparkline values={series} />
+          <View style={{ flexDirection: 'row', marginTop: 5 }}>
+            {months.map((m, i) => (
+              <Text key={i} style={styles.heroMonth}>{m}</Text>
+            ))}
+          </View>
+        </>
+      )}
+    </View>
+  );
+}
+
+function HeroSparkline({ values }: { values: number[] }) {
+  const W = 320;
+  const H = 50;
+  const pd = 6;
+  const mn = Math.min(...values);
+  const mx = Math.max(...values);
+  const rng = mx - mn || 1;
+  const pts = values.map((v, i) => [pd + (i / (values.length - 1)) * (W - pd * 2), pd + (1 - (v - mn) / rng) * (H - pd * 2)]);
+  const line = pts.map((p, i) => `${i ? 'L' : 'M'} ${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
+  const last = pts[pts.length - 1];
+  const area = `${line} L ${last[0].toFixed(1)} ${H} L ${pts[0][0].toFixed(1)} ${H} Z`;
+  return (
+    <Svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+      <Defs>
+        <LinearGradient id="nwSpk" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0" stopColor="rgba(255,255,255,0.30)" />
+          <Stop offset="1" stopColor="rgba(255,255,255,0)" />
+        </LinearGradient>
+      </Defs>
+      <Path d={area} fill="url(#nwSpk)" />
+      <Path d={line} fill="none" stroke="rgba(255,255,255,0.82)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <Circle cx={last[0]} cy={last[1]} r={4} fill="white" />
     </Svg>
   );
+}
+
+// ── Scan / add row ──────────────────────────────────────────────────────────
+function ScanRow({ onScan, onAdd }: { onScan: () => void; onAdd: () => void }) {
+  return (
+    <View style={styles.scanRow}>
+      <Pressable onPress={onScan} style={styles.scanBanner}>
+        <View style={styles.scanIcon}>
+          <Icon name="scan" size={16} color="#fff" />
+        </View>
+        <View>
+          <Text style={styles.scanTitle}>Scan Balance</Text>
+          <Text style={styles.scanSub}>AI reads your bank screenshot</Text>
+        </View>
+      </Pressable>
+      <Pressable onPress={onAdd} style={styles.addBtn}>
+        <Icon name="plus" size={18} color={colors.accent} stroke={2.4} />
+      </Pressable>
+    </View>
+  );
+}
+
+// ── Group / class labels ────────────────────────────────────────────────────
+function GroupHeader({ label, total, color }: { label: string; total: number; color: string }) {
+  return (
+    <View style={styles.groupHead}>
+      <Text style={styles.groupLabel}>{label}</Text>
+      <Text style={[styles.groupTotal, { color }]}>RM {fmt(total)}</Text>
+    </View>
+  );
+}
+
+function ClassChip({ label, sub }: { label: string; sub: string }) {
+  return (
+    <View style={styles.classChipRow}>
+      <Text style={styles.classChipLabel}>{label}</Text>
+      <Text style={styles.classChipSub}>{sub}</Text>
+    </View>
+  );
+}
+
+function PriceStamp({ asOf, refreshing, onRefresh }: { asOf: string | null; refreshing: boolean; onRefresh: () => void }) {
+  return (
+    <View style={styles.priceStamp}>
+      <View style={styles.liveDot} />
+      <Text style={styles.priceStampText}>Prices as of {timeOf(asOf) || '—'} today</Text>
+      <Pressable onPress={onRefresh} style={styles.refreshBtn} hitSlop={6}>
+        {refreshing ? (
+          <ActivityIndicator size="small" color={colors.accent} />
+        ) : (
+          <Text style={styles.refreshText}>↻ Refresh</Text>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
+// ── Asset class card (cash / investments / etc.) ────────────────────────────
+function AssetClassCard({
+  g,
+  accountValues,
+  prices,
+  pricesAsOf,
+  profitMode,
+  refreshing,
+  onRefresh,
+  onTapManual,
+  onTapGroup,
+}: {
+  g: ClassGroup;
+  accountValues: Record<string, number>;
+  prices: Record<string, PriceQuote>;
+  pricesAsOf: string | null;
+  profitMode: ValueMode;
+  refreshing: boolean;
+  onRefresh: () => void;
+  onTapManual: (id: string) => void;
+  onTapGroup: (symbol: string) => void;
+}) {
+  const holdings = g.accounts.filter((x) => isHolding(x.account)).map((x) => x.account);
+  const manual = g.accounts.filter((x) => !isHolding(x.account));
+  const hGroups = groupHoldings(holdings, accountValues);
+  const hasH = hGroups.length > 0;
+  const icon = (CLASS_BY_ID[g.cls]?.icon ?? 'wallet') as IconName;
+  return (
+    <>
+      <ClassChip label={hasH ? `${g.label} · Live prices` : g.label} sub={`RM ${fmt(g.total)}`} />
+      <View style={styles.classCard}>
+        {hasH && <PriceStamp asOf={pricesAsOf} refreshing={refreshing} onRefresh={onRefresh} />}
+        {hGroups.map((grp, i) => {
+          const profit = grp.cost != null && grp.cost > 0 ? holdingProfit(grp.value, grp.cost) : null;
+          const isLast = i === hGroups.length - 1 && manual.length === 0;
+          return (
+            <HoldingRowD key={grp.symbol} grp={grp} price={prices[grp.symbol]} profit={profit} profitMode={profitMode} isLast={isLast} onPress={() => onTapGroup(grp.symbol)} />
+          );
+        })}
+        {manual.map(({ account, value }, i) => (
+          <ManualRowD key={account.id} icon={icon} name={account.name} sub={g.label} value={value} isLast={i === manual.length - 1} onPress={() => onTapManual(account.id)} />
+        ))}
+      </View>
+    </>
+  );
+}
+
+function ManualRowD({ icon, name, sub, value, isLast, onPress }: { icon: IconName; name: string; sub: string; value: number; isLast: boolean; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={[styles.row, !isLast && styles.rowDivider]}>
+      <View style={styles.rowTile}>
+        <Icon name={icon} size={16} color={colors.accent} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={styles.rowName} numberOfLines={1}>{name}</Text>
+        <Text style={styles.rowSub} numberOfLines={1}>{sub}</Text>
+      </View>
+      <Text style={styles.rowVal}>RM {fmt(value)}</Text>
+    </Pressable>
+  );
+}
+
+function HoldingRowD({
+  grp,
+  price,
+  profit,
+  profitMode,
+  isLast,
+  onPress,
+}: {
+  grp: HoldingGroup;
+  price?: PriceQuote;
+  profit: { profit: number; pct: number | null } | null;
+  profitMode: ValueMode;
+  isLast: boolean;
+  onPress: () => void;
+}) {
+  const badge = badgeFor(grp.sub, grp.symbol);
+  const unitPx = price ? toQuantityUnitPrice(grp.symbol, price.priceMYR) : null;
+  const ch = price?.change24 ?? null;
+  const chUp = (ch ?? 0) >= 0;
+  const up = (profit?.profit ?? 0) >= 0;
+  const tick = grp.sub === 'commodity' ? (grp.symbol.startsWith('SI') ? 'XAG' : 'XAU') : grp.ticker;
+  return (
+    <Pressable onPress={onPress} style={[styles.row, !isLast && styles.rowDivider]}>
+      <View style={[styles.badge, { backgroundColor: badge.bg }]}>
+        <Text style={[styles.badgeTick, { color: badge.clr }]} numberOfLines={1}>{tick}</Text>
+        <Text style={[styles.badgeLbl, { color: badge.clr }]}>{badge.lbl}</Text>
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={styles.rowName} numberOfLines={1}>{grp.name}</Text>
+        <View style={styles.holdMetaRow}>
+          <Text style={styles.holdMeta} numberOfLines={1}>
+            {grp.quantity} {unitPx != null ? `× RM ${fmtPx(unitPx)}` : grp.ticker}
+          </Text>
+          {ch != null && (
+            <Text style={[styles.chChip, { color: chUp ? '#1a9962' : colors.red, backgroundColor: chUp ? colors.accentTint : '#fff0ef' }]}>
+              {chUp ? '+' : ''}{ch.toFixed(2)}%
+            </Text>
+          )}
+        </View>
+      </View>
+      <View style={{ alignItems: 'flex-end' }}>
+        <Text style={styles.rowVal}>RM {fmt(grp.value)}</Text>
+        {profit && (
+          <Text style={[styles.rowProfit, { color: up ? colors.accent : colors.red }]}>
+            {up ? '+' : '−'}
+            {profitMode === 'percent' && profit.pct != null ? `${Math.abs(profit.pct).toFixed(1)}%` : `RM ${fmt(Math.abs(profit.profit))}`}
+          </Text>
+        )}
+      </View>
+      <Icon name="chevronRight" size={15} color={colors.ink3} />
+    </Pressable>
+  );
+}
+
+function LiabilityRowD({ name, cls, value, isLast, onPress }: { name: string; cls: string; value: number; isLast: boolean; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={[styles.row, !isLast && styles.rowDivider]}>
+      <View style={[styles.rowTile, { backgroundColor: '#fff0ef' }]}>
+        <Icon name="scale" size={16} color={colors.red} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <View style={styles.liabNameRow}>
+          <Text style={styles.rowName} numberOfLines={1}>{name}</Text>
+          <Text style={styles.liabChip}>{cls}</Text>
+        </View>
+      </View>
+      <Text style={[styles.rowVal, { color: colors.red }]}>-RM {fmt(value)}</Text>
+    </Pressable>
+  );
+}
+
+/** Flatten liability class groups into rows tagged with their class label. */
+function flattenLiabs(groups: ClassGroup[]): { account: Account; value: number; clsLabel: string }[] {
+  const out: { account: Account; value: number; clsLabel: string }[] = [];
+  for (const g of groups) for (const { account, value } of g.accounts) out.push({ account, value, clsLabel: g.label });
+  return out;
 }
 
 /** A row showing a name + optional meta on the left and value + optional profit on the right. */
@@ -238,67 +534,6 @@ function AccountRow({
       </View>
       <Icon name="chevronRight" size={16} color={colors.ink3} />
     </Pressable>
-  );
-}
-
-function ClassSections({
-  title,
-  groups,
-  accountValues,
-  profitMode,
-  onTap,
-  onTapGroup,
-}: {
-  title: string;
-  groups: ClassGroup[];
-  accountValues: Record<string, number>;
-  profitMode: ValueMode;
-  onTap: (id: string) => void;
-  onTapGroup: (symbol: string) => void;
-}) {
-  if (groups.length === 0) return null;
-  const total = groups.reduce((s, g) => s + g.total, 0);
-  return (
-    <>
-      <View style={styles.sectionHead}>
-        <Eyebrow>{title}</Eyebrow>
-        <Text style={styles.sectionTotal}>RM {fmt(total)}</Text>
-      </View>
-      {groups.map((g) => {
-        const holdings = g.accounts.filter((x) => isHolding(x.account)).map((x) => x.account);
-        const manual = g.accounts.filter((x) => !isHolding(x.account));
-        const hGroups = groupHoldings(holdings, accountValues);
-        return (
-          <Card key={g.cls} style={{ overflow: 'hidden', marginBottom: 12 }}>
-            <View style={styles.classHead}>
-              <View style={styles.classIcon}>
-                <Icon name={(CLASS_BY_ID[g.cls]?.icon ?? 'wallet') as IconName} size={16} color={colors.accent} />
-              </View>
-              <Text style={styles.className}>{g.label}</Text>
-              <Text style={styles.classTotal}>RM {fmt(g.total)}</Text>
-            </View>
-            {hGroups.map((grp) => {
-              const lots = grp.accounts.length;
-              const p = grp.cost != null && grp.cost > 0 ? holdingProfit(grp.value, grp.cost) : null;
-              return (
-                <AccountRow
-                  key={grp.symbol}
-                  name={grp.name}
-                  meta={`${grp.quantity} ${grp.ticker}${lots > 1 ? ` · ${lots} lots` : ''}`}
-                  value={grp.value}
-                  profit={p}
-                  profitMode={profitMode}
-                  onPress={() => onTapGroup(grp.symbol)}
-                />
-              );
-            })}
-            {manual.map(({ account, value }) => (
-              <AccountRow key={account.id} name={account.name} value={value} profit={null} profitMode={profitMode} onPress={() => onTap(account.id)} />
-            ))}
-          </Card>
-        );
-      })}
-    </>
   );
 }
 
@@ -739,17 +974,74 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   scanBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.accentTint },
   scanText: { fontFamily: uiFont(700), fontSize: 13, color: colors.accent },
-  hero: { padding: 20 },
-  heroHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  profitToggle: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  profitToggleLabel: { fontFamily: uiFont(700), fontSize: 11.5, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.ink3 },
   profit: { fontFamily: numFont(700), fontSize: 12, marginTop: 2 },
   profitLine: { fontFamily: uiFont(600), fontSize: 13, marginTop: 12 },
-  heroSign: { fontFamily: numFont(700), fontSize: 30, marginRight: 2 },
-  sparkLabel: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink3, marginTop: 4 },
-  splitRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.line2 },
-  splitLabel: { fontFamily: uiFont(600), fontSize: 12, color: colors.ink3 },
-  splitVal: { fontFamily: numFont(700), fontSize: 16, marginTop: 2 },
+
+  /* nav */
+  nav: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingBottom: 10 },
+  navBtn: { width: 36, height: 36, borderRadius: 999, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', ...{ shadowColor: '#102018', shadowOpacity: 0.12, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 3 } },
+  navTitle: { flex: 1, textAlign: 'center', fontFamily: uiFont(700), fontSize: 16, color: colors.ink },
+
+  /* hero */
+  hero: { margin: 16, marginTop: 0, borderRadius: 26, padding: 20, overflow: 'hidden', backgroundColor: '#1b6b48', position: 'relative' },
+  heroCircle: { position: 'absolute', top: -48, right: -48, width: 160, height: 160, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.05)' },
+  heroHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  heroLabel: { fontFamily: uiFont(600), fontSize: 10.5, letterSpacing: 1, textTransform: 'uppercase', color: 'rgba(255,255,255,0.52)' },
+  heroToggle: { flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.22)', borderRadius: 20, padding: 2, gap: 2 },
+  heroToggleBtn: { paddingHorizontal: 14, paddingVertical: 4, borderRadius: 16 },
+  heroToggleBtnOn: { backgroundColor: '#fff' },
+  heroToggleText: { fontFamily: uiFont(700), fontSize: 11, color: 'rgba(255,255,255,0.6)' },
+  heroToggleTextOn: { color: colors.accentInk },
+  heroSign: { fontFamily: numFont(700), fontSize: 34, color: '#fff', marginRight: 2 },
+  heroNum: { fontFamily: numFont(700), fontSize: 46, color: '#fff' },
+  deltaChip: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, marginBottom: 15 },
+  deltaText: { fontFamily: numFont(700), fontSize: 11.5, color: '#42e893' },
+  heroTiles: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  heroTile: { flex: 1, backgroundColor: 'rgba(0,0,0,0.18)', borderRadius: 13, paddingHorizontal: 12, paddingVertical: 9 },
+  heroTileLabel: { fontFamily: uiFont(500), fontSize: 9.5, color: 'rgba(255,255,255,0.45)', marginBottom: 3 },
+  heroTileVal: { fontFamily: numFont(700), fontSize: 16 },
+  heroMonth: { flex: 1, textAlign: 'center', fontFamily: uiFont(500), fontSize: 9, color: 'rgba(255,255,255,0.3)' },
+
+  /* scan row */
+  scanRow: { flexDirection: 'row', gap: 9, marginHorizontal: 16, marginBottom: 4 },
+  scanBanner: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.accent, borderRadius: 16, padding: 10, paddingRight: 14, shadowColor: colors.accent, shadowOpacity: 0.3, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
+  scanIcon: { width: 30, height: 30, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
+  scanTitle: { fontFamily: uiFont(700), fontSize: 13, color: '#fff' },
+  scanSub: { fontFamily: uiFont(500), fontSize: 10, color: 'rgba(255,255,255,0.68)', marginTop: 1 },
+  addBtn: { width: 50, height: 50, borderRadius: 14, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+
+  /* group + class labels */
+  groupHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 4 },
+  groupLabel: { fontFamily: uiFont(700), fontSize: 12, color: colors.ink2, letterSpacing: 0.4 },
+  groupTotal: { fontFamily: numFont(700), fontSize: 13 },
+  classChipRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4 },
+  classChipLabel: { fontFamily: uiFont(700), fontSize: 9.5, color: colors.ink3, letterSpacing: 1, textTransform: 'uppercase' },
+  classChipSub: { fontFamily: numFont(600), fontSize: 11, color: colors.ink3 },
+  classCard: { backgroundColor: colors.surface, borderRadius: 18, marginHorizontal: 16, marginTop: 4, overflow: 'hidden', shadowColor: '#102018', shadowOpacity: 0.12, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 3 },
+
+  /* price stamp */
+  priceStamp: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 18, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.surface2 },
+  liveDot: { width: 7, height: 7, borderRadius: 999, backgroundColor: '#42e893' },
+  priceStampText: { flex: 1, fontFamily: uiFont(500), fontSize: 10, color: colors.ink3 },
+  refreshBtn: { backgroundColor: colors.accentTint, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 3, minWidth: 64, alignItems: 'center' },
+  refreshText: { fontFamily: uiFont(700), fontSize: 10, color: colors.accent },
+
+  /* rows */
+  row: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 18, paddingVertical: 11 },
+  rowDivider: { borderBottomWidth: 1, borderBottomColor: colors.line },
+  rowTile: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.accentTint, alignItems: 'center', justifyContent: 'center' },
+  rowName: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink },
+  rowSub: { fontFamily: uiFont(500), fontSize: 10.5, color: colors.ink3, marginTop: 1 },
+  rowVal: { fontFamily: numFont(700), fontSize: 14, color: colors.ink },
+  rowProfit: { fontFamily: numFont(700), fontSize: 11.5, marginTop: 1 },
+  badge: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  badgeTick: { fontFamily: numFont(700), fontSize: 11, lineHeight: 13 },
+  badgeLbl: { fontFamily: uiFont(500), fontSize: 8, opacity: 0.75, lineHeight: 9 },
+  holdMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  holdMeta: { fontFamily: numFont(500), fontSize: 10, color: colors.ink3, flexShrink: 1 },
+  chChip: { fontFamily: numFont(700), fontSize: 10, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1, overflow: 'hidden' },
+  liabNameRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  liabChip: { fontFamily: uiFont(600), fontSize: 9.5, color: colors.red, backgroundColor: '#fff0ef', borderRadius: 7, paddingHorizontal: 7, paddingVertical: 2, overflow: 'hidden' },
   emptyTitle: { fontFamily: uiFont(700), fontSize: 17, color: colors.ink, marginTop: 12 },
   emptySub: { fontFamily: uiFont(500), fontSize: 13.5, color: colors.ink2, textAlign: 'center', marginTop: 6, lineHeight: 19 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, marginBottom: 10 },

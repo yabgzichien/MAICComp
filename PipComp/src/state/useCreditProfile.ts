@@ -53,7 +53,14 @@ export function useCreditProfile(): {
     const expenseRatio = avgIncome > 0 ? avgExpenses / avgIncome : 1;
 
     const dataConfidence = computeDataConfidence(
-      transactions.map((t) => ({ amount: t.amount, source: t.source, merchantKey: t.merchantKey, date: t.date })),
+      transactions.map((t) => ({
+        amount: t.amount,
+        source: t.source,
+        merchantKey: t.merchantKey,
+        date: t.date,
+        type: t.type,
+        merchantRaw: t.merchantRaw,
+      })),
       coverage.ratio,
       expenseRatio
     );

@@ -9,7 +9,10 @@ const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'S
 
 export function greeting(d: Date = new Date()): string {
   const h = d.getHours();
-  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  // Morning 06:00–11:59 · Afternoon 12:00–17:59 · Evening 18:00–05:59
+  if (h >= 6 && h < 12) return 'Good morning';
+  if (h >= 12 && h < 18) return 'Good afternoon';
+  return 'Good evening';
 }
 
 /** e.g. "Tuesday · 1 June" */

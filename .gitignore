@@ -44,9 +44,12 @@ dataset/
 
 # ─── Scratch notes ────────────────────────────────────────────────────────────
 *.txt
+Thoughts.md
 
 # ─── Documents (statements, test scans, decks) ───────────────────────────────
 *.pdf
+*.pptx
+*.ppt
 
 # ─── Tests (excluded by request) ──────────────────────────────────────────────
 __tests__/

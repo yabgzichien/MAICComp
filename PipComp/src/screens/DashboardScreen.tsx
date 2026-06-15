@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { BudgetProgressList } from '../components/BudgetProgressList';
@@ -17,6 +17,7 @@ import { computeStreak } from '../lib/streak';
 import type { Category } from '../lib/types';
 import { useAppData } from '../state/store';
 import { useCreditProfile } from '../state/useCreditProfile';
+import { useNow } from '../state/useNow';
 import { colors, numFont, shadowCard, uiFont } from '../theme';
 
 const RED = colors.red;
@@ -53,6 +54,7 @@ export function DashboardScreen({
   onOpenPassport?: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const now = useNow();
   const { transactions, catById, allocations, hasBudget, coverage } = useAppData();
   const { score, dataConfidence } = useCreditProfile();
 
@@ -108,8 +110,8 @@ export function DashboardScreen({
         {/* Header */}
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.date}>{longDate()}</Text>
-            <Text style={styles.greeting}>{greeting()}</Text>
+            <Text style={styles.date}>{longDate(now)}</Text>
+            <Text style={styles.greeting}>{greeting(now)}</Text>
           </View>
           <View style={styles.headerActions}>
             <HeaderIcon name="trending" onPress={onOpenRecap} />
@@ -212,14 +214,36 @@ function HeaderIcon({ name, onPress }: { name: IconName; onPress: () => void }) 
 
 /* ── Streak card ── */
 function StreakCard({ streak, dots, coverage }: { streak: number; dots: boolean[]; coverage: number }) {
+  // Subtle flame flicker — driven entirely on the native thread (no per-frame JS).
+  const flicker = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(flicker, { toValue: 1, duration: 1100, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(flicker, { toValue: 0, duration: 1300, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [flicker]);
+  const flameStyle = {
+    opacity: flicker.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }),
+    transform: [
+      { translateY: flicker.interpolate({ inputRange: [0, 1], outputRange: [0, -1.2] }) },
+      { scaleX: flicker.interpolate({ inputRange: [0, 1], outputRange: [1, 1.04] }) },
+      { scaleY: flicker.interpolate({ inputRange: [0, 1], outputRange: [1, 1.09] }) },
+    ],
+  };
   return (
     <Card style={styles.streakCard}>
       <View style={styles.streakLeft}>
         <View style={styles.flameTile}>
-          <Svg width={18} height={21} viewBox="0 0 18 22" fill="none">
-            <Path d="M9 1C9 1 14.5 6.5 14.5 11.5C14.5 15 12 17.5 9 17.5C6 17.5 3.5 15 3.5 11.5C3.5 8.5 5.5 6.5 5.5 6.5C5.5 6.5 6 9.5 9 9.5C9 9.5 7.5 7.5 9 4C9.5 5.5 11.5 7.5 11.5 9.5C13 8 12.5 5.5 11 3.5C14 5.5 15.5 8.5 15.5 11.5C15.5 16.5 12.5 20.5 9 21.5C5.5 20.5 2.5 16.5 2.5 11.5C2.5 5.5 9 1 9 1Z" fill={colors.amber} />
-            <Path d="M9 13.5C9 13.5 11 12 11 10.5C10.5 11.5 9 11.5 9 11.5C9 11.5 9.5 10 9 9C8.5 10 7 11.5 7 12.5C7 13.6 7.9 14.5 9 14.5C8.7 14 9 13.5 9 13.5Z" fill="#FAC438" />
-          </Svg>
+          <Animated.View style={flameStyle}>
+            <Svg width={18} height={21} viewBox="0 0 18 22" fill="none">
+              <Path d="M9 1C9 1 14.5 6.5 14.5 11.5C14.5 15 12 17.5 9 17.5C6 17.5 3.5 15 3.5 11.5C3.5 8.5 5.5 6.5 5.5 6.5C5.5 6.5 6 9.5 9 9.5C9 9.5 7.5 7.5 9 4C9.5 5.5 11.5 7.5 11.5 9.5C13 8 12.5 5.5 11 3.5C14 5.5 15.5 8.5 15.5 11.5C15.5 16.5 12.5 20.5 9 21.5C5.5 20.5 2.5 16.5 2.5 11.5C2.5 5.5 9 1 9 1Z" fill={colors.amber} />
+              <Path d="M9 13.5C9 13.5 11 12 11 10.5C10.5 11.5 9 11.5 9 11.5C9 11.5 9.5 10 9 9C8.5 10 7 11.5 7 12.5C7 13.6 7.9 14.5 9 14.5C8.7 14 9 13.5 9 13.5Z" fill="#FAC438" />
+            </Svg>
+          </Animated.View>
         </View>
         <View>
           <Text style={styles.streakNum}>{streak}</Text>
@@ -374,8 +398,8 @@ function QuickActions({
   onOpenNetWorth: () => void;
   onOpenPassport: () => void;
 }) {
-  const items: { label: string; icon: IconName; active?: boolean; onPress: () => void }[] = [
-    { label: 'Credit', icon: 'scale', active: true, onPress: onOpenCredit },
+  const items: { label: string; icon: IconName; onPress: () => void }[] = [
+    { label: 'Credit', icon: 'scale', onPress: onOpenCredit },
     { label: 'Budget', icon: 'wallet', onPress: onOpenBudget },
     { label: 'Net Worth', icon: 'trending', onPress: onOpenNetWorth },
     { label: 'Passport', icon: 'scan', onPress: onOpenPassport },
@@ -384,12 +408,10 @@ function QuickActions({
     <Card style={styles.quickCard}>
       {items.map((it) => (
         <Pressable key={it.label} onPress={it.onPress} style={styles.quickItem}>
-          <View style={[styles.quickIcon, it.active ? styles.quickIconActive : styles.quickIconIdle]}>
-            <Icon name={it.icon} size={21} color={it.active ? '#fff' : colors.accent} />
+          <View style={[styles.quickIcon, styles.quickIconIdle]}>
+            <Icon name={it.icon} size={21} color={colors.accent} />
           </View>
-          <Text style={[styles.quickLabel, { color: it.active ? colors.accentInk : colors.ink2, fontFamily: uiFont(it.active ? 700 : 500) }]}>
-            {it.label}
-          </Text>
+          <Text style={[styles.quickLabel, { color: colors.ink2, fontFamily: uiFont(500) }]}>{it.label}</Text>
         </Pressable>
       ))}
     </Card>
@@ -489,7 +511,6 @@ const styles = StyleSheet.create({
   quickCard: { marginHorizontal: 16, marginTop: 10, paddingVertical: 14, paddingHorizontal: 6, flexDirection: 'row', justifyContent: 'space-around' },
   quickItem: { flex: 1, alignItems: 'center', gap: 7 },
   quickIcon: { width: 50, height: 50, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
-  quickIconActive: { backgroundColor: colors.accent, ...shadowCard, shadowColor: colors.accent, shadowOpacity: 0.4 },
   quickIconIdle: { backgroundColor: colors.accentTint },
   quickLabel: { fontSize: 10.5, textAlign: 'center' },
 

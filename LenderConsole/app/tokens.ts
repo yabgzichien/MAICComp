@@ -66,13 +66,24 @@ export const palette = (alert: boolean): Palette => (alert ? ALERT : CLEAN);
 
 // ── Sample data (mirrors the borrower app's sample passport / pool) ───────────
 
-export const SAMPLE_CODE = `v1.7f3a9c2b:eyJhbGciOiJFZERTQSJ9
-.eyJzdWIiOiJhaXN5YWhfbTQ3MiIsInNj
-b3JlIjo2NzIsImJhbmQiOiJHb29kIiwi
-Y29uZmlkZW5jZSI6MC42NSwiZXZpZGVu
-Y2VIYXNoIjoiN2EzYjljMmQ0ZTVmNjc4
-OWFiY2RlZjEyMzQ1NjcifQ.mK7xNqBp
-WvZrCsYtHnUoFdgXiQjKwPb8Rf2Sy4Ez`;
+// A real, pre-signed sample passport (mirrors PipComp/src/data/samplePassport.ts) —
+// it verifies against the pinned issuer key so "Load sample" exercises the real path.
+export const SAMPLE_CODE =
+  '{"passport":{"subject":"1e503a132a9cf38bf42dbbc170166ab3ba8a476daee6a77bde67793d31785759","score":672,"band":"Good","factorSummary":[{"key":"cashflow","subScore":72},{"key":"income","subScore":65},{"key":"savings","subScore":55},{"key":"debt","subScore":88},{"key":"discipline","subScore":70},{"key":"networth","subScore":52},{"key":"track_record","subScore":40}],"provenanceSummary":"source trust 70%; Benford conformity 83%; 2% round amounts; 0% duplicates; coverage 70% of last 90 days; expenses 82% of income","evidenceHash":"abc123def456abc123def456abc123def456abc123def456abc123def456ab12","repaymentRecord":{"onTime":0,"total":0},"issuedAt":"2026-06-09T08:00:00.000Z","validUntil":"2026-07-09T08:00:00.000Z","assessment":{"confidence":0.62,"coverageRatio":0.7,"coverageDays":90,"avgIncome":2540,"avgMonthlySurplus":520,"monthlyDebtService":120},"holder":{"name":"Aisyah binti Rahman","nricMasked":"••••••-••-5678","verified":true,"provider":"Demo verification (mock)"}},"signature":"b5dbaa98aef9ba92a3787f89a795a6682a7891a2313f76b1300559aa427917c38448e57b78c232e76e128a3284b418091e13370554ac7eeddd226f2acadabe09","issuerSignature":"feef569d8948f7945f6102cf08ef3bc1d578f84f98a5ebddea905ec9182c9905f2aef47dd46b034e7e6682f8b536c11acf63f445f780d958d7d4b1ceceaee801"}';
+
+/** Map passport factor keys → human labels for the breakdown table. */
+export const FACTOR_LABELS: Record<string, string> = {
+  cashflow: 'Cash-flow surplus',
+  income: 'Income regularity',
+  savings: 'Savings rate',
+  debt: 'Debt burden (DSR)',
+  discipline: 'Budgeting discipline',
+  networth: 'Net-worth trajectory',
+  track_record: 'Track record',
+};
+
+/** Score-band order (low → high) for the 5-segment band bar. */
+export const BAND_ORDER = ['Building', 'Fair', 'Good', 'Strong', 'Excellent'];
 
 export const SUSPECT_CODE = `v1.4d8f1b3e:eyJhbGciOiJFZERTQSJ9
 .eyJzdWIiOiJ1c2VyX3Vua25vd24iLCJz
@@ -82,16 +93,6 @@ ZSI6Im1hbnVhbF9vbmx5IiwiZmxhZ3Mi
 OlsiYmVuZm9yZF9mYWlsIiwicm91bmRf
 bnVtYmVycyJdfQ.INVALID_SIG_MISMATCH`;
 
-export const FACTORS = [
-  { label: 'Cash-flow surplus', score: 70 },
-  { label: 'Income regularity', score: 82 },
-  { label: 'Savings rate', score: 45 },
-  { label: 'Debt burden (DSR)', score: 60 },
-  { label: 'Budgeting discipline', score: 75 },
-  { label: 'Net-worth trajectory', score: 55 },
-  { label: 'Track record', score: 50 },
-];
-
 export const ALERT_FACTORS = [
   { label: 'Cash-flow surplus', score: 22 },
   { label: 'Income regularity', score: 18 },
@@ -100,13 +101,6 @@ export const ALERT_FACTORS = [
   { label: 'Budgeting discipline', score: 28 },
   { label: 'Net-worth trajectory', score: 20 },
   { label: 'Track record', score: 12 },
-];
-
-export const AUDIT_APPROVE = [
-  'Qualifies for "Growth Capital" tier (score 672 ≥ 620).',
-  'Installment capped to 35% of surplus + DSR ≤ 40%.',
-  'Offered RM8,000 vs RM10,000 requested (affordability).',
-  'Auto-approved: score, affordability & 65% data confidence clear policy.',
 ];
 
 export const AUDIT_REFER = [

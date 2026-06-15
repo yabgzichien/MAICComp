@@ -39,6 +39,9 @@ export interface LoanDecisionInput {
   coverageRatio?: number;
   /** Distinct days covered in the trailing 90. Optional for back-compat. */
   coverageDaysCovered?: number;
+  /** Set by `computeDataConfidence` when income failed structural authenticity checks badly
+   *  enough to DECLINE outright (not merely REFER). Optional/false by default. */
+  integrityFloorBreached?: boolean;
 }
 
 const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
@@ -232,12 +235,20 @@ export function decideLoan(input: LoanDecisionInput): LoanDecision {
     adverseRecord = 'none',
     coverageRatio,
     coverageDaysCovered,
+    integrityFloorBreached = false,
   } = input;
   const reasons: string[] = [];
 
   // Hard-adverse record overrides everything: decline outright.
   if (adverseRecord === 'hard') {
     reasons.push('Serious adverse record on file — application declined.');
+    return { decision: 'decline', maxAmount: 0, installment: 0, reasons };
+  }
+
+  // Data-integrity floor: income failed structural authenticity checks (asymmetric-fraud rings).
+  // No nominal score is trustworthy on top of fabricated income — decline pending verification.
+  if (integrityFloorBreached) {
+    reasons.push('Data-integrity floor breached: income failed structural authenticity checks — application declined pending verification.');
     return { decision: 'decline', maxAmount: 0, installment: 0, reasons };
   }
 

@@ -1,14 +1,18 @@
 /**
  * Ed25519 keypair module for the Credit Passport feature.
  *
- * On native (iOS/Android) the private key is persisted in expo-secure-store.
- * On web (where secure-store is unavailable) a fresh keypair is generated each
- * time and a clear error is surfaced so callers know the key is ephemeral.
+ * - Native (iOS/Android): the private key is persisted in expo-secure-store
+ *   (hardware-backed secure enclave / keystore).
+ * - Web: secure-store is unavailable, so the key is persisted in the browser's
+ *   localStorage instead (falling back to in-memory if even that is blocked).
+ *   This is a demo-grade store — fine for the web artifact, not production —
+ *   but it persists across reloads so the passport signs and verifies end-to-end.
  */
 
 import * as ed from '@noble/ed25519';
 import { sha512 } from '@noble/hashes/sha2.js';
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 
 // Wire synchronous SHA-512 so that the sync helpers (ed.sign / ed.getPublicKey)
 // work correctly. These are the functions we actually call below.
@@ -53,22 +57,53 @@ export interface Keypair {
  */
 let _keypairPromise: Promise<Keypair> | null = null;
 
+// Web-only in-memory fallback if localStorage is unavailable (private mode, etc.).
+let _memKey: string | null = null;
+
+/** Read the stored private-key hex from the platform's persistence layer. */
+async function readStoredKey(): Promise<string | null> {
+  if (Platform.OS === 'web') {
+    try {
+      return typeof localStorage !== 'undefined' ? localStorage.getItem(STORE_KEY) : _memKey;
+    } catch {
+      return _memKey;
+    }
+  }
+  return SecureStore.getItemAsync(STORE_KEY);
+}
+
+/** Persist the private-key hex to the platform's persistence layer. */
+async function writeStoredKey(hex: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    _memKey = hex;
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.setItem(STORE_KEY, hex);
+    } catch {
+      // localStorage blocked (private browsing) — the in-memory copy still works this session.
+    }
+    return;
+  }
+  await SecureStore.setItemAsync(STORE_KEY, hex);
+}
+
 export function getOrCreateKeypair(): Promise<Keypair> {
   if (!_keypairPromise) _keypairPromise = _init();
   return _keypairPromise;
 }
 
 async function _init(): Promise<Keypair> {
-  // Check availability first — isAvailableAsync() returns false on web.
-  const available = await SecureStore.isAvailableAsync();
-  if (!available) {
-    throw new Error(
-      'Secure store unavailable on this platform. ' +
-        'Credit Passport key management requires iOS or Android.',
-    );
+  // On native, secure-store must be present; on web we use localStorage instead.
+  if (Platform.OS !== 'web') {
+    const available = await SecureStore.isAvailableAsync();
+    if (!available) {
+      throw new Error(
+        'Secure store unavailable on this platform. ' +
+          'Credit Passport key management requires iOS or Android.',
+      );
+    }
   }
 
-  let privKeyHex = await SecureStore.getItemAsync(STORE_KEY);
+  let privKeyHex = await readStoredKey();
 
   // Validate the stored value; treat anything malformed as corrupt.
   if (privKeyHex !== null && !HEX_PRIVKEY_RE.test(privKeyHex)) {
@@ -84,7 +119,7 @@ async function _init(): Promise<Keypair> {
     // to be exactly 32 bytes).
     const seed = ed.utils.randomSecretKey();
     privKeyHex = bytesToHex(seed);
-    await SecureStore.setItemAsync(STORE_KEY, privKeyHex);
+    await writeStoredKey(privKeyHex);
   }
 
   const privKey = hexToBytes(privKeyHex);

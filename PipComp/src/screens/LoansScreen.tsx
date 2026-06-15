@@ -43,11 +43,20 @@ function repaymentStatusLabel(s: RepaymentStatus): string {
 
 export function LoansScreen({ onBack, onOpenKyc = () => {} }: { onBack: () => void; onOpenKyc?: () => void }) {
   const insets = useSafeAreaInsets();
-  const { profile, score } = useCreditProfile();
+  const { profile, score, dataConfidence } = useCreditProfile();
   const { kyc, loanProducts, loanApplications, repayments, repaymentSummary, applyForLoan, recordRepayment, reportDefault } =
     useAppData();
 
   const products = loanProducts.length > 0 ? loanProducts : DEFAULT_PRODUCTS;
+
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleExpanded = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [requestedAmount, setRequestedAmount] = useState<number | null>(null);
@@ -76,9 +85,10 @@ export function LoansScreen({ onBack, onOpenKyc = () => {} }: { onBack: () => vo
           avgIncome: profile.avgIncome,
           requestedAmount: product.maxAmount,
           products: [product],
+          integrityFloorBreached: dataConfidence.integrityFloorBreached,
         }),
       })),
-    [products, score, profile]
+    [products, score, profile, dataConfidence]
   );
 
   const activeApplications = useMemo(
@@ -119,6 +129,7 @@ export function LoansScreen({ onBack, onOpenKyc = () => {} }: { onBack: () => vo
         avgMonthlySurplus: profile.avgSurplus,
         monthlyDebtService: profile.monthlyDebtService,
         avgIncome: profile.avgIncome,
+        integrityFloorBreached: dataConfidence.integrityFloorBreached,
       });
       setLastResult({ productId: selectedProduct.id, decision });
     } catch (e) {
@@ -206,6 +217,7 @@ export function LoansScreen({ onBack, onOpenKyc = () => {} }: { onBack: () => vo
         </Text>
         {previews.map(({ product, decision }) => {
           const selected = selectedProductId === product.id;
+          const isExpanded = expanded.has(product.id);
           return (
             <Pressable key={product.id} onPress={() => pickProduct(product)}>
               <Card style={selected ? [styles.offerCard, styles.offerCardSelected] : styles.offerCard}>
@@ -236,14 +248,24 @@ export function LoansScreen({ onBack, onOpenKyc = () => {} }: { onBack: () => vo
                     </View>
                   </View>
                 )}
-                <View style={{ marginTop: 10, gap: 5 }}>
-                  {decision.reasons.map((reason, idx) => (
-                    <View key={idx} style={styles.reasonRow}>
-                      <Icon name="dots" size={6} color={colors.ink3} />
-                      <Text style={styles.reasonText}>{reason}</Text>
-                    </View>
-                  ))}
-                </View>
+                {decision.reasons.length > 0 && (
+                  <>
+                    <Pressable onPress={() => toggleExpanded(product.id)} hitSlop={8} style={styles.readMoreRow}>
+                      <Text style={styles.readMoreText}>{isExpanded ? 'Show less' : 'Read more'}</Text>
+                      <Icon name={isExpanded ? 'chevronDown' : 'chevronRight'} size={14} color={colors.accent} />
+                    </Pressable>
+                    {isExpanded && (
+                      <View style={styles.reasonsBlock}>
+                        {decision.reasons.map((reason, idx) => (
+                          <View key={idx} style={styles.reasonRow}>
+                            <Icon name="dots" size={6} color={colors.ink3} />
+                            <Text style={styles.reasonText}>{reason}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </>
+                )}
               </Card>
             </Pressable>
           );
@@ -450,6 +472,9 @@ const styles = StyleSheet.create({
   offerAmounts: { flexDirection: 'row', gap: 28, marginTop: 12 },
   amountLabel: { fontFamily: uiFont(600), fontSize: 11, color: colors.ink3, marginBottom: 2 },
   amountSuffix: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink3 },
+  readMoreRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 12, alignSelf: 'flex-start' },
+  readMoreText: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.accent },
+  reasonsBlock: { marginTop: 8, gap: 5, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.line2 },
   reasonRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingTop: 2 },
   reasonText: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, flex: 1, lineHeight: 17 },
   fieldLabel: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink2, marginBottom: 8 },

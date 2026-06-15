@@ -156,6 +156,7 @@ interface AppData {
       avgMonthlySurplus: number;
       monthlyDebtService: number;
       avgIncome: number;
+      integrityFloorBreached?: boolean;
     }
   ) => Promise<{ application: LoanApplication; decision: LoanDecision }>;
   recordRepayment: (repaymentId: string, onTime: boolean) => Promise<void>;
@@ -485,6 +486,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         avgMonthlySurplus: number;
         monthlyDebtService: number;
         avgIncome: number;
+        integrityFloorBreached?: boolean;
       }
     ) => {
       const products = loanProducts.length > 0 ? loanProducts : await dbListProducts();
@@ -503,6 +505,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         products: [product],
         coverageRatio: cov.ratio,
         coverageDaysCovered: cov.daysCovered,
+        integrityFloorBreached: decisionInputs.integrityFloorBreached,
       });
 
       const application = await dbCreateApplication(productId, requestedAmount, decision, decisionInputs.score);

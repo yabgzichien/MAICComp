@@ -1,6 +1,6 @@
 // src/screens/PassportScreen.tsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Rect } from 'react-native-svg';
@@ -294,6 +294,10 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
                 <View style={styles.algoChip}><Text style={styles.algoText}>Ed25519</Text></View>
               </View>
 
+              {Platform.OS === 'web' && (
+                <Text style={styles.webKeyNote}>Demo key stored in this browser · use the app on a phone for a device-secured key.</Text>
+              )}
+
               <Pressable onPress={generate} style={styles.regenBtn}>
                 <Icon name="return" size={13} color={colors.ink3} />
                 <Text style={styles.regenText}>Regenerate passport</Text>
@@ -369,6 +373,7 @@ const styles = StyleSheet.create({
   signedText: { flex: 1, fontFamily: uiFont(600), fontSize: 11.5, color: colors.accentInk },
   algoChip: { backgroundColor: colors.surface2, borderRadius: 5, paddingHorizontal: 7, paddingVertical: 2, borderWidth: 1, borderColor: colors.line },
   algoText: { fontFamily: numFont(700), fontSize: 10, color: colors.ink3, letterSpacing: 0.3 },
+  webKeyNote: { fontFamily: uiFont(500), fontSize: 10, color: colors.ink3, textAlign: 'center', marginBottom: 10, lineHeight: 14 },
   regenBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 4 },
   regenText: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink3 },
 });
