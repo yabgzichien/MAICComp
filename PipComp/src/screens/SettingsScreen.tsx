@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, type IconName } from '../components/Icon';
 import { Card, Eyebrow, TopBar } from '../components/ui';
 import { clearMemory } from '../db/memoryRepo';
 import { getProvider, llmErrorMessage } from '../llm';
+import { confirmAction } from '../lib/platformAlert';
 import { configFor, loadSettings, type LLMSettings, type ProviderRole } from '../settings/settingsStore';
 import { useAppData } from '../state/store';
 import { colors, radius, uiFont } from '../theme';
@@ -31,36 +32,24 @@ export function SettingsScreen({ onBack, onMigrate, onOpenLender = () => {} }: {
 
   const resetLearned = () => {
     if (learnedCount === 0) return;
-    Alert.alert('Reset learning?', `Forget all ${learnedCount} learned merchants? This can’t be undone.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Reset',
-        style: 'destructive',
-        onPress: async () => {
-          await clearMemory();
-          await refreshAll();
-        },
-      },
-    ]);
+    confirmAction('Reset learning?', `Forget all ${learnedCount} learned merchants? This can’t be undone.`, 'Reset', async () => {
+      await clearMemory();
+      await refreshAll();
+    });
   };
 
   const allocationCount = Object.keys(allocations).length;
   const resetBudgetConfirm = () => {
     if (!hasBudget) return;
-    Alert.alert('Reset budget?', 'Clear your expected income and all category allocations? This can’t be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Reset', style: 'destructive', onPress: () => resetBudget() },
-    ]);
+    confirmAction('Reset budget?', 'Clear your expected income and all category allocations? This can’t be undone.', 'Reset', () => resetBudget());
   };
 
   const resetAllConfirm = () => {
-    Alert.alert(
+    confirmAction(
       'Reset everything?',
       'This deletes all transactions, learned merchants, and your budget, and restores the default categories. This can’t be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Reset', style: 'destructive', onPress: () => resetAllData() },
-      ]
+      'Reset',
+      () => resetAllData()
     );
   };
 

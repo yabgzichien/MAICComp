@@ -1,5 +1,6 @@
 import type { ExtractedTxn } from '../lib/types';
 import type { ScannedHolding } from '../lib/prices';
+import type { ScannedSnapshot } from '../lib/parseSnapshot';
 import type { IdentityExtraction } from './ekycPrompt';
 
 export type LLMErrorCode =
@@ -84,6 +85,8 @@ export interface LLMProvider {
   extractHoldings?(input: DocExtractInput): Promise<ScannedHolding[]>;
   /** Extract a single MYR balance from a bank/e-wallet/loan screenshot (null if unreadable). */
   extractBalance?(input: DocExtractInput): Promise<number | null>;
+  /** Identify a screenshot as a balance (bank/e-wallet/loan) or a crypto wallet, and extract accordingly. */
+  extractSnapshot?(input: DocExtractInput): Promise<ScannedSnapshot>;
   /** Extract holder identity (name + IC/passport number) from a document photo. */
   extractIdentity?(input: DocExtractInput): Promise<IdentityExtraction>;
   /** Lightweight credential check for the Settings "Test" button. */

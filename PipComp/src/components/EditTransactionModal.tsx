@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Transaction, TxnType } from '../lib/types';
 import { todayISO } from '../lib/duplicates';
 import { defaultLinkEffect, type LinkEffect } from '../lib/networth';
+import { confirmAction } from '../lib/platformAlert';
 import { useAppData } from '../state/store';
 import { colors, numFont, radius, uiFont } from '../theme';
 import { AccountLinkField } from './AccountLinkField';
@@ -77,17 +78,10 @@ export function EditTransactionModal({ txn, onClose }: { txn: Transaction | null
   };
 
   const confirmDelete = () => {
-    Alert.alert('Delete transaction?', `Remove “${txn.merchantRaw}”? This can’t be undone.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          await removeTransaction(txn.id);
-          onClose();
-        },
-      },
-    ]);
+    confirmAction('Delete transaction?', `Remove “${txn.merchantRaw}”? This can’t be undone.`, 'Delete', async () => {
+      await removeTransaction(txn.id);
+      onClose();
+    });
   };
 
   return (

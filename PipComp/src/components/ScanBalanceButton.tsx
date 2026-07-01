@@ -1,8 +1,9 @@
 // src/components/ScanBalanceButton.tsx
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text } from 'react-native';
 import { getProvider, llmErrorMessage } from '../llm';
+import { notify } from '../lib/platformAlert';
 import { configFor, loadSettings } from '../settings/settingsStore';
 import { colors, uiFont } from '../theme';
 import { Icon } from './Icon';
@@ -14,13 +15,13 @@ export function ScanBalanceButton({ onResult }: { onResult: (amount: number) => 
   const extract = async (res: ImagePicker.ImagePickerResult) => {
     if (res.canceled || !res.assets?.length) return;
     const a = res.assets[0];
-    if (!a.base64) { Alert.alert('Hmm', "That image couldn't be read."); return; }
+    if (!a.base64) { notify('Hmm', "That image couldn't be read."); return; }
     setBusy(true);
     try {
       const c = configFor(await loadSettings(), 'docs');
       const provider = getProvider(c.provider);
       if (!c.apiKey || !provider.extractBalance) {
-        Alert.alert('Add your Gemini key', 'Scanning needs your Google Gemini key in Settings → Document import.');
+        notify('Add your Gemini key', 'Scanning needs your Google Gemini key in Settings → Document import.');
         return;
       }
       const amount = await provider.extractBalance({
@@ -28,10 +29,10 @@ export function ScanBalanceButton({ onResult }: { onResult: (amount: number) => 
         model: c.model,
         parts: [{ kind: 'binary', base64: a.base64, mimeType: a.mimeType ?? 'image/jpeg' }],
       });
-      if (amount == null) Alert.alert('Hmm', "I couldn't read a clear amount. Try a clearer screenshot or type it in.");
+      if (amount == null) notify('Hmm', "I couldn't read a clear amount. Try a clearer screenshot or type it in.");
       else onResult(amount);
     } catch (e) {
-      Alert.alert('Scan failed', llmErrorMessage(e));
+      notify('Scan failed', llmErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -39,17 +40,19 @@ export function ScanBalanceButton({ onResult }: { onResult: (amount: number) => 
 
   const pickGallery = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) { Alert.alert('Permission needed', 'Allow photo access to pick a screenshot.'); return; }
+    if (!perm.granted) { notify('Permission needed', 'Allow photo access to pick a screenshot.'); return; }
     await extract(await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], base64: true, quality: 0.7 }));
   };
   const takePhoto = async () => {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) { Alert.alert('Permission needed', 'Allow camera access to snap a balance.'); return; }
+    if (!perm.granted) { notify('Permission needed', 'Allow camera access to snap a balance.'); return; }
     await extract(await ImagePicker.launchCameraAsync({ base64: true, quality: 0.7 }));
   };
 
   const start = () => {
     if (busy) return;
+    // RN-web has no native action-sheet Alert — go straight to the file picker on web.
+    if (Platform.OS === 'web') { pickGallery(); return; }
     Alert.alert('Scan balance', 'Read the amount from a screenshot or photo.', [
       { text: 'Take photo', onPress: takePhoto },
       { text: 'Choose from gallery', onPress: pickGallery },

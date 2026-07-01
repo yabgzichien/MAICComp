@@ -1,9 +1,10 @@
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, type IconName } from '../components/Icon';
 import { B, BubbleText, Card, PipSays, TopBar } from '../components/ui';
+import { notify } from '../lib/platformAlert';
 import { colors, radius, uiFont } from '../theme';
 
 export interface PickedImage {
@@ -34,7 +35,7 @@ export function AttachScreen({
     if (res.canceled || !res.assets?.length) return;
     const a = res.assets[0];
     if (!a.base64) {
-      Alert.alert('Hmm', "That image couldn't be read. Try another one.");
+      notify('Hmm', "That image couldn't be read. Try another one.");
       return;
     }
     onPicked({ uri: a.uri, base64: a.base64, mime: a.mimeType ?? 'image/jpeg' });
@@ -46,7 +47,7 @@ export function AttachScreen({
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert('Permission needed', 'Allow photo access to attach a screenshot.');
+        notify('Permission needed', 'Allow photo access to attach a screenshot.');
         return;
       }
       const res = await ImagePicker.launchImageLibraryAsync({
@@ -66,7 +67,7 @@ export function AttachScreen({
     try {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert('Permission needed', 'Allow camera access to snap a receipt.');
+        notify('Permission needed', 'Allow camera access to snap a receipt.');
         return;
       }
       const res = await ImagePicker.launchCameraAsync({ base64: true, quality: 0.7 });

@@ -36,6 +36,14 @@ export function fullDate(iso?: string | null): string {
   return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`;
 }
 
+/** e.g. "Monday, 1 Jun 2026"; accepts ISO date or datetime, empty string on bad input. */
+export function fullDateWithWeekday(iso?: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return `${WEEKDAYS[d.getDay()]}, ${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+}
+
 /** Strict `YYYY-MM-DD` matcher — the only date-string shape this module rewrites. */
 export const ISO_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 

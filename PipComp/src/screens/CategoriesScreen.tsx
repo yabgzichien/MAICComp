@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, type IconName } from '../components/Icon';
 import { BtnLabel, Card, CatBadge, Eyebrow, PrimaryButton, TopBar } from '../components/ui';
 import { PROTECTED_CATEGORY_IDS } from '../db/categoriesRepo';
 import { catColorsForHue } from '../lib/catColors';
+import { confirmAction } from '../lib/platformAlert';
 import type { TxnType } from '../lib/types';
 import { useAppData } from '../state/store';
 import { colors, radius, uiFont } from '../theme';
@@ -46,10 +47,7 @@ export function CategoriesScreen({ onBack }: { onBack: () => void }) {
   };
 
   const confirmDelete = (id: string, label: string) => {
-    Alert.alert('Delete category?', `Remove “${label}”? Transactions move to a default and its learning is cleared.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => deleteCategory(id) },
-    ]);
+    confirmAction('Delete category?', `Remove “${label}”? Transactions move to a default and its learning is cleared.`, 'Delete', () => deleteCategory(id));
   };
 
   return (

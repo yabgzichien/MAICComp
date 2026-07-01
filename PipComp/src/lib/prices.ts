@@ -189,6 +189,19 @@ export interface ScannedHolding {
   quantity: number;
 }
 
+/** Coerce a raw `{ticker, quantity}` row array (already-parsed JSON) into valid holdings, dropping bad rows. */
+export function coerceHoldingsRows(rows: unknown): ScannedHolding[] {
+  const arr = Array.isArray(rows) ? rows : [];
+  const out: ScannedHolding[] = [];
+  for (const r of arr) {
+    const o = r as Record<string, unknown>;
+    const ticker = typeof o.ticker === 'string' ? o.ticker.trim().toUpperCase() : '';
+    const quantity = typeof o.quantity === 'number' ? o.quantity : typeof o.quantity === 'string' ? Number(o.quantity.replace(/[^0-9.]/g, '')) : NaN;
+    if (ticker && Number.isFinite(quantity) && quantity > 0) out.push({ ticker, quantity });
+  }
+  return out;
+}
+
 /** Defensive parser for the crypto-wallet extraction reply: {holdings:[{ticker,quantity}]}. */
 export function parseCryptoHoldings(content: string): ScannedHolding[] {
   const cleaned = stripFences(content).trim();
@@ -204,14 +217,7 @@ export function parseCryptoHoldings(content: string): ScannedHolding[] {
     : Array.isArray((data as { holdings?: unknown }).holdings)
       ? (data as { holdings: unknown[] }).holdings
       : [];
-  const out: ScannedHolding[] = [];
-  for (const r of rows) {
-    const o = r as Record<string, unknown>;
-    const ticker = typeof o.ticker === 'string' ? o.ticker.trim().toUpperCase() : '';
-    const quantity = typeof o.quantity === 'number' ? o.quantity : typeof o.quantity === 'string' ? Number(o.quantity.replace(/[^0-9.]/g, '')) : NaN;
-    if (ticker && Number.isFinite(quantity) && quantity > 0) out.push({ ticker, quantity });
-  }
-  return out;
+  return coerceHoldingsRows(rows);
 }
 
 function stripFences(s: string): string {

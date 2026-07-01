@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AddCategoryModal } from '../components/AddCategoryModal';
 import { Icon } from '../components/Icon';
 import { Amount, B, BtnLabel, BubbleText, Card, CategoryChip, PipSays, PrimaryButton, ProgressTrack, TopBar } from '../components/ui';
-import { applyDateEdit, fullDate, ISO_DATE_RE, isValidIsoDate, shortDate } from '../lib/dates';
+import { applyDateEdit, fullDateWithWeekday, ISO_DATE_RE, isValidIsoDate, shortDate } from '../lib/dates';
 import { findDuplicate, todayISO } from '../lib/duplicates';
 import { fmt } from '../lib/format';
 import { DROP, type Category, type ExtractedTxn, type TxnType } from '../lib/types';
@@ -379,7 +379,7 @@ function DateEditor({ value, onChange }: { value: string | null; onChange: (d: s
   return (
     <Pressable onPress={() => setEditing(true)} hitSlop={8} style={styles.dateTap}>
       <Icon name="clock" size={13} color={colors.ink3} />
-      <Text style={styles.dateText}>{value ? fullDate(value) : 'Add date'}</Text>
+      <Text style={styles.dateText}>{value ? fullDateWithWeekday(value) : 'Add date'}</Text>
       <Icon name="pencil" size={13} color={colors.ink3} />
     </Pressable>
   );

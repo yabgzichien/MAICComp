@@ -1,15 +1,19 @@
 // src/screens/NetWorthScreen.tsx
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, type IconName } from '../components/Icon';
-import { HoldingScanScreen } from './HoldingScanScreen';
+import { InstitutionBadge } from '../components/InstitutionBadge';
+import { InstitutionField } from '../components/InstitutionField';
+import { BalanceScanScreen } from './BalanceScanScreen';
 import { ScanBalanceButton } from '../components/ScanBalanceButton';
 import { TickerSearchModal } from '../components/TickerSearchModal';
 import { BtnLabel, Card, Eyebrow, PrimaryButton, type ValueMode } from '../components/ui';
 import { shortDate } from '../lib/dates';
 import { fmt } from '../lib/format';
+import { matchInstitution } from '../lib/institutions';
+import { confirmAction } from '../lib/platformAlert';
 import {
   CLASS_BY_ID,
   classesFor,
@@ -101,7 +105,7 @@ export function NetWorthScreen({ onBack, onOpenSettings = () => {} }: { onBack: 
 
   // Safe to branch here — all hooks above have run unconditionally.
   if (scanning) {
-    return <HoldingScanScreen onClose={() => setScanning(false)} onOpenSettings={onOpenSettings} />;
+    return <BalanceScanScreen onClose={() => setScanning(false)} onOpenSettings={onOpenSettings} />;
   }
 
   return (
@@ -407,11 +411,16 @@ function AssetClassCard({
 }
 
 function ManualRowD({ icon, name, sub, value, isLast, onPress }: { icon: IconName; name: string; sub: string; value: number; isLast: boolean; onPress: () => void }) {
+  const inst = matchInstitution(name);
   return (
     <Pressable onPress={onPress} style={[styles.row, !isLast && styles.rowDivider]}>
-      <View style={styles.rowTile}>
-        <Icon name={icon} size={16} color={colors.accent} />
-      </View>
+      {inst ? (
+        <InstitutionBadge inst={inst} size={36} />
+      ) : (
+        <View style={styles.rowTile}>
+          <Icon name={icon} size={16} color={colors.accent} />
+        </View>
+      )}
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={styles.rowName} numberOfLines={1}>{name}</Text>
         <Text style={styles.rowSub} numberOfLines={1}>{sub}</Text>
@@ -476,11 +485,16 @@ function HoldingRowD({
 }
 
 function LiabilityRowD({ name, cls, value, isLast, onPress }: { name: string; cls: string; value: number; isLast: boolean; onPress: () => void }) {
+  const inst = matchInstitution(name);
   return (
     <Pressable onPress={onPress} style={[styles.row, !isLast && styles.rowDivider]}>
-      <View style={[styles.rowTile, { backgroundColor: '#fff0ef' }]}>
-        <Icon name="scale" size={16} color={colors.red} />
-      </View>
+      {inst ? (
+        <InstitutionBadge inst={inst} size={36} />
+      ) : (
+        <View style={[styles.rowTile, { backgroundColor: '#fff0ef' }]}>
+          <Icon name="scale" size={16} color={colors.red} />
+        </View>
+      )}
       <View style={{ flex: 1, minWidth: 0 }}>
         <View style={styles.liabNameRow}>
           <Text style={styles.rowName} numberOfLines={1}>{name}</Text>
@@ -676,13 +690,12 @@ function AddAccountModal({ visible, preset, onClose }: { visible: boolean; prese
             </>
           ) : (
             <>
-              <Text style={[styles.fieldLabel, { marginTop: 18 }]}>Name</Text>
-              <TextInput
+              <Text style={[styles.fieldLabel, { marginTop: 18 }]}>Account</Text>
+              <InstitutionField
                 value={name}
                 onChangeText={setName}
                 placeholder={kind === 'asset' ? 'e.g. TnG eWallet, Maybank FD' : 'e.g. Car Loan'}
-                placeholderTextColor={colors.ink3}
-                style={styles.textInput}
+                onPick={() => { if (kind === 'asset') setCls('cash'); }}
               />
 
               <View style={[styles.labelRow, { marginTop: 18 }]}>
@@ -856,10 +869,10 @@ function AccountSheet({ account, onClose }: { account: Account | null; onClose: 
   };
 
   const confirmDelete = () => {
-    Alert.alert('Delete account?', `Remove “${account.name}” and its history? This can’t be undone.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => { await deleteAccount(account.id); onClose(); } },
-    ]);
+    confirmAction('Delete account?', `Remove “${account.name}” and its history? This can’t be undone.`, 'Delete', async () => {
+      await deleteAccount(account.id);
+      onClose();
+    });
   };
 
   return (
@@ -922,8 +935,12 @@ function AccountSheet({ account, onClose }: { account: Account | null; onClose: 
               </View>
               <Text style={styles.hint}>Saving a new value records it as of today.</Text>
 
-              <Text style={[styles.fieldLabel, { marginTop: 18 }]}>Name</Text>
-              <TextInput value={name} onChangeText={setName} style={styles.textInput} />
+              <Text style={[styles.fieldLabel, { marginTop: 18 }]}>Account</Text>
+              <InstitutionField
+                value={name}
+                onChangeText={setName}
+                onPick={() => { if (account.kind === 'asset') setCls('cash'); }}
+              />
 
               <Text style={[styles.fieldLabel, { marginTop: 18 }]}>Type</Text>
               <View style={styles.classGrid}>

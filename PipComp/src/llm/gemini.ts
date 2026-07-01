@@ -1,6 +1,7 @@
 // src/llm/gemini.ts
 import { ExtractionParseError, parseExtraction } from '../lib/parseExtraction';
 import { parseBalance } from '../lib/parseBalance';
+import { parseSnapshot, type ScannedSnapshot } from '../lib/parseSnapshot';
 import { parseCryptoHoldings, type ScannedHolding } from '../lib/prices';
 import type { ExtractedTxn } from '../lib/types';
 import {
@@ -10,6 +11,8 @@ import {
   DOC_USER_PROMPT,
   HOLDINGS_SYSTEM_PROMPT,
   HOLDINGS_USER_PROMPT,
+  SNAPSHOT_SYSTEM_PROMPT,
+  SNAPSHOT_USER_PROMPT,
 } from './extractPrompt';
 import {
   LLMError,
@@ -145,6 +148,16 @@ export const GeminiProvider: LLMProvider = {
     }
     const json = await callGemini(model, apiKey, geminiParts, { system: BALANCE_SYSTEM_PROMPT, json: true });
     return parseBalance(contentOf(json));
+  },
+
+  async extractSnapshot({ apiKey, model, parts }: DocExtractInput): Promise<ScannedSnapshot> {
+    const geminiParts: GeminiPart[] = [{ text: SNAPSHOT_USER_PROMPT }];
+    for (const p of parts) {
+      if (p.kind === 'binary') geminiParts.push({ inline_data: { mime_type: p.mimeType, data: p.base64 } });
+      else geminiParts.push({ text: p.text });
+    }
+    const json = await callGemini(model, apiKey, geminiParts, { system: SNAPSHOT_SYSTEM_PROMPT, json: true });
+    return parseSnapshot(contentOf(json));
   },
 
   async test({ apiKey, model }: TestInput): Promise<void> {

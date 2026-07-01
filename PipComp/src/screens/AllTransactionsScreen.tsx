@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EditTransactionModal } from '../components/EditTransactionModal';
 import { Icon } from '../components/Icon';
 import { Amount, Card, CatBadge, Eyebrow, IconButton, TopBar } from '../components/ui';
 import { shortDate } from '../lib/dates';
+import { confirmAction } from '../lib/platformAlert';
 import type { Category, Transaction } from '../lib/types';
 import { useAppData } from '../state/store';
 import { colors, uiFont } from '../theme';
@@ -63,17 +64,10 @@ export function AllTransactionsScreen({
   const deleteSelected = () => {
     const ids = [...selected];
     if (ids.length === 0) return;
-    Alert.alert('Delete selected?', `Remove ${ids.length} transaction${ids.length === 1 ? '' : 's'}? This can’t be undone.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          await removeMany(ids);
-          cancelSelect();
-        },
-      },
-    ]);
+    confirmAction('Delete selected?', `Remove ${ids.length} transaction${ids.length === 1 ? '' : 's'}? This can’t be undone.`, 'Delete', async () => {
+      await removeMany(ids);
+      cancelSelect();
+    });
   };
   const onRowPress = (t: Transaction) => {
     if (selectMode) toggleSelect(t.id);
