@@ -17,6 +17,7 @@ import {
 } from './tokens';
 import { type CreditPassport, parsePassportCode, verifyPassport } from '../lib/passport';
 import { DEFAULT_PRODUCTS, decideLoan, type LoanDecision } from '../lib/loans';
+import { MiniBar, SectionLabel } from './shared';
 
 type Tab = 'verify' | 'capital';
 const BAND_SEGMENTS = ['#c0392b', '#d98a00', '#3ab07a', '#1f8a5b', '#145c3d'];
@@ -53,23 +54,6 @@ function evaluate(code: string, amountStr: string): ViewState {
   } catch (e) {
     return { status: 'invalid', reasons: [e instanceof Error ? e.message : String(e)] };
   }
-}
-
-// ── shared bits ───────────────────────────────────────────────────────────────
-function SectionLabel({ children, color }: { children: React.ReactNode; color?: string }) {
-  return (
-    <p style={{ fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 700, color: color ?? '#9aa7a0', letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: 3 }}>
-      {children}
-    </p>
-  );
-}
-
-function MiniBar({ pct, color, track }: { pct: number; color: string; track: string }) {
-  return (
-    <div style={{ height: 5, borderRadius: 3, background: track, overflow: 'hidden', flex: 1 }}>
-      <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 3 }} />
-    </div>
-  );
 }
 
 function BrandMark({ p }: { p: Palette }) {
