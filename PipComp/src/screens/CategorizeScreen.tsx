@@ -245,7 +245,7 @@ export function CategorizeScreen({
                   <CategoryChip
                     category={c}
                     selected={sel === c.id}
-                    suggested={suggestion === c.id}
+                    suggested={suggestion === c.id ? 'learned' : false}
                     onPress={() => setCat(c.id)}
                   />
                 </View>

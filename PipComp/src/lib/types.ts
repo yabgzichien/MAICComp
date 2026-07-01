@@ -44,6 +44,13 @@ export interface Transaction {
 /** merchantKey -> categoryId, the learned memory. */
 export type MemoryMap = Record<string, string>;
 
+/** A category suggestion pre-filled in the Categorize flow, tagged with where
+ * it came from: a real learned-memory match, or a first-time AI guess. */
+export interface CategorySuggestion {
+  categoryId: string;
+  source: 'learned' | 'guess';
+}
+
 /** Net-worth tracking: an asset (cash, investments) or a liability (loans). */
 export type AccountKind = 'asset' | 'liability';
 

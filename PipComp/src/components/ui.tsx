@@ -79,7 +79,7 @@ export function CategoryChip({
 }: {
   category: Category;
   selected: boolean;
-  suggested: boolean;
+  suggested: false | 'learned' | 'guess';
   onPress: () => void;
 }) {
   const theme = useAccent();
@@ -95,7 +95,7 @@ export function CategoryChip({
       {suggested && !selected && (
         <View style={[styles.learnedTag, { backgroundColor: theme.accentSoft }]}>
           <Icon name="sparkles" size={11} color={theme.accentInk} />
-          <Text style={[styles.learnedTagText, { color: theme.accentInk }]}>learned</Text>
+          <Text style={[styles.learnedTagText, { color: theme.accentInk }]}>{suggested === 'guess' ? 'AI guess' : 'learned'}</Text>
         </View>
       )}
       {selected && (
