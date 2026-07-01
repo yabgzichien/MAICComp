@@ -114,14 +114,72 @@ function sortKeys(value: unknown): unknown {
   }
   if (value !== null && typeof value === 'object') {
     const obj = value as Record<string, unknown>;
+    // Build on a null-prototype object so an attacker-supplied "__proto__"/"constructor"
+    // key becomes a plain own property instead of touching the prototype chain. (L1)
     return Object.keys(obj)
       .sort()
       .reduce<Record<string, unknown>>((acc, k) => {
         acc[k] = sortKeys(obj[k]);
         return acc;
-      }, {});
+      }, Object.create(null) as Record<string, unknown>);
   }
   return value;
+}
+
+// ── Validation & freshness helpers ────────────────────────────────────────────
+
+const HEX_RE = /^[0-9a-f]+$/i;
+/** Tolerance for client/issuer clock differences when checking the validity window. */
+const CLOCK_SKEW_MS = 5 * 60 * 1000;
+
+const isFiniteNum = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
+
+/**
+ * Strict structural/type validation of an untrusted passport before it is used (M3).
+ * Returns a list of problems ([] = well-formed). Defends the decision engine from type
+ * confusion (e.g. a string score, NaN income, a missing band) in pasted JSON.
+ */
+export function validatePassportShape(p: unknown): string[] {
+  const problems: string[] = [];
+  if (!p || typeof p !== 'object') return ['passport is not an object'];
+  const o = p as Record<string, unknown>;
+  if (typeof o.subject !== 'string' || o.subject.length === 0) problems.push('subject');
+  if (!isFiniteNum(o.score)) problems.push('score');
+  if (typeof o.band !== 'string') problems.push('band');
+  if (
+    !Array.isArray(o.factorSummary) ||
+    !o.factorSummary.every(
+      (f) => f && typeof f === 'object' && typeof (f as { key?: unknown }).key === 'string' && isFiniteNum((f as { subScore?: unknown }).subScore)
+    )
+  )
+    problems.push('factorSummary');
+  if (typeof o.provenanceSummary !== 'string') problems.push('provenanceSummary');
+  if (typeof o.evidenceHash !== 'string') problems.push('evidenceHash');
+  const rr = o.repaymentRecord as { onTime?: unknown; total?: unknown } | undefined;
+  if (!rr || typeof rr !== 'object' || !isFiniteNum(rr.onTime) || !isFiniteNum(rr.total)) problems.push('repaymentRecord');
+  if (typeof o.issuedAt !== 'string' || typeof o.validUntil !== 'string') problems.push('issuedAt/validUntil');
+  if (o.assessment !== undefined) {
+    const a = o.assessment as Record<string, unknown>;
+    const keys = ['confidence', 'coverageRatio', 'coverageDays', 'avgIncome', 'avgMonthlySurplus', 'monthlyDebtService'];
+    if (!a || typeof a !== 'object' || !keys.every((k) => isFiniteNum(a[k]))) problems.push('assessment');
+  }
+  if (o.holder !== undefined) {
+    const h = o.holder as Record<string, unknown>;
+    if (!h || typeof h !== 'object' || typeof h.name !== 'string' || typeof h.nricMasked !== 'string' || typeof h.verified !== 'boolean' || typeof h.provider !== 'string')
+      problems.push('holder');
+  }
+  return problems;
+}
+
+/** Returns a reason string if the passport is outside its signed validity window, else null (H1). */
+function freshnessProblem(passport: CreditPassport, now: Date): string | null {
+  const issued = Date.parse(passport.issuedAt);
+  const until = Date.parse(passport.validUntil);
+  if (Number.isNaN(issued) || Number.isNaN(until)) return 'Passport has malformed issued/valid dates';
+  const t = now.getTime();
+  if (t > until + CLOCK_SKEW_MS) return `Passport expired (valid until ${passport.validUntil})`;
+  if (t < issued - CLOCK_SKEW_MS) return `Passport is not yet valid (issued ${passport.issuedAt})`;
+  return null;
 }
 
 // ── Exported functions ────────────────────────────────────────────────────────
@@ -206,9 +264,10 @@ export function verifyPassport(
   signature: string,
   publicKeyHex: string,
   issuer?: IssuerCheck,
+  now: Date = new Date(),
 ): VerifyResult {
-  // Validate signature length before attempting verification
-  if (signature.length !== 128) {
+  // Validate signature length + hex charset before attempting verification (L3)
+  if (signature.length !== 128 || !HEX_RE.test(signature)) {
     return {
       valid: false,
       tampered: false,
@@ -216,13 +275,19 @@ export function verifyPassport(
     };
   }
 
-  // Validate public key length before attempting verification
-  if (publicKeyHex.length !== 64) {
+  // Validate public key length + hex charset before attempting verification (L3)
+  if (publicKeyHex.length !== 64 || !HEX_RE.test(publicKeyHex)) {
     return {
       valid: false,
       tampered: false,
       reasons: ['Public key must be 32 bytes (64 hex chars)'],
     };
+  }
+
+  // Strict structural validation before the payload is trusted (M3)
+  const shape = validatePassportShape(passport);
+  if (shape.length > 0) {
+    return { valid: false, tampered: false, reasons: [`Malformed passport fields: ${shape.join(', ')}`] };
   }
 
   try {
@@ -239,7 +304,7 @@ export function verifyPassport(
     // Issuer attestation (optional): proves Pip — not just the holder — issued this passport.
     // Without it, a holder's own signature only proves "not altered", not "issued by Pip".
     if (issuer) {
-      if (issuer.signature.length !== 128 || issuer.publicKeyHex.length !== 64) {
+      if (issuer.signature.length !== 128 || !HEX_RE.test(issuer.signature) || issuer.publicKeyHex.length !== 64 || !HEX_RE.test(issuer.publicKeyHex)) {
         return {
           valid: false,
           tampered: false,
@@ -258,6 +323,12 @@ export function verifyPassport(
           reasons: ['Issuer signature invalid — not issued by Pip (possible self-minted passport)'],
         };
       }
+    }
+
+    // Freshness: only meaningful once the (signed) dates are known authentic (H1)
+    const stale = freshnessProblem(passport, now);
+    if (stale) {
+      return { valid: false, tampered: false, reasons: [stale] };
     }
 
     return { valid: true, tampered: false, reasons: [] };

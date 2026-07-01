@@ -30,8 +30,11 @@ const privKey = ed.utils.randomSecretKey();
 const pubKeyHex = Buffer.from(ed.getPublicKey(privKey)).toString('hex');
 
 // ── 2. Sample passport (672 / Good, coherent with the live demo profile) ───────
-const issuedAt = '2026-06-09T08:00:00.000Z';
-const validUntil = '2026-07-09T08:00:00.000Z';
+// NOTE: real passports are valid 30 days (see buildPassport). This *demo sample* uses an
+// extended window so "Load sample applicant" keeps verifying through the competition now
+// that verification enforces the validity window (H1).
+const issuedAt = '2026-06-01T08:00:00.000Z';
+const validUntil = '2027-06-01T08:00:00.000Z';
 
 const passport = {
   subject: pubKeyHex,

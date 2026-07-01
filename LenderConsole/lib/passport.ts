@@ -58,12 +58,14 @@ function sortKeys(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortKeys);
   if (value !== null && typeof value === 'object') {
     const obj = value as Record<string, unknown>;
+    // Null-prototype accumulator so a hostile "__proto__"/"constructor" key stays a plain
+    // own property and never touches the prototype chain. (L1)
     return Object.keys(obj)
       .sort()
       .reduce<Record<string, unknown>>((acc, k) => {
         acc[k] = sortKeys(obj[k]);
         return acc;
-      }, {});
+      }, Object.create(null) as Record<string, unknown>);
   }
   return value;
 }
@@ -73,17 +75,73 @@ export function canonicalize(passport: CreditPassport): string {
   return JSON.stringify(sortKeys(passport));
 }
 
+// ── Validation & freshness helpers ────────────────────────────────────────────
+
+const HEX_RE = /^[0-9a-f]+$/i;
+const CLOCK_SKEW_MS = 5 * 60 * 1000;
+const isFiniteNum = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
+
+/** Strict structural/type validation of an untrusted passport before use (M3). [] = OK. */
+export function validatePassportShape(p: unknown): string[] {
+  const problems: string[] = [];
+  if (!p || typeof p !== 'object') return ['passport is not an object'];
+  const o = p as Record<string, unknown>;
+  if (typeof o.subject !== 'string' || o.subject.length === 0) problems.push('subject');
+  if (!isFiniteNum(o.score)) problems.push('score');
+  if (typeof o.band !== 'string') problems.push('band');
+  if (
+    !Array.isArray(o.factorSummary) ||
+    !o.factorSummary.every(
+      (f) => f && typeof f === 'object' && typeof (f as { key?: unknown }).key === 'string' && isFiniteNum((f as { subScore?: unknown }).subScore)
+    )
+  )
+    problems.push('factorSummary');
+  if (typeof o.provenanceSummary !== 'string') problems.push('provenanceSummary');
+  if (typeof o.evidenceHash !== 'string') problems.push('evidenceHash');
+  const rr = o.repaymentRecord as { onTime?: unknown; total?: unknown } | undefined;
+  if (!rr || typeof rr !== 'object' || !isFiniteNum(rr.onTime) || !isFiniteNum(rr.total)) problems.push('repaymentRecord');
+  if (typeof o.issuedAt !== 'string' || typeof o.validUntil !== 'string') problems.push('issuedAt/validUntil');
+  if (o.assessment !== undefined) {
+    const a = o.assessment as Record<string, unknown>;
+    const keys = ['confidence', 'coverageRatio', 'coverageDays', 'avgIncome', 'avgMonthlySurplus', 'monthlyDebtService'];
+    if (!a || typeof a !== 'object' || !keys.every((k) => isFiniteNum(a[k]))) problems.push('assessment');
+  }
+  if (o.holder !== undefined) {
+    const h = o.holder as Record<string, unknown>;
+    if (!h || typeof h !== 'object' || typeof h.name !== 'string' || typeof h.nricMasked !== 'string' || typeof h.verified !== 'boolean' || typeof h.provider !== 'string')
+      problems.push('holder');
+  }
+  return problems;
+}
+
+/** Reason string if the passport is outside its signed validity window, else null (H1). */
+function freshnessProblem(passport: CreditPassport, now: Date): string | null {
+  const issued = Date.parse(passport.issuedAt);
+  const until = Date.parse(passport.validUntil);
+  if (Number.isNaN(issued) || Number.isNaN(until)) return 'Passport has malformed issued/valid dates';
+  const t = now.getTime();
+  if (t > until + CLOCK_SKEW_MS) return `Passport expired (valid until ${passport.validUntil})`;
+  if (t < issued - CLOCK_SKEW_MS) return `Passport is not yet valid (issued ${passport.issuedAt})`;
+  return null;
+}
+
 /** Verify holder signature against `passport.subject`, plus the pinned issuer signature. */
 export function verifyPassport(
   passport: CreditPassport,
   signature: string,
   issuerSignature?: string,
+  now: Date = new Date(),
 ): VerifyResult {
-  if (signature.length !== 128) {
+  if (signature.length !== 128 || !HEX_RE.test(signature)) {
     return { valid: false, tampered: false, reasons: ['Signature must be 64 bytes (128 hex chars).'] };
   }
-  if (!passport.subject || passport.subject.length !== 64) {
+  if (!passport.subject || passport.subject.length !== 64 || !HEX_RE.test(passport.subject)) {
     return { valid: false, tampered: false, reasons: ['Passport subject key is missing or malformed.'] };
+  }
+  // Strict structural validation before the payload is trusted (M3)
+  const shape = validatePassportShape(passport);
+  if (shape.length > 0) {
+    return { valid: false, tampered: false, reasons: [`Malformed passport fields: ${shape.join(', ')}`] };
   }
 
   try {
@@ -93,7 +151,7 @@ export function verifyPassport(
       return { valid: false, tampered: true, reasons: ['Holder signature verification failed — passport was altered.'] };
     }
 
-    if (!issuerSignature || issuerSignature.length !== 128) {
+    if (!issuerSignature || issuerSignature.length !== 128 || !HEX_RE.test(issuerSignature)) {
       return {
         valid: false,
         tampered: false,
@@ -107,6 +165,12 @@ export function verifyPassport(
         tampered: false,
         reasons: ['Issuer signature invalid — not issued by Pip (possible self-minted passport).'],
       };
+    }
+
+    // Freshness: only meaningful once signatures prove the dates are authentic (H1)
+    const stale = freshnessProblem(passport, now);
+    if (stale) {
+      return { valid: false, tampered: false, reasons: [stale] };
     }
     return { valid: true, tampered: false, reasons: [] };
   } catch (err) {
