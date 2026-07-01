@@ -16,6 +16,16 @@ import { SavedScreen } from './SavedScreen';
 
 type Phase = 'attach' | 'extract' | 'guessing' | 'categorize' | 'manual' | 'saved' | 'import';
 
+const GUESS_TIMEOUT_MS = 12000;
+
+/** Bounds an in-flight promise so a hung request can't strand the user indefinitely. */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Category guess timed out.')), ms)),
+  ]);
+}
+
 /**
  * The add-a-receipt flow: Attach → Extract → Categorize → Saved.
  * Mirrors the design's state machine but wired to the real LLM + SQLite.
@@ -79,12 +89,15 @@ export function AddFlow({
     }
 
     try {
-      const guessed = await provider.guessCategories({
-        apiKey: config.apiKey,
-        model: config.model,
-        items: missing.map((i) => ({ index: i, merchant: items[i].merchant, amount: items[i].amount, method: items[i].method, kind: items[i].type })),
-        categories: categories.map((c) => ({ id: c.id, label: c.label, kind: c.kind })),
-      });
+      const guessed = await withTimeout(
+        provider.guessCategories({
+          apiKey: config.apiKey,
+          model: config.model,
+          items: missing.map((i) => ({ index: i, merchant: items[i].merchant, amount: items[i].amount, method: items[i].method, kind: items[i].type })),
+          categories: categories.map((c) => ({ id: c.id, label: c.label, kind: c.kind })),
+        }),
+        GUESS_TIMEOUT_MS
+      );
       setSuggestions(learned.map((s, i) => s ?? (guessed[i] ? { categoryId: guessed[i]!, source: 'guess' } : null)));
     } catch {
       // Enhancement-only: any failure (network, timeout, bad reply) just falls
@@ -127,7 +140,7 @@ export function AddFlow({
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center', paddingHorizontal: 18 }}>
         <PipSays expr="think">
-          <BubbleText>Thinking about your new merchants…</BubbleText>
+          <BubbleText>Thinking about your new merchants… this can take a few seconds.</BubbleText>
         </PipSays>
       </View>
     );
