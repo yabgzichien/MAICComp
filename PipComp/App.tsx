@@ -32,13 +32,14 @@ import { KycScreen } from './src/screens/KycScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { NetWorthScreen } from './src/screens/NetWorthScreen';
 import { RecapScreen } from './src/screens/RecapScreen';
+import { CalendarScreen } from './src/screens/CalendarScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { AccentProvider } from './src/state/accent';
 import { AppDataProvider, useAppData } from './src/state/store';
 import { useNow } from './src/state/useNow';
 import { colors, uiFont } from './src/theme';
 
-type Screen = 'home' | 'add' | 'settings' | 'categories' | 'transactions' | 'breakdown' | 'budget' | 'recap' | 'networth' | 'credit' | 'loans' | 'passport' | 'lender' | 'kyc';
+type Screen = 'home' | 'add' | 'settings' | 'categories' | 'transactions' | 'breakdown' | 'budget' | 'recap' | 'networth' | 'credit' | 'loans' | 'passport' | 'lender' | 'kyc' | 'calendar';
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -121,6 +122,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
   const [screen, setScreen] = useState<Screen>('home');
   const [txnFilter, setTxnFilter] = useState<string | null>(null);
   const [addInitial, setAddInitial] = useState<'attach' | 'import'>('attach');
+  const [calendarMonth, setCalendarMonth] = useState<string | undefined>(undefined);
 
   // Persistent bottom nav appears only on the four primary destinations.
   const navTab: NavTab | null =
@@ -207,7 +209,21 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
         />
       )}
       {screen === 'budget' && <BudgetScreen onBack={() => setScreen('home')} onOpenRecap={() => setScreen('recap')} />}
-      {screen === 'recap' && <RecapScreen onBack={() => setScreen('home')} />}
+      {screen === 'recap' && (
+        <RecapScreen
+          onBack={() => setScreen('home')}
+          onOpenCalendar={(month) => {
+            setCalendarMonth(month);
+            setScreen('calendar');
+          }}
+        />
+      )}
+      {screen === 'calendar' && (
+        <CalendarScreen
+          onBack={() => setScreen('recap')}
+          initialMonth={calendarMonth}
+        />
+      )}
       {screen === 'networth' && <NetWorthScreen onBack={() => setScreen('home')} onOpenSettings={() => setScreen('settings')} />}
       {screen === 'credit' && (
         <CreditScreen

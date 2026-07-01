@@ -204,7 +204,7 @@ function InsightRow({ type, text, isLast }: { type: InsightType; text: string; i
   );
 }
 
-export function RecapScreen({ onBack }: { onBack: () => void }) {
+export function RecapScreen({ onBack, onOpenCalendar }: { onBack: () => void; onOpenCalendar?: (month: string) => void }) {
   const insets = useSafeAreaInsets();
   const { transactions, catById, snapshots, accounts, balanceEntries } = useAppData();
 
@@ -277,6 +277,20 @@ export function RecapScreen({ onBack }: { onBack: () => void }) {
             <Path d="M3 7.5h12M6.5 2.5v3M11.5 2.5v3M6.5 11l1.6 1.6L11.5 9" />
           </Svg>
         </Pressable>
+        {onOpenCalendar && (
+          <Pressable
+            onPress={() => onOpenCalendar(month)}
+            style={[styles.navBtn, { marginLeft: 6 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Open calendar view"
+          >
+            <Svg width={17} height={17} viewBox="0 0 18 18" fill="none" stroke={colors.accent} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
+              <Rect x={3} y={3} width={12} height={12} rx={2} />
+              <Path d="M3 7h12M6.5 1.5v3M11.5 1.5v3" />
+              <Path d="M6 10.5h2M10 10.5h2M6 13h2M10 13h2" />
+            </Svg>
+          </Pressable>
+        )}
       </View>
 
       {/* Month picker — most-recent on the right */}
