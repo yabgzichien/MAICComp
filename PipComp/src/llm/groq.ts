@@ -1,6 +1,6 @@
 import { parseExtraction, ExtractionParseError } from '../lib/parseExtraction';
 import type { ExtractedTxn } from '../lib/types';
-import { LLMError, type CoachInput, type DocExtractInput, type ExtractInput, type LLMProvider, type TestInput } from './types';
+import { LLMError, type CategoryGuessInput, type CoachInput, type DocExtractInput, type ExtractInput, type LLMProvider, type TestInput } from './types';
 import {
   IDENTITY_SYSTEM_PROMPT,
   IDENTITY_USER_PROMPT,
@@ -8,6 +8,12 @@ import {
   parseIdentityExtraction,
   type IdentityExtraction,
 } from './ekycPrompt';
+import {
+  buildCategoryGuessPrompt,
+  CATEGORY_GUESS_SYSTEM_PROMPT,
+  CategoryGuessParseError,
+  parseCategoryGuess,
+} from './categoryGuessPrompt';
 
 const ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
 const DEFAULT_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct';
@@ -157,6 +163,36 @@ export const GroqProvider: LLMProvider = {
       return parseIdentityExtraction(content);
     } catch (e) {
       if (e instanceof IdentityParseError) throw new LLMError('bad_response', e.message);
+      throw e;
+    }
+  },
+
+  async guessCategories({ apiKey, model, items, categories }: CategoryGuessInput): Promise<Record<number, string | null>> {
+    const body = {
+      model: model || DEFAULT_MODEL,
+      messages: [
+        { role: 'system', content: CATEGORY_GUESS_SYSTEM_PROMPT },
+        { role: 'user', content: buildCategoryGuessPrompt(items, categories) },
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0,
+    };
+
+    const res = await postChat(body, apiKey);
+    let json: any;
+    try {
+      json = await res.json();
+    } catch {
+      throw new LLMError('bad_response', 'Response was not JSON.');
+    }
+    const content: unknown = json?.choices?.[0]?.message?.content;
+    if (typeof content !== 'string') {
+      throw new LLMError('bad_response', 'Empty model response.');
+    }
+    try {
+      return parseCategoryGuess(content, items, categories);
+    } catch (e) {
+      if (e instanceof CategoryGuessParseError) throw new LLMError('bad_response', e.message);
       throw e;
     }
   },
