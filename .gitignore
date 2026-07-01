@@ -70,3 +70,13 @@ __tests__/
 *.pem
 *.mobileprovision
 .vercel
+
+# ─── Root allowlist — only the two app folders + README/.gitignore are ever ───
+# committed at the repo root (decks, screenshots, scratch exports, etc. stay
+# local-only regardless of file type). Must stay last: gitignore evaluates
+# rules in order, and negation only re-includes a path excluded above it.
+/*
+!/PipComp/
+!/LenderConsole/
+!/README.md
+!/.gitignore
