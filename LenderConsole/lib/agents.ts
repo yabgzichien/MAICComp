@@ -171,6 +171,7 @@ export interface AgentPanelResult {
 const TONE_SEVERITY: Record<VerdictTone, number> = { positive: 0, caution: 1, negative: 2 };
 
 export function assessOrchestrator(specialists: AgentAssessment[], decision: LoanDecision): OrchestratorAssessment {
+  if (specialists.length === 0) throw new Error('assessOrchestrator requires at least one specialist.');
   const worst = specialists.reduce((w, s) => (TONE_SEVERITY[s.tone] > TONE_SEVERITY[w.tone] ? s : w), specialists[0]);
   const flagged = specialists.filter((s) => s.tone !== 'positive').map((s) => `${s.label}: ${s.verdict}`);
   const signals = flagged.length ? flagged : ['All four specialists clear'];
