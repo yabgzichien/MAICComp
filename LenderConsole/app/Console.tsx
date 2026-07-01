@@ -18,6 +18,7 @@ import {
 import { type CreditPassport, parsePassportCode, verifyPassport } from '../lib/passport';
 import { DEFAULT_PRODUCTS, decideLoan, type LoanDecision } from '../lib/loans';
 import { MiniBar, SectionLabel } from './shared';
+import AgentPanel from './AgentPanel';
 
 type Tab = 'verify' | 'capital';
 const BAND_SEGMENTS = ['#c0392b', '#d98a00', '#3ab07a', '#1f8a5b', '#145c3d'];
@@ -215,7 +216,7 @@ function LeftPanel({
   );
 }
 
-function VerifiedCenter({ p, passport }: { p: Palette; passport: CreditPassport }) {
+function VerifiedCenter({ p, passport, decision }: { p: Palette; passport: CreditPassport; decision: LoanDecision | null }) {
   const factors = passport.factorSummary;
   const avg = factors.length ? Math.round(factors.reduce((s, f) => s + f.subScore, 0) / factors.length) : 0;
   const confidencePct = passport.assessment ? Math.round(passport.assessment.confidence * 100) : null;
@@ -294,6 +295,7 @@ function VerifiedCenter({ p, passport }: { p: Palette; passport: CreditPassport 
           {evidenceShort && <span style={{ fontFamily: FONT.mono, fontSize: 9.5, color: p.ink3 }}>SHA-256: {evidenceShort}</span>}
         </div>
       </div>
+      {decision && <AgentPanel p={p} passport={passport} decision={decision} />}
     </div>
   );
 }
@@ -682,7 +684,7 @@ export default function Console() {
         {tab === 'verify' ? (
           <>
             <LeftPanel p={p} flagged={flagged} statusValid={flagged ? false : statusValid} code={code} setCode={setCode} onVerify={onVerify} onLoadSample={onLoadSample} onLoadFlagged={onLoadFlagged} />
-            {showAlert ? <CenterAlert p={p} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} /> : <InvalidCenter p={p} reasons={state.reasons} />}
+            {showAlert ? <CenterAlert p={p} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} /> : <InvalidCenter p={p} reasons={state.reasons} />}
             {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} decision={state.decision} amount={amount} setAmount={setAmount} onAssess={onAssess} /> : <RightDecision p={p} decision={null} amount={amount} setAmount={setAmount} onAssess={onAssess} />}
           </>
         ) : (
