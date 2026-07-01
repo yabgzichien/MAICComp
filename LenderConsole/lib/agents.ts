@@ -158,3 +158,72 @@ export function assessRisk(assessment: PassportAssessment, repaymentRecord: { on
     rationale: fallbackRationale('risk', tone, signals),
   };
 }
+
+export interface OrchestratorAssessment extends AgentAssessment {
+  concurs: boolean;
+}
+
+export interface AgentPanelResult {
+  specialists: AgentAssessment[];
+  orchestrator: OrchestratorAssessment;
+}
+
+const TONE_SEVERITY: Record<VerdictTone, number> = { positive: 0, caution: 1, negative: 2 };
+
+export function assessOrchestrator(specialists: AgentAssessment[], decision: LoanDecision): OrchestratorAssessment {
+  const worst = specialists.reduce((w, s) => (TONE_SEVERITY[s.tone] > TONE_SEVERITY[w.tone] ? s : w), specialists[0]);
+  const flagged = specialists.filter((s) => s.tone !== 'positive').map((s) => `${s.label}: ${s.verdict}`);
+  const signals = flagged.length ? flagged : ['All four specialists clear'];
+  const avgConfidence = Math.round(specialists.reduce((s, a) => s + a.confidence, 0) / specialists.length);
+
+  let tone: VerdictTone;
+  let verdict: string;
+  let concurs: boolean;
+
+  if (decision.decision === 'decline') {
+    tone = 'negative';
+    verdict = 'Recommend decline';
+    concurs = true;
+  } else if (decision.decision === 'refer') {
+    tone = 'caution';
+    verdict = 'Recommend manual review';
+    concurs = true;
+  } else if (worst.tone === 'negative') {
+    // Approve, but a specialist disagrees: escalate toward caution, never override the loan itself.
+    tone = 'caution';
+    verdict = 'Dissents — recommends manual review';
+    concurs = false;
+  } else if (worst.tone === 'caution') {
+    tone = 'caution';
+    verdict = 'Concurs, with conditions';
+    concurs = true;
+  } else {
+    tone = 'positive';
+    verdict = 'Concurs — approve';
+    concurs = true;
+  }
+
+  return {
+    id: 'decision',
+    label: 'Decision',
+    verdict,
+    tone,
+    confidence: avgConfidence,
+    signals,
+    rationale: fallbackRationale('decision', tone, signals),
+    concurs,
+  };
+}
+
+export function runAgentPanel(passport: CreditPassport, decision: LoanDecision): AgentPanelResult {
+  const assessment = passport.assessment;
+  if (!assessment) throw new Error('runAgentPanel requires a passport with an assessment block.');
+  const specialists = [
+    assessFraud(assessment, passport.provenanceSummary),
+    assessCredit(passport),
+    assessAffordability(assessment, decision),
+    assessRisk(assessment, passport.repaymentRecord),
+  ];
+  const orchestrator = assessOrchestrator(specialists, decision);
+  return { specialists, orchestrator };
+}
