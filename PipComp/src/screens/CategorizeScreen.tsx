@@ -7,7 +7,7 @@ import { Amount, B, BtnLabel, BubbleText, Card, CategoryChip, PipSays, PrimaryBu
 import { applyDateEdit, fullDateWithWeekday, ISO_DATE_RE, isValidIsoDate, shortDate } from '../lib/dates';
 import { findDuplicate, todayISO } from '../lib/duplicates';
 import { fmt } from '../lib/format';
-import { DROP, type Category, type ExtractedTxn, type TxnType } from '../lib/types';
+import { DROP, type Category, type CategorySuggestion, type ExtractedTxn, type TxnType } from '../lib/types';
 import { useAccent, useAccentAlert } from '../state/accent';
 import { useAppData } from '../state/store';
 import { colors, numFont, uiFont } from '../theme';
@@ -20,7 +20,7 @@ export function CategorizeScreen({
   onComplete,
 }: {
   extracted: ExtractedTxn[];
-  suggestions: (string | null)[];
+  suggestions: (CategorySuggestion | null)[];
   categories: Category[];
   onBack: () => void;
   onComplete: (assignments: (string | null)[], items: ExtractedTxn[]) => void;
@@ -40,7 +40,7 @@ export function CategorizeScreen({
   const stepIndices = useMemo(() => items.map((_, i) => i), [items]);
 
   const [assignments, setAssignments] = useState<(string | null)[]>(() =>
-    extracted.map((_, i) => suggestions[i] ?? null)
+    extracted.map((_, i) => suggestions[i]?.categoryId ?? null)
   );
   const [acked, setAcked] = useState<Record<number, boolean>>({});
   const [step, setStep] = useState(0);
@@ -56,12 +56,11 @@ export function CategorizeScreen({
   const isIncome = item?.type === 'income';
   const sel = hasSteps ? assignments[originalIndex] : null;
   const rawSuggestion = hasSteps ? suggestions[originalIndex] : null;
-  // Ignore a learned suggestion that no longer matches the item's kind
+  // Ignore a suggestion that no longer matches the item's kind
   // (e.g. after the user flips it between expense and income).
-  const suggestion =
-    rawSuggestion && categories.find((c) => c.id === rawSuggestion)?.kind === item?.type
-      ? rawSuggestion
-      : null;
+  const suggestionValid = !!rawSuggestion && categories.find((c) => c.id === rawSuggestion.categoryId)?.kind === item?.type;
+  const suggestion = suggestionValid ? rawSuggestion!.categoryId : null;
+  const suggestionIsGuess = suggestionValid && rawSuggestion!.source === 'guess';
   const activeGrid = isIncome ? incomeGrid : expenseGrid;
   const suggestionCat = suggestion ? categories.find((c) => c.id === suggestion) : undefined;
   const isLast = safeStep === stepIndices.length - 1;
@@ -179,6 +178,10 @@ export function CategorizeScreen({
               <BubbleText>
                 Hmm — <B>‘{item!.merchant}’</B> looks like a duplicate of one you logged on <B>{dupDay}</B>.
               </BubbleText>
+            ) : suggestion && suggestionCat && suggestionIsGuess ? (
+              <BubbleText>
+                ‘{item!.merchant}’ — I think this might be <B>{suggestionCat.label}</B>. Does that look right?
+              </BubbleText>
             ) : suggestion && suggestionCat ? (
               <BubbleText>
                 ‘{item!.merchant}’ — I’ve pre-filled <B>{suggestionCat.label}</B> from last time.
@@ -245,7 +248,7 @@ export function CategorizeScreen({
                   <CategoryChip
                     category={c}
                     selected={sel === c.id}
-                    suggested={suggestion === c.id ? 'learned' : false}
+                    suggested={suggestion === c.id ? (suggestionIsGuess ? 'guess' : 'learned') : false}
                     onPress={() => setCat(c.id)}
                   />
                 </View>

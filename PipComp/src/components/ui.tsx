@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { catColorsForHue } from '../lib/catColors';
 import { fmt } from '../lib/format';
-import type { Category } from '../lib/types';
+import type { Category, CategorySuggestion } from '../lib/types';
 import { useAccent } from '../state/accent';
 import { colors, numFont, radius, shadowCard, uiFont } from '../theme';
 import { Icon, type IconName } from './Icon';
@@ -79,7 +79,7 @@ export function CategoryChip({
 }: {
   category: Category;
   selected: boolean;
-  suggested: false | 'learned' | 'guess';
+  suggested: false | CategorySuggestion['source'];
   onPress: () => void;
 }) {
   const theme = useAccent();

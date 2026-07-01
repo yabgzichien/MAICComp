@@ -1,8 +1,12 @@
 import React, { useEffect, useState } from 'react';
+import { View } from 'react-native';
+import { BubbleText, PipSays } from '../components/ui';
+import { getProvider } from '../llm';
 import { suggestForMerchant } from '../lib/recommend';
-import type { ExtractedTxn, Transaction } from '../lib/types';
+import type { CategorySuggestion, ExtractedTxn, Transaction } from '../lib/types';
 import { configFor, loadSettings } from '../settings/settingsStore';
 import { useAppData, type NewLearned } from '../state/store';
+import { colors } from '../theme';
 import { AttachScreen, type PickedImage } from './AttachScreen';
 import { CategorizeScreen } from './CategorizeScreen';
 import { ExtractScreen } from './ExtractScreen';
@@ -10,7 +14,7 @@ import { ImportScreen } from './ImportScreen';
 import { ManualEntryScreen } from './ManualEntryScreen';
 import { SavedScreen } from './SavedScreen';
 
-type Phase = 'attach' | 'extract' | 'categorize' | 'manual' | 'saved' | 'import';
+type Phase = 'attach' | 'extract' | 'guessing' | 'categorize' | 'manual' | 'saved' | 'import';
 
 /**
  * The add-a-receipt flow: Attach → Extract → Categorize → Saved.
@@ -30,7 +34,7 @@ export function AddFlow({
   const [phase, setPhase] = useState<Phase>(initialPhase);
   const [image, setImage] = useState<PickedImage | null>(null);
   const [extracted, setExtracted] = useState<ExtractedTxn[]>([]);
-  const [suggestions, setSuggestions] = useState<(string | null)[]>([]);
+  const [suggestions, setSuggestions] = useState<(CategorySuggestion | null)[]>([]);
   const [cached, setCached] = useState<ExtractedTxn[] | undefined>(undefined);
   const [result, setResult] = useState<Transaction[]>([]);
   const [newLearned, setNewLearned] = useState<NewLearned[]>([]);
@@ -46,17 +50,47 @@ export function AddFlow({
     setPhase('extract');
   };
 
-  const onExtracted = (items: ExtractedTxn[]) => {
+  const onExtracted = async (items: ExtractedTxn[]) => {
     setExtracted(items);
-    setSuggestions(
-      items.map((it) => {
-        const s = suggestForMerchant(memory, it.merchant);
-        if (!s) return null;
-        const cat = catById[s];
-        // only pre-fill if the learned category matches this item's kind
-        return cat && cat.kind === it.type ? s : null;
-      })
-    );
+
+    const learned: (CategorySuggestion | null)[] = items.map((it) => {
+      const s = suggestForMerchant(memory, it.merchant);
+      if (!s) return null;
+      const cat = catById[s];
+      // only pre-fill if the learned category matches this item's kind
+      return cat && cat.kind === it.type ? { categoryId: s, source: 'learned' } : null;
+    });
+
+    const missing = learned.map((s, i) => (s ? -1 : i)).filter((i) => i !== -1);
+    if (missing.length === 0) {
+      setSuggestions(learned);
+      setPhase('categorize');
+      return;
+    }
+
+    setPhase('guessing');
+    const settings = await loadSettings();
+    const config = configFor(settings, 'general');
+    const provider = getProvider(config.provider);
+    if (!config.apiKey || !provider.guessCategories) {
+      setSuggestions(learned);
+      setPhase('categorize');
+      return;
+    }
+
+    try {
+      const guessed = await provider.guessCategories({
+        apiKey: config.apiKey,
+        model: config.model,
+        items: missing.map((i) => ({ index: i, merchant: items[i].merchant, amount: items[i].amount, method: items[i].method, kind: items[i].type })),
+        categories: categories.map((c) => ({ id: c.id, label: c.label, kind: c.kind })),
+      });
+      setSuggestions(learned.map((s, i) => s ?? (guessed[i] ? { categoryId: guessed[i]!, source: 'guess' } : null)));
+    } catch {
+      // Enhancement-only: any failure (network, timeout, bad reply) just falls
+      // back to today's behavior — no suggestion for that merchant.
+      setSuggestions(learned);
+    }
     setPhase('categorize');
   };
 
@@ -88,6 +122,15 @@ export function AddFlow({
   }
   if (phase === 'import') {
     return <ImportScreen onClose={onClose} onOpenSettings={onOpenSettings} />;
+  }
+  if (phase === 'guessing') {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center', paddingHorizontal: 18 }}>
+        <PipSays expr="think">
+          <BubbleText>Thinking about your new merchants…</BubbleText>
+        </PipSays>
+      </View>
+    );
   }
   if (phase === 'manual') {
     return <ManualEntryScreen categories={categories} onBack={() => setPhase('attach')} onComplete={onManualComplete} />;
