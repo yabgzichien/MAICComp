@@ -102,18 +102,24 @@ export function assessAffordability(assessment: PassportAssessment, decision: Lo
   const surplusRatio = avgIncome > 0 ? avgMonthlySurplus / avgIncome : 0;
   let tone: VerdictTone;
   let verdict: string;
+  let confidence: number;
   if (decision.maxAmount <= 0 || avgIncome <= 0) {
     tone = 'negative';
     verdict = 'Weak';
-  } else if (dsr <= MAX_DSR * 0.5 && surplusRatio >= 0.15) {
-    tone = 'positive';
-    verdict = 'Strong';
+    confidence = 0;
   } else {
-    tone = 'caution';
-    verdict = 'Adequate';
+    const dsrConfidence = 1 - dsr / MAX_DSR;
+    const surplusConfidence = surplusRatio / 0.15;
+    confidence = Math.max(0, Math.min(100, Math.round(Math.min(dsrConfidence, surplusConfidence) * 100)));
+    if (dsr <= MAX_DSR * 0.5 && surplusRatio >= 0.15) {
+      tone = 'positive';
+      verdict = 'Strong';
+    } else {
+      tone = 'caution';
+      verdict = 'Adequate';
+    }
   }
   const signals = [`DSR ${pct(dsr)}%`, `Surplus ${rm(avgMonthlySurplus)}/mo`, `Approved ${rm(decision.maxAmount)}`];
-  const confidence = Math.max(0, Math.min(100, Math.round((1 - dsr / MAX_DSR) * 100)));
   return {
     id: 'affordability',
     label: 'Affordability',
@@ -133,12 +139,15 @@ export function assessRisk(assessment: PassportAssessment, repaymentRecord: { on
   if (onTimeRatio !== null && onTimeRatio < 0.8 && tone !== 'negative') {
     tone = tone === 'positive' ? 'caution' : 'negative';
   }
+  const daysConfidence = coverageDays / 90;
+  const ratioConfidence = coverageRatio / 0.5;
+  const repaymentConfidence = onTimeRatio !== null ? onTimeRatio / 0.8 : 1;
+  const confidence = Math.max(0, Math.min(100, Math.round(Math.min(daysConfidence, ratioConfidence, repaymentConfidence) * 100)));
   const verdict = tone === 'positive' ? 'Low volatility' : tone === 'caution' ? 'Moderate volatility' : 'High volatility';
   const signals = [
     `Coverage ${coverageDays}d, ${pct(coverageRatio)}%`,
     onTimeRatio !== null ? `Repayment ${onTime}/${total} on time` : 'No repayment history yet',
   ];
-  const confidence = Math.max(0, Math.min(100, Math.round((coverageDays / 90) * 100)));
   return {
     id: 'risk',
     label: 'Risk & Stability',
