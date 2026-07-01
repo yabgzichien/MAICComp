@@ -295,7 +295,15 @@ function VerifiedCenter({ p, passport, decision }: { p: Palette; passport: Credi
           {evidenceShort && <span style={{ fontFamily: FONT.mono, fontSize: 9.5, color: p.ink3 }}>SHA-256: {evidenceShort}</span>}
         </div>
       </div>
-      {decision && <AgentPanel p={p} passport={passport} decision={decision} />}
+      {decision ? (
+        <AgentPanel p={p} passport={passport} decision={decision} />
+      ) : (
+        <div style={{ background: p.surface, borderRadius: 12, padding: '14px 16px', boxShadow: p.shadow }}>
+          <p style={{ fontFamily: FONT.ui, fontSize: 11.5, color: p.ink3, lineHeight: 1.6 }}>
+            This passport doesn&apos;t carry an affordability assessment, so the AI Assessment Panel can&apos;t run. Verify a passport issued with assessment data.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
