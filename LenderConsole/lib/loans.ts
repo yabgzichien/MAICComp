@@ -37,9 +37,9 @@ export interface LoanDecisionInput {
 
 const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
 
-const MIN_CONFIDENCE_TO_APPROVE = 0.5;
+export const MIN_CONFIDENCE_TO_APPROVE = 0.5;
 const MAX_INSTALLMENT_SHARE_OF_SURPLUS = 0.35;
-const MAX_DSR = 0.4;
+export const MAX_DSR = 0.4;
 
 function rm(n: number): string {
   return `RM${Math.round(n).toLocaleString('en-MY')}`;
