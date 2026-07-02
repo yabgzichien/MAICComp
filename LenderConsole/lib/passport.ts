@@ -28,6 +28,15 @@ export interface PassportHolder {
   provider: string;
 }
 
+export interface PassportMomentum {
+  lookbackDays: number;
+  scoreFrom: number;
+  scoreTo: number;
+  coverageDaysFrom: number;
+  coverageDaysTo: number;
+  direction: 'rising' | 'flat' | 'falling';
+}
+
 export interface CreditPassport {
   subject: string;
   score: number;
@@ -40,6 +49,7 @@ export interface CreditPassport {
   validUntil: string;
   assessment?: PassportAssessment;
   holder?: PassportHolder;
+  momentum?: PassportMomentum;
 }
 
 export interface VerifyResult {
@@ -110,6 +120,12 @@ export function validatePassportShape(p: unknown): string[] {
     const h = o.holder as Record<string, unknown>;
     if (!h || typeof h !== 'object' || typeof h.name !== 'string' || typeof h.nricMasked !== 'string' || typeof h.verified !== 'boolean' || typeof h.provider !== 'string')
       problems.push('holder');
+  }
+  if (o.momentum !== undefined) {
+    const m = o.momentum as Record<string, unknown>;
+    const nums = ['lookbackDays', 'scoreFrom', 'scoreTo', 'coverageDaysFrom', 'coverageDaysTo'];
+    const okDir = m && typeof m.direction === 'string' && ['rising', 'flat', 'falling'].includes(m.direction as string);
+    if (!m || typeof m !== 'object' || !nums.every((k) => isFiniteNum(m[k])) || !okDir) problems.push('momentum');
   }
   return problems;
 }

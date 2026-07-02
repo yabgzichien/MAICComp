@@ -269,6 +269,24 @@ function VerifiedCenter({ p, passport, decision }: { p: Palette; passport: Credi
         </div>
       </div>
 
+      {passport.momentum && passport.momentum.direction !== 'flat' && (() => {
+        const m = passport.momentum;
+        const up = m.direction === 'rising';
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px', borderRadius: 12, background: up ? p.accentSoft : '#fdecea', border: `1px solid ${up ? p.accentSoft : '#f5c6c2'}` }}>
+            <span style={{ fontFamily: FONT.num, fontSize: 22, fontWeight: 700, color: up ? p.primary : p.red, lineHeight: 1 }}>{up ? '↑' : '↓'}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, color: up ? p.accentInk : '#922b21' }}>
+                Verifiable {up ? 'upward' : 'downward'} trajectory
+              </p>
+              <p style={{ fontFamily: FONT.num, fontSize: 11, color: p.ink2, marginTop: 1 }}>
+                score {m.scoreFrom} → {m.scoreTo} · coverage {m.coverageDaysFrom} → {m.coverageDaysTo} days over {m.lookbackDays}d — signed, not self-asserted
+              </p>
+            </div>
+          </div>
+        );
+      })()}
+
       <div style={{ background: p.surface, borderRadius: 12, overflow: 'hidden', boxShadow: p.shadow }}>
         <div style={{ padding: '8px 16px', background: p.surface2, borderBottom: `1px solid ${p.hairline}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 700, color: p.ink3, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Factor Breakdown · {factors.length} components</span>
