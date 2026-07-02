@@ -17,7 +17,7 @@ import {
 } from './tokens';
 import { type CreditPassport, parsePassportCode, verifyPassport } from '../lib/passport';
 import { DEFAULT_PRODUCTS, decideLoan, type LoanDecision } from '../lib/loans';
-import { MiniBar, SectionLabel } from './shared';
+import { InfoButton, InfoModal, MiniBar, SectionLabel } from './shared';
 import AgentPanel from './AgentPanel';
 
 type Tab = 'verify' | 'capital';
@@ -563,8 +563,10 @@ function RightAlert({ p }: { p: Palette }) {
 }
 
 function CapitalMarkets({ p }: { p: Palette }) {
+  const [info, setInfo] = useState<string | null>(null);
   return (
     <div style={{ flex: 1, background: p.bg, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+      <InfoModal entry={info} onClose={() => setInfo(null)} p={p} />
       <div style={{ padding: '20px 40px 18px', background: p.surface, borderBottom: `1px solid ${p.hairline}`, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
           <div>
@@ -583,7 +585,10 @@ function CapitalMarkets({ p }: { p: Palette }) {
         {POOL_STATS.map((s, i) => (
           <React.Fragment key={s.label}>
             <div style={{ flex: 1, minWidth: 120, display: 'flex', flexDirection: 'column', gap: 7 }}>
-              <span style={{ fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 600, color: 'rgba(255,255,255,0.38)', letterSpacing: '0.10em', textTransform: 'uppercase' }}>{s.label}</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 600, color: 'rgba(255,255,255,0.38)', letterSpacing: '0.10em', textTransform: 'uppercase' }}>
+                {s.label}
+                <InfoButton entry={s.info} onOpen={setInfo} dark />
+              </span>
               <span style={{ fontFamily: FONT.num, fontSize: 30, fontWeight: 700, color: 'white', letterSpacing: '-0.5px', lineHeight: 1 }}>{s.value}</span>
             </div>
             {i < POOL_STATS.length - 1 && <div style={{ width: 1, background: 'rgba(255,255,255,0.08)' }} />}
@@ -593,7 +598,10 @@ function CapitalMarkets({ p }: { p: Palette }) {
 
       <div style={{ padding: '22px 40px 0', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 10 }}>
-          <SectionLabel color={p.ink3}>Loss-Waterfall Structure</SectionLabel>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <SectionLabel color={p.ink3}>Loss-Waterfall Structure</SectionLabel>
+            <span style={{ marginBottom: 3 }}><InfoButton entry="waterfall" onOpen={setInfo} /></span>
+          </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
             {TRANCHES.map((tr) => (
               <div key={tr.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -620,23 +628,35 @@ function CapitalMarkets({ p }: { p: Palette }) {
         {TRANCHES.map((tr, i) => (
           <div key={tr.name} style={{ background: tr.tint, borderRadius: 14, border: `1.5px solid ${tr.border}`, padding: '18px 20px', boxShadow: p.shadow, display: 'flex', flexDirection: 'column', gap: 12, animation: 'fade-in-up 0.4s ease-out both', animationDelay: `${i * 70}ms` }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontFamily: FONT.ui, fontSize: 10.5, fontWeight: 700, color: tr.color, letterSpacing: '0.10em', textTransform: 'uppercase' }}>{tr.name}</span>
-              <div style={{ padding: '4px 12px', borderRadius: 7, background: tr.ratingBg, border: `1.5px solid ${tr.border}` }}>
-                <span style={{ fontFamily: FONT.num, fontSize: 15, fontWeight: 700, color: tr.ratingColor }}>{tr.rating}</span>
-              </div>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontFamily: FONT.ui, fontSize: 10.5, fontWeight: 700, color: tr.color, letterSpacing: '0.10em', textTransform: 'uppercase' }}>{tr.name}</span>
+                <InfoButton entry={tr.name.toLowerCase()} onOpen={setInfo} color={tr.color} />
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ padding: '4px 12px', borderRadius: 7, background: tr.ratingBg, border: `1.5px solid ${tr.border}` }}>
+                  <span style={{ fontFamily: FONT.num, fontSize: 15, fontWeight: 700, color: tr.ratingColor }}>{tr.rating}</span>
+                </div>
+                <InfoButton entry="rating" onOpen={setInfo} color={tr.ratingColor} />
+              </span>
             </div>
             <div style={{ height: 1, background: tr.border }} />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 16px' }}>
               <div>
-                <p style={{ fontFamily: FONT.ui, fontSize: 9.5, color: p.ink3, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Size</p>
+                <p style={{ display: 'flex', alignItems: 'center', gap: 5, fontFamily: FONT.ui, fontSize: 9.5, color: p.ink3, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>
+                  Size <InfoButton entry="size" onOpen={setInfo} />
+                </p>
                 <p style={{ fontFamily: FONT.num, fontSize: 17, fontWeight: 700, color: p.ink1 }}>{tr.size}</p>
               </div>
               <div>
-                <p style={{ fontFamily: FONT.ui, fontSize: 9.5, color: p.ink3, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Slice</p>
+                <p style={{ display: 'flex', alignItems: 'center', gap: 5, fontFamily: FONT.ui, fontSize: 9.5, color: p.ink3, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>
+                  Slice <InfoButton entry="slice" onOpen={setInfo} />
+                </p>
                 <p style={{ fontFamily: FONT.num, fontSize: 17, fontWeight: 700, color: tr.color }}>{tr.pct}%</p>
               </div>
               <div style={{ gridColumn: 'span 2' }}>
-                <p style={{ fontFamily: FONT.ui, fontSize: 9.5, color: p.ink3, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Profit rate p.a.</p>
+                <p style={{ display: 'flex', alignItems: 'center', gap: 5, fontFamily: FONT.ui, fontSize: 9.5, color: p.ink3, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>
+                  Profit rate p.a. <InfoButton entry="profit_rate" onOpen={setInfo} />
+                </p>
                 <p style={{ fontFamily: FONT.num, fontSize: 26, fontWeight: 700, color: tr.color, lineHeight: 1 }}>{tr.profit}</p>
               </div>
             </div>

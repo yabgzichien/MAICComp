@@ -116,11 +116,11 @@ export const FORENSIC_FLAGS = [
 ];
 
 export const POOL_STATS = [
-  { label: 'Total Principal', value: 'RM 6.54M' },
-  { label: 'Loans Pooled', value: '1,000' },
-  { label: 'Wtd-Avg Score', value: '667' },
-  { label: 'Wtd-Avg PD', value: '14.2%' },
-  { label: 'Expected Loss', value: '8.51%' },
+  { label: 'Total Principal', value: 'RM 6.54M', info: 'total_principal' },
+  { label: 'Loans Pooled', value: '1,000', info: 'loans_pooled' },
+  { label: 'Wtd-Avg Score', value: '667', info: 'wtd_avg_score' },
+  { label: 'Wtd-Avg PD', value: '14.2%', info: 'wtd_avg_pd' },
+  { label: 'Expected Loss', value: '8.51%', info: 'expected_loss' },
 ];
 
 export const TRANCHES = [
@@ -164,3 +164,79 @@ export const TRANCHES = [
     reason: 'First-loss equity.',
   },
 ];
+
+// ── Capital-markets glossary ──────────────────────────────────────────────────
+// Plain-language definitions plus deeper "why it matters" knowledge for each figure
+// and term on the Capital Markets tab, surfaced by the "i" info buttons. Written for
+// judges: every explanation ties the securitisation concept back to Pip's thesis
+// (funding the informal economy safely, with deterministic, auditable structure).
+
+export type GlossaryEntry = { term: string; short: string; body: string };
+
+export const GLOSSARY: Record<string, GlossaryEntry> = {
+  total_principal: {
+    term: 'Total Principal',
+    short: 'The combined face value of every micro-loan bundled into this pool.',
+    body: 'Securitisation pools many small, illiquid loans into one instrument large enough for institutional money to buy. A single RM3,000 hawker loan is too small and too risky to interest a bank treasury desk; bundled into a RM6.54M pool of 1,000 such loans, the law of large numbers makes the aggregate loss rate predictable — and therefore investable.',
+  },
+  loans_pooled: {
+    term: 'Loans Pooled',
+    short: 'How many individual micro-loans back this instrument.',
+    body: 'Diversification is the engine of securitisation. With 1,000 independent borrowers, any single default barely moves the pool; realised losses cluster tightly around the statistical expected loss instead of swinging wildly. More loans → more predictable losses → tranches that can be rated and priced with confidence.',
+  },
+  wtd_avg_score: {
+    term: 'Weighted-Average Score',
+    short: "The pool's average Pip credit score, weighted by loan size.",
+    body: 'Each borrower carries a deterministic 300–900 Pip score. Weighting by principal (not by headcount) reflects where the money actually sits, so a few large loans cannot hide behind many tiny high-scoring ones. A 667 average sits in the "Good" band — thin-file by traditional bank standards, which is exactly the informal-economy segment Pip is built to fund safely.',
+  },
+  wtd_avg_pd: {
+    term: 'Weighted-Average PD (Probability of Default)',
+    short: 'The size-weighted chance a borrower fails to repay over the loan term.',
+    body: "PD is derived from each borrower's credit band and the ML fraud / data-confidence layer, then weighted by principal. It is one of the two inputs to expected loss (the other being loss-given-default). At 14.2% this pool prices its risk openly, rather than assuming the credit-invisible are simply uncreditworthy.",
+  },
+  expected_loss: {
+    term: 'Expected Loss',
+    short: 'The share of the pool statistically expected to be lost to defaults.',
+    body: 'Expected Loss ≈ PD × loss-given-default, aggregated across the pool. It is the number that sizes the protection: the tranches beneath the senior must be thick enough to absorb this loss (and a stress multiple of it) before the senior is ever touched. Here 8.51% expected loss is covered several times over by the 28% of the stack sitting below the senior tranche.',
+  },
+  senior: {
+    term: 'Senior Tranche',
+    short: 'Paid first, loses last — the safest slice, lowest yield, highest rating.',
+    body: 'In the loss waterfall, cash flows fill the senior tranche first and losses reach it last, only after every junior tranche beneath it is wiped out. That subordination (28% of the pool here) is what earns it an investment-grade "A" and its lower profit rate: safety is bought with yield. This is the slice a pension fund or bank treasury would hold.',
+  },
+  mezzanine: {
+    term: 'Mezzanine Tranche',
+    short: 'The middle slice — takes losses after the equity, before the senior.',
+    body: 'Mezzanine sits between the first-loss equity and the protected senior. It only absorbs losses once the subordinated tranche is exhausted, so it carries more risk than senior and less than equity — reflected in its "BB" rating and a higher 13.5% profit rate. It is the classic risk/return middle ground for yield-seeking credit investors.',
+  },
+  subordinated: {
+    term: 'Subordinated (First-Loss) Tranche',
+    short: 'Absorbs losses first — highest risk, highest return, protects everyone above.',
+    body: "Also called the equity or first-loss piece, this tranche takes the very first ringgit of losses, shielding the mezzanine and senior above it. Because it is most exposed it earns the highest profit rate (19%) and carries no credit rating (\"Equity\"). Originators often retain this slice to keep \"skin in the game\", aligning their incentives with investors'.",
+  },
+  size: {
+    term: 'Tranche Size',
+    short: 'The ringgit principal allocated to this slice of the pool.',
+    body: "Size = the tranche's percentage share × the pool's total principal. The relative thickness of each tranche is what creates the protection: the thicker the junior tranches beneath a slice, the more losses must occur before that slice is touched.",
+  },
+  slice: {
+    term: 'Slice (%)',
+    short: "This tranche's share of the total pool.",
+    body: 'The stack is cut 72% senior / 16% mezzanine / 12% subordinated. The 28% sitting below the senior is its loss-absorbing buffer — every point of it must be consumed before a senior investor loses a single ringgit.',
+  },
+  profit_rate: {
+    term: 'Profit Rate p.a.',
+    short: 'The annual return to investors in this tranche — profit-sharing, not interest.',
+    body: 'To stay Shariah-compliant, returns are structured as profit-sharing on the underlying financing rather than riba (interest). Rates rise as you move down the stack (8.5% → 13.5% → 19%) because investors are paid more for standing closer to the first loss. The spread between tranches is the price of risk.',
+  },
+  rating: {
+    term: 'Tranche Rating',
+    short: "A creditworthiness grade computed deterministically from the pool's expected loss.",
+    body: 'These ratings are not marketing labels — each is calculated from the tranche\'s loss-coverage multiple (how many times over its subordination can absorb the pool\'s expected loss). A weaker pool is honestly downgraded, not rubber-stamped AAA. That is the discipline whose absence made mispriced ratings so damaging in 2008, here applied deterministically and auditably.',
+  },
+  waterfall: {
+    term: 'Loss Waterfall',
+    short: 'The fixed priority order in which losses flow through the tranches.',
+    body: 'Losses cascade bottom-up — subordinated first, then mezzanine, then senior last — while cash flows fill top-down in the reverse order. This strict priority is what lets one pool serve very different investors from the same underlying micro-loans: safety-seekers buy the senior, yield-seekers buy the first-loss equity.',
+  },
+};
