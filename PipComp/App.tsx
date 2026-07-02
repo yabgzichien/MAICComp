@@ -27,6 +27,7 @@ import { DashboardScreen } from './src/screens/DashboardScreen';
 import { CreditScreen } from './src/screens/CreditScreen';
 import { LoansScreen } from './src/screens/LoansScreen';
 import { LenderScreen } from './src/screens/LenderScreen';
+import { AttackGalleryScreen } from './src/screens/AttackGalleryScreen';
 import { PassportScreen } from './src/screens/PassportScreen';
 import { PassportCoachScreen } from './src/screens/PassportCoachScreen';
 import { KycScreen } from './src/screens/KycScreen';
@@ -40,7 +41,7 @@ import { AppDataProvider, useAppData } from './src/state/store';
 import { useNow } from './src/state/useNow';
 import { colors, uiFont } from './src/theme';
 
-type Screen = 'home' | 'add' | 'settings' | 'categories' | 'transactions' | 'breakdown' | 'budget' | 'recap' | 'networth' | 'credit' | 'loans' | 'passport' | 'coach' | 'lender' | 'kyc' | 'calendar';
+type Screen = 'home' | 'add' | 'settings' | 'categories' | 'transactions' | 'breakdown' | 'budget' | 'recap' | 'networth' | 'credit' | 'loans' | 'passport' | 'coach' | 'lender' | 'attacks' | 'kyc' | 'calendar';
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -196,8 +197,10 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
             setScreen('add');
           }}
           onOpenLender={() => setScreen('lender')}
+          onOpenAttacks={() => setScreen('attacks')}
         />
       )}
+      {screen === 'attacks' && <AttackGalleryScreen onBack={() => setScreen('settings')} />}
       {screen === 'categories' && <CategoriesScreen onBack={() => setScreen('home')} />}
       {screen === 'transactions' && (
         <AllTransactionsScreen

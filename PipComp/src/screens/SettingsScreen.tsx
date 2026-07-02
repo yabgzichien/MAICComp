@@ -19,7 +19,7 @@ function maskKey(key: string): string {
   return `${key.slice(0, 4)}…${key.slice(-4)}`;
 }
 
-export function SettingsScreen({ onBack, onMigrate, onOpenLender = () => {} }: { onBack: () => void; onMigrate?: () => void; onOpenLender?: () => void }) {
+export function SettingsScreen({ onBack, onMigrate, onOpenLender = () => {}, onOpenAttacks = () => {} }: { onBack: () => void; onMigrate?: () => void; onOpenLender?: () => void; onOpenAttacks?: () => void }) {
   const insets = useSafeAreaInsets();
   const { memory, refreshAll, expectedIncome, allocations, hasBudget, resetBudget, resetAllData, loadDemoData } = useAppData();
   const [settings, setSettings] = useState<LLMSettings | null>(null);
@@ -164,6 +164,20 @@ export function SettingsScreen({ onBack, onMigrate, onOpenLender = () => {} }: {
           <View style={{ flex: 1 }}>
             <Text style={styles.providerName}>Lender Console</Text>
             <Text style={styles.providerSub}>Verify a Credit Passport and assess an applicant's credit profile.</Text>
+          </View>
+          <Icon name="chevronRight" size={18} color={colors.ink3} />
+        </Pressable>
+
+        <Pressable
+          onPress={onOpenAttacks}
+          style={({ pressed }) => [styles.providerRow, styles.migrateRow, { marginTop: 12, opacity: pressed ? 0.9 : 1 }]}
+        >
+          <View style={styles.providerBadge}>
+            <Icon name="alert" size={16} color={colors.accent} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.providerName}>Attack Gallery</Text>
+            <Text style={styles.providerSub}>Run known fraud techniques against our own integrity rings — a live self-test.</Text>
           </View>
           <Icon name="chevronRight" size={18} color={colors.ink3} />
         </Pressable>
