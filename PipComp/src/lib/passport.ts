@@ -28,6 +28,19 @@ export interface PassportAssessment {
   monthlyDebtService: number;  // RM/mo
 }
 
+/**
+ * Signed score *trajectory* — the borrower's momentum. Thin-file borrowers can't show a high
+ * level, but they can show verifiable upward direction. Re-derived from the same dated evidence.
+ */
+export interface PassportMomentum {
+  lookbackDays: number;
+  scoreFrom: number;
+  scoreTo: number;
+  coverageDaysFrom: number;
+  coverageDaysTo: number;
+  direction: 'rising' | 'flat' | 'falling';
+}
+
 /** Verified holder identity (eKYC) bound into the passport. Masked IC only — no raw NRIC. */
 export interface PassportHolder {
   name: string;
@@ -51,6 +64,8 @@ export interface CreditPassport {
   assessment?: PassportAssessment;
   /** Verified holder identity (optional; present once the borrower has completed eKYC). */
   holder?: PassportHolder;
+  /** Signed score trajectory (optional; absent on older passports). */
+  momentum?: PassportMomentum;
 }
 
 /** Input required to build a passport. */
@@ -71,6 +86,8 @@ export interface PassportInput {
   assessment?: PassportAssessment;
   /** Optional verified holder identity, copied into the signed passport. */
   holder?: PassportHolder;
+  /** Optional signed score trajectory, copied into the signed passport. */
+  momentum?: PassportMomentum;
 }
 
 /** Result of verifying a passport signature. */
@@ -168,6 +185,12 @@ export function validatePassportShape(p: unknown): string[] {
     if (!h || typeof h !== 'object' || typeof h.name !== 'string' || typeof h.nricMasked !== 'string' || typeof h.verified !== 'boolean' || typeof h.provider !== 'string')
       problems.push('holder');
   }
+  if (o.momentum !== undefined) {
+    const m = o.momentum as Record<string, unknown>;
+    const nums = ['lookbackDays', 'scoreFrom', 'scoreTo', 'coverageDaysFrom', 'coverageDaysTo'];
+    const okDir = m && typeof m.direction === 'string' && ['rising', 'flat', 'falling'].includes(m.direction as string);
+    if (!m || typeof m !== 'object' || !nums.every((k) => isFiniteNum(m[k])) || !okDir) problems.push('momentum');
+  }
   return problems;
 }
 
@@ -240,6 +263,7 @@ export async function buildPassport(
     validUntil,
     ...(input.assessment ? { assessment: input.assessment } : {}),
     ...(input.holder ? { holder: input.holder } : {}),
+    ...(input.momentum ? { momentum: input.momentum } : {}),
   };
 
   const canonical = canonicalize(passport);

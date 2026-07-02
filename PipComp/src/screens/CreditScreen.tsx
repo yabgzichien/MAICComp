@@ -38,7 +38,7 @@ export function CreditScreen({
   onOpenCoach?: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const { score, dataConfidence, coverage } = useCreditProfile();
+  const { score, dataConfidence, coverage, momentum } = useCreditProfile();
   const capped = score.confidenceCapped;
   const confidence = dataConfidence.confidence;
 
@@ -84,6 +84,17 @@ export function CreditScreen({
             <Text style={styles.confCaption}>
               {coverage.daysCovered}/90 days covered. Add more sources to raise confidence.
             </Text>
+            {momentum.direction !== 'flat' && (
+              <View style={[styles.momentumRow, momentum.direction === 'falling' && styles.momentumRowDown]}>
+                <Text style={[styles.momentumArrow, momentum.direction === 'falling' && { color: colors.red }]}>
+                  {momentum.direction === 'rising' ? '↑' : '↓'}
+                </Text>
+                <Text style={styles.momentumText}>
+                  {momentum.direction === 'rising' ? 'Rising' : 'Falling'} · {momentum.scoreFrom}→{momentum.scoreTo} · coverage{' '}
+                  {momentum.coverageDaysFrom}→{momentum.coverageDaysTo} days over {momentum.lookbackDays}d
+                </Text>
+              </View>
+            )}
             {capped && (
               <Text style={styles.cappedNote}>ⓘ Your band is limited by data confidence — verify more to unlock your full score.</Text>
             )}
@@ -185,6 +196,10 @@ const styles = StyleSheet.create({
   confPct: { fontFamily: numFont(700), fontSize: 13, color: colors.accent },
   confTrack: { height: 5, borderRadius: 5, backgroundColor: 'rgba(20,40,30,0.10)', overflow: 'hidden' },
   confCaption: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, marginTop: 9, lineHeight: 16 },
+  momentumRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 10, backgroundColor: colors.accentTint, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
+  momentumRowDown: { backgroundColor: 'rgba(192,57,43,0.08)' },
+  momentumArrow: { fontFamily: numFont(700), fontSize: 15, color: colors.accent },
+  momentumText: { fontFamily: uiFont(600), fontSize: 11.5, color: colors.accentInk, flex: 1, lineHeight: 15 },
   cappedNote: { fontFamily: uiFont(600), fontSize: 11.5, color: '#a05c00', marginTop: 8, lineHeight: 16 },
   reasonRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   reasonText: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, flex: 1 },

@@ -60,7 +60,10 @@ export async function loadDemoProfile(): Promise<void> {
         source: 'extracted',
       });
     }
-    basket.forEach(([name, base, day], i) => {
+    // Older months (outside the recent 90-day window) are deliberately sparser, so the borrower's
+    // recorded history *ramps up* — an honest rising Credit Momentum, while current coverage stays thin.
+    const monthBasket = m >= 3 ? basket.slice(0, 3) : basket;
+    monthBasket.forEach(([name, base, day], i) => {
       const d = monthDate(m, day);
       if (d > now) return; // never future-date — keeps the coverage signal honest
       txns.push({

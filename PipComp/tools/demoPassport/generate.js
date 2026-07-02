@@ -70,6 +70,14 @@ const passport = {
     verified: true,
     provider: 'Demo verification (mock)',
   },
+  momentum: {
+    lookbackDays: 90,
+    scoreFrom: 631,
+    scoreTo: 672,
+    coverageDaysFrom: 41,
+    coverageDaysTo: 90,
+    direction: 'rising',
+  },
 };
 
 // ── 3. Canonicalize (mirrors passport.ts) ──────────────────────────────────────

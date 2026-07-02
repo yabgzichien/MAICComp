@@ -25,7 +25,7 @@ function formatDate(iso: string): string {
 
 export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () => void; onOpenKyc?: () => void }) {
   const insets = useSafeAreaInsets();
-  const { profile, score, dataConfidence, coverage } = useCreditProfile();
+  const { profile, score, dataConfidence, coverage, momentum } = useCreditProfile();
   const { kyc } = useAppData();
 
   const [loading, setLoading] = useState(true);
@@ -39,6 +39,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
   const scoreRef = useRef(score);
   const dataConfidenceRef = useRef(dataConfidence);
   const coverageRef = useRef(coverage);
+  const momentumRef = useRef(momentum);
   const kycRef = useRef(kyc);
   const sharedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -47,8 +48,9 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
     scoreRef.current = score;
     dataConfidenceRef.current = dataConfidence;
     coverageRef.current = coverage;
+    momentumRef.current = momentum;
     kycRef.current = kyc;
-  }, [profile, score, dataConfidence, coverage, kyc]);
+  }, [profile, score, dataConfidence, coverage, momentum, kyc]);
 
   useEffect(() => {
     return () => {
@@ -111,6 +113,14 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
                 provider: kycRef.current.provider,
               }
             : undefined,
+          momentum: {
+            lookbackDays: momentumRef.current.lookbackDays,
+            scoreFrom: momentumRef.current.scoreFrom,
+            scoreTo: momentumRef.current.scoreTo,
+            coverageDaysFrom: momentumRef.current.coverageDaysFrom,
+            coverageDaysTo: momentumRef.current.coverageDaysTo,
+            direction: momentumRef.current.direction,
+          },
         },
         keypair.sign.bind(keypair),
         issuerSign,
