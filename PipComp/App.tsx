@@ -28,6 +28,7 @@ import { CreditScreen } from './src/screens/CreditScreen';
 import { LoansScreen } from './src/screens/LoansScreen';
 import { LenderScreen } from './src/screens/LenderScreen';
 import { PassportScreen } from './src/screens/PassportScreen';
+import { PassportCoachScreen } from './src/screens/PassportCoachScreen';
 import { KycScreen } from './src/screens/KycScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { NetWorthScreen } from './src/screens/NetWorthScreen';
@@ -39,7 +40,7 @@ import { AppDataProvider, useAppData } from './src/state/store';
 import { useNow } from './src/state/useNow';
 import { colors, uiFont } from './src/theme';
 
-type Screen = 'home' | 'add' | 'settings' | 'categories' | 'transactions' | 'breakdown' | 'budget' | 'recap' | 'networth' | 'credit' | 'loans' | 'passport' | 'lender' | 'kyc' | 'calendar';
+type Screen = 'home' | 'add' | 'settings' | 'categories' | 'transactions' | 'breakdown' | 'budget' | 'recap' | 'networth' | 'credit' | 'loans' | 'passport' | 'coach' | 'lender' | 'kyc' | 'calendar';
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -230,6 +231,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
           onBack={() => setScreen('home')}
           onOpenLoans={() => setScreen('loans')}
           onOpenPassport={() => setScreen('passport')}
+          onOpenCoach={() => setScreen('coach')}
         />
       )}
       {screen === 'loans' && (
@@ -237,6 +239,14 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
       )}
       {screen === 'passport' && (
         <PassportScreen onBack={() => setScreen('credit')} onOpenKyc={() => setScreen('kyc')} />
+      )}
+      {screen === 'coach' && (
+        <PassportCoachScreen
+          onBack={() => setScreen('credit')}
+          onStart={(lever) =>
+            setScreen(lever === 'coverage' ? 'add' : lever === 'track' ? 'loans' : 'budget')
+          }
+        />
       )}
       {screen === 'kyc' && <KycScreen onBack={() => setScreen('passport')} />}
       {screen === 'lender' && <LenderScreen onBack={() => setScreen('home')} />}

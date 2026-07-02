@@ -1,11 +1,13 @@
 import { useMemo } from 'react';
 import { useAppData } from './store';
 import { computeCreditScore, type CreditProfile, type CreditScore } from '../lib/creditScore';
-import { computeDataConfidence, type DataConfidence } from '../lib/dataConfidence';
+import { computeDataConfidence, type ConfidenceTxn, type DataConfidence } from '../lib/dataConfidence';
 import { availableMonths, monthlyIncomeStatement, spentByCategory, computeAdherence } from '../lib/recap';
 import { netWorth, netWorthSeries } from '../lib/networth';
 import { currentMonthKey } from '../lib/budget';
 import type { Coverage } from '../lib/coverage';
+import { DEFAULT_PRODUCTS } from '../lib/loans';
+import type { CoachPlanInput } from '../lib/coachPlan';
 
 /** Assemble the CreditProfile from store state and compute the score. Deterministic given inputs. */
 export function useCreditProfile(): {
@@ -13,6 +15,8 @@ export function useCreditProfile(): {
   score: CreditScore;
   dataConfidence: DataConfidence;
   coverage: Coverage;
+  /** Everything the Passport Builder Coach needs to re-run the engines under candidate actions. */
+  coachInput: CoachPlanInput;
 } {
   const {
     transactions,
@@ -52,18 +56,15 @@ export function useCreditProfile(): {
     const avgExpenses = Math.max(0, avgIncome - avgSurplus);
     const expenseRatio = avgIncome > 0 ? avgExpenses / avgIncome : 1;
 
-    const dataConfidence = computeDataConfidence(
-      transactions.map((t) => ({
-        amount: t.amount,
-        source: t.source,
-        merchantKey: t.merchantKey,
-        date: t.date,
-        type: t.type,
-        merchantRaw: t.merchantRaw,
-      })),
-      coverage.ratio,
-      expenseRatio
-    );
+    const confidenceTxns: ConfidenceTxn[] = transactions.map((t) => ({
+      amount: t.amount,
+      source: t.source,
+      merchantKey: t.merchantKey,
+      date: t.date,
+      type: t.type,
+      merchantRaw: t.merchantRaw,
+    }));
+    const dataConfidence = computeDataConfidence(confidenceTxns, coverage.ratio, expenseRatio);
     const { confidence } = dataConfidence;
 
     const profile: CreditProfile = {
@@ -80,6 +81,13 @@ export function useCreditProfile(): {
       repaymentTotal: repaymentSummary.total,
       confidence,
     };
-    return { profile, score: computeCreditScore(profile), dataConfidence, coverage };
+    const coachInput: CoachPlanInput = {
+      profile,
+      coverage,
+      confidenceTxns,
+      expenseRatio,
+      products: DEFAULT_PRODUCTS,
+    };
+    return { profile, score: computeCreditScore(profile), dataConfidence, coverage, coachInput };
   }, [transactions, snapshots, allocations, accounts, balanceEntries, accountValues, repaymentSummary, coverage]);
 }
