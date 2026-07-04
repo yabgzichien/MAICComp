@@ -37,6 +37,13 @@ export interface PassportMomentum {
   direction: 'rising' | 'flat' | 'falling';
 }
 
+/** Version stamps of the logic that produced this passport (engine / policy / model). */
+export interface PassportProvenanceMeta {
+  engineVersion: string;
+  policyVersion: string;
+  modelWeightsVersion: string;
+}
+
 export interface CreditPassport {
   subject: string;
   score: number;
@@ -50,6 +57,11 @@ export interface CreditPassport {
   assessment?: PassportAssessment;
   holder?: PassportHolder;
   momentum?: PassportMomentum;
+  /** Version stamps of the producing logic (optional; absent on pre-v2 passports). */
+  provenanceMeta?: PassportProvenanceMeta;
+  /** Leading-digit counts 1–9 (index 0 = digit 1) of the amounts behind the score —
+   *  nine aggregate numbers, never raw transactions. Optional; absent pre-v2. */
+  digitHistogram?: number[];
 }
 
 export interface VerifyResult {
@@ -126,6 +138,16 @@ export function validatePassportShape(p: unknown): string[] {
     const nums = ['lookbackDays', 'scoreFrom', 'scoreTo', 'coverageDaysFrom', 'coverageDaysTo'];
     const okDir = m && typeof m.direction === 'string' && ['rising', 'flat', 'falling'].includes(m.direction as string);
     if (!m || typeof m !== 'object' || !nums.every((k) => isFiniteNum(m[k])) || !okDir) problems.push('momentum');
+  }
+  if (o.provenanceMeta !== undefined) {
+    const v = o.provenanceMeta as Record<string, unknown>;
+    const keys = ['engineVersion', 'policyVersion', 'modelWeightsVersion'];
+    if (!v || typeof v !== 'object' || !keys.every((k) => typeof v[k] === 'string' && (v[k] as string).length > 0))
+      problems.push('provenanceMeta');
+  }
+  if (o.digitHistogram !== undefined) {
+    const h = o.digitHistogram;
+    if (!Array.isArray(h) || h.length !== 9 || !h.every((n) => isFiniteNum(n) && n >= 0)) problems.push('digitHistogram');
   }
   return problems;
 }

@@ -53,21 +53,32 @@ export function provenanceTrust(sources: TxnSource[]): number {
 }
 
 /**
+ * Counts of leading digits 1–9 across the given amounts (index 0 = digit 1).
+ * Aggregate-only — shared by `benfordConformity` and the passport's signed
+ * `digitHistogram` block, so both always describe the same evidence.
+ */
+export function leadingDigitHistogram(amounts: number[]): number[] {
+  const counts = new Array(9).fill(0);
+  for (const a of amounts) {
+    const n = Math.floor(Math.abs(a));
+    if (n <= 0) continue;
+    const d = Number(String(n)[0]);
+    if (d >= 1 && d <= 9) counts[d - 1]++;
+  }
+  return counts;
+}
+
+/**
  * Conformity of leading digits to Benford's Law, 0..1 (1 = perfect).
  * Neutral 0.5 when there are too few amounts to judge (<30).
  */
 export function benfordConformity(amounts: number[]): number {
-  const digits = amounts
-    .map((a) => Math.floor(Math.abs(a)))
-    .filter((n) => n > 0)
-    .map((n) => Number(String(n)[0]))
-    .filter((d) => d >= 1 && d <= 9);
-  if (digits.length < 30) return 0.5;
-  const counts = new Array(10).fill(0);
-  for (const d of digits) counts[d]++;
+  const counts = leadingDigitHistogram(amounts);
+  const total = counts.reduce((s, c) => s + c, 0);
+  if (total < 30) return 0.5;
   let deviation = 0;
   for (let d = 1; d <= 9; d++) {
-    const observed = counts[d] / digits.length;
+    const observed = counts[d - 1] / total;
     const expected = Math.log10(1 + 1 / d);
     deviation += Math.abs(observed - expected);
   }

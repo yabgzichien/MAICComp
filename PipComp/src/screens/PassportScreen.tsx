@@ -11,6 +11,8 @@ import { Card, TopBar } from '../components/ui';
 import { getOrCreateKeypair } from '../crypto/keys';
 import { issuerSign } from '../crypto/issuer';
 import { buildPassport, type CreditPassport } from '../lib/passport';
+import { leadingDigitHistogram } from '../lib/dataConfidence';
+import { ENGINE_VERSION, MODEL_WEIGHTS_VERSION, POLICY_VERSION } from '../lib/versions';
 import { useCreditProfile } from '../state/useCreditProfile';
 import { useAppData } from '../state/store';
 import { colors, numFont, uiFont } from '../theme';
@@ -25,7 +27,7 @@ function formatDate(iso: string): string {
 
 export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () => void; onOpenKyc?: () => void }) {
   const insets = useSafeAreaInsets();
-  const { profile, score, dataConfidence, coverage, momentum } = useCreditProfile();
+  const { profile, score, dataConfidence, coverage, momentum, coachInput } = useCreditProfile();
   const { kyc } = useAppData();
 
   const [loading, setLoading] = useState(true);
@@ -40,6 +42,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
   const dataConfidenceRef = useRef(dataConfidence);
   const coverageRef = useRef(coverage);
   const momentumRef = useRef(momentum);
+  const coachInputRef = useRef(coachInput);
   const kycRef = useRef(kyc);
   const sharedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -49,8 +52,9 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
     dataConfidenceRef.current = dataConfidence;
     coverageRef.current = coverage;
     momentumRef.current = momentum;
+    coachInputRef.current = coachInput;
     kycRef.current = kyc;
-  }, [profile, score, dataConfidence, coverage, momentum, kyc]);
+  }, [profile, score, dataConfidence, coverage, momentum, coachInput, kyc]);
 
   useEffect(() => {
     return () => {
@@ -121,6 +125,12 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
             coverageDaysTo: momentumRef.current.coverageDaysTo,
             direction: momentumRef.current.direction,
           },
+          provenanceMeta: {
+            engineVersion: ENGINE_VERSION,
+            policyVersion: POLICY_VERSION,
+            modelWeightsVersion: MODEL_WEIGHTS_VERSION,
+          },
+          digitHistogram: leadingDigitHistogram(coachInputRef.current.confidenceTxns.map((t) => t.amount)),
         },
         keypair.sign.bind(keypair),
         issuerSign,

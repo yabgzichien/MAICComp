@@ -38,7 +38,7 @@ export interface LoanDecisionInput {
 const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
 
 export const MIN_CONFIDENCE_TO_APPROVE = 0.5;
-const MAX_INSTALLMENT_SHARE_OF_SURPLUS = 0.35;
+export const MAX_INSTALLMENT_SHARE_OF_SURPLUS = 0.35;
 export const MAX_DSR = 0.4;
 
 function rm(n: number): string {

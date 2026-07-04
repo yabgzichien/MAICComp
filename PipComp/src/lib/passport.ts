@@ -49,6 +49,18 @@ export interface PassportHolder {
   provider: string;
 }
 
+/**
+ * Version stamps of the logic that produced this passport — the scoring/confidence
+ * engine, the loan-policy constants, and the fraud-model weights (see lib/versions.ts).
+ * Signed alongside the rest, so a disputed decision can be re-run against exactly
+ * the logic that made it.
+ */
+export interface PassportProvenanceMeta {
+  engineVersion: string;
+  policyVersion: string;
+  modelWeightsVersion: string;
+}
+
 /** The portable, signable credential — no raw transactions. */
 export interface CreditPassport {
   subject: string;
@@ -66,6 +78,15 @@ export interface CreditPassport {
   holder?: PassportHolder;
   /** Signed score trajectory (optional; absent on older passports). */
   momentum?: PassportMomentum;
+  /** Version stamps of the producing logic (optional; absent on pre-v2 passports). */
+  provenanceMeta?: PassportProvenanceMeta;
+  /**
+   * Counts of leading digits 1–9 (index 0 = digit 1) across the transaction amounts
+   * behind the score — nine aggregate numbers, never raw transactions. Lets a lender
+   * chart the observed distribution against Benford's expected curve.
+   * Optional; absent on pre-v2 passports.
+   */
+  digitHistogram?: number[];
 }
 
 /** Input required to build a passport. */
@@ -88,6 +109,10 @@ export interface PassportInput {
   holder?: PassportHolder;
   /** Optional signed score trajectory, copied into the signed passport. */
   momentum?: PassportMomentum;
+  /** Optional version stamps of the producing logic, copied into the signed passport. */
+  provenanceMeta?: PassportProvenanceMeta;
+  /** Optional leading-digit counts (9 entries), copied into the signed passport. */
+  digitHistogram?: number[];
 }
 
 /** Result of verifying a passport signature. */
@@ -191,6 +216,16 @@ export function validatePassportShape(p: unknown): string[] {
     const okDir = m && typeof m.direction === 'string' && ['rising', 'flat', 'falling'].includes(m.direction as string);
     if (!m || typeof m !== 'object' || !nums.every((k) => isFiniteNum(m[k])) || !okDir) problems.push('momentum');
   }
+  if (o.provenanceMeta !== undefined) {
+    const v = o.provenanceMeta as Record<string, unknown>;
+    const keys = ['engineVersion', 'policyVersion', 'modelWeightsVersion'];
+    if (!v || typeof v !== 'object' || !keys.every((k) => typeof v[k] === 'string' && (v[k] as string).length > 0))
+      problems.push('provenanceMeta');
+  }
+  if (o.digitHistogram !== undefined) {
+    const h = o.digitHistogram;
+    if (!Array.isArray(h) || h.length !== 9 || !h.every((n) => isFiniteNum(n) && n >= 0)) problems.push('digitHistogram');
+  }
   return problems;
 }
 
@@ -264,6 +299,8 @@ export async function buildPassport(
     ...(input.assessment ? { assessment: input.assessment } : {}),
     ...(input.holder ? { holder: input.holder } : {}),
     ...(input.momentum ? { momentum: input.momentum } : {}),
+    ...(input.provenanceMeta ? { provenanceMeta: input.provenanceMeta } : {}),
+    ...(input.digitHistogram ? { digitHistogram: input.digitHistogram } : {}),
   };
 
   const canonical = canonicalize(passport);

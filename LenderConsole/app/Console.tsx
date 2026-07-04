@@ -15,16 +15,24 @@ import {
   TRANCHES,
   type Palette,
 } from './tokens';
-import { type CreditPassport, parsePassportCode, verifyPassport } from '../lib/passport';
+import { type CreditPassport, type VerifyResult, parsePassportCode, verifyPassport } from '../lib/passport';
 import { DEFAULT_PRODUCTS, decideLoan, type LoanDecision } from '../lib/loans';
+import { buildDecisionFile, decisionFileName } from '../lib/decisionFile';
+import { runAgentPanel } from '../lib/agents';
+import { buildCreditMemo } from '../lib/creditMemo';
 import { InfoButton, InfoModal, MiniBar, SectionLabel } from './shared';
 import AgentPanel from './AgentPanel';
+import CreditMemoModal from './CreditMemo';
 
 type Tab = 'verify' | 'capital';
 const BAND_SEGMENTS = ['#c0392b', '#d98a00', '#3ab07a', '#1f8a5b', '#145c3d'];
 
+/** Signature material + verification outcome kept alongside a verified passport so the
+ *  officer can export a self-contained, re-verifiable decision file (retained evidence). */
+type Credential = { signature: string; issuerSignature?: string; verification: VerifyResult };
+
 type ViewState =
-  | { status: 'valid'; passport: CreditPassport; decision: LoanDecision | null }
+  | { status: 'valid'; passport: CreditPassport; decision: LoanDecision | null; credential: Credential }
   | { status: 'invalid'; reasons: string[] };
 
 const parseAmount = (s: string): number => Number(s.replace(/[^0-9.]/g, '')) || 0;
@@ -51,7 +59,12 @@ function evaluate(code: string, amountStr: string): ViewState {
     const parsed = parsePassportCode(code);
     const res = verifyPassport(parsed.passport, parsed.signature, parsed.issuerSignature);
     if (!res.valid) return { status: 'invalid', reasons: res.reasons };
-    return { status: 'valid', passport: parsed.passport, decision: decisionFor(parsed.passport, amountStr) };
+    return {
+      status: 'valid',
+      passport: parsed.passport,
+      decision: decisionFor(parsed.passport, amountStr),
+      credential: { signature: parsed.signature, issuerSignature: parsed.issuerSignature, verification: res },
+    };
   } catch (e) {
     return { status: 'invalid', reasons: [e instanceof Error ? e.message : String(e)] };
   }
@@ -459,7 +472,30 @@ const VERDICT = {
   decline: { label: 'DECLINED', grad: 'linear-gradient(140deg, #c0392b 0%, #7d241b 100%)', shadow: 'rgba(192,57,43,0.40)' },
 } as const;
 
-function RightDecision({ p, decision, amount, setAmount, onAssess }: { p: Palette; decision: LoanDecision | null; amount: string; setAmount: (s: string) => void; onAssess: () => void }) {
+function RightDecision({ p, passport, decision, credential, amount, setAmount, onAssess }: { p: Palette; passport: CreditPassport | null; decision: LoanDecision | null; credential: Credential | null; amount: string; setAmount: (s: string) => void; onAssess: () => void }) {
+  const [memoOpen, setMemoOpen] = useState(false);
+
+  function downloadDecisionFile() {
+    if (!passport || !decision || !credential) return;
+    const requestedAmount = parseAmount(amount);
+    const memo = buildCreditMemo(passport, decision, runAgentPanel(passport, decision), requestedAmount);
+    const file = buildDecisionFile({
+      passport,
+      signature: credential.signature,
+      issuerSignature: credential.issuerSignature,
+      verification: credential.verification,
+      decision,
+      requestedAmount,
+      memo,
+    });
+    const blob = new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = decisionFileName(passport, file.generatedAt);
+    a.click();
+    URL.revokeObjectURL(url);
+  }
   return (
     <div style={{ width: 340, background: p.surface, borderLeft: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
       <div style={{ padding: '14px 20px 11px', borderBottom: `1px solid ${p.hairline}` }}>
@@ -516,11 +552,38 @@ function RightDecision({ p, decision, amount, setAmount, onAssess }: { p: Palett
               ))}
             </div>
           </div>
+
+          {passport && (
+            <div style={{ padding: '12px 20px 0' }}>
+              <button
+                onClick={() => setMemoOpen(true)}
+                style={{ width: '100%', padding: '10px 0', borderRadius: 9, border: `1.5px solid ${p.primary}`, cursor: 'pointer', background: 'transparent', color: p.primary, fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700 }}
+              >
+                Generate audit memo
+              </button>
+            </div>
+          )}
+
+          {passport && credential && (
+            <div style={{ padding: '8px 20px 0' }}>
+              <button
+                onClick={downloadDecisionFile}
+                title="Self-contained evidence bundle: signed passport, verification result, decision + reasons, and the memo — independently re-verifiable."
+                style={{ width: '100%', padding: '10px 0', borderRadius: 9, border: `1.5px solid ${p.hairline}`, cursor: 'pointer', background: 'transparent', color: p.ink2, fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700 }}
+              >
+                Download decision file
+              </button>
+            </div>
+          )}
         </>
       ) : (
         <div style={{ padding: '20px', flex: 1 }}>
           <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.6 }}>This passport doesn&apos;t carry an affordability assessment, so no automated decision can be run. Verify a passport issued with assessment data.</p>
         </div>
+      )}
+
+      {memoOpen && passport && decision && (
+        <CreditMemoModal p={p} passport={passport} decision={decision} requestedAmount={parseAmount(amount)} onClose={() => setMemoOpen(false)} />
       )}
 
       <div style={{ padding: '12px 20px 15px', borderTop: `1px solid ${p.hairline}`, marginTop: 'auto' }}>
@@ -731,7 +794,7 @@ export default function Console() {
           <>
             <LeftPanel p={p} flagged={flagged} statusValid={flagged ? false : statusValid} code={code} setCode={setCode} onVerify={onVerify} onLoadSample={onLoadSample} onLoadFlagged={onLoadFlagged} />
             {showAlert ? <CenterAlert p={p} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} /> : <InvalidCenter p={p} reasons={state.reasons} />}
-            {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} decision={state.decision} amount={amount} setAmount={setAmount} onAssess={onAssess} /> : <RightDecision p={p} decision={null} amount={amount} setAmount={setAmount} onAssess={onAssess} />}
+            {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} />}
           </>
         ) : (
           <CapitalMarkets p={palette(false)} />

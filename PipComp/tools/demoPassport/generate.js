@@ -25,6 +25,38 @@ if (!secretMatch) {
 }
 const issuerSecret = Buffer.from(secretMatch[1], 'hex');
 
+// ── Read the version stamps from src/lib/versions.ts (kept in sync automatically) ──
+const versionsTs = fs.readFileSync(path.join(__dirname, '../../src/lib/versions.ts'), 'utf8');
+function readVersion(name) {
+  const m = versionsTs.match(new RegExp(name + "\\s*=\\s*'([^']+)'"));
+  if (!m) {
+    console.error(`Could not read ${name} from src/lib/versions.ts.`);
+    process.exit(1);
+  }
+  return m[1];
+}
+const provenanceMeta = {
+  engineVersion: readVersion('ENGINE_VERSION'),
+  policyVersion: readVersion('POLICY_VERSION'),
+  modelWeightsVersion: readVersion('MODEL_WEIGHTS_VERSION'),
+};
+
+// ── Sample digit histogram (counts of leading digits 1–9, index 0 = digit 1) ──────
+// Mildly off-Benford, matching a genuine-but-imperfect 90-day ledger. The Benford
+// percentage in provenanceSummary is COMPUTED from these counts (same formula as
+// src/lib/dataConfidence.ts benfordConformity) so prose and chart can never disagree.
+const digitHistogram = [71, 22, 18, 13, 20, 9, 8, 10, 7];
+function benfordPctOf(counts) {
+  const total = counts.reduce((s, c) => s + c, 0);
+  let deviation = 0;
+  for (let d = 1; d <= 9; d++) {
+    deviation += Math.abs(counts[d - 1] / total - Math.log10(1 + 1 / d));
+  }
+  const conformity = Math.max(0, Math.min(1, 1 - deviation / 1.7));
+  return Math.round(conformity * 100);
+}
+const benfordPct = benfordPctOf(digitHistogram);
+
 // ── 1. Holder keypair (the borrower) ───────────────────────────────────────────
 const privKey = ed.utils.randomSecretKey();
 const pubKeyHex = Buffer.from(ed.getPublicKey(privKey)).toString('hex');
@@ -50,7 +82,7 @@ const passport = {
     { key: 'track_record', subScore: 40 },
   ],
   provenanceSummary:
-    'source trust 70%; Benford conformity 83%; 2% round amounts; 0% duplicates; coverage 70% of last 90 days; expenses 82% of income',
+    `source trust 70%; Benford conformity ${benfordPct}%; 2% round amounts; 0% duplicates; coverage 70% of last 90 days; expenses 82% of income`,
   evidenceHash:
     'abc123def456abc123def456abc123def456abc123def456abc123def456ab12',
   repaymentRecord: { onTime: 0, total: 0 },
@@ -78,6 +110,8 @@ const passport = {
     coverageDaysTo: 90,
     direction: 'rising',
   },
+  provenanceMeta,
+  digitHistogram,
 };
 
 // ── 3. Canonicalize (mirrors passport.ts) ──────────────────────────────────────
