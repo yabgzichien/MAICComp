@@ -82,7 +82,8 @@ function IncomeHero({
 }) {
   const positive = net >= 0;
   return (
-    <View style={[styles.hero, positive ? styles.heroShadowPos : styles.heroShadowNeg]}>
+    <View style={[styles.heroShadowWrap, positive ? styles.heroShadowPos : styles.heroShadowNeg]}>
+      <View style={styles.hero}>
       <HeroGradient positive={positive} />
       <View style={styles.heroBlob} />
 
@@ -135,6 +136,7 @@ function IncomeHero({
           </View>
         </View>
       )}
+      </View>
     </View>
   );
 }
@@ -428,7 +430,13 @@ const styles = StyleSheet.create({
   monthChipTextOn: { fontFamily: uiFont(700), color: '#fff' },
 
   // hero
-  hero: { marginHorizontal: 16, borderRadius: 26, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 16, overflow: 'hidden' },
+  // Split in two: the shadow (incl. Android `elevation`) lives on this outer,
+  // unclipped wrapper, while `hero` below clips the gradient/blob to the
+  // rounded corners. Combining overflow:'hidden' with elevation on the same
+  // View clips Android's shadow into a glitchy rectangular offset — this
+  // wrapper/content split is the standard fix.
+  heroShadowWrap: { marginHorizontal: 16, borderRadius: 26 },
+  hero: { borderRadius: 26, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 16, overflow: 'hidden' },
   heroShadowPos: { shadowColor: '#0c2214', shadowOpacity: 0.28, shadowRadius: 24, shadowOffset: { width: 0, height: 14 }, elevation: 8 },
   heroShadowNeg: { shadowColor: '#5a0a14', shadowOpacity: 0.32, shadowRadius: 24, shadowOffset: { width: 0, height: 14 }, elevation: 8 },
   heroBlob: { position: 'absolute', top: -50, right: -40, width: 160, height: 160, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.05)' },

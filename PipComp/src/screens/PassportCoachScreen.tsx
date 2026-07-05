@@ -11,7 +11,8 @@ import { Icon } from '../components/Icon';
 import { Card, TopBar } from '../components/ui';
 import { getProvider } from '../llm';
 import { buildCoachPrompt, COACH_SYSTEM_PROMPT, coachPlanFallback } from '../llm/coachPrompt';
-import { buildCoachPlan, type CoachAction, type CoachLever, type CoachSim } from '../lib/coachPlan';
+import { baseline, buildCoachPlan, type CoachAction, type CoachLever, type CoachSim } from '../lib/coachPlan';
+import { fetchLenderDirectory, type LenderDirectory } from '../lib/lenderDirectory';
 import { configFor, loadSettings } from '../settings/settingsStore';
 import { useCreditProfile } from '../state/useCreditProfile';
 import { colors, numFont, uiFont } from '../theme';
@@ -29,6 +30,13 @@ function pct(x: number): string {
 function decisionLabel(d: CoachSim['decisionTo']): string {
   return d === 'approve' ? 'Likely approved' : d === 'refer' ? 'Refer for review' : 'Likely declined';
 }
+
+// Short, honest badges for the lender strip — policy projections, never approvals.
+const VERDICT_SHORT: Record<CoachSim['decisionTo'], string> = {
+  approve: 'Likely eligible',
+  refer: 'Manual review',
+  decline: 'Not yet',
+};
 
 /** Plain-English resilience line for an approved offer under income shocks (feature B). */
 function stressLabel(dipPct: number): string {
@@ -116,11 +124,44 @@ export function PassportCoachScreen({
 }) {
   const insets = useSafeAreaInsets();
   const { coachInput } = useCreditProfile();
-  const plan = useMemo(() => buildCoachPlan(coachInput), [coachInput]);
+
+  // Lender Match flywheel: the console's published ladders, fetched once. Only public
+  // criteria travel (lender → borrower); the simulation below never leaves the device.
+  const [dir, setDir] = useState<LenderDirectory | null>(null);
+  const [lenderId, setLenderId] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    fetchLenderDirectory().then((d) => {
+      if (!live) return;
+      setDir(d);
+      setLenderId(d.lenders[0]?.id ?? null);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const selectedLender = useMemo(
+    () => dir?.lenders.find((l) => l.id === lenderId) ?? dir?.lenders[0] ?? null,
+    [dir, lenderId]
+  );
+  const planInput = useMemo(
+    () => (selectedLender ? { ...coachInput, products: selectedLender.products } : coachInput),
+    [coachInput, selectedLender]
+  );
+  const plan = useMemo(() => buildCoachPlan(planInput), [planInput]);
+  // Per-lender verdict badges: the cheap baseline evaluation only, never a full plan per card.
+  const verdicts = useMemo(
+    () =>
+      new Map((dir?.lenders ?? []).map((l) => [l.id, baseline({ ...coachInput, products: l.products }).loan.decision])),
+    [dir, coachInput]
+  );
 
   const [selected, setSelected] = useState<number | null>(null);
-  const [narration, setNarration] = useState<{ at: number; text: string; ai: boolean } | null>(null);
+  const [narration, setNarration] = useState<{ at: string; text: string; ai: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  // Narration is keyed on lender + score so switching lenders re-narrates the new plan.
+  const planKey = `${selectedLender?.id ?? 'base'}:${plan.baseline.score}`;
 
   const runCoach = async () => {
     setBusy(true);
@@ -135,20 +176,21 @@ export function PassportCoachScreen({
         }),
         COACH_TIMEOUT_MS
       );
-      setNarration({ at: plan.baseline.score, text: text.trim(), ai: true });
+      setNarration({ at: planKey, text: text.trim(), ai: true });
     } catch {
       // Graceful degradation: real numbers, scripted prose.
-      setNarration({ at: plan.baseline.score, text: coachPlanFallback(plan), ai: false });
+      setNarration({ at: planKey, text: coachPlanFallback(plan), ai: false });
     } finally {
       setBusy(false);
     }
   };
 
-  // Auto-run once per score; falls back instantly if the LLM is unavailable.
+  // Auto-run once per lender+score; waits for the directory so the first narration
+  // already describes the selected lender's ladder. Falls back instantly without an LLM.
   useEffect(() => {
-    if (narration?.at !== plan.baseline.score) runCoach();
+    if (dir && narration?.at !== planKey) runCoach();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan.baseline.score]);
+  }, [planKey, dir]);
 
   const b = plan.baseline;
   const activeWhatIf = selected !== null ? plan.whatIfs[selected] : null;
@@ -186,6 +228,56 @@ export function PassportCoachScreen({
             </View>
           )}
         </Card>
+
+        {/* Lender strip — the flywheel: pick whose published criteria to coach against */}
+        {dir && selectedLender && (
+          <>
+            <Text style={styles.sectionLabel}>COACHING AGAINST</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.lenderRow}>
+              {dir.lenders.map((l) => {
+                const active = l.id === selectedLender.id;
+                const v = verdicts.get(l.id) ?? 'refer';
+                return (
+                  <Pressable
+                    key={l.id}
+                    onPress={() => {
+                      setLenderId(l.id);
+                      setSelected(null); // what-if chips are ladder-specific
+                    }}
+                    style={[styles.lenderCard, active && styles.lenderCardActive]}
+                  >
+                    <View style={styles.lenderHead}>
+                      <View style={[styles.lenderDot, { backgroundColor: l.brandColor }]} />
+                      <Text style={[styles.lenderName, active && styles.lenderNameActive]} numberOfLines={2}>
+                        {l.name}
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.verdictPill,
+                        v === 'approve' ? styles.verdictPillOk : v === 'refer' ? styles.verdictPillRefer : styles.verdictPillNo,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.verdictText,
+                          { color: v === 'approve' ? colors.accentInk : v === 'refer' ? '#a05c00' : colors.red },
+                        ]}
+                      >
+                        {VERDICT_SHORT[v]}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            {dir.offline ? (
+              <Text style={styles.offlineNote}>Lender directory unreachable — coaching against the generic Pip ladder.</Text>
+            ) : (
+              <Text style={styles.lenderBlurb}>{selectedLender.blurb}</Text>
+            )}
+          </>
+        )}
 
         {/* Pip's take (AI narration, provenance-tagged) */}
         <Card style={styles.pipCard}>
@@ -257,6 +349,21 @@ const styles = StyleSheet.create({
   blockerRow: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.line },
   blockerLabel: { fontFamily: uiFont(600), fontSize: 9, letterSpacing: 1, color: colors.ink3, marginBottom: 3 },
   blockerText: { fontFamily: uiFont(700), fontSize: 14, color: colors.red },
+
+  lenderRow: { gap: 8, paddingRight: 4 },
+  lenderCard: { width: 150, backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1.5, borderColor: colors.line, padding: 12, gap: 10, justifyContent: 'space-between' },
+  lenderCardActive: { borderColor: colors.accent, backgroundColor: colors.accentTint },
+  lenderHead: { flexDirection: 'row', gap: 7, alignItems: 'flex-start' },
+  lenderDot: { width: 10, height: 10, borderRadius: 999, marginTop: 3 },
+  lenderName: { flex: 1, fontFamily: uiFont(700), fontSize: 12.5, color: colors.ink, lineHeight: 16 },
+  lenderNameActive: { color: colors.accentInk },
+  verdictPill: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
+  verdictPillOk: { backgroundColor: colors.accentSoft },
+  verdictPillRefer: { backgroundColor: '#fdf1dc' },
+  verdictPillNo: { backgroundColor: '#fdeaea' },
+  verdictText: { fontFamily: uiFont(700), fontSize: 10.5 },
+  lenderBlurb: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, marginTop: 8, lineHeight: 16 },
+  offlineNote: { fontFamily: uiFont(500), fontSize: 11.5, color: '#a05c00', marginTop: 8, lineHeight: 16 },
 
   pipCard: { padding: 16, borderRadius: 18, marginTop: 12, backgroundColor: colors.accentSoft },
   pipHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },

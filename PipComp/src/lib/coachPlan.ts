@@ -67,7 +67,7 @@ export interface CoachPlan {
   whatIfs: CoachAction[];
 }
 
-interface Evaluation {
+export interface Evaluation {
   score: number;
   band: CreditBand;
   confidence: number;
@@ -148,8 +148,9 @@ function simOf(from: Evaluation, to: Evaluation): CoachSim {
   };
 }
 
-/** Baseline evaluation at the borrower's current coverage and surplus. */
-function baseline(input: CoachPlanInput): Evaluation {
+/** Baseline evaluation at the borrower's current coverage and surplus. Exported so the
+ *  Coach's lender strip can cheaply badge each published ladder without building a full plan. */
+export function baseline(input: CoachPlanInput): Evaluation {
   return evaluate(input, {
     coverageRatio: input.coverage.ratio,
     coverageDays: input.coverage.daysCovered,
