@@ -16,8 +16,8 @@ export function useCreditProfile(): {
   coverage: Coverage;
   /** Everything the Passport Builder Coach needs to re-run the engines under candidate actions. */
   coachInput: CoachPlanInput;
-  /** The borrower's 90-day score/coverage trajectory. */
-  momentum: Momentum;
+  /** The borrower's 90-day score/coverage trajectory; null below the minimum-history floor. */
+  momentum: Momentum | null;
 } {
   const { transactions, snapshots, allocations, accounts, balanceEntries, accountValues, repaymentSummary } =
     useAppData();

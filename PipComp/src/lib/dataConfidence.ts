@@ -68,14 +68,39 @@ export function leadingDigitHistogram(amounts: number[]): number[] {
   return counts;
 }
 
+/** Benford's Law only emerges over data spanning multiple orders of magnitude; below this
+ *  spread, honest narrow-band earners (daily gig payouts RM80–120, hawker QR sales) would be
+ *  penalized for their band's position on the number line, not for inauthenticity. */
+const BENFORD_MIN_DISPERSION_DECADES = 1.2;
+
+/** The absolute amounts the digit histogram actually counts (|a| ≥ 1). */
+function benfordEligibleAmounts(amounts: number[]): number[] {
+  return amounts.map((a) => Math.abs(a)).filter((a) => Math.floor(a) > 0);
+}
+
+/**
+ * True when the amounts span too narrow a range for Benford analysis to be informative.
+ * Dispersion measure: log10 of the p90/p10 ratio of the eligible absolute amounts, using
+ * nearest-rank percentiles — robust to a handful of outlier rows, unlike max/min.
+ */
+function benfordRangeTooNarrow(amounts: number[]): boolean {
+  const xs = benfordEligibleAmounts(amounts).sort((a, b) => a - b);
+  if (xs.length === 0) return true;
+  const p = (q: number) => xs[Math.max(0, Math.ceil(q * xs.length) - 1)];
+  return Math.log10(p(0.9) / p(0.1)) < BENFORD_MIN_DISPERSION_DECADES;
+}
+
 /**
  * Conformity of leading digits to Benford's Law, 0..1 (1 = perfect).
- * Neutral 0.5 when there are too few amounts to judge (<30).
+ * Neutral 0.5 when there are too few amounts to judge (<30), and neutral 0.5 when the
+ * amounts span too narrow a range for the law to apply (see BENFORD_MIN_DISPERSION_DECADES) —
+ * the same convention, because in both cases the check is unreliable, not failed.
  */
 export function benfordConformity(amounts: number[]): number {
   const counts = leadingDigitHistogram(amounts);
   const total = counts.reduce((s, c) => s + c, 0);
   if (total < 30) return 0.5;
+  if (benfordRangeTooNarrow(amounts)) return 0.5;
   let deviation = 0;
   for (let d = 1; d <= 9; d++) {
     const observed = counts[d - 1] / total;
@@ -120,11 +145,11 @@ const VERIFIED_PAYER_TOKENS = [
   'grab', 'shopee', 'foodpanda', 'lazada', 'government', 'kerajaan', 'jabatan', 'kementerian',
 ];
 
-/** Payer strings that mark an undocumented peer-to-peer transfer masquerading as income. */
-const GENERIC_PAYER_TOKENS = [
-  'duitnow', 'funds transfer', 'fund transfer', 'instant transfer', 'ibg', 'interbank',
-  '3rd party', 'third party', 'transfer from', 'cash deposit',
-];
+/** Merchant-QR receipt patterns — money in from customers via a DuitNow QR / QRPay stand.
+ *  Real sales income for hawkers and stall owners, so this tier is NEUTRAL: no verified
+ *  bonus, no generic penalty. Ad-hoc transfer wording ("duitnow transfer", "transfer from",
+ *  "cash deposit", third-party transfers) deliberately does NOT match — it stays generic. */
+const QR_MERCHANT_PAYER_TOKENS = ['duitnow qr', 'qrpay', 'qr pay', 'qr payment', 'merchant qr'];
 
 /** Below 0.40 the loans engine cannot auto-approve (its MIN_CONFIDENCE_TO_APPROVE is 0.50),
  *  so capping here forces a REFER through machinery that already exists. */
@@ -146,14 +171,28 @@ function mad(xs: number[], med: number): number {
   return median(xs.map((x) => Math.abs(x - med)));
 }
 
-/** True when an income row's payer cannot be matched to a verified commercial source. A blank
- *  string or a bare personal name is treated as generic — we cannot verify it as a real payer. */
-export function isGenericIncomePayer(t: ConfidenceTxn): boolean {
+export type IncomePayerTier = 'verified' | 'qr-merchant' | 'generic';
+
+/**
+ * Three-tier payer classification (Brief D). `verified` = registered commercial/statutory
+ * source. `qr-merchant` = DuitNow QR / QRPay receipt — a hawker's real sales, neutral.
+ * `generic` = everything else: ad-hoc transfers ("duitnow transfer", "transfer from",
+ * "funds transfer", "cash deposit", third-party wording), blanks, and bare personal names —
+ * income we cannot tie to any documentable source, penalized as before.
+ */
+export function classifyIncomePayer(t: ConfidenceTxn): IncomePayerTier {
   const raw = (t.merchantRaw ?? t.merchantKey ?? '').toLowerCase().trim();
-  if (raw === '') return true;
-  if (VERIFIED_PAYER_TOKENS.some((tok) => raw.includes(tok))) return false;
-  if (GENERIC_PAYER_TOKENS.some((tok) => raw.includes(tok))) return true;
-  return true;
+  if (raw === '') return 'generic';
+  if (VERIFIED_PAYER_TOKENS.some((tok) => raw.includes(tok))) return 'verified';
+  if (QR_MERCHANT_PAYER_TOKENS.some((tok) => raw.includes(tok))) return 'qr-merchant';
+  return 'generic';
+}
+
+/** True when an income row's payer is in the generic tier — undocumented P2P-style income.
+ *  Only this tier is penalized; `p2pIncomeValueRatio` and the weak-source outlier check both
+ *  key off it, so the QR-merchant tier is neutral everywhere by construction. */
+export function isGenericIncomePayer(t: ConfidenceTxn): boolean {
+  return classifyIncomePayer(t) === 'generic';
 }
 
 /**
@@ -391,6 +430,8 @@ export function computeDataConfidence(
   const amounts = txns.map((t) => t.amount);
   const trust = provenanceTrust(txns.map((t) => t.source));
   const benford = benfordConformity(amounts);
+  // Gate state for the reason row: only meaningful once there is enough data to have judged.
+  const benfordNarrow = amounts.length >= 30 && benfordRangeTooNarrow(amounts);
   const round = roundRatio(amounts);
   const dup = duplicateRatio(txns);
   const roundPenalty = clamp((round - 0.2) / 0.5, 0, 1);
@@ -443,8 +484,13 @@ export function computeDataConfidence(
     { key: 'provenance', ok: trust >= 0.7, detail: `source trust ${Math.round(trust * 100)}%` },
     {
       key: 'benford',
-      ok: benford >= 0.6,
-      detail: amounts.length >= 30 ? `Benford conformity ${Math.round(benford * 100)}%` : 'not enough data for Benford',
+      ok: benford >= 0.6 || benfordNarrow,
+      detail:
+        amounts.length < 30
+          ? 'not enough data for Benford'
+          : benfordNarrow
+            ? 'amount range too narrow for Benford analysis'
+            : `Benford conformity ${Math.round(benford * 100)}%`,
     },
     { key: 'round_numbers', ok: roundPenalty === 0, detail: `${Math.round(round * 100)}% round amounts` },
     { key: 'duplicates', ok: dup < 0.05, detail: `${Math.round(dup * 100)}% duplicate-looking rows` },

@@ -33,7 +33,8 @@ export interface PassportDraftArgs {
   score: CreditScore;
   dataConfidence: DataConfidence;
   coverage: Coverage;
-  momentum: Momentum;
+  /** Null when the borrower is below momentum's minimum-history floor — no block is carried. */
+  momentum: Momentum | null;
   /** Transaction amounts behind the confidence run — the digit histogram's input. */
   amounts: number[];
   identity: ConsentIdentity | null;
@@ -99,14 +100,18 @@ export function buildPassportDraft(args: PassportDraftArgs): PassportDraft {
           },
         }
       : {}),
-    momentum: {
-      lookbackDays: momentum.lookbackDays,
-      scoreFrom: momentum.scoreFrom,
-      scoreTo: momentum.scoreTo,
-      coverageDaysFrom: momentum.coverageDaysFrom,
-      coverageDaysTo: momentum.coverageDaysTo,
-      direction: momentum.direction,
-    },
+    ...(momentum
+      ? {
+          momentum: {
+            lookbackDays: momentum.lookbackDays,
+            scoreFrom: momentum.scoreFrom,
+            scoreTo: momentum.scoreTo,
+            coverageDaysFrom: momentum.coverageDaysFrom,
+            coverageDaysTo: momentum.coverageDaysTo,
+            direction: momentum.direction,
+          },
+        }
+      : {}),
     provenanceMeta: {
       engineVersion: ENGINE_VERSION,
       policyVersion: POLICY_VERSION,

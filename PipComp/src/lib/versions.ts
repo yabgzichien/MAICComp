@@ -13,6 +13,6 @@
 // tools/demoPassport/generate.js reads these constants by regex — keep each export
 // in the single-quoted `export const NAME = '...'` literal form below.
 
-export const ENGINE_VERSION = '1.0.0';
+export const ENGINE_VERSION = '1.1.0';
 export const POLICY_VERSION = '1.0.0';
 export const MODEL_WEIGHTS_VERSION = '1.0.0-berka9';

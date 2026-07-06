@@ -84,7 +84,7 @@ export function CreditScreen({
             <Text style={styles.confCaption}>
               {coverage.daysCovered}/90 days covered. Add more sources to raise confidence.
             </Text>
-            {momentum.direction !== 'flat' && (
+            {momentum && momentum.direction !== 'flat' && (
               <View style={[styles.momentumRow, momentum.direction === 'falling' && styles.momentumRowDown]}>
                 <Text style={[styles.momentumArrow, momentum.direction === 'falling' && { color: colors.red }]}>
                   {momentum.direction === 'rising' ? '↑' : '↓'}
