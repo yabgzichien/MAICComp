@@ -38,6 +38,25 @@ export interface LoanProduct {
   apr: number;
 }
 
+/**
+ * The intermediate caps decideLoan already computes on the way to an offer, exposed for
+ * the decision-waterfall visual (Brief K). Additive and optional: absent when no tier was
+ * selected (hard adverse record, integrity floor, score below the ladder).
+ */
+export interface DecisionBreakdown {
+  requestedAmount: number;
+  tierLabel: string;
+  tierMinAmount: number;
+  /** The requested amount clamped into the tier's principal range. */
+  tierCeiling: number;
+  /** Largest principal whose installment fits the surplus-share cap (may exceed the ceiling — then it didn't bite). */
+  surplusCapPrincipal: number;
+  /** Largest principal whose installment fits the DSR cap (may exceed the ceiling — then it didn't bite). */
+  dsrCapPrincipal: number;
+  /** The final offered principal — equals maxAmount; 0 on an affordability decline. */
+  offered: number;
+}
+
 export interface LoanDecision {
   decision: Decision;
   maxAmount: number;
@@ -46,6 +65,8 @@ export interface LoanDecision {
   /** The same reasons with their adverse-action category. Optional so hand-built fixtures
    *  and previously stored decisions stay valid; decideLoan always emits it. */
   categorizedReasons?: DecisionReason[];
+  /** Intermediate caps for the waterfall visual; present whenever a tier was evaluated. */
+  breakdown?: DecisionBreakdown;
 }
 
 export interface LoanDecisionInput {
@@ -97,6 +118,11 @@ type AffordabilityShortfall = 'no-headroom' | 'below-tier-minimum';
 interface AffordabilityResult {
   principal: number;
   shortfall?: AffordabilityShortfall;
+  /** The requested amount clamped into the tier range (feeds the waterfall breakdown). */
+  ceiling: number;
+  /** Largest principal each cap alone would support at this tier's rate/tenor. */
+  surplusCapPrincipal: number;
+  dsrCapPrincipal: number;
 }
 
 function affordablePrincipal(
@@ -110,12 +136,16 @@ function affordablePrincipal(
   const surplusCapInstallment = Math.max(0, avgMonthlySurplus * MAX_INSTALLMENT_SHARE_OF_SURPLUS);
   const dsrCapInstallment = Math.max(0, avgIncome * MAX_DSR - monthlyDebtService);
   const maxInstallment = Math.min(surplusCapInstallment, dsrCapInstallment);
-  if (maxInstallment <= 0) return { principal: 0, shortfall: 'no-headroom' };
+  // Installment scales linearly with principal for a fixed apr/tenor; the per-cap principals feed the waterfall.
   const installmentAtCeiling = installmentFor(ceiling, tier.apr, tier.tenorMonths);
-  if (installmentAtCeiling <= maxInstallment) return { principal: ceiling };
+  const principalFor = (cap: number): number => (installmentAtCeiling > 0 ? ceiling * (cap / installmentAtCeiling) : 0);
+  const surplusCapPrincipal = principalFor(surplusCapInstallment);
+  const dsrCapPrincipal = principalFor(dsrCapInstallment);
+  if (maxInstallment <= 0) return { principal: 0, shortfall: 'no-headroom', ceiling, surplusCapPrincipal, dsrCapPrincipal };
+  if (installmentAtCeiling <= maxInstallment) return { principal: ceiling, ceiling, surplusCapPrincipal, dsrCapPrincipal };
   const scaled = ceiling * (maxInstallment / installmentAtCeiling);
-  if (scaled < tier.minAmount) return { principal: 0, shortfall: 'below-tier-minimum' };
-  return { principal: Math.min(scaled, ceiling) };
+  if (scaled < tier.minAmount) return { principal: 0, shortfall: 'below-tier-minimum', ceiling, surplusCapPrincipal, dsrCapPrincipal };
+  return { principal: Math.min(scaled, ceiling), ceiling, surplusCapPrincipal, dsrCapPrincipal };
 }
 
 function applyCoverageTierFilter(
@@ -173,6 +203,8 @@ export function decideLoan(input: LoanDecisionInput): LoanDecision {
     integrityFloorBreached = false,
   } = input;
   const reasons: DecisionReason[] = [];
+  // Set once a tier has been evaluated; rides every decision made after that point.
+  let breakdown: DecisionBreakdown | undefined;
   // Flat strings stay derived from the categorized list so the two can never disagree.
   const finish = (decision: Decision, maxAmount: number, installment: number): LoanDecision => ({
     decision,
@@ -180,6 +212,7 @@ export function decideLoan(input: LoanDecisionInput): LoanDecision {
     installment,
     reasons: reasons.map((r) => r.text),
     categorizedReasons: reasons,
+    ...(breakdown ? { breakdown } : {}),
   });
 
   if (adverseRecord === 'hard') {
@@ -209,6 +242,15 @@ export function decideLoan(input: LoanDecisionInput): LoanDecision {
   reasons.push({ category: 'policy', text: `Qualifies for the "${tier.label}" tier (requires score ≥ ${tier.minScore}, scored ${score}).` });
 
   const affordability = affordablePrincipal(tier, requestedAmount, avgMonthlySurplus, monthlyDebtService, avgIncome);
+  breakdown = {
+    requestedAmount,
+    tierLabel: tier.label,
+    tierMinAmount: tier.minAmount,
+    tierCeiling: affordability.ceiling,
+    surplusCapPrincipal: affordability.surplusCapPrincipal,
+    dsrCapPrincipal: affordability.dsrCapPrincipal,
+    offered: affordability.principal,
+  };
   if (affordability.principal <= 0) {
     const detail =
       affordability.shortfall === 'below-tier-minimum'

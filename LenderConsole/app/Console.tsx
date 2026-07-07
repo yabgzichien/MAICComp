@@ -12,6 +12,7 @@ import {
   POOL_STATS,
   SAMPLE_CODE,
   SUSPECT_CODE,
+  SUSPECT_HISTOGRAM,
   TRANCHES,
   type Palette,
 } from './tokens';
@@ -26,6 +27,7 @@ import { deriveTrustRows, type TrustRowState } from '../lib/trustPanel';
 import { InfoButton, InfoModal, MiniBar, SectionLabel } from './shared';
 import AgentPanel from './AgentPanel';
 import CreditMemoModal from './CreditMemo';
+import { BenfordChart, DecisionWaterfall, HeadroomBar, MomentumSpark } from './DecisionViz';
 
 type Tab = 'verify' | 'capital';
 const BAND_SEGMENTS = ['#c0392b', '#d98a00', '#3ab07a', '#1f8a5b', '#145c3d'];
@@ -347,9 +349,10 @@ function VerifiedCenter({ p, passport, decision, priors, issuerVerified, stackin
                 Verifiable {up ? 'upward' : 'downward'} trajectory
               </p>
               <p style={{ fontFamily: FONT.num, fontSize: 11, color: p.ink2, marginTop: 1 }}>
-                score {m.scoreFrom} → {m.scoreTo} · coverage {m.coverageDaysFrom} → {m.coverageDaysTo} days over {m.lookbackDays}d — signed, not self-asserted
+                score {m.scoreFrom} → {m.scoreTo} over {m.lookbackDays}d — signed, not self-asserted
               </p>
             </div>
+            <MomentumSpark p={p} momentum={m} />
           </div>
         );
       })()}
@@ -380,6 +383,16 @@ function VerifiedCenter({ p, passport, decision, priors, issuerVerified, stackin
           {evidenceShort && <span style={{ fontFamily: FONT.mono, fontSize: 9.5, color: p.ink3 }}>SHA-256: {evidenceShort}</span>}
         </div>
       </div>
+      {passport.digitHistogram && passport.digitHistogram.length === 9 && (
+        <div style={{ background: p.surface, borderRadius: 12, padding: '12px 16px', boxShadow: p.shadow }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, gap: 8 }}>
+            <span style={{ fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 700, color: p.ink3, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Benford forensic check</span>
+            <span style={{ fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 600, color: p.accentInk, background: p.accentTint, border: `1px solid ${p.accentSoft}`, borderRadius: 5, padding: '2px 8px' }}>signed digit counts · no raw transactions</span>
+          </div>
+          <BenfordChart p={p} histogram={passport.digitHistogram} />
+        </div>
+      )}
+
       {decision ? (
         <AgentPanel p={p} passport={passport} decision={decision} stacking={stacking} />
       ) : (
@@ -494,6 +507,9 @@ function CenterAlert({ p }: { p: Palette }) {
             </div>
           );
         })}
+        <div style={{ padding: '10px 16px 6px', borderTop: `1px solid ${p.hairline}`, background: '#fffafa' }}>
+          <BenfordChart p={p} histogram={SUSPECT_HISTOGRAM} tone="alert" />
+        </div>
         <div style={{ padding: '7px 16px', background: '#fff0ef', borderTop: `1px solid ${p.hairline}` }}>
           <p style={{ fontFamily: FONT.ui, fontSize: 10, color: p.ink3, lineHeight: 1.5 }}>Analysis ran on submitted aggregates — <strong style={{ color: p.accentInk }}>not raw transactions</strong>. Statistical patterns suggest manual fabrication of income figures.</p>
         </div>
@@ -593,6 +609,9 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
               <p style={{ fontFamily: FONT.ui, fontSize: 18, fontWeight: 800, color: 'white', lineHeight: 1.25, position: 'relative' }}>No offer at this amount</p>
             )}
           </div>
+
+          {passport?.assessment && <HeadroomBar p={p} assessment={passport.assessment} installment={decision.installment} />}
+          {decision.breakdown && <DecisionWaterfall p={p} breakdown={decision.breakdown} />}
 
           <div style={{ padding: '14px 20px 0', flex: 1 }}>
             <SectionLabel color={p.ink3}>Audit Trail</SectionLabel>

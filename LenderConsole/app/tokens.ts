@@ -115,6 +115,11 @@ export const FORENSIC_FLAGS = [
   { label: 'Top ML signal', value: 'amount uniformity', sev: 'Fraud signal', critical: false },
 ];
 
+/** Leading-digit counts for the staged fraud-demo screen (Brief K): round-number
+ *  fabrication clusters on 5s and 8s (RM500/RM800-style amounts), so the observed
+ *  bars visibly break Benford's curve. Illustrative, like the rest of the alert demo. */
+export const SUSPECT_HISTOGRAM = [4, 2, 2, 1, 34, 2, 1, 38, 3];
+
 export const POOL_STATS = [
   { label: 'Total Principal', value: 'RM 6.54M', info: 'total_principal' },
   { label: 'Loans Pooled', value: '1,000', info: 'loans_pooled' },
