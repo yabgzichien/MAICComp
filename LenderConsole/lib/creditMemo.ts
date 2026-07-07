@@ -151,11 +151,19 @@ function buildConditions(decision: LoanDecision): string[] {
   }
 }
 
+/** An officer's queue resolution (Brief O) — surfaces in the memo's conditions. */
+export interface MemoResolution {
+  outcome: 'approved' | 'declined';
+  rationale: string;
+  officer: string;
+}
+
 export function buildCreditMemo(
   passport: CreditPassport,
   decision: LoanDecision,
   panel: AgentPanelResult,
   requestedAmount: number,
+  resolution?: MemoResolution,
 ): CreditMemo {
   const header: MemoHeader = {
     applicant: passport.holder?.name ?? 'Applicant',
@@ -174,7 +182,9 @@ export function buildCreditMemo(
     rationale: decision.reasons,
     groupedRationale: groupRationale(decision),
     compliance: buildCompliance(passport, decision),
-    conditions: buildConditions(decision),
+    conditions: resolution
+      ? [`Officer resolution — ${resolution.outcome} by ${resolution.officer}: "${resolution.rationale}" (recorded in the application audit trail).`, ...buildConditions(decision)]
+      : buildConditions(decision),
   };
 }
 

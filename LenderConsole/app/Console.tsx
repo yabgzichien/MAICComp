@@ -24,6 +24,18 @@ import { buildCreditMemo } from '../lib/creditMemo';
 import { findRecentPresentments, formatAgo, presentmentKey, type Presentment } from '../lib/presentment';
 import { readPresentmentLog, recordPresentment } from '../lib/presentmentStore';
 import { deriveTrustRows, type TrustRowState } from '../lib/trustPanel';
+import {
+  fileApplication,
+  readApplications,
+  resolveApplication,
+  writeApplications,
+  type ApplicationRecord,
+  type DeclaredPurpose,
+  type FileApplicationInput,
+  type PurposeCategory,
+} from '../lib/applications';
+import { DEMO_APPLICANTS } from './demoApplicants';
+import QueueRail from './QueueRail';
 import { InfoButton, InfoModal, MiniBar, SectionLabel } from './shared';
 import AgentPanel from './AgentPanel';
 import CreditMemoModal from './CreditMemo';
@@ -542,13 +554,95 @@ const VERDICT = {
   decline: { label: 'DECLINED', grad: 'linear-gradient(140deg, #c0392b 0%, #7d241b 100%)', shadow: 'rgba(192,57,43,0.40)' },
 } as const;
 
-function RightDecision({ p, passport, decision, credential, amount, setAmount, onAssess, stacking }: { p: Palette; passport: CreditPassport | null; decision: LoanDecision | null; credential: Credential | null; amount: string; setAmount: (s: string) => void; onAssess: () => void; stacking?: StackingSignal }) {
+const PURPOSE_LABELS: Record<PurposeCategory, string> = {
+  stock: 'Stock / inventory',
+  equipment: 'Equipment',
+  'working-capital': 'Working capital',
+  emergency: 'Emergency',
+  education: 'Education',
+  other: 'Other',
+};
+
+const APP_STATUS_STYLE: Record<ApplicationRecord['status'], { label: string; color: string; bg: string }> = {
+  new: { label: 'New', color: '#3b5bdb', bg: '#eef2ff' },
+  referred: { label: 'Referred — awaiting officer', color: '#8a6100', bg: '#fdf3dc' },
+  approved: { label: 'Approved', color: '#1f8a5b', bg: '#e7f4ec' },
+  declined: { label: 'Declined', color: '#c0392b', bg: '#fde8e8' },
+};
+
+/** The selected application's state + resolution controls (Brief O). The override
+ *  matrix is enforced in lib/applications.ts; this card only offers legal moves. */
+function ApplicationCard({ p, app, onResolve }: { p: Palette; app: ApplicationRecord; onResolve: (outcome: 'approved' | 'declined', rationale: string) => void }) {
+  const [rationale, setRationale] = useState('');
+  const s = APP_STATUS_STYLE[app.status];
+  const canResolve = rationale.trim().length > 0;
+  const rationaleInput = (
+    <input
+      value={rationale}
+      onChange={(e) => setRationale(e.target.value)}
+      maxLength={160}
+      placeholder="One-line rationale (required)"
+      style={{ width: '100%', padding: '7px 10px', borderRadius: 7, border: `1.5px solid ${p.hairline}`, fontSize: 11, color: p.ink1, background: p.surface, outline: 'none', fontFamily: FONT.ui, marginBottom: 6 }}
+    />
+  );
+  return (
+    <div style={{ margin: '12px 20px 0', borderRadius: 10, border: `1px solid ${p.hairline}`, background: p.surface2, padding: '10px 12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+        <span style={{ fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 700, color: p.ink3, letterSpacing: '0.10em', textTransform: 'uppercase' }}>Application</span>
+        <span style={{ fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 700, color: s.color, background: s.bg, borderRadius: 5, padding: '2px 8px' }}>{s.label}</span>
+      </div>
+      <p style={{ fontFamily: FONT.ui, fontSize: 10, color: p.ink3, marginBottom: 6 }}>
+        Filed {formatAgo(app.filedAt)}
+        {app.purpose ? ` · purpose: ${PURPOSE_LABELS[app.purpose.category]}${app.purpose.note ? ` — “${app.purpose.note}”` : ''} (self-reported)` : ''}
+      </p>
+
+      {app.status === 'referred' && (
+        <div>
+          {rationaleInput}
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button disabled={!canResolve} onClick={() => onResolve('approved', rationale)} style={{ flex: 1, padding: '7px 0', borderRadius: 7, border: 'none', cursor: canResolve ? 'pointer' : 'not-allowed', background: canResolve ? p.primary : 'rgba(20,40,30,0.12)', color: 'white', fontFamily: FONT.ui, fontSize: 11, fontWeight: 700 }}>Approve</button>
+            <button disabled={!canResolve} onClick={() => onResolve('declined', rationale)} style={{ flex: 1, padding: '7px 0', borderRadius: 7, border: `1.5px solid ${canResolve ? p.red : p.hairline}`, cursor: canResolve ? 'pointer' : 'not-allowed', background: 'transparent', color: canResolve ? p.red : p.ink3, fontFamily: FONT.ui, fontSize: 11, fontWeight: 700 }}>Decline</button>
+          </div>
+        </div>
+      )}
+
+      {app.status === 'approved' && (
+        <div>
+          {rationaleInput}
+          <button disabled={!canResolve} onClick={() => onResolve('declined', rationale)} style={{ width: '100%', padding: '7px 0', borderRadius: 7, border: `1.5px solid ${canResolve ? p.red : p.hairline}`, cursor: canResolve ? 'pointer' : 'not-allowed', background: 'transparent', color: canResolve ? p.red : p.ink3, fontFamily: FONT.ui, fontSize: 11, fontWeight: 700 }}>Overturn to decline</button>
+        </div>
+      )}
+
+      {app.status === 'declined' && (
+        <p style={{ fontFamily: FONT.ui, fontSize: 10, color: p.ink3, fontStyle: 'italic', lineHeight: 1.5 }}>
+          A decline can never be overturned to an approval — escalation only, same asymmetry as the agent orchestrator.
+        </p>
+      )}
+
+      {app.resolution && (
+        <p style={{ fontFamily: FONT.ui, fontSize: 10, color: p.ink2, lineHeight: 1.5, marginTop: 6 }}>
+          Resolved <strong>{app.resolution.outcome}</strong> by {app.resolution.officer}: “{app.resolution.rationale}”
+        </p>
+      )}
+
+      <div style={{ marginTop: 8, borderTop: `1px solid ${p.hairline}`, paddingTop: 6 }}>
+        {app.audit.map((e, i) => (
+          <p key={i} style={{ fontFamily: FONT.mono, fontSize: 8.5, color: p.ink3, lineHeight: 1.6 }}>
+            {e.at.slice(0, 16).replace('T', ' ')} · {e.action}{e.detail ? ` — ${e.detail}` : ''}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RightDecision({ p, passport, decision, credential, amount, setAmount, onAssess, stacking, selectedApp, onResolve, purpose, setPurpose }: { p: Palette; passport: CreditPassport | null; decision: LoanDecision | null; credential: Credential | null; amount: string; setAmount: (s: string) => void; onAssess: () => void; stacking?: StackingSignal; selectedApp?: ApplicationRecord | null; onResolve?: (outcome: 'approved' | 'declined', rationale: string) => void; purpose?: DeclaredPurpose | null; setPurpose?: (p: DeclaredPurpose | null) => void }) {
   const [memoOpen, setMemoOpen] = useState(false);
 
   function downloadDecisionFile() {
     if (!passport || !decision || !credential) return;
     const requestedAmount = parseAmount(amount);
-    const memo = buildCreditMemo(passport, decision, runAgentPanel(passport, decision, stacking), requestedAmount);
+    const memo = buildCreditMemo(passport, decision, runAgentPanel(passport, decision, stacking), requestedAmount, selectedApp?.resolution);
     const file = buildDecisionFile({
       passport,
       signature: credential.signature,
@@ -582,7 +676,38 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
           </div>
           <button onClick={onAssess} style={{ padding: '9px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', background: p.primary, color: 'white', fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, flexShrink: 0 }}>Assess</button>
         </div>
+        {setPurpose && (
+          <div style={{ marginTop: 8 }}>
+            <label style={{ fontFamily: FONT.ui, fontSize: 10, fontWeight: 600, color: p.ink3, display: 'block', marginBottom: 4 }}>Declared purpose — as stated by the applicant · never a scoring input</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <select
+                value={purpose?.category ?? ''}
+                onChange={(e) => {
+                  const cat = e.target.value as PurposeCategory | '';
+                  setPurpose(cat ? { category: cat, ...(purpose?.note ? { note: purpose.note } : {}) } : null);
+                }}
+                style={{ flex: 1, padding: '6px 8px', borderRadius: 7, border: `1.5px solid ${p.hairline}`, fontSize: 11, color: p.ink1, background: p.surface2, fontFamily: FONT.ui, outline: 'none' }}
+              >
+                <option value="">— not stated —</option>
+                {(Object.keys(PURPOSE_LABELS) as PurposeCategory[]).map((c) => (
+                  <option key={c} value={c}>{PURPOSE_LABELS[c]}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={purpose?.note ?? ''}
+                maxLength={140}
+                placeholder="optional note"
+                disabled={!purpose}
+                onChange={(e) => purpose && setPurpose({ category: purpose.category, ...(e.target.value ? { note: e.target.value } : {}) })}
+                style={{ flex: 1, padding: '6px 8px', borderRadius: 7, border: `1.5px solid ${p.hairline}`, fontSize: 11, color: p.ink1, background: purpose ? p.surface2 : 'rgba(20,40,30,0.04)', fontFamily: FONT.ui, outline: 'none' }}
+              />
+            </div>
+          </div>
+        )}
       </div>
+
+      {selectedApp && onResolve && <ApplicationCard p={p} app={selectedApp} onResolve={onResolve} />}
 
       {decision ? (
         <>
@@ -684,7 +809,7 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
       )}
 
       {memoOpen && passport && decision && (
-        <CreditMemoModal p={p} passport={passport} decision={decision} requestedAmount={parseAmount(amount)} stacking={stacking} onClose={() => setMemoOpen(false)} />
+        <CreditMemoModal p={p} passport={passport} decision={decision} requestedAmount={parseAmount(amount)} stacking={stacking} resolution={selectedApp?.resolution} onClose={() => setMemoOpen(false)} />
       )}
 
       <div style={{ padding: '12px 20px 15px', borderTop: `1px solid ${p.hairline}`, marginTop: 'auto' }}>
@@ -866,6 +991,10 @@ export default function Console() {
   const [state, setState] = useState<ViewState>(() => evaluate(SAMPLE_CODE, '10,000'));
   // Prior presentments of the currently verified passport (24h window, this console's log).
   const [priors, setPriors] = useState<Presentment[]>([]);
+  // The application pipeline (Brief O): persisted per-console, loaded after mount (SSR-safe).
+  const [apps, setApps] = useState<ApplicationRecord[]>([]);
+  const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
+  const [purpose, setPurpose] = useState<DeclaredPurpose | null>(null);
 
   // Boot pre-verifies the sample as a demo convenience — that is not an officer action, so it
   // is not logged; it only reads any history a previous session already recorded.
@@ -873,8 +1002,14 @@ export default function Console() {
     if (state.status === 'valid') {
       setPriors(findRecentPresentments(readPresentmentLog(), presentmentKey(state.passport)));
     }
+    setApps(readApplications());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const syncApps = (next: ApplicationRecord[]) => {
+    setApps(next);
+    writeApplications(next);
+  };
 
   /** Log an explicit verification as a presentment; priors exclude the one being recorded. */
   const logPresentment = (passport: CreditPassport) => {
@@ -883,28 +1018,113 @@ export default function Console() {
     recordPresentment({ id, at: new Date().toISOString(), lender: 'TEKUN' });
   };
 
+  const filingInput = (codeUsed: string, passport: CreditPassport, decision: LoanDecision, amountNum: number, declared?: DeclaredPurpose | null): FileApplicationInput => ({
+    passportCode: codeUsed,
+    subject: passport.subject,
+    applicantLabel: passport.holder?.name ?? 'Applicant',
+    requestedAmount: amountNum,
+    engineDecision: decision.decision,
+    offeredAmount: decision.maxAmount,
+    installment: decision.installment,
+    ...(decision.breakdown?.tierLabel ? { tierLabel: decision.breakdown.tierLabel } : {}),
+    ...(declared ? { purpose: declared } : {}),
+  });
+
+  /** File a successful verify+assessment as an application (deduped) and select it. */
+  const fileAndSelect = (codeUsed: string, next: ViewState) => {
+    if (next.status !== 'valid' || !next.decision) return;
+    const amountNum = parseAmount(amount);
+    const res = fileApplication(apps, filingInput(codeUsed, next.passport, next.decision, amountNum, purpose));
+    if (res.filed) syncApps(res.apps);
+    const match = res.apps.find((a) => a.subject === next.passport.subject && a.requestedAmount === amountNum);
+    setSelectedAppId(match?.id ?? null);
+  };
+
   const onVerify = () => {
     setFlagged(false);
     const next = evaluate(code, amount);
     setState(next);
-    if (next.status === 'valid') logPresentment(next.passport);
-    else setPriors([]);
+    if (next.status === 'valid') {
+      logPresentment(next.passport);
+      fileAndSelect(code, next);
+    } else {
+      setPriors([]);
+      setSelectedAppId(null);
+    }
   };
   const onLoadSample = () => {
     setFlagged(false);
     setCode(SAMPLE_CODE);
     const next = evaluate(SAMPLE_CODE, amount);
     setState(next);
-    if (next.status === 'valid') logPresentment(next.passport);
-    else setPriors([]);
+    if (next.status === 'valid') {
+      logPresentment(next.passport);
+      fileAndSelect(SAMPLE_CODE, next);
+    } else {
+      setPriors([]);
+      setSelectedAppId(null);
+    }
   };
   const onLoadFlagged = () => {
     setFlagged(true);
     setCode(SUSPECT_CODE);
   };
   const onAssess = () => {
-    if (state.status === 'valid') setState({ ...state, decision: decisionFor(state.passport, amount) });
+    if (state.status !== 'valid') return;
+    const decision = decisionFor(state.passport, amount);
+    const next: ViewState = { ...state, decision };
+    setState(next);
+    if (decision) fileAndSelect(code, next);
   };
+
+  /** Reviewing an existing file re-runs the same pure evaluate path from the stored code —
+   *  no duplicated state — and is not a new presentment (no log entry). */
+  const onSelectApp = (app: ApplicationRecord) => {
+    setFlagged(false);
+    setCode(app.passportCode);
+    const amtStr = app.requestedAmount.toLocaleString('en-MY');
+    setAmount(amtStr);
+    const next = evaluate(app.passportCode, amtStr);
+    setState(next);
+    setSelectedAppId(app.id);
+    setPurpose(app.purpose ?? null);
+    if (next.status === 'valid') setPriors(findRecentPresentments(readPresentmentLog(), presentmentKey(next.passport)));
+  };
+
+  const onPasteNew = () => {
+    setSelectedAppId(null);
+    setPurpose(null);
+    setCode('');
+  };
+
+  const onResolve = (outcome: 'approved' | 'declined', rationale: string) => {
+    if (!selectedAppId) return;
+    syncApps(resolveApplication(apps, selectedAppId, outcome, rationale));
+  };
+
+  /** Seed a working pipeline from the pre-signed demo applicants + the sample (Brief O).
+   *  Staggered filing times so the Referred queue demonstrates its oldest-first order. */
+  const onSeed = () => {
+    const seeds: { code: string; amount: number; purpose?: DeclaredPurpose }[] = [
+      ...DEMO_APPLICANTS.map((d, i) => ({
+        code: d.code,
+        amount: d.requestedAmount,
+        purpose: (['stock', 'working-capital', 'emergency'] as PurposeCategory[])[i] ? { category: (['stock', 'working-capital', 'emergency'] as PurposeCategory[])[i] } : undefined,
+      })),
+      { code: SAMPLE_CODE, amount: 10000, purpose: { category: 'stock', note: 'Stock for the raya season' } },
+    ];
+    let next = readApplications();
+    seeds.forEach((seed, i) => {
+      const s = evaluate(seed.code, String(seed.amount));
+      if (s.status === 'valid' && s.decision) {
+        const at = new Date(Date.now() - (seeds.length - i) * 5_400_000); // 1.5h apart, oldest first
+        next = fileApplication(next, filingInput(seed.code, s.passport, s.decision, seed.amount, seed.purpose), at).apps;
+      }
+    });
+    syncApps(next);
+  };
+
+  const selectedApp = apps.find((a) => a.id === selectedAppId) ?? null;
 
   const showAlert = tab === 'verify' && flagged;
   const p = palette(showAlert);
@@ -919,9 +1139,10 @@ export default function Console() {
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
         {tab === 'verify' ? (
           <>
+            <QueueRail p={p} apps={apps} selectedId={selectedAppId} onSelect={onSelectApp} onSeed={onSeed} onPasteNew={onPasteNew} />
             <LeftPanel p={p} flagged={flagged} statusValid={flagged ? false : statusValid} code={code} setCode={setCode} onVerify={onVerify} onLoadSample={onLoadSample} onLoadFlagged={onLoadFlagged} />
             {showAlert ? <CenterAlert p={p} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} /> : <InvalidCenter p={p} reasons={state.reasons} />}
-            {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} stacking={stackingSignal} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} />}
+            {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} stacking={stackingSignal} selectedApp={selectedApp} onResolve={onResolve} purpose={purpose} setPurpose={setPurpose} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} />}
           </>
         ) : (
           <CapitalMarkets p={palette(false)} />

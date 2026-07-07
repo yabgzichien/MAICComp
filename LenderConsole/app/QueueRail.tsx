@@ -1,0 +1,115 @@
+'use client';
+
+// Queue rail (Brief O) — the left edge of the two-pane workbench. Lists the four
+// queues with counts and age badges; Referred shows oldest first (the pure
+// orderQueue rule), because the longest-waiting file is the officer's next job.
+
+import { FONT, type Palette } from './tokens';
+import { orderQueue, type ApplicationRecord, type ApplicationStatus } from '../lib/applications';
+import { formatAgo } from '../lib/presentment';
+
+const QUEUES: { status: ApplicationStatus; label: string }[] = [
+  { status: 'new', label: 'New' },
+  { status: 'referred', label: 'Referred' },
+  { status: 'approved', label: 'Approved' },
+  { status: 'declined', label: 'Declined' },
+];
+
+const STATUS_COLOR: Record<ApplicationStatus, string> = {
+  new: '#3b5bdb',
+  referred: '#d98a00',
+  approved: '#1f8a5b',
+  declined: '#c0392b',
+};
+
+const rm = (n: number): string => `RM${Math.round(n).toLocaleString('en-MY')}`;
+
+export default function QueueRail({
+  p,
+  apps,
+  selectedId,
+  onSelect,
+  onSeed,
+  onPasteNew,
+}: {
+  p: Palette;
+  apps: ApplicationRecord[];
+  selectedId: string | null;
+  onSelect: (app: ApplicationRecord) => void;
+  onSeed: () => void;
+  onPasteNew: () => void;
+}) {
+  return (
+    <div style={{ width: 212, background: p.surface2, borderRight: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto' }}>
+      <div style={{ padding: '14px 12px 10px', borderBottom: `1px solid ${p.hairline}` }}>
+        <p style={{ fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 700, color: p.ink3, letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: 8 }}>Pipeline</p>
+        <button
+          onClick={onPasteNew}
+          style={{ width: '100%', padding: '7px 0', borderRadius: 8, border: `1.5px dashed ${p.hairline}`, cursor: 'pointer', background: 'transparent', fontFamily: FONT.ui, fontSize: 11, fontWeight: 600, color: p.ink2 }}
+        >
+          + Paste new application
+        </button>
+      </div>
+
+      {apps.length === 0 && (
+        <div style={{ padding: '14px 12px' }}>
+          <p style={{ fontFamily: FONT.ui, fontSize: 10.5, color: p.ink3, lineHeight: 1.55, marginBottom: 9 }}>
+            No applications yet. Verifying a passport files one automatically, or seed a demo pipeline:
+          </p>
+          <button
+            onClick={onSeed}
+            style={{ width: '100%', padding: '8px 0', borderRadius: 8, border: 'none', cursor: 'pointer', background: p.primary, color: 'white', fontFamily: FONT.ui, fontSize: 11.5, fontWeight: 700 }}
+          >
+            Seed demo pipeline
+          </button>
+        </div>
+      )}
+
+      {QUEUES.map(({ status, label }) => {
+        const queue = orderQueue(apps, status);
+        return (
+          <div key={status} style={{ padding: '10px 8px 4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px', marginBottom: 5 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 700, color: p.ink3, letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: STATUS_COLOR[status], display: 'inline-block' }} />
+                {label}
+              </span>
+              <span style={{ fontFamily: FONT.num, fontSize: 10, fontWeight: 700, color: queue.length > 0 ? p.ink1 : p.ink3 }}>{queue.length}</span>
+            </div>
+            {queue.map((a) => {
+              const selected = a.id === selectedId;
+              return (
+                <button
+                  key={a.id}
+                  onClick={() => onSelect(a)}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '7px 9px',
+                    marginBottom: 4,
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    border: selected ? `1.5px solid ${p.primary}` : `1px solid ${p.hairline}`,
+                    background: selected ? p.accentTint : p.surface,
+                  }}
+                >
+                  <p style={{ fontFamily: FONT.ui, fontSize: 11, fontWeight: 700, color: p.ink1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.applicantLabel}</p>
+                  <p style={{ fontFamily: FONT.num, fontSize: 9.5, color: p.ink3, marginTop: 2 }}>
+                    {rm(a.requestedAmount)} · filed {formatAgo(a.filedAt)}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        );
+      })}
+
+      <div style={{ marginTop: 'auto', padding: '10px 12px' }}>
+        <p style={{ fontFamily: FONT.ui, fontSize: 8.5, color: p.ink3, lineHeight: 1.5 }}>
+          Applications persist in this console&apos;s local store (demo) · one officer persona · age badges are timers, not SLAs.
+        </p>
+      </div>
+    </div>
+  );
+}

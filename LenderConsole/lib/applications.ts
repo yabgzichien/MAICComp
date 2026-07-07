@@ -1,0 +1,205 @@
+// Application queues store (Brief O) — the console's persistent pipeline. Pure
+// array-in/array-out logic plus an injectable-Storage wrapper (same pattern as
+// presentmentStore). No UI imports.
+//
+// The one inviolable rule — the override matrix — mirrors the orchestrator's
+// escalation-only asymmetry documented in agents.ts: an officer can resolve a
+// REFER either way and can DECLINE an engine approve (tighten), but can never
+// APPROVE an engine decline (soften). resolveApplication throws on violations.
+
+import type { Decision } from './loans';
+
+export type ApplicationStatus = 'new' | 'referred' | 'approved' | 'declined';
+
+/** Declared loan purpose (spec 2026-07-07): officer-facing context, never a scoring input. */
+export type PurposeCategory = 'stock' | 'equipment' | 'working-capital' | 'emergency' | 'education' | 'other';
+export interface DeclaredPurpose {
+  category: PurposeCategory;
+  note?: string;
+}
+
+export interface AuditEntry {
+  at: string;
+  action: string;
+  detail?: string;
+}
+
+export interface ApplicationRecord {
+  id: string;
+  /** The full pasted code — the detail pane rehydrates by re-running evaluate on it. */
+  passportCode: string;
+  subject: string;
+  applicantLabel: string;
+  requestedAmount: number;
+  purpose?: DeclaredPurpose;
+  /** The engine's verdict at filing. Never rewritten — resolutions live in `resolution`. */
+  engineDecision: Decision;
+  /** Offer terms at filing — the portfolio/early-warning specs read these off approved rows. */
+  offeredAmount: number;
+  installment: number;
+  tierLabel?: string;
+  status: ApplicationStatus;
+  filedAt: string;
+  resolvedAt?: string;
+  resolution?: { outcome: 'approved' | 'declined'; rationale: string; officer: string };
+  notes: string[];
+  /** Append-only. Entries are never edited or removed. */
+  audit: AuditEntry[];
+}
+
+export interface FileApplicationInput {
+  passportCode: string;
+  subject: string;
+  applicantLabel: string;
+  requestedAmount: number;
+  engineDecision: Decision;
+  offeredAmount: number;
+  installment: number;
+  tierLabel?: string;
+  purpose?: DeclaredPurpose;
+}
+
+const OFFICER = 'Hamdan Z.';
+
+/** Status a filing lands in: approve/decline resolve as engine-decided; refer waits for a human. */
+function statusFor(verdict: Decision): ApplicationStatus {
+  return verdict === 'approve' ? 'approved' : verdict === 'decline' ? 'declined' : 'referred';
+}
+
+/**
+ * File one verified+assessed passport as an application. Dedupe: the same subject
+ * asking for the same amount is the same application — re-verifying it does not
+ * file again (the presentment log already records repeat verifications).
+ */
+export function fileApplication(
+  apps: ApplicationRecord[],
+  input: FileApplicationInput,
+  now: Date = new Date(),
+): { apps: ApplicationRecord[]; filed: boolean; id?: string } {
+  const exists = apps.some((a) => a.subject === input.subject && a.requestedAmount === input.requestedAmount);
+  if (exists) return { apps, filed: false };
+
+  const at = now.toISOString();
+  const status = statusFor(input.engineDecision);
+  const resolved = status !== 'referred' && status !== 'new';
+  const record: ApplicationRecord = {
+    id: `${input.subject.slice(0, 8)}-${now.getTime().toString(36)}-${input.requestedAmount}`,
+    passportCode: input.passportCode,
+    subject: input.subject,
+    applicantLabel: input.applicantLabel,
+    requestedAmount: input.requestedAmount,
+    ...(input.purpose ? { purpose: input.purpose } : {}),
+    engineDecision: input.engineDecision,
+    offeredAmount: input.offeredAmount,
+    installment: input.installment,
+    ...(input.tierLabel ? { tierLabel: input.tierLabel } : {}),
+    status,
+    filedAt: at,
+    ...(resolved ? { resolvedAt: at } : {}),
+    notes: [],
+    audit: [
+      {
+        at,
+        action: 'filed',
+        detail: resolved ? `engine ${input.engineDecision} — resolved as filed` : 'engine refer — awaiting officer decision',
+      },
+    ],
+  };
+  return { apps: [...apps, record], filed: true, id: record.id };
+}
+
+/**
+ * Resolve an application. Enforces the override matrix:
+ *   referred → approved | declined   (either way, rationale required)
+ *   approved → declined              (an officer can always tighten)
+ *   declined → approved              (NEVER — throws)
+ */
+export function resolveApplication(
+  apps: ApplicationRecord[],
+  id: string,
+  outcome: 'approved' | 'declined',
+  rationale: string,
+  now: Date = new Date(),
+  officer: string = OFFICER,
+): ApplicationRecord[] {
+  const app = apps.find((a) => a.id === id);
+  if (!app) throw new Error(`No application with id ${id}.`);
+  if (!rationale.trim()) throw new Error('A one-line rationale is required to resolve an application.');
+  if (app.status === 'declined' && outcome === 'approved') {
+    throw new Error('An engine or officer decline can never be overturned to an approval — escalation only.');
+  }
+  if (app.status === 'approved' && outcome === 'approved') {
+    throw new Error('Already approved.');
+  }
+
+  const at = now.toISOString();
+  const resolvedApp: ApplicationRecord = {
+    ...app,
+    status: outcome,
+    resolvedAt: at,
+    resolution: { outcome, rationale: rationale.trim(), officer },
+    audit: [...app.audit, { at, action: `resolved-${outcome}`, detail: `${officer}: ${rationale.trim()}` }],
+  };
+  return apps.map((a) => (a.id === id ? resolvedApp : a));
+}
+
+/** Append an officer note (audit-trailed). */
+export function addNote(apps: ApplicationRecord[], id: string, note: string, now: Date = new Date()): ApplicationRecord[] {
+  const at = now.toISOString();
+  return apps.map((a) =>
+    a.id === id ? { ...a, notes: [...a.notes, note], audit: [...a.audit, { at, action: 'note', detail: note }] } : a,
+  );
+}
+
+/**
+ * One queue, in officer-work order: Referred shows the OLDEST first (the file that
+ * has waited longest is the next job); resolved queues show the newest first.
+ */
+export function orderQueue(apps: ApplicationRecord[], status: ApplicationStatus): ApplicationRecord[] {
+  const inQueue = apps.filter((a) => a.status === status);
+  const asc = status === 'referred' || status === 'new';
+  return [...inQueue].sort((a, b) => (asc ? a.filedAt.localeCompare(b.filedAt) : b.filedAt.localeCompare(a.filedAt)));
+}
+
+// ── localStorage wrapper (injectable, SSR-safe — presentmentStore pattern) ────
+
+const STORE_KEY = 'pip-applications';
+
+function defaultStorage(): Storage | null {
+  return typeof window === 'undefined' ? null : window.localStorage;
+}
+
+function isRecord(x: unknown): x is ApplicationRecord {
+  if (!x || typeof x !== 'object') return false;
+  const a = x as Record<string, unknown>;
+  return (
+    typeof a.id === 'string' &&
+    typeof a.passportCode === 'string' &&
+    typeof a.subject === 'string' &&
+    typeof a.requestedAmount === 'number' &&
+    typeof a.status === 'string' &&
+    typeof a.filedAt === 'string' &&
+    Array.isArray(a.audit)
+  );
+}
+
+export function readApplications(storage: Storage | null = defaultStorage()): ApplicationRecord[] {
+  if (!storage) return [];
+  try {
+    const raw = storage.getItem(STORE_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter(isRecord) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function writeApplications(apps: ApplicationRecord[], storage: Storage | null = defaultStorage()): void {
+  if (!storage) return;
+  try {
+    storage.setItem(STORE_KEY, JSON.stringify(apps));
+  } catch {
+    // Quota/security failures degrade to an in-memory-only session — never break the console.
+  }
+}
