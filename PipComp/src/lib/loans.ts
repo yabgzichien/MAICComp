@@ -5,6 +5,28 @@ import type { CreditBand } from './creditScore';
 
 export type Decision = 'approve' | 'refer' | 'decline';
 
+/**
+ * Why a reason exists (Brief J / regulator finding AA2): "cannot afford", "cannot
+ * verify", and "integrity concern" demand different adverse-action notices and give
+ * the borrower different remedies, so every reason carries its category.
+ */
+export type ReasonCategory = 'affordability' | 'data-quality' | 'integrity' | 'policy' | 'record';
+
+/** One evaluation-step reason with its adverse-action category. */
+export interface DecisionReason {
+  category: ReasonCategory;
+  text: string;
+}
+
+/** Display headings for grouped reason rendering — one source of truth for both apps' UIs. */
+export const REASON_CATEGORY_LABELS: Record<ReasonCategory, string> = {
+  affordability: 'Affordability — capacity to repay',
+  'data-quality': 'Data quality — what we could not verify',
+  integrity: 'Integrity — automated validation',
+  policy: 'Policy & tier',
+  record: 'Credit record',
+};
+
 /** Severity of an applicant's adverse credit record (mock until verification connectors land). */
 export type AdverseRecord = 'none' | 'soft' | 'hard';
 
@@ -22,7 +44,10 @@ export interface LoanDecision {
   decision: Decision;
   maxAmount: number; // RM the applicant qualifies for (0 if declined/referred without an offer)
   installment: number; // RM/month at maxAmount (0 if no offer)
-  reasons: string[]; // human-readable explanation, one entry per evaluation step
+  reasons: string[]; // human-readable explanation, one entry per evaluation step (derived from categorizedReasons)
+  /** The same reasons with their adverse-action category. Optional so hand-built fixtures
+   *  and previously stored decisions stay valid; decideLoan always emits it. */
+  categorizedReasons?: DecisionReason[];
 }
 
 export interface LoanDecisionInput {
@@ -182,7 +207,7 @@ function applyCoverageTierFilter(
   products: LoanProduct[],
   coverageRatio: number | undefined,
   coverageDaysCovered: number | undefined
-): { products: LoanProduct[]; forceRefer: boolean; reasons: string[] } {
+): { products: LoanProduct[]; forceRefer: boolean; reasons: DecisionReason[] } {
   if (typeof coverageDaysCovered !== 'number' || typeof coverageRatio !== 'number') {
     return { products, forceRefer: false, reasons: [] };
   }
@@ -194,7 +219,10 @@ function applyCoverageTierFilter(
       products: keep(['emergency']),
       forceRefer: true,
       reasons: [
-        `Coverage ${pct}% (${coverageDaysCovered} days of last 90) → Emergency Micro tier only; routed to manual review (REFER) regardless of affordability.`,
+        {
+          category: 'data-quality',
+          text: `Coverage ${pct}% (${coverageDaysCovered} days of last 90) → Emergency Micro tier only; routed to manual review (REFER) regardless of affordability.`,
+        },
       ],
     };
   }
@@ -203,7 +231,10 @@ function applyCoverageTierFilter(
       products: keep(['emergency', 'starter']),
       forceRefer: false,
       reasons: [
-        `Coverage ${pct}% (${coverageDaysCovered} days of last 90) → eligibility capped to Starter Capital and below.`,
+        {
+          category: 'data-quality',
+          text: `Coverage ${pct}% (${coverageDaysCovered} days of last 90) → eligibility capped to Starter Capital and below.`,
+        },
       ],
     };
   }
@@ -212,7 +243,10 @@ function applyCoverageTierFilter(
       products: keep(['emergency', 'starter']),
       forceRefer: false,
       reasons: [
-        `90+ days of history but coverage is only ${pct}% — eligibility capped to Starter Capital and below until coverage reaches 50%.`,
+        {
+          category: 'data-quality',
+          text: `90+ days of history but coverage is only ${pct}% — eligibility capped to Starter Capital and below until coverage reaches 50%.`,
+        },
       ],
     };
   }
@@ -237,19 +271,30 @@ export function decideLoan(input: LoanDecisionInput): LoanDecision {
     coverageDaysCovered,
     integrityFloorBreached = false,
   } = input;
-  const reasons: string[] = [];
+  const reasons: DecisionReason[] = [];
+  // Flat strings stay derived from the categorized list so the two can never disagree.
+  const finish = (decision: Decision, maxAmount: number, installment: number): LoanDecision => ({
+    decision,
+    maxAmount,
+    installment,
+    reasons: reasons.map((r) => r.text),
+    categorizedReasons: reasons,
+  });
 
   // Hard-adverse record overrides everything: decline outright.
   if (adverseRecord === 'hard') {
-    reasons.push('Serious adverse record on file — application declined.');
-    return { decision: 'decline', maxAmount: 0, installment: 0, reasons };
+    reasons.push({ category: 'record', text: 'Serious adverse record on file — application declined.' });
+    return finish('decline', 0, 0);
   }
 
-  // Data-integrity floor: income failed structural authenticity checks (asymmetric-fraud rings).
-  // No nominal score is trustworthy on top of fabricated income — decline pending verification.
+  // Data-integrity floor (asymmetric-fraud rings). Worded as a verification requirement,
+  // not an accusation — automated validation failing is a reason for human review, not a verdict on the person.
   if (integrityFloorBreached) {
-    reasons.push('Data-integrity floor breached: income failed structural authenticity checks — application declined pending verification.');
-    return { decision: 'decline', maxAmount: 0, installment: 0, reasons };
+    reasons.push({
+      category: 'integrity',
+      text: 'Data-integrity check: the income pattern could not be validated automatically — declined pending manual verification with the lender.',
+    });
+    return finish('decline', 0, 0);
   }
 
   // Phase 6 — narrow eligibility by coverage *before* selecting a tier.
@@ -259,10 +304,10 @@ export function decideLoan(input: LoanDecisionInput): LoanDecision {
   const tier = selectTier(score, coverage.products);
   if (!tier) {
     const lowest = products.reduce((m, p) => Math.min(m, p.minScore), Infinity);
-    reasons.push(`Score ${score} is below the minimum tier threshold (${lowest}) — application declined.`);
-    return { decision: 'decline', maxAmount: 0, installment: 0, reasons };
+    reasons.push({ category: 'policy', text: `Score ${score} is below the minimum tier threshold (${lowest}) — application declined.` });
+    return finish('decline', 0, 0);
   }
-  reasons.push(`Qualifies for the "${tier.label}" tier (requires score ≥ ${tier.minScore}, scored ${score}).`);
+  reasons.push({ category: 'policy', text: `Qualifies for the "${tier.label}" tier (requires score ≥ ${tier.minScore}, scored ${score}).` });
 
   const affordability = affordablePrincipal(tier, requestedAmount, avgMonthlySurplus, monthlyDebtService, avgIncome);
   if (affordability.principal <= 0) {
@@ -270,40 +315,47 @@ export function decideLoan(input: LoanDecisionInput): LoanDecision {
       affordability.shortfall === 'below-tier-minimum'
         ? `leave only enough room for an installment below this tier's minimum amount (${rm(tier.minAmount)})`
         : `leave no room for any installment at all`;
-    reasons.push(
-      `Affordability check failed: monthly surplus (${rm(avgMonthlySurplus)}) and existing debt service ` +
-        `(${rm(monthlyDebtService)} of ${rm(avgIncome)} income) ${detail}.`
-    );
-    return { decision: 'decline', maxAmount: 0, installment: 0, reasons };
+    reasons.push({
+      category: 'affordability',
+      text:
+        `Affordability check failed: monthly surplus (${rm(avgMonthlySurplus)}) and existing debt service ` +
+        `(${rm(monthlyDebtService)} of ${rm(avgIncome)} income) ${detail}.`,
+    });
+    return finish('decline', 0, 0);
   }
   const principal = affordability.principal;
 
   const installment = installmentFor(principal, tier.apr, tier.tenorMonths);
-  reasons.push(
-    `Approved amount capped at ${rm(principal)} so the installment (${rm(installment)}/mo over ${tier.tenorMonths} months ` +
-      `at ${Math.round(tier.apr * 100)}% APR) stays within ${Math.round(MAX_INSTALLMENT_SHARE_OF_SURPLUS * 100)}% of avg surplus and a ${Math.round(MAX_DSR * 100)}% DSR cap.`
-  );
+  reasons.push({
+    category: 'affordability',
+    text:
+      `Approved amount capped at ${rm(principal)} so the installment (${rm(installment)}/mo over ${tier.tenorMonths} months ` +
+      `at ${Math.round(tier.apr * 100)}% APR) stays within ${Math.round(MAX_INSTALLMENT_SHARE_OF_SURPLUS * 100)}% of avg surplus and a ${Math.round(MAX_DSR * 100)}% DSR cap.`,
+  });
   if (principal < requestedAmount) {
-    reasons.push(`Requested ${rm(requestedAmount)} exceeds what affordability supports; offering ${rm(principal)} instead.`);
+    reasons.push({ category: 'affordability', text: `Requested ${rm(requestedAmount)} exceeds what affordability supports; offering ${rm(principal)} instead.` });
   }
 
   // Soft-adverse and low-confidence both flip an otherwise-clean approval to a human-reviewed referral.
   if (adverseRecord === 'soft') {
-    reasons.push('Minor adverse record on file — routed to manual review instead of auto-approval.');
-    return { decision: 'refer', maxAmount: principal, installment, reasons };
+    reasons.push({ category: 'record', text: 'Minor adverse record on file — routed to manual review instead of auto-approval.' });
+    return finish('refer', principal, installment);
   }
   if (confidence < MIN_CONFIDENCE_TO_APPROVE) {
-    reasons.push(
-      `Confidence in the underlying data (${Math.round(confidence * 100)}%) is below the ${Math.round(MIN_CONFIDENCE_TO_APPROVE * 100)}% threshold for auto-approval — routed to manual review.`
-    );
-    return { decision: 'refer', maxAmount: principal, installment, reasons };
+    reasons.push({
+      category: 'data-quality',
+      text:
+        `We could not verify enough of the recorded data (confidence ${Math.round(confidence * 100)}%, below the ` +
+        `${Math.round(MIN_CONFIDENCE_TO_APPROVE * 100)}% auto-approval floor) — routed to manual review. More verified history would strengthen this application.`,
+    });
+    return finish('refer', principal, installment);
   }
 
   if (coverage.forceRefer) {
-    reasons.push('Auto-approval blocked by coverage policy — routed to manual review.');
-    return { decision: 'refer', maxAmount: principal, installment, reasons };
+    reasons.push({ category: 'data-quality', text: 'Auto-approval blocked by coverage policy — routed to manual review.' });
+    return finish('refer', principal, installment);
   }
 
-  reasons.push('Auto-approved: score, affordability, and data confidence all clear policy thresholds.');
-  return { decision: 'approve', maxAmount: principal, installment, reasons };
+  reasons.push({ category: 'policy', text: 'Auto-approved: score, affordability, and data confidence all clear policy thresholds.' });
+  return finish('approve', principal, installment);
 }

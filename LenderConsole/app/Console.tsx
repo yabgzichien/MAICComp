@@ -16,7 +16,7 @@ import {
   type Palette,
 } from './tokens';
 import { type CreditPassport, type VerifyResult, parsePassportCode, verifyPassport } from '../lib/passport';
-import { DEFAULT_PRODUCTS, decideLoan, type LoanDecision } from '../lib/loans';
+import { DEFAULT_PRODUCTS, REASON_CATEGORY_LABELS, decideLoan, type LoanDecision } from '../lib/loans';
 import { buildDecisionFile, decisionFileName } from '../lib/decisionFile';
 import { runAgentPanel, type StackingSignal } from '../lib/agents';
 import { buildCreditMemo } from '../lib/creditMemo';
@@ -596,15 +596,43 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
 
           <div style={{ padding: '14px 20px 0', flex: 1 }}>
             <SectionLabel color={p.ink3}>Audit Trail</SectionLabel>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
-              {decision.reasons.map((reason, i) => (
-                <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
-                  <span style={{ fontFamily: FONT.mono, fontSize: 10, fontWeight: 600, color: p.primary, lineHeight: 1.6, minWidth: 20, textAlign: 'right', flexShrink: 0 }}>{String(i + 1).padStart(2, '0')}</span>
-                  <div style={{ width: 1, background: p.accentSoft, alignSelf: 'stretch', marginTop: 3 }} />
-                  <p style={{ fontFamily: FONT.mono, fontSize: 10.5, lineHeight: 1.55, color: p.ink1 }}>{reason}</p>
-                </div>
-              ))}
-            </div>
+            {/* Grouped by adverse-action category (Brief J); flat fallback for pre-category decisions. */}
+            {decision.categorizedReasons && decision.categorizedReasons.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+                {(['affordability', 'data-quality', 'integrity', 'record', 'policy'] as const)
+                  .map((cat) => ({ cat, rows: decision.categorizedReasons!.filter((r) => r.category === cat) }))
+                  .filter((g) => g.rows.length > 0)
+                  .map((g, gi, groups) => {
+                    const offset = groups.slice(0, gi).reduce((s, x) => s + x.rows.length, 0);
+                    return (
+                      <div key={g.cat}>
+                        <p style={{ fontFamily: FONT.ui, fontSize: 9, fontWeight: 700, color: p.ink3, letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 5 }}>
+                          {REASON_CATEGORY_LABELS[g.cat]}
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                          {g.rows.map((r, i) => (
+                            <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+                              <span style={{ fontFamily: FONT.mono, fontSize: 10, fontWeight: 600, color: p.primary, lineHeight: 1.6, minWidth: 20, textAlign: 'right', flexShrink: 0 }}>{String(offset + i + 1).padStart(2, '0')}</span>
+                              <div style={{ width: 1, background: p.accentSoft, alignSelf: 'stretch', marginTop: 3 }} />
+                              <p style={{ fontFamily: FONT.mono, fontSize: 10.5, lineHeight: 1.55, color: p.ink1 }}>{r.text}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                {decision.reasons.map((reason, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+                    <span style={{ fontFamily: FONT.mono, fontSize: 10, fontWeight: 600, color: p.primary, lineHeight: 1.6, minWidth: 20, textAlign: 'right', flexShrink: 0 }}>{String(i + 1).padStart(2, '0')}</span>
+                    <div style={{ width: 1, background: p.accentSoft, alignSelf: 'stretch', marginTop: 3 }} />
+                    <p style={{ fontFamily: FONT.mono, fontSize: 10.5, lineHeight: 1.55, color: p.ink1 }}>{reason}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {passport && (

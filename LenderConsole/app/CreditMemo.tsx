@@ -152,16 +152,31 @@ export default function CreditMemoModal({
             </div>
           </Section>
 
-          {/* Rationale */}
+          {/* Rationale — grouped by adverse-action category (Brief J); flat fallback otherwise. */}
           <Section p={p} title="Rationale">
             <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink1, lineHeight: 1.6, marginBottom: 8 }}>{narrative.rationale}</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-              {memo.rationale.map((r, i) => (
-                <p key={i} style={{ fontFamily: FONT.mono, fontSize: 10, color: p.ink2, lineHeight: 1.5 }}>
-                  {String(i + 1).padStart(2, '0')} · {r}
-                </p>
-              ))}
-            </div>
+            {memo.groupedRationale.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                {memo.groupedRationale.map((g) => (
+                  <div key={g.category}>
+                    <p style={{ fontFamily: FONT.ui, fontSize: 9, fontWeight: 700, color: p.ink3, letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 3 }}>{g.label}</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {g.reasons.map((r, i) => (
+                        <p key={i} style={{ fontFamily: FONT.mono, fontSize: 10, color: p.ink2, lineHeight: 1.5 }}>· {r}</p>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {memo.rationale.map((r, i) => (
+                  <p key={i} style={{ fontFamily: FONT.mono, fontSize: 10, color: p.ink2, lineHeight: 1.5 }}>
+                    {String(i + 1).padStart(2, '0')} · {r}
+                  </p>
+                ))}
+              </div>
+            )}
           </Section>
 
           {/* CCA-2025 compliance */}

@@ -7,8 +7,8 @@
 // deterministic prose instead. Nothing here can change the verdict or amount.
 
 import type { CreditPassport } from './passport';
-import type { LoanDecision, Decision } from './loans';
-import { MAX_DSR, MAX_INSTALLMENT_SHARE_OF_SURPLUS, MIN_CONFIDENCE_TO_APPROVE } from './loans';
+import type { LoanDecision, Decision, ReasonCategory } from './loans';
+import { MAX_DSR, MAX_INSTALLMENT_SHARE_OF_SURPLUS, MIN_CONFIDENCE_TO_APPROVE, REASON_CATEGORY_LABELS } from './loans';
 import type { AgentPanelResult, AgentAssessment } from './agents';
 
 const rm = (n: number): string => `RM${Math.round(n).toLocaleString('en-MY')}`;
@@ -51,13 +51,36 @@ export interface ComplianceLine {
   met: boolean;
 }
 
+/** Reasons of one adverse-action category, under its display heading (Brief J). */
+export interface MemoRationaleGroup {
+  category: ReasonCategory;
+  label: string;
+  reasons: string[];
+}
+
 export interface CreditMemo {
   header: MemoHeader;
   decision: MemoDecision;
   findings: MemoFinding[];
   rationale: string[];
+  /** The rationale grouped by adverse-action category, non-empty groups only.
+   *  Empty when the decision predates categorized reasons — renderers fall back to `rationale`. */
+  groupedRationale: MemoRationaleGroup[];
   compliance: ComplianceLine[];
   conditions: string[];
+}
+
+/** Display order for the grouped headings: what binds the money first, then what could not be verified. */
+const GROUP_ORDER: ReasonCategory[] = ['affordability', 'data-quality', 'integrity', 'record', 'policy'];
+
+function groupRationale(decision: LoanDecision): MemoRationaleGroup[] {
+  const categorized = decision.categorizedReasons;
+  if (!categorized || categorized.length === 0) return [];
+  return GROUP_ORDER.map((category) => ({
+    category,
+    label: REASON_CATEGORY_LABELS[category],
+    reasons: categorized.filter((r) => r.category === category).map((r) => r.text),
+  })).filter((g) => g.reasons.length > 0);
 }
 
 function shortHash(hash: string): string {
@@ -149,6 +172,7 @@ export function buildCreditMemo(
     decision: { label: DECISION_LABEL[decision.decision], maxAmount: decision.maxAmount, installment: decision.installment },
     findings: [...panel.specialists, panel.orchestrator].map(toFinding),
     rationale: decision.reasons,
+    groupedRationale: groupRationale(decision),
     compliance: buildCompliance(passport, decision),
     conditions: buildConditions(decision),
   };
@@ -177,8 +201,17 @@ export function memoToMarkdown(memo: CreditMemo): string {
   lines.push('');
   lines.push('## Rationale');
   lines.push('');
-  for (const r of memo.rationale) lines.push(`- ${r}`);
-  lines.push('');
+  if (memo.groupedRationale.length > 0) {
+    for (const g of memo.groupedRationale) {
+      lines.push(`### ${g.label}`);
+      lines.push('');
+      for (const r of g.reasons) lines.push(`- ${r}`);
+      lines.push('');
+    }
+  } else {
+    for (const r of memo.rationale) lines.push(`- ${r}`);
+    lines.push('');
+  }
   lines.push('## Consumer Credit Act 2025 — affordability assessment');
   lines.push('');
   for (const c of memo.compliance) {
