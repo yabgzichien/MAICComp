@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { FONT, type Palette } from './tokens';
 import { SectionLabel } from './shared';
-import { runAgentPanel } from '../lib/agents';
+import { runAgentPanel, type StackingSignal } from '../lib/agents';
 import { buildCreditMemo, memoToMarkdown, fallbackNarrative, type CreditMemo } from '../lib/creditMemo';
 import type { CreditPassport } from '../lib/passport';
 import type { LoanDecision } from '../lib/loans';
@@ -28,18 +28,20 @@ export default function CreditMemoModal({
   passport,
   decision,
   requestedAmount,
+  stacking,
   onClose,
 }: {
   p: Palette;
   passport: CreditPassport;
   decision: LoanDecision;
   requestedAmount: number;
+  stacking?: StackingSignal;
   onClose: () => void;
 }) {
   const memo = useMemo(() => {
-    const panel = runAgentPanel(passport, decision);
+    const panel = runAgentPanel(passport, decision, stacking);
     return buildCreditMemo(passport, decision, panel, requestedAmount);
-  }, [passport, decision, requestedAmount]);
+  }, [passport, decision, requestedAmount, stacking]);
 
   const fallback = useMemo(() => fallbackNarrative(memo), [memo]);
   const [narrative, setNarrative] = useState(fallback);

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ALERT_FACTORS,
   AUDIT_REFER,
@@ -18,8 +18,11 @@ import {
 import { type CreditPassport, type VerifyResult, parsePassportCode, verifyPassport } from '../lib/passport';
 import { DEFAULT_PRODUCTS, decideLoan, type LoanDecision } from '../lib/loans';
 import { buildDecisionFile, decisionFileName } from '../lib/decisionFile';
-import { runAgentPanel } from '../lib/agents';
+import { runAgentPanel, type StackingSignal } from '../lib/agents';
 import { buildCreditMemo } from '../lib/creditMemo';
+import { findRecentPresentments, formatAgo, presentmentKey, type Presentment } from '../lib/presentment';
+import { readPresentmentLog, recordPresentment } from '../lib/presentmentStore';
+import { deriveTrustRows, type TrustRowState } from '../lib/trustPanel';
 import { InfoButton, InfoModal, MiniBar, SectionLabel } from './shared';
 import AgentPanel from './AgentPanel';
 import CreditMemoModal from './CreditMemo';
@@ -229,16 +232,53 @@ function LeftPanel({
   );
 }
 
-function VerifiedCenter({ p, passport, decision }: { p: Palette; passport: CreditPassport; decision: LoanDecision | null }) {
+function TrustRowIcon({ state, p }: { state: TrustRowState; p: Palette }) {
+  const color = state === 'pass' ? p.primary : state === 'warn' ? p.amber : p.red;
+  const bg = state === 'pass' ? p.accentSoft : state === 'warn' ? '#fdf3dc' : '#fde8e8';
+  return (
+    <div style={{ width: 15, height: 15, borderRadius: '50%', background: bg, border: `1px solid ${color}66`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+      <span style={{ fontSize: 9, fontWeight: 800, color, fontFamily: FONT.ui, lineHeight: 1 }}>{state === 'pass' ? '✓' : state === 'warn' ? '!' : '✕'}</span>
+    </div>
+  );
+}
+
+/** Repeat-presentment banner (Brief G) — same visual weight as the integrity alert banner. */
+function StackingBanner({ p, priors }: { p: Palette; priors: Presentment[] }) {
+  const severe = priors.length >= 3;
+  const grad = severe
+    ? 'linear-gradient(90deg, #a93226 0%, #c0392b 45%, #a93226 100%)'
+    : 'linear-gradient(90deg, #b87000 0%, #d98a00 45%, #b87000 100%)';
+  return (
+    <div style={{ borderRadius: 12, background: grad, padding: '11px 16px', display: 'flex', alignItems: 'center', gap: 12, boxShadow: `0 4px 18px ${severe ? 'rgba(192,57,43,0.35)' : 'rgba(217,138,0,0.35)'}`, animation: 'fade-in-up 0.35s ease-out both' }}>
+      <div style={{ width: 9, height: 9, borderRadius: '50%', background: 'white', animation: 'blink-dot 1.8s ease-in-out infinite', flexShrink: 0 }} />
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+        <path d="M8 1.5L1 14h14L8 1.5z" fill="rgba(255,255,255,0.22)" stroke="white" strokeWidth="1.3" strokeLinejoin="round" />
+        <line x1="8" y1="6" x2="8" y2="10" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
+        <circle cx="8" cy="12.2" r="0.85" fill="white" />
+      </svg>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 800, color: 'white', letterSpacing: '0.02em' }}>REPEAT PRESENTMENT — possible loan stacking</p>
+        <p style={{ fontFamily: FONT.ui, fontSize: 11, color: 'rgba(255,255,255,0.88)', marginTop: 1, lineHeight: 1.45 }}>
+          This passport was already verified {priors.length} time{priors.length === 1 ? '' : 's'} in the last 24h at this console — last {formatAgo(priors[0].at)}. Review before disbursing.
+        </p>
+        <p style={{ fontFamily: FONT.ui, fontSize: 9.5, color: 'rgba(255,255,255,0.68)', marginTop: 3 }}>per-console log (demo) · production: cross-lender registry</p>
+      </div>
+    </div>
+  );
+}
+
+function VerifiedCenter({ p, passport, decision, priors, issuerVerified, stacking }: { p: Palette; passport: CreditPassport; decision: LoanDecision | null; priors: Presentment[]; issuerVerified: boolean; stacking?: StackingSignal }) {
   const factors = passport.factorSummary;
   const avg = factors.length ? Math.round(factors.reduce((s, f) => s + f.subScore, 0) / factors.length) : 0;
   const confidencePct = passport.assessment ? Math.round(passport.assessment.confidence * 100) : null;
   const activeBand = Math.max(0, BAND_ORDER.indexOf(passport.band));
   const evidenceShort = passport.evidenceHash ? `${passport.evidenceHash.slice(0, 6)}…${passport.evidenceHash.slice(-6)}` : '';
+  const trustRows = deriveTrustRows({ passport, holderVerified: true, issuerVerified, priorPresentments: priors });
   return (
     <div style={{ flex: 1, background: p.bg, overflowY: 'auto', padding: '16px 14px', display: 'flex', flexDirection: 'column', gap: 11, minWidth: 360 }}>
+      {priors.length > 0 && <StackingBanner p={p} priors={priors} />}
       <div style={{ background: p.surface, borderRadius: 12, padding: '14px 16px', boxShadow: p.shadow, animation: 'fade-in-up 0.4s ease-out both' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 13, gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: p.primary, boxShadow: `0 0 0 3px ${p.accentSoft}` }} />
             <span style={{ fontFamily: FONT.ui, fontSize: 13, fontWeight: 700, color: p.primary }}>Verified ✓</span>
@@ -251,6 +291,20 @@ function VerifiedCenter({ p, passport, decision }: { p: Palette; passport: Credi
             </svg>
             <span style={{ fontFamily: FONT.ui, fontSize: 10.5, fontWeight: 700, color: p.accentInk }}>Privacy Locked — no raw transactions</span>
           </div>
+        </div>
+
+        {/* Trust panel (Brief G): five checks answering "can I trust this file?" */}
+        <div style={{ marginBottom: 12 }}>
+          {trustRows.map((r, i) => (
+            <div key={r.key} style={{ display: 'grid', gridTemplateColumns: '15px 118px 1fr', alignItems: 'start', gap: 8, padding: '6px 0', borderTop: i === 0 ? `1px solid ${p.hairline}` : 'none', borderBottom: `1px solid ${p.hairline}` }}>
+              <TrustRowIcon state={r.state} p={p} />
+              <span style={{ fontFamily: FONT.ui, fontSize: 11, fontWeight: 700, color: p.ink1, lineHeight: 1.5 }}>{r.label}</span>
+              <span style={{ fontFamily: FONT.ui, fontSize: 10.5, color: r.state === 'fail' ? p.red : r.state === 'warn' ? '#8a6100' : p.ink2, lineHeight: 1.5 }}>{r.detail}</span>
+            </div>
+          ))}
+          <p style={{ fontFamily: FONT.ui, fontSize: 9, color: p.ink3, marginTop: 5, lineHeight: 1.45 }}>
+            The stacking check uses this console&apos;s own presentment log (demo) — a production deployment shares it across lenders via a registry.
+          </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0 }}>
@@ -327,7 +381,7 @@ function VerifiedCenter({ p, passport, decision }: { p: Palette; passport: Credi
         </div>
       </div>
       {decision ? (
-        <AgentPanel p={p} passport={passport} decision={decision} />
+        <AgentPanel p={p} passport={passport} decision={decision} stacking={stacking} />
       ) : (
         <div style={{ background: p.surface, borderRadius: 12, padding: '14px 16px', boxShadow: p.shadow }}>
           <p style={{ fontFamily: FONT.ui, fontSize: 11.5, color: p.ink3, lineHeight: 1.6 }}>
@@ -472,13 +526,13 @@ const VERDICT = {
   decline: { label: 'DECLINED', grad: 'linear-gradient(140deg, #c0392b 0%, #7d241b 100%)', shadow: 'rgba(192,57,43,0.40)' },
 } as const;
 
-function RightDecision({ p, passport, decision, credential, amount, setAmount, onAssess }: { p: Palette; passport: CreditPassport | null; decision: LoanDecision | null; credential: Credential | null; amount: string; setAmount: (s: string) => void; onAssess: () => void }) {
+function RightDecision({ p, passport, decision, credential, amount, setAmount, onAssess, stacking }: { p: Palette; passport: CreditPassport | null; decision: LoanDecision | null; credential: Credential | null; amount: string; setAmount: (s: string) => void; onAssess: () => void; stacking?: StackingSignal }) {
   const [memoOpen, setMemoOpen] = useState(false);
 
   function downloadDecisionFile() {
     if (!passport || !decision || !credential) return;
     const requestedAmount = parseAmount(amount);
-    const memo = buildCreditMemo(passport, decision, runAgentPanel(passport, decision), requestedAmount);
+    const memo = buildCreditMemo(passport, decision, runAgentPanel(passport, decision, stacking), requestedAmount);
     const file = buildDecisionFile({
       passport,
       signature: credential.signature,
@@ -583,7 +637,7 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
       )}
 
       {memoOpen && passport && decision && (
-        <CreditMemoModal p={p} passport={passport} decision={decision} requestedAmount={parseAmount(amount)} onClose={() => setMemoOpen(false)} />
+        <CreditMemoModal p={p} passport={passport} decision={decision} requestedAmount={parseAmount(amount)} stacking={stacking} onClose={() => setMemoOpen(false)} />
       )}
 
       <div style={{ padding: '12px 20px 15px', borderTop: `1px solid ${p.hairline}`, marginTop: 'auto' }}>
@@ -763,15 +817,39 @@ export default function Console() {
   const [amount, setAmount] = useState('10,000');
   const [flagged, setFlagged] = useState(false);
   const [state, setState] = useState<ViewState>(() => evaluate(SAMPLE_CODE, '10,000'));
+  // Prior presentments of the currently verified passport (24h window, this console's log).
+  const [priors, setPriors] = useState<Presentment[]>([]);
+
+  // Boot pre-verifies the sample as a demo convenience — that is not an officer action, so it
+  // is not logged; it only reads any history a previous session already recorded.
+  useEffect(() => {
+    if (state.status === 'valid') {
+      setPriors(findRecentPresentments(readPresentmentLog(), presentmentKey(state.passport)));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Log an explicit verification as a presentment; priors exclude the one being recorded. */
+  const logPresentment = (passport: CreditPassport) => {
+    const id = presentmentKey(passport);
+    setPriors(findRecentPresentments(readPresentmentLog(), id));
+    recordPresentment({ id, at: new Date().toISOString(), lender: 'TEKUN' });
+  };
 
   const onVerify = () => {
     setFlagged(false);
-    setState(evaluate(code, amount));
+    const next = evaluate(code, amount);
+    setState(next);
+    if (next.status === 'valid') logPresentment(next.passport);
+    else setPriors([]);
   };
   const onLoadSample = () => {
     setFlagged(false);
     setCode(SAMPLE_CODE);
-    setState(evaluate(SAMPLE_CODE, amount));
+    const next = evaluate(SAMPLE_CODE, amount);
+    setState(next);
+    if (next.status === 'valid') logPresentment(next.passport);
+    else setPriors([]);
   };
   const onLoadFlagged = () => {
     setFlagged(true);
@@ -784,6 +862,8 @@ export default function Console() {
   const showAlert = tab === 'verify' && flagged;
   const p = palette(showAlert);
   const statusValid = flagged ? false : state.status === 'valid' ? true : false;
+  const stackingSignal: StackingSignal | undefined =
+    priors.length > 0 ? { priorCount: priors.length, lastAgo: formatAgo(priors[0].at), windowHours: 24 } : undefined;
 
   return (
     <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: p.bg }}>
@@ -793,8 +873,8 @@ export default function Console() {
         {tab === 'verify' ? (
           <>
             <LeftPanel p={p} flagged={flagged} statusValid={flagged ? false : statusValid} code={code} setCode={setCode} onVerify={onVerify} onLoadSample={onLoadSample} onLoadFlagged={onLoadFlagged} />
-            {showAlert ? <CenterAlert p={p} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} /> : <InvalidCenter p={p} reasons={state.reasons} />}
-            {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} />}
+            {showAlert ? <CenterAlert p={p} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} /> : <InvalidCenter p={p} reasons={state.reasons} />}
+            {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} stacking={stackingSignal} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} />}
           </>
         ) : (
           <CapitalMarkets p={palette(false)} />

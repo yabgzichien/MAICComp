@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { FONT, type Palette } from './tokens';
 import { MiniBar, SectionLabel } from './shared';
-import { runAgentPanel, type AgentAssessment, type VerdictTone } from '../lib/agents';
+import { runAgentPanel, type AgentAssessment, type StackingSignal, type VerdictTone } from '../lib/agents';
 import type { CreditPassport } from '../lib/passport';
 import type { LoanDecision } from '../lib/loans';
 
@@ -77,8 +77,8 @@ function AgentCard({
   );
 }
 
-export default function AgentPanel({ p, passport, decision }: { p: Palette; passport: CreditPassport; decision: LoanDecision }) {
-  const panel = useMemo(() => runAgentPanel(passport, decision), [passport, decision]);
+export default function AgentPanel({ p, passport, decision, stacking }: { p: Palette; passport: CreditPassport; decision: LoanDecision; stacking?: StackingSignal }) {
+  const panel = useMemo(() => runAgentPanel(passport, decision, stacking), [passport, decision, stacking]);
   const [rationales, setRationales] = useState<Record<string, string>>({});
   const [provenance, setProvenance] = useState<Provenance>('pending');
 

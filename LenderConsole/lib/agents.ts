@@ -58,12 +58,37 @@ function fallbackRationale(id: AgentId, tone: VerdictTone, signals: string[]): s
   return FALLBACK_RATIONALE[id][tone].replace('{cite}', signals.join('; '));
 }
 
-export function assessFraud(assessment: PassportAssessment, provenanceSummary: string): AgentAssessment {
+/** Anti-stacking signal from the presentment log (Brief G). */
+export interface StackingSignal {
+  /** Prior presentments of this passport within the window (excluding the current one). */
+  priorCount: number;
+  /** Recency of the most recent prior presentment, e.g. "2 h ago". */
+  lastAgo: string;
+  windowHours: number;
+}
+
+/** Escalation-only: a stacking hit can worsen the fraud tone, never soften it —
+ *  the same asymmetry the orchestrator enforces. */
+const STACKING_NEGATIVE_COUNT = 3;
+
+export function assessFraud(
+  assessment: PassportAssessment,
+  provenanceSummary: string,
+  stacking?: StackingSignal,
+): AgentAssessment {
   const confidencePct = pct(assessment.confidence);
-  const tone: VerdictTone =
+  const baseTone: VerdictTone =
     assessment.confidence >= HIGH_CONFIDENCE ? 'positive' : assessment.confidence >= MIN_CONFIDENCE_TO_APPROVE ? 'caution' : 'negative';
+
+  const stackedCount = stacking?.priorCount ?? 0;
+  const stackTone: VerdictTone = stackedCount >= STACKING_NEGATIVE_COUNT ? 'negative' : stackedCount >= 1 ? 'caution' : 'positive';
+  const tone: VerdictTone = TONE_SEVERITY[stackTone] > TONE_SEVERITY[baseTone] ? stackTone : baseTone;
+
   const verdict = tone === 'positive' ? 'Low risk' : tone === 'caution' ? 'Moderate risk' : 'High risk';
   const signals = [`Data confidence ${confidencePct}%`, provenanceSummary];
+  if (stacking && stackedCount >= 1) {
+    signals.push(`Presented ${stackedCount} time(s) before within ${stacking.windowHours}h (last ${stacking.lastAgo})`);
+  }
   return {
     id: 'fraud',
     label: 'Fraud & Integrity',
@@ -216,11 +241,11 @@ export function assessOrchestrator(specialists: AgentAssessment[], decision: Loa
   };
 }
 
-export function runAgentPanel(passport: CreditPassport, decision: LoanDecision): AgentPanelResult {
+export function runAgentPanel(passport: CreditPassport, decision: LoanDecision, stacking?: StackingSignal): AgentPanelResult {
   const assessment = passport.assessment;
   if (!assessment) throw new Error('runAgentPanel requires a passport with an assessment block.');
   const specialists = [
-    assessFraud(assessment, passport.provenanceSummary),
+    assessFraud(assessment, passport.provenanceSummary, stacking),
     assessCredit(passport),
     assessAffordability(assessment, decision),
     assessRisk(assessment, passport.repaymentRecord),
