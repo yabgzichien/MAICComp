@@ -18,6 +18,13 @@ e-wallet screenshots, through the exact production path the app ships
    **Label independently from the model's output** — correcting the model's own
    extraction biases the ground truth toward agreement.
 
+   Optional aid: after adding the images, run `npx tsx tools/ocrEval/scaffold.ts`
+   to drop a blank, schema-shaped label template into `dataset/labels/` for every
+   screenshot that doesn't have one yet (existing label files are never touched).
+   Then you're filling blanks instead of remembering the schema. The placeholder
+   row is intentionally invalid, so a template left unfilled fails loudly in
+   step 3 rather than counting as a real row.
+
 2. **Extract** (spends API calls): `npx tsx tools/ocrEval/run.ts`
    Key from `GROQ_API_KEY` / `EXPO_PUBLIC_GROQ_API_KEY` / `.env.local`.
    Sequential with 3s pacing (`OCR_EVAL_DELAY_MS` to change), one 20s-backoff

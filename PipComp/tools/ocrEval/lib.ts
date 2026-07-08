@@ -14,6 +14,21 @@ export interface LabelRow {
   direction: 'in' | 'out';
 }
 
+/** A blank, schema-shaped label file for one screenshot (see score.ts's
+ *  parseLabelFile / README.md). scaffold.ts writes one of these per unlabeled
+ *  image. The single placeholder row is DELIBERATELY invalid — empty merchant,
+ *  amount 0 — so a template left unfilled fails loudly in score.ts and names its
+ *  own file, instead of silently scoring as a real ground-truth row. */
+export function blankLabelTemplate(): { _README: string; rows: LabelRow[] } {
+  return {
+    _README:
+      'Label EVERY visible transaction row. amount is positive (direction "in"|"out" carries the sign); ' +
+      'date is "YYYY-MM-DD" or null when the screenshot shows none. Replace this placeholder and add one ' +
+      'object per row. Label independently of the model output — do not copy the extraction.',
+    rows: [{ merchant: '', amount: 0, date: null, direction: 'out' }],
+  };
+}
+
 /** One row from the real extraction pipeline (ExtractedTxn, minus fields we don't score). */
 export interface EvalExtractedRow {
   merchant: string;
