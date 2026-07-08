@@ -19,6 +19,7 @@ import {
 import { type CreditPassport, type VerifyResult, parsePassportCode, verifyPassport } from '../lib/passport';
 import { DEFAULT_PRODUCTS, REASON_CATEGORY_LABELS, decideLoan, type LoanDecision } from '../lib/loans';
 import { buildDecisionFile, decisionFileName } from '../lib/decisionFile';
+import { caseIdFor, flagTimeLabel } from '../lib/caseRef';
 import { runAgentPanel, type StackingSignal } from '../lib/agents';
 import { buildCreditMemo } from '../lib/creditMemo';
 import { findRecentPresentments, formatAgo, presentmentKey, type Presentment } from '../lib/presentment';
@@ -138,7 +139,7 @@ function Header({ p, tab, setTab, alert }: { p: Palette; tab: Tab; setTab: (t: T
   );
 }
 
-function AlertBanner() {
+function AlertBanner({ caseId, flagTime }: { caseId: string; flagTime: string }) {
   return (
     <div style={{ background: 'linear-gradient(90deg, #a93226 0%, #c0392b 40%, #a93226 100%)', padding: '0 22px', height: 38, display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0, animation: 'banner-slide 0.4s ease-out', borderBottom: '2px solid #922b21' }}>
       <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'white', animation: 'pulse-ring 1.8s ease-out infinite, blink-dot 1.8s ease-in-out infinite' }} />
@@ -150,10 +151,10 @@ function AlertBanner() {
       <span style={{ fontFamily: FONT.ui, fontSize: 13, fontWeight: 800, color: 'white', letterSpacing: '0.02em' }}>DATA INTEGRITY ALERT — Fabricated data suspected</span>
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ padding: '3px 10px', borderRadius: 5, background: 'rgba(0,0,0,0.22)', border: '1px solid rgba(255,255,255,0.22)' }}>
-          <span style={{ fontFamily: FONT.mono, fontSize: 10.5, color: 'rgba(255,255,255,0.85)', fontWeight: 500 }}>Case #FL-2024-0831 · Flagged 14:38 today</span>
+          <span style={{ fontFamily: FONT.mono, fontSize: 10.5, color: 'rgba(255,255,255,0.85)', fontWeight: 500 }}>Case #{caseId} · Flagged {flagTime}</span>
         </div>
         <div style={{ padding: '3px 10px', borderRadius: 5, background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)' }}>
-          <span style={{ fontFamily: FONT.ui, fontSize: 10.5, fontWeight: 700, color: 'white' }}>ML Model v3.1 · 95% confidence</span>
+          <span style={{ fontFamily: FONT.ui, fontSize: 10.5, fontWeight: 700, color: 'white' }}>Forensic screening · explainable checks</span>
         </div>
       </div>
     </div>
@@ -441,7 +442,7 @@ function InvalidCenter({ p, reasons }: { p: Palette; reasons: string[] }) {
   );
 }
 
-function CenterAlert({ p }: { p: Palette }) {
+function CenterAlert({ p, flagTime }: { p: Palette; flagTime: string }) {
   return (
     <div style={{ flex: 1, background: p.bg, overflowY: 'auto', padding: '14px 13px', display: 'flex', flexDirection: 'column', gap: 10, minWidth: 360 }}>
       <div style={{ background: p.surface, borderRadius: 12, padding: '14px 16px', border: `2px solid ${p.primary}`, boxShadow: '0 4px 20px rgba(192,57,43,0.18)', animation: 'fade-in-up 0.4s ease-out both' }}>
@@ -449,7 +450,7 @@ function CenterAlert({ p }: { p: Palette }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: p.primary, animation: 'blink-dot 1.4s ease-in-out infinite' }} />
             <span style={{ fontFamily: FONT.ui, fontSize: 13, fontWeight: 700, color: p.primary }}>Flagged ✕</span>
-            <span style={{ fontFamily: FONT.num, fontSize: 11, color: p.ink3 }}>· 14:38 · Unknown applicant</span>
+            <span style={{ fontFamily: FONT.num, fontSize: 11, color: p.ink3 }}>· {flagTime} · Unknown applicant</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: 8, background: p.accentTint, border: `1.5px solid ${p.accentSoft}` }}>
             <svg width="11" height="13" viewBox="0 0 11 13" fill="none">
@@ -495,7 +496,7 @@ function CenterAlert({ p }: { p: Palette }) {
             </svg>
             <span style={{ fontFamily: FONT.ui, fontSize: 11.5, fontWeight: 800, color: 'white', letterSpacing: '0.04em' }}>DATA FORENSICS</span>
           </div>
-          <span style={{ fontFamily: FONT.mono, fontSize: 10, color: 'rgba(255,255,255,0.65)' }}>ML v3.1 · Benford · Pattern analysis</span>
+          <span style={{ fontFamily: FONT.mono, fontSize: 10, color: 'rgba(255,255,255,0.65)' }}>Benford · provenance · integrity checks</span>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px 100px', padding: '5px 16px', borderBottom: `1px solid ${p.hairline}`, background: '#fff4f4' }}>
           {['Red Flag', 'Finding', 'Severity'].map((h) => (
@@ -988,6 +989,9 @@ export default function Console() {
   const [code, setCode] = useState(SAMPLE_CODE);
   const [amount, setAmount] = useState('10,000');
   const [flagged, setFlagged] = useState(false);
+  // Real timestamp captured the moment the flag was raised — the alert's flag time
+  // and case id are derived from this + the loaded code, never hardcoded (Brief A).
+  const [flaggedAt, setFlaggedAt] = useState<Date | null>(null);
   const [state, setState] = useState<ViewState>(() => evaluate(SAMPLE_CODE, '10,000'));
   // Prior presentments of the currently verified passport (24h window, this console's log).
   const [priors, setPriors] = useState<Presentment[]>([]);
@@ -1067,6 +1071,7 @@ export default function Console() {
   };
   const onLoadFlagged = () => {
     setFlagged(true);
+    setFlaggedAt(new Date());
     setCode(SUSPECT_CODE);
   };
   const onAssess = () => {
@@ -1127,6 +1132,8 @@ export default function Console() {
   const selectedApp = apps.find((a) => a.id === selectedAppId) ?? null;
 
   const showAlert = tab === 'verify' && flagged;
+  const flagTime = flagTimeLabel(flaggedAt ?? new Date());
+  const flagCaseId = caseIdFor(SUSPECT_CODE);
   const p = palette(showAlert);
   const statusValid = flagged ? false : state.status === 'valid' ? true : false;
   const stackingSignal: StackingSignal | undefined =
@@ -1135,13 +1142,13 @@ export default function Console() {
   return (
     <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: p.bg }}>
       <Header p={p} tab={tab} setTab={setTab} alert={showAlert} />
-      {showAlert && <AlertBanner />}
+      {showAlert && <AlertBanner caseId={flagCaseId} flagTime={flagTime} />}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
         {tab === 'verify' ? (
           <>
             <QueueRail p={p} apps={apps} selectedId={selectedAppId} onSelect={onSelectApp} onSeed={onSeed} onPasteNew={onPasteNew} />
             <LeftPanel p={p} flagged={flagged} statusValid={flagged ? false : statusValid} code={code} setCode={setCode} onVerify={onVerify} onLoadSample={onLoadSample} onLoadFlagged={onLoadFlagged} />
-            {showAlert ? <CenterAlert p={p} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} /> : <InvalidCenter p={p} reasons={state.reasons} />}
+            {showAlert ? <CenterAlert p={p} flagTime={flagTime} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} /> : <InvalidCenter p={p} reasons={state.reasons} />}
             {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} stacking={stackingSignal} selectedApp={selectedApp} onResolve={onResolve} purpose={purpose} setPurpose={setPurpose} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} />}
           </>
         ) : (
