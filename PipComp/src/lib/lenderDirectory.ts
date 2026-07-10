@@ -9,15 +9,19 @@
 // the valid ones. Any transport failure degrades to a single offline generic-ladder
 // entry so the Coach screen never breaks in a disconnected demo environment.
 
-import { DEFAULT_PRODUCTS, type LoanProduct } from './loans';
+import { DEFAULT_PRODUCTS, type LenderPolicy, type LoanProduct } from './loans';
 
-/** One published lender: display identity + its loan product ladder. */
+/** One published lender: display identity + its loan product ladder, and (Brief N)
+ *  optionally the affordability thresholds the lender's console decides with —
+ *  when present, the Coach simulates under them, so "what this lender would say"
+ *  tracks their real, current policy. Absent on older consoles (back-compat). */
 export interface LenderProfile {
   id: string;
   name: string;
   blurb: string;
   brandColor: string;
   products: LoanProduct[];
+  policy?: LenderPolicy;
 }
 
 export interface LenderDirectory {
@@ -63,8 +67,31 @@ function parseProduct(raw: unknown): LoanProduct | null {
   };
 }
 
+/** Validate a published policy block (Brief N): all six thresholds present and sane.
+ *  Ratios in (0,1], day gates whole numbers within the 90-day coverage window, gates ordered. */
+function parsePolicy(raw: unknown): LenderPolicy | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const p = raw as Record<string, unknown>;
+  const ratio = (v: unknown): v is number => isFiniteNum(v) && v > 0 && v <= 1;
+  const days = (v: unknown): v is number => isFiniteNum(v) && Number.isInteger(v) && v >= 0 && v <= 90;
+  if (!ratio(p.minConfidenceToApprove) || !ratio(p.maxInstallmentShareOfSurplus) || !ratio(p.maxDsr)) return null;
+  if (!days(p.emergencyOnlyBelowDays) || !days(p.fullLadderFromDays)) return null;
+  if (!ratio(p.minCoverageRatioForFullLadder)) return null;
+  if (p.emergencyOnlyBelowDays > p.fullLadderFromDays) return null;
+  return {
+    minConfidenceToApprove: p.minConfidenceToApprove,
+    maxInstallmentShareOfSurplus: p.maxInstallmentShareOfSurplus,
+    maxDsr: p.maxDsr,
+    emergencyOnlyBelowDays: p.emergencyOnlyBelowDays,
+    fullLadderFromDays: p.fullLadderFromDays,
+    minCoverageRatioForFullLadder: p.minCoverageRatioForFullLadder,
+  };
+}
+
 /** Validate one lender entry; a single malformed product invalidates the whole entry —
- *  a partial ladder could silently mis-tier a borrower, which is worse than no ladder. */
+ *  a partial ladder could silently mis-tier a borrower, which is worse than no ladder.
+ *  Same rule for a malformed published policy: mis-simulating a lender's thresholds is
+ *  worse than skipping the lender. A MISSING policy is fine (older console, defaults). */
 function parseLender(raw: unknown): LenderProfile | null {
   if (!raw || typeof raw !== 'object') return null;
   const l = raw as Record<string, unknown>;
@@ -77,7 +104,13 @@ function parseLender(raw: unknown): LenderProfile | null {
     if (!p) return null;
     products.push(p);
   }
-  return { id: l.id, name: l.name, blurb: l.blurb, brandColor: l.brandColor, products };
+  let policy: LenderPolicy | undefined;
+  if (l.policy !== undefined) {
+    const parsed = parsePolicy(l.policy);
+    if (!parsed) return null;
+    policy = parsed;
+  }
+  return { id: l.id, name: l.name, blurb: l.blurb, brandColor: l.brandColor, products, ...(policy ? { policy } : {}) };
 }
 
 /** Pure: validate an untrusted payload into lender profiles, dropping bad entries individually. */

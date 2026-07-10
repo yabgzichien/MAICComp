@@ -145,15 +145,19 @@ export function PassportCoachScreen({
     () => dir?.lenders.find((l) => l.id === lenderId) ?? dir?.lenders[0] ?? null,
     [dir, lenderId]
   );
+  // The lender's ladder AND its published thresholds (Brief N): "what this lender would
+  // say" simulates under the policy their console actually decides with.
   const planInput = useMemo(
-    () => (selectedLender ? { ...coachInput, products: selectedLender.products } : coachInput),
+    () => (selectedLender ? { ...coachInput, products: selectedLender.products, policy: selectedLender.policy } : coachInput),
     [coachInput, selectedLender]
   );
   const plan = useMemo(() => buildCoachPlan(planInput), [planInput]);
   // Per-lender verdict badges: the cheap baseline evaluation only, never a full plan per card.
   const verdicts = useMemo(
     () =>
-      new Map((dir?.lenders ?? []).map((l) => [l.id, baseline({ ...coachInput, products: l.products }).loan.decision])),
+      new Map(
+        (dir?.lenders ?? []).map((l) => [l.id, baseline({ ...coachInput, products: l.products, policy: l.policy }).loan.decision])
+      ),
     [dir, coachInput]
   );
 

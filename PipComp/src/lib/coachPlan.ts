@@ -6,7 +6,7 @@
 import { computeCreditScore, type CreditBand, type CreditProfile } from './creditScore';
 import type { Coverage } from './coverage';
 import { computeDataConfidence, type ConfidenceTxn } from './dataConfidence';
-import { decideLoan, type AdverseRecord, type Decision, type LoanDecision, type LoanProduct } from './loans';
+import { decideLoan, type AdverseRecord, type Decision, type LenderPolicy, type LoanDecision, type LoanProduct } from './loans';
 
 const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
 
@@ -17,6 +17,8 @@ export interface CoachPlanInput {
   expenseRatio: number;
   products: LoanProduct[];
   adverseRecord?: AdverseRecord;
+  /** The lender's published thresholds (Brief N flywheel). Omitted → engine defaults. */
+  policy?: LenderPolicy;
 }
 
 export interface CoachSim {
@@ -128,6 +130,7 @@ function evaluate(
     coverageRatio: opts.coverageRatio,
     coverageDaysCovered: opts.coverageDays,
     integrityFloorBreached: dc.integrityFloorBreached,
+    policy: input.policy,
   });
   return { score: score.score, band: score.band, confidence, loan };
 }
@@ -259,7 +262,7 @@ export function diagnoseConstraint(input: CoachPlanInput): ConstraintDiagnosis {
   const win = input.coverage.windowDays || 90;
 
   // Coverage: the best genuinely-improving milestone (mirrors the coach's own non-declining filter).
-  const coverageImpact = coverageMilestones(input.coverage.daysCovered, win)
+  const coverageImpact = coverageMilestones(input.coverage.daysCovered, win, gateDaysOf(input))
     .map((t) => coverageActionAt(input, t))
     .filter((a) => a.sim.decisionTo !== 'decline')
     .reduce((m, a) => Math.max(m, a.impact), 0);
@@ -323,8 +326,14 @@ function rm(n: number): string {
   return `RM${Math.round(n).toLocaleString('en-MY')}`;
 }
 
-/** Below 30 covered days the Emergency-tier gate caps the offer no matter the surplus. */
+/** Below this many covered days the Emergency-tier gate caps the offer no matter the surplus.
+ *  The engine default; a lender's published policy (Brief N) may move it. */
 const COVERAGE_GATE_DAYS = 30;
+
+/** The Emergency-only gate in force for this input — the lender's published gate when present. */
+function gateDaysOf(input: CoachPlanInput): number {
+  return input.policy?.emergencyOnlyBelowDays ?? COVERAGE_GATE_DAYS;
+}
 
 /** True when an action moves the offer in any observable way (score, decision, or amount). */
 function simChanged(sim: CoachSim): boolean {
@@ -352,10 +361,11 @@ function surplusPresets(profile: CreditProfile): number[] {
 /** How many on-time repayments the track-record what-if models. */
 const TRACK_RECORD_COUNT = 3;
 
-/** The coverage milestones still ahead of the borrower (30-day Starter floor, 90-day full ladder). */
-function coverageMilestones(daysCovered: number, windowDays: number): number[] {
+/** The coverage milestones still ahead of the borrower (Emergency-gate floor → Starter,
+ *  full-window → full ladder), under the gate actually in force for this lender. */
+function coverageMilestones(daysCovered: number, windowDays: number, gateDays: number): number[] {
   const targets: number[] = [];
-  if (daysCovered < COVERAGE_GATE_DAYS) targets.push(COVERAGE_GATE_DAYS); // Emergency-only floor → Starter
+  if (daysCovered < gateDays) targets.push(gateDays); // Emergency-only floor → Starter
   if (daysCovered < windowDays) targets.push(windowDays); // Starter cap → full ladder
   return targets;
 }
@@ -415,12 +425,13 @@ export function buildCoachPlan(input: CoachPlanInput): CoachPlan {
   // A coverage milestone that would *decline* (e.g. more history qualifies a higher tier the
   // borrower's surplus can't yet afford) is misleading to offer as an unlock — drop it. The honest
   // path in that case is the surplus lever, which stays available.
-  const coverageActions = coverageMilestones(input.coverage.daysCovered, win)
+  const gateDays = gateDaysOf(input);
+  const coverageActions = coverageMilestones(input.coverage.daysCovered, win, gateDays)
     .map((t) => coverageActionAt(input, t))
     .filter((a) => a.sim.decisionTo !== 'decline');
   const nearestCoverage = coverageActions[0] ?? null;
 
-  const coverageBlocks = input.coverage.daysCovered < COVERAGE_GATE_DAYS;
+  const coverageBlocks = input.coverage.daysCovered < gateDays;
   const raw = surplusPresets(input.profile).map((reduction) => ({
     reduction,
     sim: simulateSurplus(input, reduction),
@@ -432,7 +443,7 @@ export function buildCoachPlan(input: CoachPlanInput): CoachPlan {
     let note: string | undefined;
     if (!changed) {
       if (coverageBlocks) {
-        note = `Reach ${COVERAGE_GATE_DAYS} days of recorded history first — trimming spending can't lift an Emergency-tier offer.`;
+        note = `Reach ${gateDays} days of recorded history first — trimming spending can't lift an Emergency-tier offer.`;
       } else if (anyStepHelps) {
         note = 'Free up a little more to move your offer.';
       } else {

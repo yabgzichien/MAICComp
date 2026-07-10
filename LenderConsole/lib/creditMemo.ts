@@ -7,8 +7,8 @@
 // deterministic prose instead. Nothing here can change the verdict or amount.
 
 import type { CreditPassport } from './passport';
-import type { LoanDecision, Decision, ReasonCategory } from './loans';
-import { MAX_DSR, MAX_INSTALLMENT_SHARE_OF_SURPLUS, MIN_CONFIDENCE_TO_APPROVE, REASON_CATEGORY_LABELS } from './loans';
+import type { LenderPolicy, LoanDecision, Decision, ReasonCategory } from './loans';
+import { DEFAULT_POLICY, REASON_CATEGORY_LABELS } from './loans';
 import type { AgentPanelResult, AgentAssessment } from './agents';
 import { drivingConstraintFrom } from './counterOffer';
 
@@ -104,37 +104,38 @@ function toFinding(a: AgentAssessment): MemoFinding {
 }
 
 /** The CCA-2025 affordability duties, each as requirement → evidence → met/not-met,
- * derived from the SAME thresholds `decideLoan` used, so it can never contradict the verdict. */
-function buildCompliance(passport: CreditPassport, decision: LoanDecision): ComplianceLine[] {
+ * derived from the SAME thresholds `decideLoan` used (the active LenderPolicy — Brief N),
+ * so it can never contradict the verdict. */
+function buildCompliance(passport: CreditPassport, decision: LoanDecision, policy: LenderPolicy): ComplianceLine[] {
   const a = passport.assessment;
   if (!a) return [];
   const income = a.avgIncome;
   const postDsr = income > 0 ? (a.monthlyDebtService + decision.installment) / income : 1;
   const surplusShare = a.avgMonthlySurplus > 0 ? decision.installment / a.avgMonthlySurplus : 0;
-  const coverageOk = a.coverageDays >= 90 && a.coverageRatio >= 0.5;
+  const coverageOk = a.coverageDays >= policy.fullLadderFromDays && a.coverageRatio >= policy.minCoverageRatioForFullLadder;
 
   return [
     {
       id: 'repayment-capacity',
-      requirement: `Total debt service after this facility stays within a ${pct(MAX_DSR)}% debt-service ratio`,
+      requirement: `Total debt service after this facility stays within a ${pct(policy.maxDsr)}% debt-service ratio`,
       evidence: `Post-loan DSR ${pct(postDsr)}% ((${rm(a.monthlyDebtService)} existing + ${rm(decision.installment)} new) of ${rm(income)} income)`,
-      met: postDsr <= MAX_DSR + 1e-9,
+      met: postDsr <= policy.maxDsr + 1e-9,
     },
     {
       id: 'installment-affordability',
-      requirement: `Installment consumes no more than ${pct(MAX_INSTALLMENT_SHARE_OF_SURPLUS)}% of average monthly surplus`,
+      requirement: `Installment consumes no more than ${pct(policy.maxInstallmentShareOfSurplus)}% of average monthly surplus`,
       evidence: `Installment ${rm(decision.installment)} = ${pct(surplusShare)}% of ${rm(a.avgMonthlySurplus)} surplus`,
-      met: surplusShare <= MAX_INSTALLMENT_SHARE_OF_SURPLUS + 1e-9,
+      met: surplusShare <= policy.maxInstallmentShareOfSurplus + 1e-9,
     },
     {
       id: 'data-confidence',
-      requirement: `Underlying data confidence meets the ${pct(MIN_CONFIDENCE_TO_APPROVE)}% floor for automated approval`,
+      requirement: `Underlying data confidence meets the ${pct(policy.minConfidenceToApprove)}% floor for automated approval`,
       evidence: `Data confidence ${pct(a.confidence)}%`,
-      met: a.confidence >= MIN_CONFIDENCE_TO_APPROVE,
+      met: a.confidence >= policy.minConfidenceToApprove,
     },
     {
       id: 'coverage',
-      requirement: 'Cash-flow history spans at least 90 days with at least 50% coverage',
+      requirement: `Cash-flow history spans at least ${policy.fullLadderFromDays} days with at least ${pct(policy.minCoverageRatioForFullLadder)}% coverage`,
       evidence: `${a.coverageDays} days of history, ${pct(a.coverageRatio)}% coverage`,
       met: coverageOk,
     },
@@ -176,6 +177,7 @@ export function buildCreditMemo(
   panel: AgentPanelResult,
   requestedAmount: number,
   resolution?: MemoResolution,
+  policy: LenderPolicy = DEFAULT_POLICY,
 ): CreditMemo {
   const header: MemoHeader = {
     applicant: passport.holder?.name ?? 'Applicant',
@@ -200,7 +202,7 @@ export function buildCreditMemo(
     findings: [...panel.specialists, panel.orchestrator].map(toFinding),
     rationale: decision.reasons,
     groupedRationale: groupRationale(decision),
-    compliance: buildCompliance(passport, decision),
+    compliance: buildCompliance(passport, decision, policy),
     conditions: resolution
       ? [`Officer resolution — ${resolution.outcome} by ${resolution.officer}: "${resolution.rationale}" (recorded in the application audit trail).`, ...buildConditions(decision)]
       : buildConditions(decision),

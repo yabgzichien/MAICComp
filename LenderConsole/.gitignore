@@ -2,6 +2,8 @@
 /.next
 /out
 /build
+# lender policy store (Brief N) — runtime data, never committed
+/.data
 .DS_Store
 *.pem
 npm-debug.log*

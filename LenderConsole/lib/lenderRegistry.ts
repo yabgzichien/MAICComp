@@ -9,7 +9,8 @@
 // (loans.ts applyCoverageTierFilter), so a ladder using other ids would silently fall out
 // of thin-coverage eligibility. Lender-specific naming belongs in `label`.
 
-import { DEFAULT_PRODUCTS, type LoanProduct } from './loans';
+import { DEFAULT_POLICY, DEFAULT_PRODUCTS, type LenderPolicy, type LoanProduct } from './loans';
+import type { StoredPolicy } from './policyStore';
 
 export interface LenderProfile {
   id: string;
@@ -17,6 +18,10 @@ export interface LenderProfile {
   blurb: string;
   brandColor: string;
   products: LoanProduct[];
+  /** Published affordability thresholds (Brief N) — the same policy the console
+   *  decides with, so borrower-side simulations track the lender's real criteria.
+   *  Optional for wire back-compat with borrower apps that predate it. */
+  policy?: LenderPolicy;
 }
 
 export const LENDER_REGISTRY: LenderProfile[] = [
@@ -27,6 +32,7 @@ export const LENDER_REGISTRY: LenderProfile[] = [
     brandColor: '#0f2d5c',
     // Reuses the engine's ladder unchanged, so today's console behaviour is identical.
     products: DEFAULT_PRODUCTS,
+    policy: DEFAULT_POLICY,
   },
   {
     id: 'koperasi-sejahtera',
@@ -37,6 +43,7 @@ export const LENDER_REGISTRY: LenderProfile[] = [
       { id: 'starter', label: 'Anggota Starter', minScore: 560, minAmount: 1000, maxAmount: 4000, tenorMonths: 12, apr: 0.14 },
       { id: 'growth', label: 'Anggota Growth', minScore: 680, minAmount: 5000, maxAmount: 12000, tenorMonths: 18, apr: 0.12 },
     ],
+    policy: DEFAULT_POLICY,
   },
   {
     id: 'dana-niaga',
@@ -47,5 +54,18 @@ export const LENDER_REGISTRY: LenderProfile[] = [
       { id: 'emergency', label: 'Micro Boost', minScore: 400, minAmount: 300, maxAmount: 1500, tenorMonths: 6, apr: 0.28 },
       { id: 'starter', label: 'Niaga Flex', minScore: 600, minAmount: 2000, maxAmount: 8000, tenorMonths: 12, apr: 0.24 },
     ],
+    policy: DEFAULT_POLICY,
   },
 ];
+
+/**
+ * Publish the directory with TEKUN's entry composed from the STORED policy (Brief N):
+ * the ladder + thresholds the Policy tab edits are exactly what borrowers are coached
+ * toward. The two demo lenders stay static — they exist to give the borrower-side
+ * picker genuine variation, not to be editable.
+ */
+export function composeRegistry(stored: StoredPolicy): LenderProfile[] {
+  return LENDER_REGISTRY.map((l) =>
+    l.id === 'tekun' ? { ...l, products: stored.products, policy: stored.policy } : l,
+  );
+}

@@ -82,6 +82,8 @@ export interface LoanDecisionInput {
   coverageDaysCovered?: number;
   /** Set when income failed structural authenticity checks badly enough to DECLINE outright. */
   integrityFloorBreached?: boolean;
+  /** Lender-owned thresholds (Brief N). Omitted → DEFAULT_POLICY, i.e. today's behaviour. */
+  policy?: LenderPolicy;
 }
 
 const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
@@ -89,6 +91,36 @@ const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.m
 export const MIN_CONFIDENCE_TO_APPROVE = 0.5;
 export const MAX_INSTALLMENT_SHARE_OF_SURPLUS = 0.35;
 export const MAX_DSR = 0.4;
+
+/**
+ * Lender-owned affordability + coverage thresholds (Brief N). The engine's reason
+ * strings template these values, so a lender's custom caps are cited automatically.
+ * Every field defaults to the value that was previously hardcoded — an omitted
+ * policy reproduces the historical behaviour exactly (regression-guard tested).
+ */
+export interface LenderPolicy {
+  /** Below this confidence, never auto-approve — refer for human review. */
+  minConfidenceToApprove: number;
+  /** An installment may not exceed this share of average monthly surplus. */
+  maxInstallmentShareOfSurplus: number;
+  /** Total debt service (existing + new installment) over income may not exceed this. */
+  maxDsr: number;
+  /** Below this many covered days (of the last 90): Emergency tier only + forced referral. */
+  emergencyOnlyBelowDays: number;
+  /** From this many covered days the full ladder opens (below it: Starter and below). */
+  fullLadderFromDays: number;
+  /** With a full window, a coverage ratio below this still caps to Starter and below. */
+  minCoverageRatioForFullLadder: number;
+}
+
+export const DEFAULT_POLICY: LenderPolicy = {
+  minConfidenceToApprove: MIN_CONFIDENCE_TO_APPROVE,
+  maxInstallmentShareOfSurplus: MAX_INSTALLMENT_SHARE_OF_SURPLUS,
+  maxDsr: MAX_DSR,
+  emergencyOnlyBelowDays: 30,
+  fullLadderFromDays: 90,
+  minCoverageRatioForFullLadder: 0.5,
+};
 
 function rm(n: number): string {
   return `RM${Math.round(n).toLocaleString('en-MY')}`;
@@ -131,10 +163,11 @@ function affordablePrincipal(
   avgMonthlySurplus: number,
   monthlyDebtService: number,
   avgIncome: number,
+  policy: LenderPolicy,
 ): AffordabilityResult {
   const ceiling = clamp(requestedAmount, tier.minAmount, tier.maxAmount);
-  const surplusCapInstallment = Math.max(0, avgMonthlySurplus * MAX_INSTALLMENT_SHARE_OF_SURPLUS);
-  const dsrCapInstallment = Math.max(0, avgIncome * MAX_DSR - monthlyDebtService);
+  const surplusCapInstallment = Math.max(0, avgMonthlySurplus * policy.maxInstallmentShareOfSurplus);
+  const dsrCapInstallment = Math.max(0, avgIncome * policy.maxDsr - monthlyDebtService);
   const maxInstallment = Math.min(surplusCapInstallment, dsrCapInstallment);
   // Installment scales linearly with principal for a fixed apr/tenor; the per-cap principals feed the waterfall.
   const installmentAtCeiling = installmentFor(ceiling, tier.apr, tier.tenorMonths);
@@ -152,13 +185,14 @@ function applyCoverageTierFilter(
   products: LoanProduct[],
   coverageRatio: number | undefined,
   coverageDaysCovered: number | undefined,
+  policy: LenderPolicy,
 ): { products: LoanProduct[]; forceRefer: boolean; reasons: DecisionReason[] } {
   if (typeof coverageDaysCovered !== 'number' || typeof coverageRatio !== 'number') {
     return { products, forceRefer: false, reasons: [] };
   }
   const pct = Math.round(coverageRatio * 100);
   const keep = (ids: string[]) => products.filter((p) => ids.includes(p.id));
-  if (coverageDaysCovered < 30) {
+  if (coverageDaysCovered < policy.emergencyOnlyBelowDays) {
     return {
       products: keep(['emergency']),
       forceRefer: true,
@@ -167,7 +201,7 @@ function applyCoverageTierFilter(
       ],
     };
   }
-  if (coverageDaysCovered < 90) {
+  if (coverageDaysCovered < policy.fullLadderFromDays) {
     return {
       products: keep(['emergency', 'starter']),
       forceRefer: false,
@@ -176,12 +210,12 @@ function applyCoverageTierFilter(
       ],
     };
   }
-  if (coverageRatio < 0.5) {
+  if (coverageRatio < policy.minCoverageRatioForFullLadder) {
     return {
       products: keep(['emergency', 'starter']),
       forceRefer: false,
       reasons: [
-        { category: 'data-quality', text: `90+ days of history but coverage is only ${pct}% — eligibility capped to Starter Capital and below until coverage reaches 50%.` },
+        { category: 'data-quality', text: `${policy.fullLadderFromDays}+ days of history but coverage is only ${pct}% — eligibility capped to Starter Capital and below until coverage reaches ${Math.round(policy.minCoverageRatioForFullLadder * 100)}%.` },
       ],
     };
   }
@@ -201,6 +235,7 @@ export function decideLoan(input: LoanDecisionInput): LoanDecision {
     coverageRatio,
     coverageDaysCovered,
     integrityFloorBreached = false,
+    policy = DEFAULT_POLICY,
   } = input;
   const reasons: DecisionReason[] = [];
   // Set once a tier has been evaluated; rides every decision made after that point.
@@ -230,7 +265,7 @@ export function decideLoan(input: LoanDecisionInput): LoanDecision {
     return finish('decline', 0, 0);
   }
 
-  const coverage = applyCoverageTierFilter(products, coverageRatio, coverageDaysCovered);
+  const coverage = applyCoverageTierFilter(products, coverageRatio, coverageDaysCovered, policy);
   reasons.push(...coverage.reasons);
 
   const tier = selectTier(score, coverage.products);
@@ -241,7 +276,7 @@ export function decideLoan(input: LoanDecisionInput): LoanDecision {
   }
   reasons.push({ category: 'policy', text: `Qualifies for the "${tier.label}" tier (requires score ≥ ${tier.minScore}, scored ${score}).` });
 
-  const affordability = affordablePrincipal(tier, requestedAmount, avgMonthlySurplus, monthlyDebtService, avgIncome);
+  const affordability = affordablePrincipal(tier, requestedAmount, avgMonthlySurplus, monthlyDebtService, avgIncome, policy);
   breakdown = {
     requestedAmount,
     tierLabel: tier.label,
@@ -266,7 +301,7 @@ export function decideLoan(input: LoanDecisionInput): LoanDecision {
   const installment = installmentFor(principal, tier.apr, tier.tenorMonths);
   reasons.push({
     category: 'affordability',
-    text: `Approved amount capped at ${rm(principal)} so the installment (${rm(installment)}/mo over ${tier.tenorMonths} months at ${Math.round(tier.apr * 100)}% APR) stays within ${Math.round(MAX_INSTALLMENT_SHARE_OF_SURPLUS * 100)}% of avg surplus and a ${Math.round(MAX_DSR * 100)}% DSR cap.`,
+    text: `Approved amount capped at ${rm(principal)} so the installment (${rm(installment)}/mo over ${tier.tenorMonths} months at ${Math.round(tier.apr * 100)}% APR) stays within ${Math.round(policy.maxInstallmentShareOfSurplus * 100)}% of avg surplus and a ${Math.round(policy.maxDsr * 100)}% DSR cap.`,
   });
   if (principal < requestedAmount) {
     reasons.push({ category: 'affordability', text: `Requested ${rm(requestedAmount)} exceeds what affordability supports; offering ${rm(principal)} instead.` });
@@ -276,10 +311,10 @@ export function decideLoan(input: LoanDecisionInput): LoanDecision {
     reasons.push({ category: 'record', text: 'Minor adverse record on file — routed to manual review instead of auto-approval.' });
     return finish('refer', principal, installment);
   }
-  if (confidence < MIN_CONFIDENCE_TO_APPROVE) {
+  if (confidence < policy.minConfidenceToApprove) {
     reasons.push({
       category: 'data-quality',
-      text: `We could not verify enough of the recorded data (confidence ${Math.round(confidence * 100)}%, below the ${Math.round(MIN_CONFIDENCE_TO_APPROVE * 100)}% auto-approval floor) — routed to manual review. More verified history would strengthen this application.`,
+      text: `We could not verify enough of the recorded data (confidence ${Math.round(confidence * 100)}%, below the ${Math.round(policy.minConfidenceToApprove * 100)}% auto-approval floor) — routed to manual review. More verified history would strengthen this application.`,
     });
     return finish('refer', principal, installment);
   }

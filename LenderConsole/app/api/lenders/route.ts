@@ -4,7 +4,8 @@
 // borrower's simulation against these ladders happens entirely on their device.
 
 import { NextResponse } from 'next/server';
-import { LENDER_REGISTRY } from '../../../lib/lenderRegistry';
+import { composeRegistry } from '../../../lib/lenderRegistry';
+import { readStoredPolicy } from '../../../lib/policyFile';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -13,7 +14,9 @@ const CORS_HEADERS = {
 };
 
 export async function GET() {
-  return NextResponse.json(LENDER_REGISTRY, { headers: CORS_HEADERS });
+  // TEKUN's entry is composed from the stored policy (Brief N): the ladder the
+  // Policy tab edits is the ladder borrowers are coached toward — the flywheel.
+  return NextResponse.json(composeRegistry(readStoredPolicy()), { headers: CORS_HEADERS });
 }
 
 export async function OPTIONS() {

@@ -17,7 +17,9 @@ import {
   type Palette,
 } from './tokens';
 import { type CreditPassport, type VerifyResult, parsePassportCode, verifyPassport } from '../lib/passport';
-import { DEFAULT_PRODUCTS, REASON_CATEGORY_LABELS, decideLoan, type LoanDecision } from '../lib/loans';
+import { REASON_CATEGORY_LABELS, decideLoan, type LenderPolicy, type LoanDecision } from '../lib/loans';
+import { DEFAULT_STORED_POLICY, type StoredPolicy } from '../lib/policyStore';
+import PolicyTab from './PolicyTab';
 import { buildDecisionFile, decisionFileName } from '../lib/decisionFile';
 import { caseIdFor, flagTimeLabel } from '../lib/caseRef';
 import { runAgentPanel, type StackingSignal } from '../lib/agents';
@@ -43,7 +45,7 @@ import AgentPanel from './AgentPanel';
 import CreditMemoModal from './CreditMemo';
 import { BenfordChart, DecisionWaterfall, HeadroomBar, MomentumSpark } from './DecisionViz';
 
-type Tab = 'verify' | 'capital';
+type Tab = 'verify' | 'capital' | 'policy';
 const BAND_SEGMENTS = ['#c0392b', '#d98a00', '#3ab07a', '#1f8a5b', '#145c3d'];
 
 /** Signature material + verification outcome kept alongside a verified passport so the
@@ -56,7 +58,7 @@ type ViewState =
 
 const parseAmount = (s: string): number => Number(s.replace(/[^0-9.]/g, '')) || 0;
 
-function decisionFor(passport: CreditPassport, amountStr: string): LoanDecision | null {
+function decisionFor(passport: CreditPassport, amountStr: string, stored: StoredPolicy): LoanDecision | null {
   const a = passport.assessment;
   if (!a) return null;
   return decideLoan({
@@ -66,14 +68,16 @@ function decisionFor(passport: CreditPassport, amountStr: string): LoanDecision 
     monthlyDebtService: a.monthlyDebtService,
     avgIncome: a.avgIncome,
     requestedAmount: parseAmount(amountStr),
-    products: DEFAULT_PRODUCTS,
+    products: stored.products,
     coverageRatio: a.coverageRatio,
     coverageDaysCovered: a.coverageDays,
+    policy: stored.policy,
   });
 }
 
-/** Pure: parse + cryptographically verify a pasted code, then run the loan decision. */
-function evaluate(code: string, amountStr: string): ViewState {
+/** Pure: parse + cryptographically verify a pasted code, then run the loan decision
+ *  under the lender's stored policy (Brief N). */
+function evaluate(code: string, amountStr: string, stored: StoredPolicy): ViewState {
   try {
     const parsed = parsePassportCode(code);
     const res = verifyPassport(parsed.passport, parsed.signature, parsed.issuerSignature);
@@ -81,7 +85,7 @@ function evaluate(code: string, amountStr: string): ViewState {
     return {
       status: 'valid',
       passport: parsed.passport,
-      decision: decisionFor(parsed.passport, amountStr),
+      decision: decisionFor(parsed.passport, amountStr, stored),
       credential: { signature: parsed.signature, issuerSignature: parsed.issuerSignature, verification: res },
     };
   } catch (e) {
@@ -117,7 +121,7 @@ function Header({ p, tab, setTab, alert }: { p: Palette; tab: Tab; setTab: (t: T
       <BrandMark p={p} />
       <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
         <div style={{ display: 'flex', background: p.surface2, borderRadius: 10, padding: 3, gap: 2, border: `1px solid ${p.hairline}` }}>
-          {([['verify', 'Verify Passport'], ['capital', 'Capital Markets']] as [Tab, string][]).map(([key, label]) => {
+          {([['verify', 'Verify Passport'], ['capital', 'Capital Markets'], ['policy', 'Policy']] as [Tab, string][]).map(([key, label]) => {
             const active = key === tab;
             return (
               <button key={key} onClick={() => setTab(key)} style={{ padding: '6px 22px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: FONT.ui, fontSize: 12.5, fontWeight: active ? 700 : 500, background: active ? p.primary : 'transparent', color: active ? 'white' : p.ink3, whiteSpace: 'nowrap' }}>
@@ -638,13 +642,13 @@ function ApplicationCard({ p, app, onResolve }: { p: Palette; app: ApplicationRe
   );
 }
 
-function RightDecision({ p, passport, decision, credential, amount, setAmount, onAssess, onCounterOffer, isCounterOffer, stacking, selectedApp, onResolve, purpose, setPurpose }: { p: Palette; passport: CreditPassport | null; decision: LoanDecision | null; credential: Credential | null; amount: string; setAmount: (s: string) => void; onAssess: () => void; onCounterOffer?: (counterAmount: number) => void; isCounterOffer?: boolean; stacking?: StackingSignal; selectedApp?: ApplicationRecord | null; onResolve?: (outcome: 'approved' | 'declined', rationale: string) => void; purpose?: DeclaredPurpose | null; setPurpose?: (p: DeclaredPurpose | null) => void }) {
+function RightDecision({ p, passport, decision, credential, amount, setAmount, onAssess, onCounterOffer, isCounterOffer, stacking, selectedApp, onResolve, purpose, setPurpose, policy, policyUpdatedAt }: { p: Palette; passport: CreditPassport | null; decision: LoanDecision | null; credential: Credential | null; amount: string; setAmount: (s: string) => void; onAssess: () => void; onCounterOffer?: (counterAmount: number) => void; isCounterOffer?: boolean; stacking?: StackingSignal; selectedApp?: ApplicationRecord | null; onResolve?: (outcome: 'approved' | 'declined', rationale: string) => void; purpose?: DeclaredPurpose | null; setPurpose?: (p: DeclaredPurpose | null) => void; policy?: LenderPolicy; policyUpdatedAt?: string }) {
   const [memoOpen, setMemoOpen] = useState(false);
 
   function downloadDecisionFile() {
     if (!passport || !decision || !credential) return;
     const requestedAmount = parseAmount(amount);
-    const memo = buildCreditMemo(passport, decision, runAgentPanel(passport, decision, stacking), requestedAmount, selectedApp?.resolution);
+    const memo = buildCreditMemo(passport, decision, runAgentPanel(passport, decision, stacking), requestedAmount, selectedApp?.resolution, policy);
     const file = buildDecisionFile({
       passport,
       signature: credential.signature,
@@ -667,6 +671,11 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
       <div style={{ padding: '14px 20px 11px', borderBottom: `1px solid ${p.hairline}` }}>
         <SectionLabel color={p.ink3}>Loan Decision Engine</SectionLabel>
         <p style={{ fontFamily: FONT.ui, fontSize: 11, color: p.ink3 }}>Deterministic · policy-enforced · audit-ready</p>
+        {/* Which policy produced this verdict (Brief N) — an officer always knows. */}
+        <p style={{ fontFamily: FONT.ui, fontSize: 9.5, color: p.ink3, marginTop: 3 }}>
+          Evaluated under <strong style={{ color: p.ink2 }}>TEKUN policy</strong>
+          {policyUpdatedAt ? ` · last updated ${new Date(policyUpdatedAt).toLocaleDateString('en-MY')}` : ' · defaults'}
+        </p>
       </div>
 
       <div style={{ padding: '14px 20px 0' }}>
@@ -776,8 +785,8 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
             </div>
           )}
 
-          {passport?.assessment && <HeadroomBar p={p} assessment={passport.assessment} installment={decision.installment} />}
-          {decision.breakdown && <DecisionWaterfall p={p} breakdown={decision.breakdown} />}
+          {passport?.assessment && <HeadroomBar p={p} assessment={passport.assessment} installment={decision.installment} policy={policy} />}
+          {decision.breakdown && <DecisionWaterfall p={p} breakdown={decision.breakdown} policy={policy} />}
 
           <div style={{ padding: '14px 20px 0', flex: 1 }}>
             <SectionLabel color={p.ink3}>Audit Trail</SectionLabel>
@@ -850,7 +859,7 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
       )}
 
       {memoOpen && passport && decision && (
-        <CreditMemoModal p={p} passport={passport} decision={decision} requestedAmount={parseAmount(amount)} stacking={stacking} resolution={selectedApp?.resolution} onClose={() => setMemoOpen(false)} />
+        <CreditMemoModal p={p} passport={passport} decision={decision} requestedAmount={parseAmount(amount)} stacking={stacking} resolution={selectedApp?.resolution} policy={policy} onClose={() => setMemoOpen(false)} />
       )}
 
       <div style={{ padding: '12px 20px 15px', borderTop: `1px solid ${p.hairline}`, marginTop: 'auto' }}>
@@ -1032,7 +1041,11 @@ export default function Console() {
   // Real timestamp captured the moment the flag was raised — the alert's flag time
   // and case id are derived from this + the loaded code, never hardcoded (Brief A).
   const [flaggedAt, setFlaggedAt] = useState<Date | null>(null);
-  const [state, setState] = useState<ViewState>(() => evaluate(SAMPLE_CODE, '10,000'));
+  // The lender's stored policy (Brief N): boot renders under the defaults, then the
+  // fetch swaps in the persisted policy and re-evaluates so every verdict on screen
+  // was produced by the policy the note cites.
+  const [storedPolicy, setStoredPolicy] = useState<StoredPolicy>(DEFAULT_STORED_POLICY);
+  const [state, setState] = useState<ViewState>(() => evaluate(SAMPLE_CODE, '10,000', DEFAULT_STORED_POLICY));
   // Prior presentments of the currently verified passport (24h window, this console's log).
   const [priors, setPriors] = useState<Presentment[]>([]);
   // The application pipeline (Brief O): persisted per-console, loaded after mount (SSR-safe).
@@ -1049,8 +1062,26 @@ export default function Console() {
       setPriors(findRecentPresentments(readPresentmentLog(), presentmentKey(state.passport)));
     }
     setApps(readApplications());
+    // Load the persisted policy; if it differs from the defaults, re-run the boot decision
+    // under it so the on-screen verdict matches the policy note.
+    fetch('/api/policy')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((sp: StoredPolicy | null) => {
+        if (!sp) return;
+        setStoredPolicy(sp);
+        if (sp.updatedAt) setState(evaluate(SAMPLE_CODE, '10,000', sp));
+      })
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /** A saved policy takes effect immediately: keep it in state and re-evaluate whatever
+   *  is currently loaded so the Verify tab can never show a verdict from a stale policy. */
+  const onPolicySaved = (sp: StoredPolicy) => {
+    setStoredPolicy(sp);
+    setIsCounterOffer(false);
+    if (state.status === 'valid') setState(evaluate(code, amount, sp));
+  };
 
   const syncApps = (next: ApplicationRecord[]) => {
     setApps(next);
@@ -1088,7 +1119,7 @@ export default function Console() {
 
   const onVerify = () => {
     setFlagged(false);
-    const next = evaluate(code, amount);
+    const next = evaluate(code, amount, storedPolicy);
     setState(next);
     if (next.status === 'valid') {
       logPresentment(next.passport);
@@ -1101,7 +1132,7 @@ export default function Console() {
   const onLoadSample = () => {
     setFlagged(false);
     setCode(SAMPLE_CODE);
-    const next = evaluate(SAMPLE_CODE, amount);
+    const next = evaluate(SAMPLE_CODE, amount, storedPolicy);
     setState(next);
     if (next.status === 'valid') {
       logPresentment(next.passport);
@@ -1119,7 +1150,7 @@ export default function Console() {
   const onAssess = () => {
     if (state.status !== 'valid') return;
     setIsCounterOffer(false);
-    const decision = decisionFor(state.passport, amount);
+    const decision = decisionFor(state.passport, amount, storedPolicy);
     const next: ViewState = { ...state, decision };
     setState(next);
     if (decision) fileAndSelect(code, next);
@@ -1133,7 +1164,7 @@ export default function Console() {
     const amtStr = Math.round(counterAmount).toLocaleString('en-MY');
     setAmount(amtStr);
     setIsCounterOffer(true);
-    const decision = decisionFor(state.passport, String(counterAmount));
+    const decision = decisionFor(state.passport, String(counterAmount), storedPolicy);
     const next: ViewState = { ...state, decision };
     setState(next);
     if (decision) fileAndSelect(code, next);
@@ -1146,7 +1177,7 @@ export default function Console() {
     setCode(app.passportCode);
     const amtStr = app.requestedAmount.toLocaleString('en-MY');
     setAmount(amtStr);
-    const next = evaluate(app.passportCode, amtStr);
+    const next = evaluate(app.passportCode, amtStr, storedPolicy);
     setState(next);
     setSelectedAppId(app.id);
     setPurpose(app.purpose ?? null);
@@ -1177,7 +1208,7 @@ export default function Console() {
     ];
     let next = readApplications();
     seeds.forEach((seed, i) => {
-      const s = evaluate(seed.code, String(seed.amount));
+      const s = evaluate(seed.code, String(seed.amount), storedPolicy);
       if (s.status === 'valid' && s.decision) {
         const at = new Date(Date.now() - (seeds.length - i) * 5_400_000); // 1.5h apart, oldest first
         next = fileApplication(next, filingInput(seed.code, s.passport, s.decision, seed.amount, seed.purpose), at).apps;
@@ -1206,10 +1237,12 @@ export default function Console() {
             <QueueRail p={p} apps={apps} selectedId={selectedAppId} onSelect={onSelectApp} onSeed={onSeed} onPasteNew={onPasteNew} />
             <LeftPanel p={p} flagged={flagged} statusValid={flagged ? false : statusValid} code={code} setCode={setCode} onVerify={onVerify} onLoadSample={onLoadSample} onLoadFlagged={onLoadFlagged} />
             {showAlert ? <CenterAlert p={p} flagTime={flagTime} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} /> : <InvalidCenter p={p} reasons={state.reasons} />}
-            {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} onCounterOffer={onCounterOffer} isCounterOffer={isCounterOffer} stacking={stackingSignal} selectedApp={selectedApp} onResolve={onResolve} purpose={purpose} setPurpose={setPurpose} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} />}
+            {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} onCounterOffer={onCounterOffer} isCounterOffer={isCounterOffer} stacking={stackingSignal} selectedApp={selectedApp} onResolve={onResolve} purpose={purpose} setPurpose={setPurpose} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} />}
           </>
-        ) : (
+        ) : tab === 'capital' ? (
           <CapitalMarkets p={palette(false)} />
+        ) : (
+          <PolicyTab key={storedPolicy.updatedAt ?? 'defaults'} p={palette(false)} stored={storedPolicy} onSaved={onPolicySaved} />
         )}
       </div>
     </div>

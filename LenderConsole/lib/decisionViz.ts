@@ -2,7 +2,7 @@
 // helpers turn numbers the engine already computed into segment/tick/step layouts,
 // so the components stay dumb and the geometry stays unit-tested.
 
-import { MAX_DSR, MAX_INSTALLMENT_SHARE_OF_SURPLUS, type DecisionBreakdown } from './loans';
+import { DEFAULT_POLICY, type LenderPolicy, type DecisionBreakdown } from './loans';
 
 const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
 
@@ -37,6 +37,7 @@ export interface HeadroomLayout {
 export function headroomLayout(
   a: { avgIncome: number; avgMonthlySurplus: number; monthlyDebtService: number },
   installment: number,
+  policy: LenderPolicy = DEFAULT_POLICY,
 ): HeadroomLayout | null {
   const income = a.avgIncome;
   if (!(income > 0)) return null;
@@ -47,10 +48,10 @@ export function headroomLayout(
   const remaining = clamp((surplus - installment) / income, 0, 1 - ds - inst);
   const other = Math.max(0, 1 - ds - inst - remaining);
 
-  const dsrTick = MAX_DSR;
-  const surplusTick = clamp(ds + (MAX_INSTALLMENT_SHARE_OF_SURPLUS * surplus) / income, 0, 1);
+  const dsrTick = policy.maxDsr;
+  const surplusTick = clamp(ds + (policy.maxInstallmentShareOfSurplus * surplus) / income, 0, 1);
   const eps = 1e-9;
-  const safe = ds + inst <= dsrTick + eps && inst <= (MAX_INSTALLMENT_SHARE_OF_SURPLUS * surplus) / income + eps;
+  const safe = ds + inst <= dsrTick + eps && inst <= (policy.maxInstallmentShareOfSurplus * surplus) / income + eps;
 
   return {
     segments: [
@@ -60,8 +61,8 @@ export function headroomLayout(
       { key: 'other', label: 'Other spending', frac: other },
     ],
     ticks: [
-      { key: 'dsr', label: `${Math.round(MAX_DSR * 100)}% DSR cap`, frac: dsrTick },
-      { key: 'surplusShare', label: `${Math.round(MAX_INSTALLMENT_SHARE_OF_SURPLUS * 100)}% of surplus`, frac: surplusTick },
+      { key: 'dsr', label: `${Math.round(policy.maxDsr * 100)}% DSR cap`, frac: dsrTick },
+      { key: 'surplusShare', label: `${Math.round(policy.maxInstallmentShareOfSurplus * 100)}% of surplus`, frac: surplusTick },
     ],
     safe,
   };
@@ -88,7 +89,7 @@ export interface Waterfall {
 const rm = (n: number): string => `RM${Math.round(n).toLocaleString('en-MY')}`;
 
 /** Requested → tier clamp → surplus cap → DSR cap → offered, each annotated when it bit. */
-export function waterfallSteps(b: DecisionBreakdown): Waterfall {
+export function waterfallSteps(b: DecisionBreakdown, policy: LenderPolicy = DEFAULT_POLICY): Waterfall {
   const steps: WaterfallStep[] = [];
   steps.push({ key: 'requested', label: 'Requested', amount: b.requestedAmount, bit: false });
 
@@ -112,20 +113,20 @@ export function waterfallSteps(b: DecisionBreakdown): Waterfall {
   const surplusBit = afterSurplus < b.tierCeiling;
   steps.push({
     key: 'surplus',
-    label: `Surplus cap (${Math.round(MAX_INSTALLMENT_SHARE_OF_SURPLUS * 100)}%)`,
+    label: `Surplus cap (${Math.round(policy.maxInstallmentShareOfSurplus * 100)}%)`,
     amount: afterSurplus,
     bit: surplusBit,
-    ...(surplusBit ? { note: `installment must stay within ${Math.round(MAX_INSTALLMENT_SHARE_OF_SURPLUS * 100)}% of monthly surplus` } : {}),
+    ...(surplusBit ? { note: `installment must stay within ${Math.round(policy.maxInstallmentShareOfSurplus * 100)}% of monthly surplus` } : {}),
   });
 
   const afterDsr = Math.min(afterSurplus, b.dsrCapPrincipal);
   const dsrBit = afterDsr < afterSurplus;
   steps.push({
     key: 'dsr',
-    label: `DSR cap (${Math.round(MAX_DSR * 100)}%)`,
+    label: `DSR cap (${Math.round(policy.maxDsr * 100)}%)`,
     amount: afterDsr,
     bit: dsrBit,
-    ...(dsrBit ? { note: `total debt service must stay within ${Math.round(MAX_DSR * 100)}% of income` } : {}),
+    ...(dsrBit ? { note: `total debt service must stay within ${Math.round(policy.maxDsr * 100)}% of income` } : {}),
   });
 
   const offeredBit = b.offered !== afterDsr;

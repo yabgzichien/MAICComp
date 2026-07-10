@@ -6,7 +6,7 @@ import { SectionLabel } from './shared';
 import { runAgentPanel, type StackingSignal } from '../lib/agents';
 import { buildCreditMemo, memoToMarkdown, fallbackNarrative, type CreditMemo, type MemoResolution } from '../lib/creditMemo';
 import type { CreditPassport } from '../lib/passport';
-import type { LoanDecision } from '../lib/loans';
+import type { LenderPolicy, LoanDecision } from '../lib/loans';
 
 type Provenance = 'pending' | 'live' | 'fallback';
 
@@ -30,6 +30,7 @@ export default function CreditMemoModal({
   requestedAmount,
   stacking,
   resolution,
+  policy,
   onClose,
 }: {
   p: Palette;
@@ -38,12 +39,14 @@ export default function CreditMemoModal({
   requestedAmount: number;
   stacking?: StackingSignal;
   resolution?: MemoResolution;
+  /** Active lender policy (Brief N) — the compliance section cites its thresholds. */
+  policy?: LenderPolicy;
   onClose: () => void;
 }) {
   const memo = useMemo(() => {
     const panel = runAgentPanel(passport, decision, stacking);
-    return buildCreditMemo(passport, decision, panel, requestedAmount, resolution);
-  }, [passport, decision, requestedAmount, stacking, resolution]);
+    return buildCreditMemo(passport, decision, panel, requestedAmount, resolution, policy);
+  }, [passport, decision, requestedAmount, stacking, resolution, policy]);
 
   const fallback = useMemo(() => fallbackNarrative(memo), [memo]);
   const [narrative, setNarrative] = useState(fallback);

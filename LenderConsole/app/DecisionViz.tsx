@@ -24,7 +24,7 @@ import {
 } from 'recharts';
 import { FONT, type Palette } from './tokens';
 import { benfordChart, headroomLayout, waterfallSteps } from '../lib/decisionViz';
-import type { DecisionBreakdown } from '../lib/loans';
+import type { DecisionBreakdown, LenderPolicy } from '../lib/loans';
 import type { PassportAssessment, PassportMomentum } from '../lib/passport';
 
 const rm = (n: number): string => `RM${Math.round(n).toLocaleString('en-MY')}`;
@@ -32,8 +32,8 @@ const pctLabel = (v: number): string => `${Math.round(v * 100)}%`;
 
 // ── 1. Affordability headroom bar ─────────────────────────────────────────────
 
-export function HeadroomBar({ p, assessment, installment }: { p: Palette; assessment: PassportAssessment; installment: number }) {
-  const layout = headroomLayout(assessment, installment);
+export function HeadroomBar({ p, assessment, installment, policy }: { p: Palette; assessment: PassportAssessment; installment: number; policy?: LenderPolicy }) {
+  const layout = headroomLayout(assessment, installment, policy);
   if (!layout) return null;
   const colors: Record<string, string> = {
     debtService: '#9aa7a0',
@@ -92,8 +92,8 @@ export function HeadroomBar({ p, assessment, installment }: { p: Palette; assess
 
 // ── 2. Decision waterfall ─────────────────────────────────────────────────────
 
-export function DecisionWaterfall({ p, breakdown }: { p: Palette; breakdown: DecisionBreakdown }) {
-  const w = waterfallSteps(breakdown);
+export function DecisionWaterfall({ p, breakdown, policy }: { p: Palette; breakdown: DecisionBreakdown; policy?: LenderPolicy }) {
+  const w = waterfallSteps(breakdown, policy);
   const data = w.steps.map((s) => ({
     name: s.label,
     amount: s.amount,
