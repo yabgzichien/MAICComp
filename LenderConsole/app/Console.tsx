@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ALERT_FACTORS,
   AUDIT_REFER,
@@ -9,17 +9,20 @@ import {
   FONT,
   FORENSIC_FLAGS,
   palette,
-  POOL_STATS,
   SAMPLE_CODE,
   SUSPECT_CODE,
   SUSPECT_HISTOGRAM,
-  TRANCHES,
   type Palette,
 } from './tokens';
 import { type CreditPassport, type VerifyResult, parsePassportCode, verifyPassport } from '../lib/passport';
 import { REASON_CATEGORY_LABELS, decideLoan, type LenderPolicy, type LoanDecision } from '../lib/loans';
 import { DEFAULT_STORED_POLICY, type StoredPolicy } from '../lib/policyStore';
+import { structurePool, type PoolLoan } from '../lib/securitization';
+import { SAMPLE_POOL } from '../lib/samplePool';
+import { poolStatCells, trancheViews } from '../lib/poolView';
+import { bookToPool } from '../lib/portfolio';
 import PolicyTab from './PolicyTab';
+import PortfolioTab from './PortfolioTab';
 import { buildDecisionFile, decisionFileName } from '../lib/decisionFile';
 import { caseIdFor, flagTimeLabel } from '../lib/caseRef';
 import { runAgentPanel, type StackingSignal } from '../lib/agents';
@@ -45,7 +48,9 @@ import AgentPanel from './AgentPanel';
 import CreditMemoModal from './CreditMemo';
 import { BenfordChart, DecisionWaterfall, HeadroomBar, MomentumSpark } from './DecisionViz';
 
-type Tab = 'verify' | 'capital' | 'policy';
+type Tab = 'verify' | 'portfolio' | 'capital' | 'policy';
+/** Which pool the Capital Markets tab structures (Brief Q): the synthetic sample or the live approved book. */
+type PoolSource = 'sample' | 'live';
 const BAND_SEGMENTS = ['#c0392b', '#d98a00', '#3ab07a', '#1f8a5b', '#145c3d'];
 
 /** Signature material + verification outcome kept alongside a verified passport so the
@@ -121,7 +126,7 @@ function Header({ p, tab, setTab, alert }: { p: Palette; tab: Tab; setTab: (t: T
       <BrandMark p={p} />
       <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
         <div style={{ display: 'flex', background: p.surface2, borderRadius: 10, padding: 3, gap: 2, border: `1px solid ${p.hairline}` }}>
-          {([['verify', 'Verify Passport'], ['capital', 'Capital Markets'], ['policy', 'Policy']] as [Tab, string][]).map(([key, label]) => {
+          {([['verify', 'Verify Passport'], ['portfolio', 'Portfolio'], ['capital', 'Capital Markets'], ['policy', 'Policy']] as [Tab, string][]).map(([key, label]) => {
             const active = key === tab;
             return (
               <button key={key} onClick={() => setTab(key)} style={{ padding: '6px 22px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: FONT.ui, fontSize: 12.5, fontWeight: active ? 700 : 500, background: active ? p.primary : 'transparent', color: active ? 'white' : p.ink3, whiteSpace: 'nowrap' }}>
@@ -919,8 +924,16 @@ function RightAlert({ p }: { p: Palette }) {
   );
 }
 
-function CapitalMarkets({ p }: { p: Palette }) {
+function CapitalMarkets({ p, book, source, setSource }: { p: Palette; book: PoolLoan[]; source: PoolSource; setSource: (s: PoolSource) => void }) {
   const [info, setInfo] = useState<string | null>(null);
+  // Empty book can't structure, so it always falls back to the sample (labeled).
+  const effectiveSource: PoolSource = source === 'live' && book.length === 0 ? 'sample' : source;
+  const pool = effectiveSource === 'live' ? book : SAMPLE_POOL;
+  const result = useMemo(() => structurePool(pool), [pool]);
+  const stats = poolStatCells(result.summary);
+  const tranches = trancheViews(result);
+  const isSample = effectiveSource === 'sample';
+
   return (
     <div style={{ flex: 1, background: p.bg, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
       <InfoModal entry={info} onClose={() => setInfo(null)} p={p} />
@@ -931,15 +944,38 @@ function CapitalMarkets({ p }: { p: Palette }) {
             <h2 style={{ fontFamily: FONT.ui, fontSize: 22, fontWeight: 800, color: p.ink1, letterSpacing: '-0.4px', marginTop: 4, marginBottom: 5 }}>AI-Structured Micro-Sukuk</h2>
             <p style={{ fontFamily: FONT.ui, fontSize: 11.5, color: p.ink3 }}>Tranched by deterministic loss-waterfall · Shariah-compliant profit-sharing</p>
           </div>
-          <div style={{ padding: '8px 16px', borderRadius: 9, background: p.accentSoft, display: 'flex', alignItems: 'center', gap: 7 }}>
-            <div style={{ width: 7, height: 7, borderRadius: '50%', background: p.primary }} />
-            <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.accentInk }}>Funds the informal economy, safely.</span>
+          {/* Source toggle (Brief Q): the same engine over the sample pool or the live approved book. */}
+          <div style={{ display: 'flex', background: p.surface2, borderRadius: 9, padding: 3, gap: 2, border: `1px solid ${p.hairline}` }}>
+            {([['live', book.length > 0 ? `Live book · ${book.length}` : 'Live book'], ['sample', 'Sample pool']] as [PoolSource, string][]).map(([key, label]) => {
+              const active = effectiveSource === key;
+              const disabled = key === 'live' && book.length === 0;
+              return (
+                <button
+                  key={key}
+                  onClick={() => !disabled && setSource(key)}
+                  title={disabled ? 'Approve loans in the pipeline to build a live book' : undefined}
+                  style={{ padding: '6px 16px', borderRadius: 7, border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: FONT.ui, fontSize: 11.5, fontWeight: active ? 700 : 500, background: active ? p.primary : 'transparent', color: active ? 'white' : disabled ? p.ink3 : p.ink2, opacity: disabled ? 0.5 : 1 }}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
+        </div>
+        <div style={{ marginTop: 10, padding: '6px 12px', borderRadius: 7, background: isSample ? '#fdf3dc' : p.accentTint, border: `1px solid ${isSample ? '#f5d990' : p.accentSoft}`, display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: isSample ? p.amber : p.primary }} />
+          <span style={{ fontFamily: FONT.ui, fontSize: 10.5, fontWeight: 600, color: isSample ? '#7a5c00' : p.accentInk }}>
+            {isSample
+              ? source === 'live'
+                ? 'No approved loans yet — showing the illustrative sample pool (1,000 loans).'
+                : 'Illustrative sample pool — 1,000 synthetic micro-loans.'
+              : 'Live book — structured from the loans you approved in the pipeline.'}
+          </span>
         </div>
       </div>
 
       <div style={{ background: 'linear-gradient(135deg, #0e1812 0%, #17211a 100%)', padding: '22px 40px', display: 'flex', alignItems: 'stretch', flexShrink: 0, flexWrap: 'wrap', gap: 16 }}>
-        {POOL_STATS.map((s, i) => (
+        {stats.map((s, i) => (
           <React.Fragment key={s.label}>
             <div style={{ flex: 1, minWidth: 120, display: 'flex', flexDirection: 'column', gap: 7 }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 600, color: 'rgba(255,255,255,0.38)', letterSpacing: '0.10em', textTransform: 'uppercase' }}>
@@ -948,7 +984,7 @@ function CapitalMarkets({ p }: { p: Palette }) {
               </span>
               <span style={{ fontFamily: FONT.num, fontSize: 30, fontWeight: 700, color: 'white', letterSpacing: '-0.5px', lineHeight: 1 }}>{s.value}</span>
             </div>
-            {i < POOL_STATS.length - 1 && <div style={{ width: 1, background: 'rgba(255,255,255,0.08)' }} />}
+            {i < stats.length - 1 && <div style={{ width: 1, background: 'rgba(255,255,255,0.08)' }} />}
           </React.Fragment>
         ))}
       </div>
@@ -960,17 +996,17 @@ function CapitalMarkets({ p }: { p: Palette }) {
             <span style={{ marginBottom: 3 }}><InfoButton entry="waterfall" onOpen={setInfo} /></span>
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-            {TRANCHES.map((tr) => (
-              <div key={tr.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {tranches.map((tr) => (
+              <div key={tr.seat} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <div style={{ width: 10, height: 10, borderRadius: 2, background: tr.color }} />
-                <span style={{ fontFamily: FONT.ui, fontSize: 11, fontWeight: 500, color: p.ink2 }}>{tr.name[0] + tr.name.slice(1).toLowerCase()} {tr.pct}%</span>
+                <span style={{ fontFamily: FONT.ui, fontSize: 11, fontWeight: 500, color: p.ink2 }}>{tr.seat} {tr.pct}%</span>
               </div>
             ))}
           </div>
         </div>
         <div style={{ height: 32, borderRadius: 8, overflow: 'hidden', display: 'flex', gap: 2, boxShadow: '0 4px 14px rgba(16,32,24,0.14)' }}>
-          {TRANCHES.map((tr) => (
-            <div key={tr.name} style={{ width: `${tr.pct}%`, background: tr.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {tranches.map((tr) => (
+            <div key={tr.seat} style={{ width: `${tr.pct}%`, background: tr.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <span style={{ fontFamily: FONT.num, fontSize: 11.5, fontWeight: 700, color: 'white' }}>{tr.pct}%</span>
             </div>
           ))}
@@ -982,15 +1018,15 @@ function CapitalMarkets({ p }: { p: Palette }) {
       </div>
 
       <div style={{ padding: '18px 40px 0', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, flexShrink: 0 }}>
-        {TRANCHES.map((tr, i) => (
-          <div key={tr.name} style={{ background: tr.tint, borderRadius: 14, border: `1.5px solid ${tr.border}`, padding: '18px 20px', boxShadow: p.shadow, display: 'flex', flexDirection: 'column', gap: 12, animation: 'fade-in-up 0.4s ease-out both', animationDelay: `${i * 70}ms` }}>
+        {tranches.map((tr, i) => (
+          <div key={tr.seat} style={{ background: tr.tint, borderRadius: 14, border: `1.5px solid ${tr.border}`, padding: '18px 20px', boxShadow: p.shadow, display: 'flex', flexDirection: 'column', gap: 12, animation: 'fade-in-up 0.4s ease-out both', animationDelay: `${i * 70}ms` }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontFamily: FONT.ui, fontSize: 10.5, fontWeight: 700, color: tr.color, letterSpacing: '0.10em', textTransform: 'uppercase' }}>{tr.name}</span>
-                <InfoButton entry={tr.name.toLowerCase()} onOpen={setInfo} color={tr.color} />
+                <InfoButton entry={tr.seat.toLowerCase()} onOpen={setInfo} color={tr.color} />
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ padding: '4px 12px', borderRadius: 7, background: tr.ratingBg, border: `1.5px solid ${tr.border}` }}>
+                <div style={{ padding: '4px 12px', borderRadius: 7, background: tr.ratingBg, border: `1.5px solid ${tr.ratingColor}33` }}>
                   <span style={{ fontFamily: FONT.num, fontSize: 15, fontWeight: 700, color: tr.ratingColor }}>{tr.rating}</span>
                 </div>
                 <InfoButton entry="rating" onOpen={setInfo} color={tr.ratingColor} />
@@ -1054,6 +1090,9 @@ export default function Console() {
   const [purpose, setPurpose] = useState<DeclaredPurpose | null>(null);
   // Tracks whether the currently-displayed decision is the result of a counter-offer action (Brief L).
   const [isCounterOffer, setIsCounterOffer] = useState(false);
+  // Capital Markets pool source (Brief Q): defaults to the live approved book, auto-falling
+  // back to the sample pool while the book is empty (handled inside CapitalMarkets).
+  const [poolSource, setPoolSource] = useState<PoolSource>('live');
 
   // Boot pre-verifies the sample as a demo convenience — that is not an officer action, so it
   // is not logged; it only reads any history a previous session already recorded.
@@ -1218,6 +1257,8 @@ export default function Console() {
   };
 
   const selectedApp = apps.find((a) => a.id === selectedAppId) ?? null;
+  // The live approved book (Brief Q) — maps approved applications into the pool shape.
+  const book = useMemo(() => bookToPool(apps), [apps]);
 
   const showAlert = tab === 'verify' && flagged;
   const flagTime = flagTimeLabel(flaggedAt ?? new Date());
@@ -1239,8 +1280,10 @@ export default function Console() {
             {showAlert ? <CenterAlert p={p} flagTime={flagTime} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} /> : <InvalidCenter p={p} reasons={state.reasons} />}
             {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} onCounterOffer={onCounterOffer} isCounterOffer={isCounterOffer} stacking={stackingSignal} selectedApp={selectedApp} onResolve={onResolve} purpose={purpose} setPurpose={setPurpose} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} />}
           </>
+        ) : tab === 'portfolio' ? (
+          <PortfolioTab p={palette(false)} apps={apps} onStructure={() => { setPoolSource('live'); setTab('capital'); }} />
         ) : tab === 'capital' ? (
-          <CapitalMarkets p={palette(false)} />
+          <CapitalMarkets p={palette(false)} book={book} source={poolSource} setSource={setPoolSource} />
         ) : (
           <PolicyTab key={storedPolicy.updatedAt ?? 'defaults'} p={palette(false)} stored={storedPolicy} onSaved={onPolicySaved} />
         )}

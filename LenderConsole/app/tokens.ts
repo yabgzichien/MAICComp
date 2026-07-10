@@ -120,55 +120,9 @@ export const FORENSIC_FLAGS = [
  *  bars visibly break Benford's curve. Illustrative, like the rest of the alert demo. */
 export const SUSPECT_HISTOGRAM = [4, 2, 2, 1, 34, 2, 1, 38, 3];
 
-export const POOL_STATS = [
-  { label: 'Total Principal', value: 'RM 6.54M', info: 'total_principal' },
-  { label: 'Loans Pooled', value: '1,000', info: 'loans_pooled' },
-  { label: 'Wtd-Avg Score', value: '667', info: 'wtd_avg_score' },
-  { label: 'Wtd-Avg PD', value: '14.2%', info: 'wtd_avg_pd' },
-  { label: 'Expected Loss', value: '8.51%', info: 'expected_loss' },
-];
-
-export const TRANCHES = [
-  {
-    name: 'SENIOR',
-    rating: 'A',
-    ratingColor: '#1f8a5b',
-    ratingBg: '#dbece5',
-    color: '#1f8a5b',
-    tint: '#eff7f4',
-    border: '#dbece5',
-    pct: 72,
-    size: 'RM 4.71M',
-    profit: '8.5%',
-    reason: '3.3× expected-loss coverage beneath it → A.',
-  },
-  {
-    name: 'MEZZANINE',
-    rating: 'BB',
-    ratingColor: '#d98a00',
-    ratingBg: '#fdf3dc',
-    color: '#d98a00',
-    tint: '#fffcf2',
-    border: '#f5d990',
-    pct: 16,
-    size: 'RM 1.05M',
-    profit: '13.5%',
-    reason: '1.4× coverage → BB.',
-  },
-  {
-    name: 'SUBORDINATED',
-    rating: 'Equity',
-    ratingColor: '#c0392b',
-    ratingBg: '#fde8e8',
-    color: '#c0392b',
-    tint: '#fff8f8',
-    border: '#f5c6c6',
-    pct: 12,
-    size: 'RM 784K',
-    profit: '19.0%',
-    reason: 'First-loss equity.',
-  },
-];
+// The Capital Markets pool summary + tranche cards are computed live from structurePool
+// (Brief Q) via lib/poolView.ts — the old static POOL_STATS / TRANCHES constants were
+// removed. The glossary below still backs the "i" info buttons on that tab.
 
 // ── Capital-markets glossary ──────────────────────────────────────────────────
 // Plain-language definitions plus deeper "why it matters" knowledge for each figure
