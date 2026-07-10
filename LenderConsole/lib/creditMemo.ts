@@ -10,6 +10,7 @@ import type { CreditPassport } from './passport';
 import type { LoanDecision, Decision, ReasonCategory } from './loans';
 import { MAX_DSR, MAX_INSTALLMENT_SHARE_OF_SURPLUS, MIN_CONFIDENCE_TO_APPROVE, REASON_CATEGORY_LABELS } from './loans';
 import type { AgentPanelResult, AgentAssessment } from './agents';
+import { drivingConstraintFrom } from './counterOffer';
 
 const rm = (n: number): string => `RM${Math.round(n).toLocaleString('en-MY')}`;
 const pct = (x: number): number => Math.round(x * 100);
@@ -58,6 +59,15 @@ export interface MemoRationaleGroup {
   reasons: string[];
 }
 
+/** The counter-offer note (Brief L). Present only when the engine's offered amount was
+ *  positive and below the request — carries the original request, the countered amount,
+ *  and the engine's own reason for the reduction (never an invented one). Null otherwise. */
+export interface MemoCounterOffer {
+  originalRequest: number;
+  counteredAmount: number;
+  constraint: string;
+}
+
 export interface CreditMemo {
   header: MemoHeader;
   decision: MemoDecision;
@@ -68,6 +78,8 @@ export interface CreditMemo {
   groupedRationale: MemoRationaleGroup[];
   compliance: ComplianceLine[];
   conditions: string[];
+  /** Optional counter-offer note (Brief L). Null unless the offer was reduced below the request. */
+  counterOffer: MemoCounterOffer | null;
 }
 
 /** Display order for the grouped headings: what binds the money first, then what could not be verified. */
@@ -175,6 +187,13 @@ export function buildCreditMemo(
     offeredAmount: decision.maxAmount,
   };
 
+  // Counter-offer note (Brief L): present only when the offer was reduced below the request.
+  // The constraint comes from the engine's own reason strings via the pure helper — never invented.
+  const counterOffer: MemoCounterOffer | null =
+    decision.maxAmount > 0 && requestedAmount > 0 && decision.maxAmount < requestedAmount
+      ? { originalRequest: requestedAmount, counteredAmount: decision.maxAmount, constraint: drivingConstraintFrom(decision) }
+      : null;
+
   return {
     header,
     decision: { label: DECISION_LABEL[decision.decision], maxAmount: decision.maxAmount, installment: decision.installment },
@@ -185,6 +204,7 @@ export function buildCreditMemo(
     conditions: resolution
       ? [`Officer resolution — ${resolution.outcome} by ${resolution.officer}: "${resolution.rationale}" (recorded in the application audit trail).`, ...buildConditions(decision)]
       : buildConditions(decision),
+    counterOffer,
   };
 }
 
@@ -228,6 +248,15 @@ export function memoToMarkdown(memo: CreditMemo): string {
     lines.push(`- ${c.met ? '✓ Met' : '✗ Not met'} — ${c.requirement}. ${c.evidence}.`);
   }
   lines.push('');
+  if (memo.counterOffer) {
+    const co = memo.counterOffer;
+    lines.push('## Counter-offer');
+    lines.push('');
+    lines.push(`Original request: ${rm(co.originalRequest)}  ·  Countered amount: ${rm(co.counteredAmount)}`);
+    lines.push('');
+    lines.push(`Driving constraint: ${co.constraint}`);
+    lines.push('');
+  }
   lines.push('## Conditions & next steps');
   lines.push('');
   for (const c of memo.conditions) lines.push(`- ${c}`);

@@ -22,6 +22,7 @@ import { buildDecisionFile, decisionFileName } from '../lib/decisionFile';
 import { caseIdFor, flagTimeLabel } from '../lib/caseRef';
 import { runAgentPanel, type StackingSignal } from '../lib/agents';
 import { buildCreditMemo } from '../lib/creditMemo';
+import { counterOfferFor } from '../lib/counterOffer';
 import { findRecentPresentments, formatAgo, presentmentKey, type Presentment } from '../lib/presentment';
 import { readPresentmentLog, recordPresentment } from '../lib/presentmentStore';
 import { deriveTrustRows, type TrustRowState } from '../lib/trustPanel';
@@ -637,7 +638,7 @@ function ApplicationCard({ p, app, onResolve }: { p: Palette; app: ApplicationRe
   );
 }
 
-function RightDecision({ p, passport, decision, credential, amount, setAmount, onAssess, stacking, selectedApp, onResolve, purpose, setPurpose }: { p: Palette; passport: CreditPassport | null; decision: LoanDecision | null; credential: Credential | null; amount: string; setAmount: (s: string) => void; onAssess: () => void; stacking?: StackingSignal; selectedApp?: ApplicationRecord | null; onResolve?: (outcome: 'approved' | 'declined', rationale: string) => void; purpose?: DeclaredPurpose | null; setPurpose?: (p: DeclaredPurpose | null) => void }) {
+function RightDecision({ p, passport, decision, credential, amount, setAmount, onAssess, onCounterOffer, isCounterOffer, stacking, selectedApp, onResolve, purpose, setPurpose }: { p: Palette; passport: CreditPassport | null; decision: LoanDecision | null; credential: Credential | null; amount: string; setAmount: (s: string) => void; onAssess: () => void; onCounterOffer?: (counterAmount: number) => void; isCounterOffer?: boolean; stacking?: StackingSignal; selectedApp?: ApplicationRecord | null; onResolve?: (outcome: 'approved' | 'declined', rationale: string) => void; purpose?: DeclaredPurpose | null; setPurpose?: (p: DeclaredPurpose | null) => void }) {
   const [memoOpen, setMemoOpen] = useState(false);
 
   function downloadDecisionFile() {
@@ -735,6 +736,45 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
               <p style={{ fontFamily: FONT.ui, fontSize: 18, fontWeight: 800, color: 'white', lineHeight: 1.25, position: 'relative' }}>No offer at this amount</p>
             )}
           </div>
+
+          {/* Counter-offer strip (Brief L): show when the engine found a positive supportable amount below the request. */}
+          {(() => {
+            const requestedAmount = parseAmount(amount);
+            const co = decision && counterOfferFor(decision, requestedAmount);
+            if (!co) return null;
+            return (
+              <div style={{ margin: '10px 20px 0', borderRadius: 10, border: `1.5px solid ${p.primary}`, background: p.accentTint, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                    <path d="M6.5 1.5v4l2.5 1.5" stroke={p.primary} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <circle cx="6.5" cy="6.5" r="5.5" stroke={p.primary} strokeWidth="1.3" />
+                  </svg>
+                  <span style={{ fontFamily: FONT.ui, fontSize: 10.5, fontWeight: 700, color: p.accentInk, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Counter-offer available</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                  <span style={{ fontFamily: FONT.num, fontSize: 22, fontWeight: 700, color: p.ink1, letterSpacing: '-0.5px' }}>RM {Math.round(co.amount).toLocaleString('en-MY')}</span>
+                  <span style={{ fontFamily: FONT.num, fontSize: 11.5, fontWeight: 600, color: p.ink2 }}>RM {Math.round(co.installment).toLocaleString('en-MY')}/mo</span>
+                </div>
+                <p style={{ fontFamily: FONT.mono, fontSize: 9.5, color: p.ink2, lineHeight: 1.5, margin: 0 }}>{co.constraint.length > 120 ? co.constraint.slice(0, 117) + '…' : co.constraint}</p>
+                <button
+                  onClick={() => onCounterOffer?.(co.amount)}
+                  style={{ alignSelf: 'flex-start', padding: '7px 14px', borderRadius: 7, border: 'none', cursor: 'pointer', background: p.primary, color: 'white', fontFamily: FONT.ui, fontSize: 11.5, fontWeight: 700 }}
+                >
+                  Assess at this amount
+                </button>
+              </div>
+            );
+          })()}
+
+          {/* Counter-offer result badge: shown when the current decision was triggered by a counter-offer action. */}
+          {isCounterOffer && decision && decision.maxAmount > 0 && (
+            <div style={{ margin: '6px 20px 0', borderRadius: 7, background: p.accentSoft, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 7 }}>
+              <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                <path d="M2 5.5l2.5 2.5L9 3" stroke={p.primary} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span style={{ fontFamily: FONT.ui, fontSize: 10, fontWeight: 700, color: p.accentInk }}>Counter-offer assessment</span>
+            </div>
+          )}
 
           {passport?.assessment && <HeadroomBar p={p} assessment={passport.assessment} installment={decision.installment} />}
           {decision.breakdown && <DecisionWaterfall p={p} breakdown={decision.breakdown} />}
@@ -999,6 +1039,8 @@ export default function Console() {
   const [apps, setApps] = useState<ApplicationRecord[]>([]);
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
   const [purpose, setPurpose] = useState<DeclaredPurpose | null>(null);
+  // Tracks whether the currently-displayed decision is the result of a counter-offer action (Brief L).
+  const [isCounterOffer, setIsCounterOffer] = useState(false);
 
   // Boot pre-verifies the sample as a demo convenience — that is not an officer action, so it
   // is not logged; it only reads any history a previous session already recorded.
@@ -1076,7 +1118,22 @@ export default function Console() {
   };
   const onAssess = () => {
     if (state.status !== 'valid') return;
+    setIsCounterOffer(false);
     const decision = decisionFor(state.passport, amount);
+    const next: ViewState = { ...state, decision };
+    setState(next);
+    if (decision) fileAndSelect(code, next);
+  };
+
+  /** Counter-offer action (Brief L): sets the amount field to the engine's supportable amount,
+   *  re-runs the decision, and tags the result as a counter-offer in view state so the UI can
+   *  badge it clearly. Pure engine re-run — no new engine math. */
+  const onCounterOffer = (counterAmount: number) => {
+    if (state.status !== 'valid') return;
+    const amtStr = Math.round(counterAmount).toLocaleString('en-MY');
+    setAmount(amtStr);
+    setIsCounterOffer(true);
+    const decision = decisionFor(state.passport, String(counterAmount));
     const next: ViewState = { ...state, decision };
     setState(next);
     if (decision) fileAndSelect(code, next);
@@ -1149,7 +1206,7 @@ export default function Console() {
             <QueueRail p={p} apps={apps} selectedId={selectedAppId} onSelect={onSelectApp} onSeed={onSeed} onPasteNew={onPasteNew} />
             <LeftPanel p={p} flagged={flagged} statusValid={flagged ? false : statusValid} code={code} setCode={setCode} onVerify={onVerify} onLoadSample={onLoadSample} onLoadFlagged={onLoadFlagged} />
             {showAlert ? <CenterAlert p={p} flagTime={flagTime} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} /> : <InvalidCenter p={p} reasons={state.reasons} />}
-            {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} stacking={stackingSignal} selectedApp={selectedApp} onResolve={onResolve} purpose={purpose} setPurpose={setPurpose} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} />}
+            {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} onCounterOffer={onCounterOffer} isCounterOffer={isCounterOffer} stacking={stackingSignal} selectedApp={selectedApp} onResolve={onResolve} purpose={purpose} setPurpose={setPurpose} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} />}
           </>
         ) : (
           <CapitalMarkets p={palette(false)} />
