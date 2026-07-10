@@ -111,6 +111,10 @@ export interface LenderPolicy {
   fullLadderFromDays: number;
   /** With a full window, a coverage ratio below this still caps to Starter and below. */
   minCoverageRatioForFullLadder: number;
+  /** Lender's blended annual cost of funds (Brief R pricing input; not read by decideLoan). */
+  costOfFunds: number;
+  /** Target annual net return above break-even the pricing assistant aims for (Brief R). */
+  targetReturn: number;
 }
 
 export const DEFAULT_POLICY: LenderPolicy = {
@@ -120,6 +124,8 @@ export const DEFAULT_POLICY: LenderPolicy = {
   emergencyOnlyBelowDays: 30,
   fullLadderFromDays: 90,
   minCoverageRatioForFullLadder: 0.5,
+  costOfFunds: 0.05,
+  targetReturn: 0.06,
 };
 
 function rm(n: number): string {

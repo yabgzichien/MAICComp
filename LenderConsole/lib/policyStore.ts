@@ -72,6 +72,8 @@ export function validateStoredPolicy(raw: unknown): PolicyValidation {
     const emergencyOnlyBelowDays = days('emergencyOnlyBelowDays');
     const fullLadderFromDays = days('fullLadderFromDays');
     const minCoverageRatioForFullLadder = ratio('minCoverageRatioForFullLadder');
+    const costOfFunds = ratio('costOfFunds');
+    const targetReturn = ratio('targetReturn');
     if (
       emergencyOnlyBelowDays !== undefined &&
       fullLadderFromDays !== undefined &&
@@ -92,6 +94,8 @@ export function validateStoredPolicy(raw: unknown): PolicyValidation {
               emergencyOnlyBelowDays: emergencyOnlyBelowDays!,
               fullLadderFromDays: fullLadderFromDays!,
               minCoverageRatioForFullLadder: minCoverageRatioForFullLadder!,
+              costOfFunds: costOfFunds!,
+              targetReturn: targetReturn!,
             },
             products,
           },

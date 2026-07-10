@@ -68,6 +68,14 @@ export interface MemoCounterOffer {
   constraint: string;
 }
 
+/** Risk-based pricing note (Brief R): the ladder rate, the rate actually applied, and the
+ *  assistant's rationale lines. Present only when a pricing suggestion was computed. */
+export interface MemoPricing {
+  ladderApr: number;
+  adoptedApr: number;
+  reasons: string[];
+}
+
 export interface CreditMemo {
   header: MemoHeader;
   decision: MemoDecision;
@@ -80,6 +88,8 @@ export interface CreditMemo {
   conditions: string[];
   /** Optional counter-offer note (Brief L). Null unless the offer was reduced below the request. */
   counterOffer: MemoCounterOffer | null;
+  /** Optional risk-based pricing note (Brief R). Null unless a pricing suggestion was computed. */
+  pricing: MemoPricing | null;
 }
 
 /** Display order for the grouped headings: what binds the money first, then what could not be verified. */
@@ -178,6 +188,7 @@ export function buildCreditMemo(
   requestedAmount: number,
   resolution?: MemoResolution,
   policy: LenderPolicy = DEFAULT_POLICY,
+  pricing: MemoPricing | null = null,
 ): CreditMemo {
   const header: MemoHeader = {
     applicant: passport.holder?.name ?? 'Applicant',
@@ -207,6 +218,7 @@ export function buildCreditMemo(
       ? [`Officer resolution — ${resolution.outcome} by ${resolution.officer}: "${resolution.rationale}" (recorded in the application audit trail).`, ...buildConditions(decision)]
       : buildConditions(decision),
     counterOffer,
+    pricing,
   };
 }
 
@@ -225,6 +237,13 @@ export function memoToMarkdown(memo: CreditMemo): string {
   lines.push('');
   lines.push(`**${memo.decision.label}** — up to ${rm(memo.decision.maxAmount)} at ${rm(memo.decision.installment)}/mo.`);
   lines.push('');
+  if (memo.pricing) {
+    const pr = memo.pricing;
+    const asPct = (x: number) => `${(x * 100).toFixed(1)}%`;
+    lines.push(`**Pricing:** ladder rate ${asPct(pr.ladderApr)}, rate applied ${asPct(pr.adoptedApr)}${pr.adoptedApr < pr.ladderApr ? ' (risk-based discount)' : ''}.`);
+    for (const r of pr.reasons) lines.push(`- ${r}`);
+    lines.push('');
+  }
   lines.push('## Panel findings');
   lines.push('');
   for (const f of memo.findings) {

@@ -21,6 +21,8 @@ interface ThresholdForm {
   emergencyDays: string;
   fullLadderDays: string;
   minCoveragePct: string;
+  costOfFundsPct: string;
+  targetReturnPct: string;
 }
 
 interface LadderRow {
@@ -40,6 +42,8 @@ const toThresholdForm = (p: LenderPolicy): ThresholdForm => ({
   emergencyDays: String(p.emergencyOnlyBelowDays),
   fullLadderDays: String(p.fullLadderFromDays),
   minCoveragePct: String(Math.round(p.minCoverageRatioForFullLadder * 100)),
+  costOfFundsPct: String(Math.round(p.costOfFunds * 100)),
+  targetReturnPct: String(Math.round(p.targetReturn * 100)),
 });
 
 const toLadderRows = (products: LoanProduct[]): LadderRow[] =>
@@ -65,6 +69,8 @@ function formToCandidate(t: ThresholdForm, rows: LadderRow[]): unknown {
       emergencyOnlyBelowDays: num(t.emergencyDays),
       fullLadderFromDays: num(t.fullLadderDays),
       minCoverageRatioForFullLadder: num(t.minCoveragePct) / 100,
+      costOfFunds: num(t.costOfFundsPct) / 100,
+      targetReturn: num(t.targetReturnPct) / 100,
     },
     products: rows.map((r) => ({
       id: r.id,
@@ -85,6 +91,12 @@ const THRESHOLD_FIELDS: { key: keyof ThresholdForm; label: string; suffix: strin
   { key: 'emergencyDays', label: 'Emergency-only gate', suffix: 'days', hint: 'Below this many covered days (of the last 90): Emergency tier only, forced referral.' },
   { key: 'fullLadderDays', label: 'Full-ladder gate', suffix: 'days', hint: 'From this many covered days the full ladder opens; below it, Starter and below.' },
   { key: 'minCoveragePct', label: 'Coverage ratio floor', suffix: '%', hint: 'Even with a full window, coverage below this still caps eligibility to Starter.' },
+];
+
+/** Pricing inputs for the risk-based pricing assistant (Brief R). */
+const PRICING_FIELDS: { key: keyof ThresholdForm; label: string; suffix: string; hint: string }[] = [
+  { key: 'costOfFundsPct', label: 'Cost of funds', suffix: '% p.a.', hint: 'Your blended annual funding cost — the floor the assistant never prices below.' },
+  { key: 'targetReturnPct', label: 'Target net return', suffix: '% p.a.', hint: 'Net margin above break-even the assistant aims for when discounting a strong file.' },
 ];
 
 const LADDER_COLS = [
@@ -201,6 +213,26 @@ export default function PolicyTab({
               </div>
             ))}
           </div>
+        </div>
+
+        {/* ── Pricing (risk-based assistant, Brief R) ── */}
+        <div style={{ background: p.surface, borderRadius: 12, padding: '14px 18px', boxShadow: p.shadow }}>
+          <SectionLabel color={p.ink3}>Pricing · risk-based assistant</SectionLabel>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px 22px', marginTop: 10 }}>
+            {PRICING_FIELDS.map((f) => (
+              <div key={f.key}>
+                <label style={{ fontFamily: FONT.ui, fontSize: 11, fontWeight: 700, color: p.ink1, display: 'block', marginBottom: 4 }}>{f.label}</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input value={thresholds[f.key]} onChange={(e) => setThreshold(f.key, e.target.value)} inputMode="numeric" style={{ ...inputStyle, width: 76 }} />
+                  <span style={{ fontFamily: FONT.ui, fontSize: 10.5, color: p.ink3 }}>{f.suffix}</span>
+                </div>
+                <p style={{ fontFamily: FONT.ui, fontSize: 9.5, color: p.ink3, lineHeight: 1.45, marginTop: 4 }}>{f.hint}</p>
+              </div>
+            ))}
+          </div>
+          <p style={{ fontFamily: FONT.ui, fontSize: 9.5, color: p.ink3, lineHeight: 1.5, marginTop: 10 }}>
+            The assistant suggests a rate that meets your target return, <strong style={{ color: p.ink2 }}>clamped to the tier ladder as a ceiling</strong> — it discounts strong files, it never surcharges past the published rate.
+          </p>
         </div>
 
         {/* ── Product ladder ── */}

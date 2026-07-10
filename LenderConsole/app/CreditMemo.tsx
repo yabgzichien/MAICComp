@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { FONT, type Palette } from './tokens';
 import { SectionLabel } from './shared';
 import { runAgentPanel, type StackingSignal } from '../lib/agents';
-import { buildCreditMemo, memoToMarkdown, fallbackNarrative, type CreditMemo, type MemoResolution } from '../lib/creditMemo';
+import { buildCreditMemo, memoToMarkdown, fallbackNarrative, type CreditMemo, type MemoPricing, type MemoResolution } from '../lib/creditMemo';
 import type { CreditPassport } from '../lib/passport';
 import type { LenderPolicy, LoanDecision } from '../lib/loans';
 
@@ -31,6 +31,7 @@ export default function CreditMemoModal({
   stacking,
   resolution,
   policy,
+  pricing,
   onClose,
 }: {
   p: Palette;
@@ -41,12 +42,14 @@ export default function CreditMemoModal({
   resolution?: MemoResolution;
   /** Active lender policy (Brief N) — the compliance section cites its thresholds. */
   policy?: LenderPolicy;
+  /** Risk-based pricing note (Brief R) — ladder + adopted rate + rationale. */
+  pricing?: MemoPricing | null;
   onClose: () => void;
 }) {
   const memo = useMemo(() => {
     const panel = runAgentPanel(passport, decision, stacking);
-    return buildCreditMemo(passport, decision, panel, requestedAmount, resolution, policy);
-  }, [passport, decision, requestedAmount, stacking, resolution, policy]);
+    return buildCreditMemo(passport, decision, panel, requestedAmount, resolution, policy, pricing ?? null);
+  }, [passport, decision, requestedAmount, stacking, resolution, policy, pricing]);
 
   const fallback = useMemo(() => fallbackNarrative(memo), [memo]);
   const [narrative, setNarrative] = useState(fallback);
@@ -141,6 +144,12 @@ export default function CreditMemoModal({
             <p style={{ fontFamily: FONT.ui, fontSize: 11, color: p.ink3, marginTop: 3 }}>
               Requested RM {Math.round(memo.header.requestedAmount).toLocaleString('en-MY')} · Offered RM {Math.round(memo.header.offeredAmount).toLocaleString('en-MY')}
             </p>
+            {memo.pricing && (
+              <p style={{ fontFamily: FONT.ui, fontSize: 11, color: p.ink2, marginTop: 5 }}>
+                <strong>Pricing:</strong> ladder rate {(memo.pricing.ladderApr * 100).toFixed(1)}%, rate applied {(memo.pricing.adoptedApr * 100).toFixed(1)}%
+                {memo.pricing.adoptedApr < memo.pricing.ladderApr && <span style={{ color: p.accentInk, fontWeight: 700 }}> (risk-based discount)</span>}
+              </p>
+            )}
           </Section>
 
           {/* Findings */}

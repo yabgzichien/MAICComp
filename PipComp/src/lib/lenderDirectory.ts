@@ -77,6 +77,7 @@ function parsePolicy(raw: unknown): LenderPolicy | null {
   if (!ratio(p.minConfidenceToApprove) || !ratio(p.maxInstallmentShareOfSurplus) || !ratio(p.maxDsr)) return null;
   if (!days(p.emergencyOnlyBelowDays) || !days(p.fullLadderFromDays)) return null;
   if (!ratio(p.minCoverageRatioForFullLadder)) return null;
+  if (!ratio(p.costOfFunds) || !ratio(p.targetReturn)) return null;
   if (p.emergencyOnlyBelowDays > p.fullLadderFromDays) return null;
   return {
     minConfidenceToApprove: p.minConfidenceToApprove,
@@ -85,6 +86,8 @@ function parsePolicy(raw: unknown): LenderPolicy | null {
     emergencyOnlyBelowDays: p.emergencyOnlyBelowDays,
     fullLadderFromDays: p.fullLadderFromDays,
     minCoverageRatioForFullLadder: p.minCoverageRatioForFullLadder,
+    costOfFunds: p.costOfFunds,
+    targetReturn: p.targetReturn,
   };
 }
 

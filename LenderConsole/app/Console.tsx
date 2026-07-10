@@ -15,9 +15,10 @@ import {
   type Palette,
 } from './tokens';
 import { type CreditPassport, type VerifyResult, parsePassportCode, verifyPassport } from '../lib/passport';
-import { REASON_CATEGORY_LABELS, decideLoan, type LenderPolicy, type LoanDecision } from '../lib/loans';
+import { REASON_CATEGORY_LABELS, decideLoan, type LenderPolicy, type LoanDecision, type LoanProduct } from '../lib/loans';
 import { DEFAULT_STORED_POLICY, type StoredPolicy } from '../lib/policyStore';
-import { structurePool, type PoolLoan } from '../lib/securitization';
+import { priceLoan, repriceProducts, type PricingSuggestion } from '../lib/pricing';
+import { structurePool, type CreditBand, type PoolLoan } from '../lib/securitization';
 import { SAMPLE_POOL } from '../lib/samplePool';
 import { poolStatCells, trancheViews } from '../lib/poolView';
 import { bookToPool } from '../lib/portfolio';
@@ -63,7 +64,7 @@ type ViewState =
 
 const parseAmount = (s: string): number => Number(s.replace(/[^0-9.]/g, '')) || 0;
 
-function decisionFor(passport: CreditPassport, amountStr: string, stored: StoredPolicy): LoanDecision | null {
+function decisionFor(passport: CreditPassport, amountStr: string, stored: StoredPolicy, productsOverride?: LoanProduct[]): LoanDecision | null {
   const a = passport.assessment;
   if (!a) return null;
   return decideLoan({
@@ -73,7 +74,7 @@ function decisionFor(passport: CreditPassport, amountStr: string, stored: Stored
     monthlyDebtService: a.monthlyDebtService,
     avgIncome: a.avgIncome,
     requestedAmount: parseAmount(amountStr),
-    products: stored.products,
+    products: productsOverride ?? stored.products,
     coverageRatio: a.coverageRatio,
     coverageDaysCovered: a.coverageDays,
     policy: stored.policy,
@@ -647,13 +648,52 @@ function ApplicationCard({ p, app, onResolve }: { p: Palette; app: ApplicationRe
   );
 }
 
-function RightDecision({ p, passport, decision, credential, amount, setAmount, onAssess, onCounterOffer, isCounterOffer, stacking, selectedApp, onResolve, purpose, setPurpose, policy, policyUpdatedAt }: { p: Palette; passport: CreditPassport | null; decision: LoanDecision | null; credential: Credential | null; amount: string; setAmount: (s: string) => void; onAssess: () => void; onCounterOffer?: (counterAmount: number) => void; isCounterOffer?: boolean; stacking?: StackingSignal; selectedApp?: ApplicationRecord | null; onResolve?: (outcome: 'approved' | 'declined', rationale: string) => void; purpose?: DeclaredPurpose | null; setPurpose?: (p: DeclaredPurpose | null) => void; policy?: LenderPolicy; policyUpdatedAt?: string }) {
+/** Risk-based pricing strip (Brief R): ladder rate vs the suggested rate, net margin at
+ *  each, and an Adopt action. The suggestion only ever discounts (clamped to the ladder). */
+function PricingStrip({ p, pricing, adopted, onAdopt }: { p: Palette; pricing: PricingSuggestion; adopted: number | null; onAdopt?: (rate: number) => void }) {
+  const asPct = (x: number) => `${(x * 100).toFixed(1)}%`;
+  const hasDiscount = pricing.discountBps > 0;
+  const isAdopted = adopted !== null;
+  const RateCol = ({ title, rate, margin, highlight }: { title: string; rate: number; margin: number; highlight?: boolean }) => (
+    <div style={{ flex: 1, padding: '8px 12px', borderRadius: 8, background: highlight ? p.accentTint : p.surface2, border: `1px solid ${highlight ? p.accentSoft : p.hairline}` }}>
+      <p style={{ fontFamily: FONT.ui, fontSize: 9, fontWeight: 700, color: p.ink3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{title}</p>
+      <p style={{ fontFamily: FONT.num, fontSize: 20, fontWeight: 700, color: highlight ? p.accentInk : p.ink1, lineHeight: 1.2 }}>{asPct(rate)}</p>
+      <p style={{ fontFamily: FONT.ui, fontSize: 9.5, color: p.ink3 }}>net margin {asPct(margin)}</p>
+    </div>
+  );
+  return (
+    <div style={{ padding: '14px 20px 0' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <span style={{ fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 700, color: p.ink3, letterSpacing: '0.10em', textTransform: 'uppercase' }}>Risk-based pricing</span>
+        {hasDiscount && <span style={{ fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 700, color: p.accentInk, background: p.accentSoft, borderRadius: 5, padding: '2px 8px' }}>−{pricing.discountBps} bps for a lower-risk file</span>}
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <RateCol title="Ladder rate" rate={pricing.ladderApr} margin={pricing.ladder.netMargin} highlight={!isAdopted && !hasDiscount} />
+        <RateCol title={hasDiscount ? 'Suggested rate' : 'Suggested = ladder'} rate={pricing.suggestedRate} margin={pricing.suggested.netMargin} highlight={hasDiscount} />
+      </div>
+      {onAdopt && hasDiscount && (
+        <button
+          onClick={() => onAdopt(pricing.suggestedRate)}
+          disabled={isAdopted}
+          style={{ width: '100%', marginTop: 8, padding: '8px 0', borderRadius: 8, border: `1.5px solid ${p.primary}`, cursor: isAdopted ? 'default' : 'pointer', background: isAdopted ? p.accentSoft : 'transparent', color: isAdopted ? p.accentInk : p.primary, fontFamily: FONT.ui, fontSize: 11.5, fontWeight: 700 }}
+        >
+          {isAdopted ? `✓ Custom-priced at ${asPct(adopted!)} — re-checked for affordability` : `Adopt ${asPct(pricing.suggestedRate)} — re-prices the installment`}
+        </button>
+      )}
+      <p style={{ fontFamily: FONT.ui, fontSize: 9, color: p.ink3, marginTop: 5, lineHeight: 1.5 }}>{pricing.reasons[pricing.reasons.length - 1]}</p>
+    </div>
+  );
+}
+
+function RightDecision({ p, passport, decision, credential, amount, setAmount, onAssess, onCounterOffer, isCounterOffer, stacking, selectedApp, onResolve, purpose, setPurpose, policy, policyUpdatedAt, pricing, adoptedRate, onAdoptRate }: { p: Palette; passport: CreditPassport | null; decision: LoanDecision | null; credential: Credential | null; amount: string; setAmount: (s: string) => void; onAssess: () => void; onCounterOffer?: (counterAmount: number) => void; isCounterOffer?: boolean; stacking?: StackingSignal; selectedApp?: ApplicationRecord | null; onResolve?: (outcome: 'approved' | 'declined', rationale: string) => void; purpose?: DeclaredPurpose | null; setPurpose?: (p: DeclaredPurpose | null) => void; policy?: LenderPolicy; policyUpdatedAt?: string; pricing?: PricingSuggestion | null; adoptedRate?: number | null; onAdoptRate?: (rate: number) => void }) {
   const [memoOpen, setMemoOpen] = useState(false);
+  // The pricing note for the memo/decision-file: ladder rate + the rate actually in force.
+  const memoPricing = pricing ? { ladderApr: pricing.ladderApr, adoptedApr: adoptedRate ?? pricing.ladderApr, reasons: pricing.reasons } : null;
 
   function downloadDecisionFile() {
     if (!passport || !decision || !credential) return;
     const requestedAmount = parseAmount(amount);
-    const memo = buildCreditMemo(passport, decision, runAgentPanel(passport, decision, stacking), requestedAmount, selectedApp?.resolution, policy);
+    const memo = buildCreditMemo(passport, decision, runAgentPanel(passport, decision, stacking), requestedAmount, selectedApp?.resolution, policy, memoPricing);
     const file = buildDecisionFile({
       passport,
       signature: credential.signature,
@@ -792,6 +832,7 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
 
           {passport?.assessment && <HeadroomBar p={p} assessment={passport.assessment} installment={decision.installment} policy={policy} />}
           {decision.breakdown && <DecisionWaterfall p={p} breakdown={decision.breakdown} policy={policy} />}
+          {pricing && <PricingStrip p={p} pricing={pricing} adopted={adoptedRate ?? null} onAdopt={onAdoptRate} />}
 
           <div style={{ padding: '14px 20px 0', flex: 1 }}>
             <SectionLabel color={p.ink3}>Audit Trail</SectionLabel>
@@ -864,7 +905,7 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
       )}
 
       {memoOpen && passport && decision && (
-        <CreditMemoModal p={p} passport={passport} decision={decision} requestedAmount={parseAmount(amount)} stacking={stacking} resolution={selectedApp?.resolution} policy={policy} onClose={() => setMemoOpen(false)} />
+        <CreditMemoModal p={p} passport={passport} decision={decision} requestedAmount={parseAmount(amount)} stacking={stacking} resolution={selectedApp?.resolution} policy={policy} pricing={memoPricing} onClose={() => setMemoOpen(false)} />
       )}
 
       <div style={{ padding: '12px 20px 15px', borderTop: `1px solid ${p.hairline}`, marginTop: 'auto' }}>
@@ -1093,6 +1134,8 @@ export default function Console() {
   // Capital Markets pool source (Brief Q): defaults to the live approved book, auto-falling
   // back to the sample pool while the book is empty (handled inside CapitalMarkets).
   const [poolSource, setPoolSource] = useState<PoolSource>('live');
+  // Adopted risk-based rate (Brief R): null = ladder rate in force; a number = custom-priced.
+  const [adoptedRate, setAdoptedRate] = useState<number | null>(null);
 
   // Boot pre-verifies the sample as a demo convenience — that is not an officer action, so it
   // is not logged; it only reads any history a previous session already recorded.
@@ -1119,6 +1162,7 @@ export default function Console() {
   const onPolicySaved = (sp: StoredPolicy) => {
     setStoredPolicy(sp);
     setIsCounterOffer(false);
+    setAdoptedRate(null);
     if (state.status === 'valid') setState(evaluate(code, amount, sp));
   };
 
@@ -1158,6 +1202,7 @@ export default function Console() {
 
   const onVerify = () => {
     setFlagged(false);
+    setAdoptedRate(null);
     const next = evaluate(code, amount, storedPolicy);
     setState(next);
     if (next.status === 'valid') {
@@ -1170,6 +1215,7 @@ export default function Console() {
   };
   const onLoadSample = () => {
     setFlagged(false);
+    setAdoptedRate(null);
     setCode(SAMPLE_CODE);
     const next = evaluate(SAMPLE_CODE, amount, storedPolicy);
     setState(next);
@@ -1189,9 +1235,23 @@ export default function Console() {
   const onAssess = () => {
     if (state.status !== 'valid') return;
     setIsCounterOffer(false);
+    setAdoptedRate(null);
     const decision = decisionFor(state.passport, amount, storedPolicy);
     const next: ViewState = { ...state, decision };
     setState(next);
+    if (decision) fileAndSelect(code, next);
+  };
+
+  /** Adopt the risk-based suggested rate (Brief R): re-run decideLoan with the applicant's
+   *  tier APR replaced by the adopted rate — the engine re-checks affordability at the new
+   *  installment. A discount frees headroom; the decision is tagged custom-priced. */
+  const onAdoptRate = (rate: number) => {
+    if (state.status !== 'valid' || !state.decision?.breakdown) return;
+    const products = repriceProducts(storedPolicy.products, state.decision.breakdown.tierLabel, rate);
+    const decision = decisionFor(state.passport, amount, storedPolicy, products);
+    const next: ViewState = { ...state, decision };
+    setState(next);
+    setAdoptedRate(rate);
     if (decision) fileAndSelect(code, next);
   };
 
@@ -1203,6 +1263,7 @@ export default function Console() {
     const amtStr = Math.round(counterAmount).toLocaleString('en-MY');
     setAmount(amtStr);
     setIsCounterOffer(true);
+    setAdoptedRate(null);
     const decision = decisionFor(state.passport, String(counterAmount), storedPolicy);
     const next: ViewState = { ...state, decision };
     setState(next);
@@ -1213,6 +1274,7 @@ export default function Console() {
    *  no duplicated state — and is not a new presentment (no log entry). */
   const onSelectApp = (app: ApplicationRecord) => {
     setFlagged(false);
+    setAdoptedRate(null);
     setCode(app.passportCode);
     const amtStr = app.requestedAmount.toLocaleString('en-MY');
     setAmount(amtStr);
@@ -1260,6 +1322,21 @@ export default function Console() {
   // The live approved book (Brief Q) — maps approved applications into the pool shape.
   const book = useMemo(() => bookToPool(apps), [apps]);
 
+  // Risk-based pricing suggestion (Brief R) for the current offer — computed from the
+  // ORIGINAL ladder rate (not the adopted one) so the strip always shows ladder vs suggested.
+  const pricing: PricingSuggestion | null = useMemo(() => {
+    if (state.status !== 'valid' || !state.decision || state.decision.maxAmount <= 0 || !state.decision.breakdown) return null;
+    const tierLabel = state.decision.breakdown.tierLabel;
+    const prod = storedPolicy.products.find((pr) => pr.label === tierLabel);
+    if (!prod) return null;
+    return priceLoan({
+      band: state.passport.band as CreditBand,
+      ladderApr: prod.apr,
+      costOfFunds: storedPolicy.policy.costOfFunds,
+      targetReturn: storedPolicy.policy.targetReturn,
+    });
+  }, [state, storedPolicy]);
+
   const showAlert = tab === 'verify' && flagged;
   const flagTime = flagTimeLabel(flaggedAt ?? new Date());
   const flagCaseId = caseIdFor(SUSPECT_CODE);
@@ -1278,7 +1355,7 @@ export default function Console() {
             <QueueRail p={p} apps={apps} selectedId={selectedAppId} onSelect={onSelectApp} onSeed={onSeed} onPasteNew={onPasteNew} />
             <LeftPanel p={p} flagged={flagged} statusValid={flagged ? false : statusValid} code={code} setCode={setCode} onVerify={onVerify} onLoadSample={onLoadSample} onLoadFlagged={onLoadFlagged} />
             {showAlert ? <CenterAlert p={p} flagTime={flagTime} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} /> : <InvalidCenter p={p} reasons={state.reasons} />}
-            {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} onCounterOffer={onCounterOffer} isCounterOffer={isCounterOffer} stacking={stackingSignal} selectedApp={selectedApp} onResolve={onResolve} purpose={purpose} setPurpose={setPurpose} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} />}
+            {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} onCounterOffer={onCounterOffer} isCounterOffer={isCounterOffer} stacking={stackingSignal} selectedApp={selectedApp} onResolve={onResolve} purpose={purpose} setPurpose={setPurpose} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} pricing={pricing} adoptedRate={adoptedRate} onAdoptRate={onAdoptRate} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} />}
           </>
         ) : tab === 'portfolio' ? (
           <PortfolioTab p={palette(false)} apps={apps} onStructure={() => { setPoolSource('live'); setTab('capital'); }} />
