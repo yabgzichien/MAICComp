@@ -61,6 +61,23 @@ export interface PassportProvenanceMeta {
   modelWeightsVersion: string;
 }
 
+/** Consent tiers: 0 = aggregates, 1 = identity/occupation, 2 = spending-behaviour profile. */
+export type ConsentTier = 0 | 1 | 2;
+
+/**
+ * A signed consent receipt (Brief I stretch): proof, embedded in the passport, of exactly
+ * which tier the borrower granted, the fields it covers, when it was granted, and when it
+ * expires. Because buildPassport signs the whole canonicalized passport, receipts are
+ * tamper-evident for free — a lender can prove consent field-by-field. An expired grant
+ * degrades only its own block ("consent lapsed"), never the whole passport.
+ */
+export interface ConsentReceipt {
+  tier: ConsentTier;
+  scope: string[];   // field names shared under this tier
+  grantedAt: string; // ISO
+  expiresAt: string; // ISO — may be shorter than the passport's own validUntil
+}
+
 /** The portable, signable credential — no raw transactions. */
 export interface CreditPassport {
   subject: string;
@@ -87,6 +104,8 @@ export interface CreditPassport {
    * Optional; absent on pre-v2 passports.
    */
   digitHistogram?: number[];
+  /** Signed consent receipts (Brief I stretch). Optional; absent on pre-consent passports. */
+  consent?: ConsentReceipt[];
 }
 
 /** Input required to build a passport. */
@@ -113,6 +132,8 @@ export interface PassportInput {
   provenanceMeta?: PassportProvenanceMeta;
   /** Optional leading-digit counts (9 entries), copied into the signed passport. */
   digitHistogram?: number[];
+  /** Optional signed consent receipts, copied into the signed passport. */
+  consent?: ConsentReceipt[];
 }
 
 /** Result of verifying a passport signature. */
@@ -120,6 +141,8 @@ export interface VerifyResult {
   valid: boolean;
   tampered: boolean;
   reasons: string[];
+  /** Tiers whose consent grant has expired — the block is present but "lapsed" (not a failure). */
+  lapsedTiers?: ConsentTier[];
 }
 
 /** Issuer-attestation inputs for verification: Pip's pinned public key + the issuer signature. */
@@ -226,7 +249,22 @@ export function validatePassportShape(p: unknown): string[] {
     const h = o.digitHistogram;
     if (!Array.isArray(h) || h.length !== 9 || !h.every((n) => isFiniteNum(n) && n >= 0)) problems.push('digitHistogram');
   }
+  if (o.consent !== undefined && !isValidConsent(o.consent)) problems.push('consent');
   return problems;
+}
+
+/** True when `c` is a non-empty array of well-formed consent receipts. */
+function isValidConsent(c: unknown): c is ConsentReceipt[] {
+  if (!Array.isArray(c) || c.length === 0) return false;
+  return c.every((e) => {
+    if (!e || typeof e !== 'object') return false;
+    const r = e as Record<string, unknown>;
+    if (r.tier !== 0 && r.tier !== 1 && r.tier !== 2) return false;
+    if (!Array.isArray(r.scope) || r.scope.length === 0 || !r.scope.every((s) => typeof s === 'string' && s.length > 0)) return false;
+    if (typeof r.grantedAt !== 'string' || Number.isNaN(Date.parse(r.grantedAt))) return false;
+    if (typeof r.expiresAt !== 'string' || Number.isNaN(Date.parse(r.expiresAt))) return false;
+    return true;
+  });
 }
 
 /** Returns a reason string if the passport is outside its signed validity window, else null (H1). */
@@ -281,6 +319,13 @@ export async function buildPassport(
   sign: (bytes: Uint8Array) => Promise<Uint8Array>,
   issuerSign?: (bytes: Uint8Array) => Promise<Uint8Array>,
 ): Promise<{ passport: CreditPassport; signature: string; issuerSignature?: string }> {
+  // Consent enforcement (Brief I stretch): once a consent block is supplied, identity may
+  // only ride along with a Tier 1 grant. A holder with no consent block at all is the
+  // pre-consent (back-compat) path and is left untouched.
+  if (input.holder && input.consent !== undefined && !input.consent.some((c) => c.tier === 1)) {
+    throw new Error('Cannot attach a holder without a Tier 1 consent grant.');
+  }
+
   const issuedAt = new Date().toISOString();
   const validUntilDate = new Date(issuedAt);
   validUntilDate.setDate(validUntilDate.getDate() + 30);
@@ -301,6 +346,7 @@ export async function buildPassport(
     ...(input.momentum ? { momentum: input.momentum } : {}),
     ...(input.provenanceMeta ? { provenanceMeta: input.provenanceMeta } : {}),
     ...(input.digitHistogram ? { digitHistogram: input.digitHistogram } : {}),
+    ...(input.consent ? { consent: input.consent } : {}),
   };
 
   const canonical = canonicalize(passport);
@@ -390,6 +436,19 @@ export function verifyPassport(
     const stale = freshnessProblem(passport, now);
     if (stale) {
       return { valid: false, tampered: false, reasons: [stale] };
+    }
+
+    // Consent semantics (Brief I stretch), only trusted once the payload is proven authentic:
+    //  · identity present but no Tier 1 receipt → data riding without consent → fail;
+    //  · an expired tier grant degrades only that block (lapsedTiers), never the passport.
+    if (passport.consent !== undefined) {
+      if (passport.holder && !passport.consent.some((c) => c.tier === 1)) {
+        return { valid: false, tampered: false, reasons: ['Identity present without a Tier 1 consent receipt'] };
+      }
+      const lapsedTiers = passport.consent
+        .filter((c) => Date.parse(c.expiresAt) < now.getTime() - CLOCK_SKEW_MS)
+        .map((c) => c.tier);
+      if (lapsedTiers.length > 0) return { valid: true, tampered: false, reasons: [], lapsedTiers };
     }
 
     return { valid: true, tampered: false, reasons: [] };

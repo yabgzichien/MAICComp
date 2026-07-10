@@ -293,13 +293,13 @@ function StackingBanner({ p, priors }: { p: Palette; priors: Presentment[] }) {
   );
 }
 
-function VerifiedCenter({ p, passport, decision, priors, issuerVerified, stacking }: { p: Palette; passport: CreditPassport; decision: LoanDecision | null; priors: Presentment[]; issuerVerified: boolean; stacking?: StackingSignal }) {
+function VerifiedCenter({ p, passport, decision, priors, issuerVerified, stacking, lapsedTiers }: { p: Palette; passport: CreditPassport; decision: LoanDecision | null; priors: Presentment[]; issuerVerified: boolean; stacking?: StackingSignal; lapsedTiers?: import('../lib/passport').ConsentTier[] }) {
   const factors = passport.factorSummary;
   const avg = factors.length ? Math.round(factors.reduce((s, f) => s + f.subScore, 0) / factors.length) : 0;
   const confidencePct = passport.assessment ? Math.round(passport.assessment.confidence * 100) : null;
   const activeBand = Math.max(0, BAND_ORDER.indexOf(passport.band));
   const evidenceShort = passport.evidenceHash ? `${passport.evidenceHash.slice(0, 6)}…${passport.evidenceHash.slice(-6)}` : '';
-  const trustRows = deriveTrustRows({ passport, holderVerified: true, issuerVerified, priorPresentments: priors });
+  const trustRows = deriveTrustRows({ passport, holderVerified: true, issuerVerified, priorPresentments: priors, lapsedTiers });
   return (
     <div style={{ flex: 1, background: p.bg, overflowY: 'auto', padding: '16px 14px', display: 'flex', flexDirection: 'column', gap: 11, minWidth: 360 }}>
       {priors.length > 0 && <StackingBanner p={p} priors={priors} />}
@@ -1354,7 +1354,7 @@ export default function Console() {
           <>
             <QueueRail p={p} apps={apps} selectedId={selectedAppId} onSelect={onSelectApp} onSeed={onSeed} onPasteNew={onPasteNew} />
             <LeftPanel p={p} flagged={flagged} statusValid={flagged ? false : statusValid} code={code} setCode={setCode} onVerify={onVerify} onLoadSample={onLoadSample} onLoadFlagged={onLoadFlagged} />
-            {showAlert ? <CenterAlert p={p} flagTime={flagTime} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} /> : <InvalidCenter p={p} reasons={state.reasons} />}
+            {showAlert ? <CenterAlert p={p} flagTime={flagTime} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} lapsedTiers={state.credential.verification.lapsedTiers} /> : <InvalidCenter p={p} reasons={state.reasons} />}
             {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} onCounterOffer={onCounterOffer} isCounterOffer={isCounterOffer} stacking={stackingSignal} selectedApp={selectedApp} onResolve={onResolve} purpose={purpose} setPurpose={setPurpose} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} pricing={pricing} adoptedRate={adoptedRate} onAdoptRate={onAdoptRate} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} />}
           </>
         ) : tab === 'portfolio' ? (

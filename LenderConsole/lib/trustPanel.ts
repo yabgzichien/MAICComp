@@ -3,7 +3,7 @@
 // Pure: verify outcome + consent state + presentment log in, row states out. The UI
 // only renders what this function derives.
 
-import type { CreditPassport } from './passport';
+import type { ConsentTier, CreditPassport } from './passport';
 import { formatAgo, type Presentment } from './presentment';
 
 export type TrustRowState = 'pass' | 'warn' | 'fail';
@@ -24,6 +24,8 @@ export interface TrustPanelInput {
   issuerVerified: boolean;
   /** Prior presentments of this subject within the window (excluding the current one). */
   priorPresentments: Presentment[];
+  /** Tiers whose consent grant has lapsed, from verifyPassport's result (Brief I stretch). */
+  lapsedTiers?: ConsentTier[];
   windowHours?: number;
   now?: Date;
 }
@@ -65,6 +67,28 @@ function stackingRow(priors: Presentment[], windowHours: number, now: Date): Tru
   return { key: 'stacking', label, state: priors.length >= STACKING_FAIL_COUNT ? 'fail' : 'warn', detail };
 }
 
+const TIER_NAME: Record<ConsentTier, string> = { 0: 'Tier 0 aggregates', 1: 'Tier 1 identity', 2: 'Tier 2 spending' };
+
+/**
+ * Consent receipts (Brief I stretch). A passport that carries them lets the officer prove
+ * what the borrower granted, field-by-field. A lapsed tier degrades to a warning ("ask to
+ * re-share"); a pre-consent passport keeps the honest "not shared" soft warning.
+ */
+function consentRow(passport: CreditPassport, lapsedTiers: ConsentTier[] | undefined, now: Date): TrustRow {
+  const label = 'Consent';
+  const receipts = passport.consent;
+  if (!receipts || receipts.length === 0) {
+    return { key: 'consent', label, state: 'warn', detail: 'Not shared — this passport carries no consent receipts; presenting the code is itself the borrower’s consent act' };
+  }
+  const lapsed = lapsedTiers ?? receipts.filter((r) => Date.parse(r.expiresAt) < now.getTime()).map((r) => r.tier);
+  if (lapsed.length > 0) {
+    const names = Array.from(new Set(lapsed)).map((t) => TIER_NAME[t]).join(', ');
+    return { key: 'consent', label, state: 'warn', detail: `${names} consent lapsed — ask the applicant to re-share the passport` };
+  }
+  const tiers = receipts.map((r) => r.tier).sort((a, b) => a - b).map((t) => TIER_NAME[t]);
+  return { key: 'consent', label, state: 'pass', detail: `Signed consent receipts: ${tiers.join(' + ')} — granted ${receipts[0].grantedAt.slice(0, 10)}, provable field-by-field` };
+}
+
 /** Derive the five trust rows, in display order. */
 export function deriveTrustRows(input: TrustPanelInput): TrustRow[] {
   const { passport, holderVerified, issuerVerified, priorPresentments } = input;
@@ -79,9 +103,5 @@ export function deriveTrustRows(input: TrustPanelInput): TrustRow[] {
     ? { key: 'issuer', label: 'Issuer attestation', state: 'pass', detail: 'Signed by Pip’s pinned issuer key — issued by Pip, not self-minted' }
     : { key: 'issuer', label: 'Issuer attestation', state: 'fail', detail: 'No valid issuer signature — possible self-minted passport' };
 
-  // Consent receipts arrive with the consent-tiers schema (Brief I stretch). Until a
-  // passport carries them, the honest state is a soft warning, not a failure.
-  const consent: TrustRow = { key: 'consent', label: 'Consent', state: 'warn', detail: 'Not shared — this passport version carries no consent receipts; presenting the code is itself the borrower’s consent act' };
-
-  return [holder, issuer, freshnessRow(passport, now), consent, stackingRow(priorPresentments, windowHours, now)];
+  return [holder, issuer, freshnessRow(passport, now), consentRow(passport, input.lapsedTiers, now), stackingRow(priorPresentments, windowHours, now)];
 }

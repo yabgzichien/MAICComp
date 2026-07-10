@@ -13,7 +13,7 @@ import { Card, TopBar } from '../components/ui';
 import { getOrCreateKeypair } from '../crypto/keys';
 import { issuerSign } from '../crypto/issuer';
 import { buildPassport, type CreditPassport } from '../lib/passport';
-import { buildPassportDraft, tier0ScopeRows, tier1ScopeRows } from '../lib/consentScopes';
+import { buildConsentReceipts, buildPassportDraft, tier0ScopeRows, tier1ScopeRows } from '../lib/consentScopes';
 import { useCreditProfile } from '../state/useCreditProfile';
 import { useAppData } from '../state/store';
 import { PassportCeremonyScreen } from './PassportCeremonyScreen';
@@ -73,8 +73,10 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
     try {
       const keypair = await getOrCreateKeypair();
       const draft = buildPassportDraft({ ...draftArgs, includeIdentity });
+      // Signed consent receipts (Brief I stretch): Tier 0 always, Tier 1 when identity is shared.
+      const consent = buildConsentReceipts(draft);
       const result = await buildPassport(
-        { ...draft, subject: keypair.publicKeyHex },
+        { ...draft, subject: keypair.publicKeyHex, consent },
         keypair.sign.bind(keypair),
         issuerSign,
       );

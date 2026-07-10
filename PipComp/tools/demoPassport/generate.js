@@ -112,6 +112,23 @@ const passport = {
   },
   provenanceMeta,
   digitHistogram,
+  // Signed consent receipts (Brief I stretch): Tier 0 aggregates + Tier 1 identity, so the
+  // holder rides along legitimately and the console trust panel shows real consent. Scope
+  // keys mirror tier0ScopeRows/tier1ScopeRows; both grants run to the demo validity window.
+  consent: [
+    {
+      tier: 0,
+      scope: ['score', 'factors', 'confidence', 'coverage', 'income', 'surplus', 'debtService', 'repayment', 'momentum', 'digitHistogram', 'provenance', 'evidence', 'versions'],
+      grantedAt: issuedAt,
+      expiresAt: validUntil,
+    },
+    {
+      tier: 1,
+      scope: ['holderName', 'holderNric', 'holderProvider'],
+      grantedAt: issuedAt,
+      expiresAt: validUntil,
+    },
+  ],
 };
 
 // ── 3. Canonicalize (mirrors passport.ts) ──────────────────────────────────────

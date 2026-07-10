@@ -44,6 +44,17 @@ export interface PassportProvenanceMeta {
   modelWeightsVersion: string;
 }
 
+/** Consent tiers: 0 = aggregates, 1 = identity/occupation, 2 = spending-behaviour profile. */
+export type ConsentTier = 0 | 1 | 2;
+
+/** A signed consent receipt (Brief I stretch) — see PipComp/src/lib/passport.ts (verbatim port). */
+export interface ConsentReceipt {
+  tier: ConsentTier;
+  scope: string[];
+  grantedAt: string;
+  expiresAt: string;
+}
+
 export interface CreditPassport {
   subject: string;
   score: number;
@@ -62,12 +73,16 @@ export interface CreditPassport {
   /** Leading-digit counts 1–9 (index 0 = digit 1) of the amounts behind the score —
    *  nine aggregate numbers, never raw transactions. Optional; absent pre-v2. */
   digitHistogram?: number[];
+  /** Signed consent receipts (Brief I stretch). Optional; absent on pre-consent passports. */
+  consent?: ConsentReceipt[];
 }
 
 export interface VerifyResult {
   valid: boolean;
   tampered: boolean;
   reasons: string[];
+  /** Tiers whose consent grant has expired — the block is present but "lapsed" (not a failure). */
+  lapsedTiers?: ConsentTier[];
 }
 
 function hexToBytes(hex: string): Uint8Array {
@@ -149,7 +164,22 @@ export function validatePassportShape(p: unknown): string[] {
     const h = o.digitHistogram;
     if (!Array.isArray(h) || h.length !== 9 || !h.every((n) => isFiniteNum(n) && n >= 0)) problems.push('digitHistogram');
   }
+  if (o.consent !== undefined && !isValidConsent(o.consent)) problems.push('consent');
   return problems;
+}
+
+/** True when `c` is a non-empty array of well-formed consent receipts. */
+function isValidConsent(c: unknown): c is ConsentReceipt[] {
+  if (!Array.isArray(c) || c.length === 0) return false;
+  return c.every((e) => {
+    if (!e || typeof e !== 'object') return false;
+    const r = e as Record<string, unknown>;
+    if (r.tier !== 0 && r.tier !== 1 && r.tier !== 2) return false;
+    if (!Array.isArray(r.scope) || r.scope.length === 0 || !r.scope.every((s) => typeof s === 'string' && s.length > 0)) return false;
+    if (typeof r.grantedAt !== 'string' || Number.isNaN(Date.parse(r.grantedAt))) return false;
+    if (typeof r.expiresAt !== 'string' || Number.isNaN(Date.parse(r.expiresAt))) return false;
+    return true;
+  });
 }
 
 /** Reason string if the passport is outside its signed validity window, else null (H1). */
@@ -209,6 +239,19 @@ export function verifyPassport(
     const stale = freshnessProblem(passport, now);
     if (stale) {
       return { valid: false, tampered: false, reasons: [stale] };
+    }
+
+    // Consent semantics (Brief I stretch), trusted only once the payload is proven authentic:
+    //  · identity present but no Tier 1 receipt → data riding without consent → fail;
+    //  · an expired tier grant degrades only that block (lapsedTiers), never the passport.
+    if (passport.consent !== undefined) {
+      if (passport.holder && !passport.consent.some((c) => c.tier === 1)) {
+        return { valid: false, tampered: false, reasons: ['Identity present without a Tier 1 consent receipt.'] };
+      }
+      const lapsedTiers = passport.consent
+        .filter((c) => Date.parse(c.expiresAt) < now.getTime() - CLOCK_SKEW_MS)
+        .map((c) => c.tier);
+      if (lapsedTiers.length > 0) return { valid: true, tampered: false, reasons: [], lapsedTiers };
     }
     return { valid: true, tampered: false, reasons: [] };
   } catch (err) {

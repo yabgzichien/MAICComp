@@ -11,7 +11,7 @@
  * it — the display list cannot silently drift from the signed payload.
  */
 
-import type { PassportInput } from './passport';
+import type { ConsentReceipt, PassportInput } from './passport';
 import type { CreditProfile, CreditScore } from './creditScore';
 import { leadingDigitHistogram, type DataConfidence } from './dataConfidence';
 import type { Coverage } from './coverage';
@@ -127,8 +127,12 @@ type RowBuilder = (d: PassportDraft) => ConsentScopeRow[];
  * Exhaustive disclosure map: every PassportDraft key is either disclosed by a
  * Tier 0 row builder, folded into another row ('mergedIntoScore'), or belongs
  * to the identity tier ('tier1'). Literal key order = display order.
+ *
+ * `consent` is excluded: it is the receipt of what is shared, not itself a shared
+ * aggregate — it records the very grants this ceremony produces. Every other field
+ * stays covered by the drift guard (adding one breaks the build until disclosed).
  */
-const TIER0_DISCLOSURE: { [K in keyof PassportDraft]-?: RowBuilder | 'mergedIntoScore' | 'tier1' } = {
+const TIER0_DISCLOSURE: { [K in keyof Omit<PassportDraft, 'consent'>]-?: RowBuilder | 'mergedIntoScore' | 'tier1' } = {
   score: (d) => [{ key: 'score', label: 'Credit score & band', detail: `${Math.round(d.score)} · ${d.band}` }],
   band: 'mergedIntoScore',
   factorSummary: (d) => [
@@ -198,7 +202,7 @@ const TIER0_DISCLOSURE: { [K in keyof PassportDraft]-?: RowBuilder | 'mergedInto
 
 /** Tier 0 — the aggregate fields every passport carries, with their real values. */
 export function tier0ScopeRows(draft: PassportDraft): ConsentScopeRow[] {
-  return (Object.keys(TIER0_DISCLOSURE) as (keyof PassportDraft)[]).flatMap((k) => {
+  return (Object.keys(TIER0_DISCLOSURE) as (keyof Omit<PassportDraft, 'consent'>)[]).flatMap((k) => {
     const builder = TIER0_DISCLOSURE[k];
     return typeof builder === 'function' ? builder(draft) : [];
   });
@@ -213,4 +217,28 @@ export function tier1ScopeRows(draft: PassportDraft): ConsentScopeRow[] {
     { key: 'holderNric', label: 'IC number (masked)', detail: h.nricMasked },
     { key: 'holderProvider', label: 'Verified by', detail: h.provider },
   ];
+}
+
+// The passport itself is valid 30 days; aggregate consent expires with it, while a verified
+// identity grant is longer-lived (a year) — "identity long-lived, spending profile short"
+// (privacy-modes spec). Short-lived grants stand in for a revocation registry.
+const DAY_MS = 24 * 60 * 60 * 1000;
+const TIER0_VALIDITY_MS = 30 * DAY_MS;
+const TIER1_VALIDITY_MS = 365 * DAY_MS;
+
+/**
+ * The signed consent receipts for a confirmed ceremony (Brief I stretch). Each tier's scope
+ * is the list of field keys the draft actually carries, so the receipt can never disagree
+ * with the disclosed rows. A Tier 1 receipt is produced exactly when the draft carries a
+ * holder block — which is what buildPassport requires before it will attach identity.
+ */
+export function buildConsentReceipts(draft: PassportDraft, now: Date = new Date()): ConsentReceipt[] {
+  const grantedAt = now.toISOString();
+  const receipts: ConsentReceipt[] = [
+    { tier: 0, scope: tier0ScopeRows(draft).map((r) => r.key), grantedAt, expiresAt: new Date(now.getTime() + TIER0_VALIDITY_MS).toISOString() },
+  ];
+  if (draft.holder) {
+    receipts.push({ tier: 1, scope: tier1ScopeRows(draft).map((r) => r.key), grantedAt, expiresAt: new Date(now.getTime() + TIER1_VALIDITY_MS).toISOString() });
+  }
+  return receipts;
 }
