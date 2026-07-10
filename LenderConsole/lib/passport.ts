@@ -44,6 +44,34 @@ export interface PassportProvenanceMeta {
   modelWeightsVersion: string;
 }
 
+/** Richer passport blocks (Brief P) — verbatim shapes from PipComp/src/lib/passport.ts. */
+export interface PassportOccupation {
+  occupation: string;
+  sector: string;
+  employmentType: 'salaried' | 'gig' | 'self-employed' | 'micro-business';
+  tenureMonths: number;
+  selfDeclared: true;
+}
+export interface PassportIncomeQuality {
+  variationCoefficient: number;
+  sourceCount: number;
+  regularityRatio: number;
+  seasonal: boolean;
+}
+export interface PassportObligation {
+  label: string;
+  kind: 'rent' | 'utilities' | 'installment' | 'other';
+  monthlyAmount: number;
+  monthsObserved: number;
+}
+export interface PassportSpendingProfile {
+  essentialsRatio: number;
+  expenseVolatility: number;
+  bufferDays: number;
+  savingsRate: number;
+  obligations: PassportObligation[];
+}
+
 /** Consent tiers: 0 = aggregates, 1 = identity/occupation, 2 = spending-behaviour profile. */
 export type ConsentTier = 0 | 1 | 2;
 
@@ -75,6 +103,10 @@ export interface CreditPassport {
   digitHistogram?: number[];
   /** Signed consent receipts (Brief I stretch). Optional; absent on pre-consent passports. */
   consent?: ConsentReceipt[];
+  /** Richer blocks (Brief P): occupation (Tier 1), income quality (Tier 0), spending (Tier 2). */
+  occupation?: PassportOccupation;
+  incomeQuality?: PassportIncomeQuality;
+  spendingProfile?: PassportSpendingProfile;
 }
 
 export interface VerifyResult {
@@ -165,7 +197,45 @@ export function validatePassportShape(p: unknown): string[] {
     if (!Array.isArray(h) || h.length !== 9 || !h.every((n) => isFiniteNum(n) && n >= 0)) problems.push('digitHistogram');
   }
   if (o.consent !== undefined && !isValidConsent(o.consent)) problems.push('consent');
+  if (o.occupation !== undefined && !isValidOccupation(o.occupation)) problems.push('occupation');
+  if (o.incomeQuality !== undefined && !isValidIncomeQuality(o.incomeQuality)) problems.push('incomeQuality');
+  if (o.spendingProfile !== undefined && !isValidSpendingProfile(o.spendingProfile)) problems.push('spendingProfile');
   return problems;
+}
+
+const EMPLOYMENT_TYPES = ['salaried', 'gig', 'self-employed', 'micro-business'];
+const OBLIGATION_KINDS = ['rent', 'utilities', 'installment', 'other'];
+
+function isValidOccupation(v: unknown): boolean {
+  if (!v || typeof v !== 'object') return false;
+  const o = v as Record<string, unknown>;
+  return (
+    typeof o.occupation === 'string' &&
+    typeof o.sector === 'string' &&
+    typeof o.employmentType === 'string' &&
+    EMPLOYMENT_TYPES.includes(o.employmentType) &&
+    isFiniteNum(o.tenureMonths) &&
+    (o.tenureMonths as number) >= 0 &&
+    o.selfDeclared === true
+  );
+}
+
+function isValidIncomeQuality(v: unknown): boolean {
+  if (!v || typeof v !== 'object') return false;
+  const o = v as Record<string, unknown>;
+  return isFiniteNum(o.variationCoefficient) && isFiniteNum(o.sourceCount) && isFiniteNum(o.regularityRatio) && typeof o.seasonal === 'boolean';
+}
+
+function isValidSpendingProfile(v: unknown): boolean {
+  if (!v || typeof v !== 'object') return false;
+  const o = v as Record<string, unknown>;
+  if (!['essentialsRatio', 'expenseVolatility', 'bufferDays', 'savingsRate'].every((k) => isFiniteNum(o[k]))) return false;
+  if (!Array.isArray(o.obligations)) return false;
+  return o.obligations.every((e) => {
+    if (!e || typeof e !== 'object') return false;
+    const ob = e as Record<string, unknown>;
+    return typeof ob.label === 'string' && typeof ob.kind === 'string' && OBLIGATION_KINDS.includes(ob.kind) && isFiniteNum(ob.monthlyAmount) && isFiniteNum(ob.monthsObserved);
+  });
 }
 
 /** True when `c` is a non-empty array of well-formed consent receipts. */
@@ -245,8 +315,12 @@ export function verifyPassport(
     //  · identity present but no Tier 1 receipt → data riding without consent → fail;
     //  · an expired tier grant degrades only that block (lapsedTiers), never the passport.
     if (passport.consent !== undefined) {
-      if (passport.holder && !passport.consent.some((c) => c.tier === 1)) {
-        return { valid: false, tampered: false, reasons: ['Identity present without a Tier 1 consent receipt.'] };
+      const hasGrant = (tier: ConsentTier) => passport.consent!.some((c) => c.tier === tier);
+      if ((passport.holder || passport.occupation) && !hasGrant(1)) {
+        return { valid: false, tampered: false, reasons: ['Tier 1 block (identity or occupation) present without a Tier 1 consent receipt.'] };
+      }
+      if (passport.spendingProfile && !hasGrant(2)) {
+        return { valid: false, tampered: false, reasons: ['Tier 2 spending block present without a Tier 2 consent receipt.'] };
       }
       const lapsedTiers = passport.consent
         .filter((c) => Date.parse(c.expiresAt) < now.getTime() - CLOCK_SKEW_MS)

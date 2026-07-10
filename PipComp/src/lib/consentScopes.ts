@@ -129,10 +129,13 @@ type RowBuilder = (d: PassportDraft) => ConsentScopeRow[];
  * to the identity tier ('tier1'). Literal key order = display order.
  *
  * `consent` is excluded: it is the receipt of what is shared, not itself a shared
- * aggregate — it records the very grants this ceremony produces. Every other field
+ * aggregate — it records the very grants this ceremony produces. The Brief P richer
+ * blocks (occupation/incomeQuality/spendingProfile) are also excluded here: they are
+ * disclosed by their own tiered ceremony sections when attached (see buildConsentReceipts
+ * and the ceremony's Tier 1/2 rows), not by the Tier 0 aggregate list. Every other field
  * stays covered by the drift guard (adding one breaks the build until disclosed).
  */
-const TIER0_DISCLOSURE: { [K in keyof Omit<PassportDraft, 'consent'>]-?: RowBuilder | 'mergedIntoScore' | 'tier1' } = {
+const TIER0_DISCLOSURE: { [K in keyof Omit<PassportDraft, 'consent' | 'occupation' | 'incomeQuality' | 'spendingProfile'>]-?: RowBuilder | 'mergedIntoScore' | 'tier1' } = {
   score: (d) => [{ key: 'score', label: 'Credit score & band', detail: `${Math.round(d.score)} · ${d.band}` }],
   band: 'mergedIntoScore',
   factorSummary: (d) => [
@@ -202,7 +205,7 @@ const TIER0_DISCLOSURE: { [K in keyof Omit<PassportDraft, 'consent'>]-?: RowBuil
 
 /** Tier 0 — the aggregate fields every passport carries, with their real values. */
 export function tier0ScopeRows(draft: PassportDraft): ConsentScopeRow[] {
-  return (Object.keys(TIER0_DISCLOSURE) as (keyof Omit<PassportDraft, 'consent'>)[]).flatMap((k) => {
+  return (Object.keys(TIER0_DISCLOSURE) as (keyof Omit<PassportDraft, 'consent' | 'occupation' | 'incomeQuality' | 'spendingProfile'>)[]).flatMap((k) => {
     const builder = TIER0_DISCLOSURE[k];
     return typeof builder === 'function' ? builder(draft) : [];
   });
