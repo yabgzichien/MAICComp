@@ -41,7 +41,15 @@ function repaymentStatusLabel(s: RepaymentStatus): string {
   return 'Scheduled';
 }
 
-export function LoansScreen({ onBack, onOpenKyc = () => {} }: { onBack: () => void; onOpenKyc?: () => void }) {
+export function LoansScreen({
+  onBack,
+  onOpenKyc = () => {},
+  onOpenPassport = () => {},
+}: {
+  onBack: () => void;
+  onOpenKyc?: () => void;
+  onOpenPassport?: () => void;
+}) {
   const insets = useSafeAreaInsets();
   const { profile, score, dataConfidence } = useCreditProfile();
   const { kyc, loanProducts, loanApplications, repayments, repaymentSummary, applyForLoan, recordRepayment, reportDefault } =
@@ -374,6 +382,25 @@ export function LoansScreen({ onBack, onOpenKyc = () => {} }: { onBack: () => vo
             <Text style={styles.muted}>
               Track record so far: {repaymentSummary.onTime} of {repaymentSummary.total} repayments on time.
             </Text>
+          </>
+        )}
+
+        {/* 3.5 Post-disbursement check-in (Brief S) */}
+        {activeApplications.length > 0 && (
+          <>
+            <Eyebrow style={{ marginTop: 22, marginBottom: 10 }}>Keep your lender in the loop</Eyebrow>
+            <Card style={{ padding: 16 }}>
+              <Text style={styles.fieldLabel}>Share a check-in</Text>
+              <Text style={styles.muted}>
+                If you granted ongoing monitoring when you minted your passport, re-sharing a fresh one lets your
+                lender see your updated numbers before a repayment is ever missed — the same signed passport, just
+                current.
+              </Text>
+              <Pressable onPress={onOpenPassport} style={[styles.applyBtn, { backgroundColor: colors.accent }]}>
+                <Icon name="trending" size={16} color={colors.onAccent} />
+                <Text style={styles.applyBtnText}>Share a check-in</Text>
+              </Pressable>
+            </Card>
           </>
         )}
 

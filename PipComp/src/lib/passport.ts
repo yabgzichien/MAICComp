@@ -95,8 +95,9 @@ export interface PassportSpendingProfile {
   obligations: PassportObligation[];
 }
 
-/** Consent tiers: 0 = aggregates, 1 = identity/occupation, 2 = spending-behaviour profile. */
-export type ConsentTier = 0 | 1 | 2;
+/** Consent tiers: 0 = aggregates, 1 = identity/occupation, 2 = spending-behaviour profile,
+ *  3 = post-disbursement monitoring (re-share updated aggregates while a loan is active). */
+export type ConsentTier = 0 | 1 | 2 | 3;
 
 /**
  * A signed consent receipt (Brief I stretch): proof, embedded in the passport, of exactly
@@ -341,7 +342,7 @@ function isValidConsent(c: unknown): c is ConsentReceipt[] {
   return c.every((e) => {
     if (!e || typeof e !== 'object') return false;
     const r = e as Record<string, unknown>;
-    if (r.tier !== 0 && r.tier !== 1 && r.tier !== 2) return false;
+    if (r.tier !== 0 && r.tier !== 1 && r.tier !== 2 && r.tier !== 3) return false;
     if (!Array.isArray(r.scope) || r.scope.length === 0 || !r.scope.every((s) => typeof s === 'string' && s.length > 0)) return false;
     if (typeof r.grantedAt !== 'string' || Number.isNaN(Date.parse(r.grantedAt))) return false;
     if (typeof r.expiresAt !== 'string' || Number.isNaN(Date.parse(r.expiresAt))) return false;

@@ -35,13 +35,16 @@ import { deriveTrustRows, type TrustRowState } from '../lib/trustPanel';
 import {
   fileApplication,
   readApplications,
+  recordCheckIn,
   resolveApplication,
+  watchlistApplications,
   writeApplications,
   type ApplicationRecord,
   type DeclaredPurpose,
   type FileApplicationInput,
   type PurposeCategory,
 } from '../lib/applications';
+import { diffCheckIn, monitoringStatus, type EarlyWarningFlag, type MonitoringStatus } from '../lib/earlyWarning';
 import { DEMO_APPLICANTS } from './demoApplicants';
 import QueueRail from './QueueRail';
 import { InfoButton, InfoModal, MiniBar, SectionLabel } from './shared';
@@ -690,7 +693,53 @@ const APP_STATUS_STYLE: Record<ApplicationRecord['status'], { label: string; col
 
 /** The selected application's state + resolution controls (Brief O). The override
  *  matrix is enforced in lib/applications.ts; this card only offers legal moves. */
-function ApplicationCard({ p, app, onResolve }: { p: Palette; app: ApplicationRecord; onResolve: (outcome: 'approved' | 'declined', rationale: string) => void }) {
+const MONITORING_LABEL: Record<MonitoringStatus, string> = {
+  active: 'Monitoring active',
+  expired: 'Monitoring expired',
+  'not-granted': 'Monitoring not granted',
+};
+const MONITORING_COLOR = (p: Palette, s: MonitoringStatus): string => (s === 'active' ? p.primary : s === 'expired' ? p.red : p.ink3);
+
+const FLAG_SEVERITY_COLOR = (p: Palette, severity: 'watch' | 'critical'): string => (severity === 'critical' ? p.red : '#a3791f');
+
+/** Monitoring status + check-in history (Brief S). Only rendered for an approved loan whose
+ *  currently-loaded passport lets us read its own consent receipts. */
+function MonitoringSection({ p, app, passport }: { p: Palette; app: ApplicationRecord; passport: CreditPassport | null }) {
+  if (!passport) return null;
+  const status = monitoringStatus(passport);
+  const checkIns = app.checkIns ?? [];
+  return (
+    <div style={{ marginTop: 8, borderTop: `1px solid ${p.hairline}`, paddingTop: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+        <span style={{ width: 7, height: 7, borderRadius: '50%', background: MONITORING_COLOR(p, status), display: 'inline-block' }} />
+        <span style={{ fontFamily: FONT.ui, fontSize: 10, fontWeight: 700, color: MONITORING_COLOR(p, status) }}>{MONITORING_LABEL[status]}</span>
+        {checkIns.length > 0 && <span style={{ fontFamily: FONT.num, fontSize: 9.5, color: p.ink3, marginLeft: 'auto' }}>{checkIns.length} check-in(s)</span>}
+      </div>
+      {checkIns.length === 0 ? (
+        <p style={{ fontFamily: FONT.ui, fontSize: 9.5, color: p.ink3, lineHeight: 1.5 }}>
+          No check-ins yet — verifying a fresh passport with this subject records one automatically.
+        </p>
+      ) : (
+        [...checkIns].reverse().map((c, i) => (
+          <div key={i} style={{ padding: '5px 0', borderTop: i > 0 ? `1px solid ${p.hairline}` : 'none' }}>
+            <p style={{ fontFamily: FONT.mono, fontSize: 8.5, color: p.ink3 }}>{c.at.slice(0, 16).replace('T', ' ')}</p>
+            {c.flags.length === 0 ? (
+              <p style={{ fontFamily: FONT.ui, fontSize: 9.5, color: p.ink2 }}>Clean — no flags</p>
+            ) : (
+              c.flags.map((f, j) => (
+                <p key={j} style={{ fontFamily: FONT.ui, fontSize: 9.5, color: FLAG_SEVERITY_COLOR(p, f.severity), lineHeight: 1.5 }}>
+                  ● {f.evidence}
+                </p>
+              ))
+            )}
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+function ApplicationCard({ p, app, passport, onResolve }: { p: Palette; app: ApplicationRecord; passport?: CreditPassport | null; onResolve: (outcome: 'approved' | 'declined', rationale: string) => void }) {
   const [rationale, setRationale] = useState('');
   const s = APP_STATUS_STYLE[app.status];
   const canResolve = rationale.trim().length > 0;
@@ -742,6 +791,8 @@ function ApplicationCard({ p, app, onResolve }: { p: Palette; app: ApplicationRe
           Resolved <strong>{app.resolution.outcome}</strong> by {app.resolution.officer}: “{app.resolution.rationale}”
         </p>
       )}
+
+      {app.status === 'approved' && <MonitoringSection p={p} app={app} passport={passport ?? null} />}
 
       <div style={{ marginTop: 8, borderTop: `1px solid ${p.hairline}`, paddingTop: 6 }}>
         {app.audit.map((e, i) => (
@@ -869,7 +920,7 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
         )}
       </div>
 
-      {selectedApp && onResolve && <ApplicationCard p={p} app={selectedApp} onResolve={onResolve} />}
+      {selectedApp && onResolve && <ApplicationCard p={p} app={selectedApp} passport={passport} onResolve={onResolve} />}
 
       {decision ? (
         <>
@@ -1296,10 +1347,27 @@ export default function Console() {
     ...(declared ? { purpose: declared } : {}),
   });
 
-  /** File a successful verify+assessment as an application (deduped) and select it. */
+  /** File a successful verify+assessment as an application (deduped) and select it. Subject-
+   *  matching (Brief S): a passport whose subject matches an already-approved loan is a
+   *  check-in against that loan, not a new application — filed regardless of amount. */
   const fileAndSelect = (codeUsed: string, next: ViewState) => {
     if (next.status !== 'valid' || !next.decision) return;
     const amountNum = parseAmount(amount);
+
+    const existingLoan = apps.find((a) => a.status === 'approved' && a.subject === next.passport.subject);
+    if (existingLoan) {
+      let baseline: CreditPassport | null = null;
+      try {
+        baseline = parsePassportCode(existingLoan.passportCode).passport;
+      } catch {
+        baseline = null; // malformed stored code — file the check-in with no flags rather than block it
+      }
+      const flags: EarlyWarningFlag[] = baseline ? diffCheckIn(baseline, next.passport).flags : [];
+      syncApps(recordCheckIn(apps, existingLoan.id, codeUsed, flags));
+      setSelectedAppId(existingLoan.id);
+      return;
+    }
+
     const res = fileApplication(apps, filingInput(codeUsed, next.passport, next.decision, amountNum, purpose));
     if (res.filed) syncApps(res.apps);
     const match = res.apps.find((a) => a.subject === next.passport.subject && a.requestedAmount === amountNum);

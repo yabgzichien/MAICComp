@@ -238,7 +238,11 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
         />
       )}
       {screen === 'loans' && (
-        <LoansScreen onBack={() => setScreen('credit')} onOpenKyc={() => setScreen('kyc')} />
+        <LoansScreen
+          onBack={() => setScreen('credit')}
+          onOpenKyc={() => setScreen('kyc')}
+          onOpenPassport={() => setScreen('passport')}
+        />
       )}
       {screen === 'passport' && (
         <PassportScreen onBack={() => setScreen('credit')} onOpenKyc={() => setScreen('kyc')} />

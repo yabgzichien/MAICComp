@@ -322,6 +322,21 @@ export function tier2ScopeRows(draft: PassportDraft): ConsentScopeRow[] {
   ];
 }
 
+/**
+ * Tier 3 — post-disbursement monitoring (Brief S). Not data carried inside the passport (no
+ * new block): a receipt-only grant that "the borrower will re-share updated aggregates while
+ * this loan is active", with its own expiry set from the loan's tenor rather than the fixed
+ * validity windows below. Pure — the row is the same whether shown in the ceremony preview or
+ * signed into the receipt.
+ */
+export function monitoringScopeRow(tenorMonths: number): ConsentScopeRow {
+  return {
+    key: 'monitoring',
+    label: 'Ongoing check-ins',
+    detail: `Share updated aggregates while this loan is active (up to ${tenorMonths} months)`,
+  };
+}
+
 // The passport itself is valid 30 days; aggregate consent expires with it, while a verified
 // identity grant is longer-lived (a year) — "identity long-lived, spending profile short"
 // (privacy-modes spec). Short-lived grants stand in for a revocation registry.
@@ -331,15 +346,24 @@ const TIER1_VALIDITY_MS = 365 * DAY_MS;
 // Behavioural spending data is the most sensitive tier, so its grant is the shortest-lived —
 // "identity long-lived, spending profile short" (privacy-modes spec). It expires with the passport.
 const TIER2_VALIDITY_MS = 30 * DAY_MS;
+/** Average month length used to turn a loan's tenor (whole months) into a Tier 3 expiry offset. */
+const MONTH_MS = 30.44 * DAY_MS;
 
 /**
  * The signed consent receipts for a confirmed ceremony (Brief I stretch). Each tier's scope
  * is the list of field keys the draft actually carries, so the receipt can never disagree
  * with the disclosed rows. A Tier 1 receipt is produced exactly when the draft carries a holder
  * or occupation block, and a Tier 2 receipt when it carries a spending block — which is what
- * buildPassport requires before it will attach those blocks.
+ * buildPassport requires before it will attach those blocks. `monitoring` (Brief S) is separate
+ * from the draft: it is never a passport block, just a Tier 3 grant with its own expiry derived
+ * from the loan's tenor, produced only when the ceremony is minting against an active loan and
+ * the borrower left the monitoring toggle on.
  */
-export function buildConsentReceipts(draft: PassportDraft, now: Date = new Date()): ConsentReceipt[] {
+export function buildConsentReceipts(
+  draft: PassportDraft,
+  now: Date = new Date(),
+  monitoring?: { tenorMonths: number },
+): ConsentReceipt[] {
   const grantedAt = now.toISOString();
   const receipts: ConsentReceipt[] = [
     { tier: 0, scope: tier0ScopeRows(draft).map((r) => r.key), grantedAt, expiresAt: new Date(now.getTime() + TIER0_VALIDITY_MS).toISOString() },
@@ -349,6 +373,14 @@ export function buildConsentReceipts(draft: PassportDraft, now: Date = new Date(
   }
   if (draft.spendingProfile) {
     receipts.push({ tier: 2, scope: tier2ScopeRows(draft).map((r) => r.key), grantedAt, expiresAt: new Date(now.getTime() + TIER2_VALIDITY_MS).toISOString() });
+  }
+  if (monitoring) {
+    receipts.push({
+      tier: 3,
+      scope: [monitoringScopeRow(monitoring.tenorMonths).key],
+      grantedAt,
+      expiresAt: new Date(now.getTime() + monitoring.tenorMonths * MONTH_MS).toISOString(),
+    });
   }
   return receipts;
 }

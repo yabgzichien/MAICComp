@@ -37,10 +37,13 @@ export function PassportCeremonyScreen({
   tier0,
   tier1,
   tier2,
+  tier3,
   includeIdentity,
   onToggleIdentity,
   includeSpending,
   onToggleSpending,
+  includeMonitoring,
+  onToggleMonitoring,
   onConfirm,
   onBack,
   minting,
@@ -49,10 +52,14 @@ export function PassportCeremonyScreen({
   tier0: ConsentScopeRow[];
   tier1: ConsentScopeRow[];
   tier2: ConsentScopeRow[];
+  /** Present only when the ceremony is minting against an active loan (Brief S). */
+  tier3: ConsentScopeRow | null;
   includeIdentity: boolean;
   onToggleIdentity: (on: boolean) => void;
   includeSpending: boolean;
   onToggleSpending: (on: boolean) => void;
+  includeMonitoring: boolean;
+  onToggleMonitoring: (on: boolean) => void;
   onConfirm: () => void;
   onBack: () => void;
   minting: boolean;
@@ -61,6 +68,7 @@ export function PassportCeremonyScreen({
   const insets = useSafeAreaInsets();
   const hasIdentity = tier1.length > 0;
   const hasSpending = tier2.length > 0;
+  const hasMonitoring = tier3 !== null;
 
   return (
     <View style={styles.root}>
@@ -151,6 +159,31 @@ export function PassportCeremonyScreen({
               {includeSpending
                 ? 'The most detailed tier — your spending mix and the recurring obligations behind your debt-service figure. Short-lived grant; toggle off to keep it private.'
                 : 'Excluded — the lender sees your debt-service total but not the itemised spending behind it.'}
+            </Text>
+          </Card>
+        )}
+
+        {hasMonitoring && tier3 && (
+          <Card style={styles.tierCard}>
+            <View style={styles.tierHeader}>
+              <Text style={styles.tierEyebrow}>Tier 3 · Ongoing monitoring</Text>
+              <Pressable
+                onPress={() => onToggleMonitoring(!includeMonitoring)}
+                accessibilityRole="switch"
+                accessibilityState={{ checked: includeMonitoring }}
+                aria-checked={includeMonitoring}
+                accessibilityLabel="Include ongoing monitoring"
+                hitSlop={8}
+                style={[styles.switchTrack, includeMonitoring && styles.switchTrackOn]}
+              >
+                <View style={styles.switchThumb} />
+              </Pressable>
+            </View>
+            <ScopeRows rows={[tier3]} dimmed={!includeMonitoring} />
+            <Text style={styles.identityNote}>
+              {includeMonitoring
+                ? 'Lets the lender ask for a fresh check-in while your loan is active — you choose when to share one. Toggle off to skip ongoing monitoring.'
+                : 'Excluded — the lender only sees this passport, never a check-in, unless you regenerate with this on.'}
             </Text>
           </Card>
         )}

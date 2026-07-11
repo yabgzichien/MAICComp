@@ -5,7 +5,7 @@
 // orderQueue rule), because the longest-waiting file is the officer's next job.
 
 import { FONT, type Palette } from './tokens';
-import { orderQueue, type ApplicationRecord, type ApplicationStatus } from '../lib/applications';
+import { orderQueue, watchlistApplications, type ApplicationRecord, type ApplicationStatus } from '../lib/applications';
 import { formatAgo } from '../lib/presentment';
 
 const QUEUES: { status: ApplicationStatus; label: string }[] = [
@@ -64,6 +64,49 @@ export default function QueueRail({
           </button>
         </div>
       )}
+
+      {(() => {
+        const watchlist = watchlistApplications(apps);
+        if (watchlist.length === 0) return null;
+        return (
+          <div style={{ padding: '10px 8px 4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px', marginBottom: 5 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 700, color: '#c0392b', letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#c0392b', display: 'inline-block' }} />
+                Watchlist
+              </span>
+              <span style={{ fontFamily: FONT.num, fontSize: 10, fontWeight: 700, color: '#c0392b' }}>{watchlist.length}</span>
+            </div>
+            {watchlist.map((a) => {
+              const selected = a.id === selectedId;
+              const latest = a.checkIns![a.checkIns!.length - 1];
+              const critical = latest.flags.some((f) => f.severity === 'critical');
+              return (
+                <button
+                  key={a.id}
+                  onClick={() => onSelect(a)}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '7px 9px',
+                    marginBottom: 4,
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    border: selected ? '1.5px solid #c0392b' : '1px solid #f0c4bd',
+                    background: selected ? '#fdecea' : '#fff8f7',
+                  }}
+                >
+                  <p style={{ fontFamily: FONT.ui, fontSize: 11, fontWeight: 700, color: p.ink1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.applicantLabel}</p>
+                  <p style={{ fontFamily: FONT.ui, fontSize: 9.5, color: critical ? '#c0392b' : '#a3791f', marginTop: 2, fontWeight: 600 }}>
+                    {latest.flags.length} flag(s){critical ? ' · critical' : ''}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {QUEUES.map(({ status, label }) => {
         const queue = orderQueue(apps, status);

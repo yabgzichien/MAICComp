@@ -67,7 +67,7 @@ function stackingRow(priors: Presentment[], windowHours: number, now: Date): Tru
   return { key: 'stacking', label, state: priors.length >= STACKING_FAIL_COUNT ? 'fail' : 'warn', detail };
 }
 
-const TIER_NAME: Record<ConsentTier, string> = { 0: 'Tier 0 aggregates', 1: 'Tier 1 identity', 2: 'Tier 2 spending' };
+const TIER_NAME: Record<ConsentTier, string> = { 0: 'Tier 0 aggregates', 1: 'Tier 1 identity', 2: 'Tier 2 spending', 3: 'Tier 3 monitoring' };
 
 /**
  * Consent receipts (Brief I stretch). A passport that carries them lets the officer prove

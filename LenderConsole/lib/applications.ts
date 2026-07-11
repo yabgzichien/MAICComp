@@ -8,6 +8,7 @@
 // APPROVE an engine decline (soften). resolveApplication throws on violations.
 
 import type { Decision } from './loans';
+import type { EarlyWarningFlag } from './earlyWarning';
 
 export type ApplicationStatus = 'new' | 'referred' | 'approved' | 'declined';
 
@@ -22,6 +23,14 @@ export interface AuditEntry {
   at: string;
   action: string;
   detail?: string;
+}
+
+/** One post-disbursement check-in (Brief S): a fresh, re-verified passport diffed against the
+ *  loan's baseline, with the flags that diff produced (empty when the check-in was clean). */
+export interface CheckIn {
+  at: string;
+  passportCode: string;
+  flags: EarlyWarningFlag[];
 }
 
 export interface ApplicationRecord {
@@ -45,6 +54,9 @@ export interface ApplicationRecord {
   notes: string[];
   /** Append-only. Entries are never edited or removed. */
   audit: AuditEntry[];
+  /** Post-disbursement check-ins (Brief S), oldest first. Absent/empty on applications that
+   *  predate monitoring or have never been re-verified. */
+  checkIns?: CheckIn[];
 }
 
 export interface FileApplicationInput {
@@ -149,6 +161,41 @@ export function addNote(apps: ApplicationRecord[], id: string, note: string, now
   return apps.map((a) =>
     a.id === id ? { ...a, notes: [...a.notes, note], audit: [...a.audit, { at, action: 'note', detail: note }] } : a,
   );
+}
+
+/**
+ * Record a post-disbursement check-in (Brief S): appends the re-verified passport code and its
+ * flags to the application's check-in history, audit-trailed. Never changes `status` or
+ * `resolution` — a check-in informs the officer, it never re-decides the loan.
+ */
+export function recordCheckIn(
+  apps: ApplicationRecord[],
+  id: string,
+  passportCode: string,
+  flags: EarlyWarningFlag[],
+  now: Date = new Date(),
+): ApplicationRecord[] {
+  const at = now.toISOString();
+  const checkIn: CheckIn = { at, passportCode, flags };
+  const detail =
+    flags.length === 0
+      ? 'clean — no flags'
+      : `${flags.length} flag(s): ${flags.map((f) => `${f.key} (${f.severity})`).join(', ')}`;
+  return apps.map((a) =>
+    a.id === id
+      ? { ...a, checkIns: [...(a.checkIns ?? []), checkIn], audit: [...a.audit, { at, action: 'check-in', detail }] }
+      : a,
+  );
+}
+
+/** Approved applications whose most recent check-in still carries active flags — the Watchlist
+ *  queue (Brief S), a filtered view of Approved rather than a fifth status value. */
+export function watchlistApplications(apps: ApplicationRecord[]): ApplicationRecord[] {
+  return apps.filter((a) => {
+    if (a.status !== 'approved' || !a.checkIns || a.checkIns.length === 0) return false;
+    const latest = a.checkIns[a.checkIns.length - 1];
+    return latest.flags.length > 0;
+  });
 }
 
 /**

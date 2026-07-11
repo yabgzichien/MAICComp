@@ -13,9 +13,10 @@ import { Card, TopBar } from '../components/ui';
 import { getOrCreateKeypair } from '../crypto/keys';
 import { issuerSign } from '../crypto/issuer';
 import { buildPassport, type CreditPassport } from '../lib/passport';
-import { buildConsentReceipts, buildPassportDraft, tier0ScopeRows, tier1ScopeRows, tier2ScopeRows } from '../lib/consentScopes';
+import { buildConsentReceipts, buildPassportDraft, monitoringScopeRow, tier0ScopeRows, tier1ScopeRows, tier2ScopeRows } from '../lib/consentScopes';
 import { useCreditProfile } from '../state/useCreditProfile';
 import { useAppData } from '../state/store';
+import { DEFAULT_PRODUCTS } from '../lib/loans';
 import { PassportCeremonyScreen } from './PassportCeremonyScreen';
 import { colors, numFont, uiFont } from '../theme';
 
@@ -30,11 +31,23 @@ function formatDate(iso: string): string {
 export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () => void; onOpenKyc?: () => void }) {
   const insets = useSafeAreaInsets();
   const { profile, score, dataConfidence, coverage, momentum, coachInput, incomeQuality, spendingProfile, obligations } = useCreditProfile();
-  const { kyc, occupation } = useAppData();
+  const { kyc, occupation, loanApplications, loanProducts } = useAppData();
 
   const [phase, setPhase] = useState<'consent' | 'minted'>('consent');
   const [includeIdentity, setIncludeIdentity] = useState(true);
   const [includeSpending, setIncludeSpending] = useState(true);
+  const [includeMonitoring, setIncludeMonitoring] = useState(true);
+
+  // Tier 3 monitoring (Brief S): offered whenever the borrower has an active loan, with the
+  // grant's expiry drawn from that loan's own tenor. No active loan → no monitoring section,
+  // the honest absence (mirrors momentum's own minimum-history floor pattern).
+  const activeLoanTenorMonths = useMemo(() => {
+    const active = loanApplications.find((a) => a.status === 'active');
+    if (!active) return null;
+    const products = loanProducts.length > 0 ? loanProducts : DEFAULT_PRODUCTS;
+    const product = products.find((p) => p.id === active.productId);
+    return product?.tenorMonths ?? null;
+  }, [loanApplications, loanProducts]);
   const [minting, setMinting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [passport, setPassport] = useState<CreditPassport | null>(null);
@@ -73,6 +86,10 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
   const tier0 = useMemo(() => tier0ScopeRows(previewDraft), [previewDraft]);
   const tier1 = useMemo(() => tier1ScopeRows(previewDraft), [previewDraft]);
   const tier2 = useMemo(() => tier2ScopeRows(previewDraft), [previewDraft]);
+  const tier3 = useMemo(
+    () => (activeLoanTenorMonths != null ? monitoringScopeRow(activeLoanTenorMonths) : null),
+    [activeLoanTenorMonths]
+  );
 
   // Mint — only reachable through the ceremony's explicit confirm.
   const mint = useCallback(async () => {
@@ -82,9 +99,14 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
     try {
       const keypair = await getOrCreateKeypair();
       const draft = buildPassportDraft({ ...draftArgs, includeIdentity, includeSpending });
-      // Signed consent receipts (Brief I stretch + Brief P): Tier 0 always, Tier 1 when identity or
-      // occupation is shared, Tier 2 when the spending profile is shared.
-      const consent = buildConsentReceipts(draft);
+      // Signed consent receipts (Brief I stretch + Brief P + Brief S): Tier 0 always, Tier 1 when
+      // identity or occupation is shared, Tier 2 when the spending profile is shared, Tier 3 when
+      // minting against an active loan with the monitoring toggle left on.
+      const consent = buildConsentReceipts(
+        draft,
+        new Date(),
+        includeMonitoring && activeLoanTenorMonths != null ? { tenorMonths: activeLoanTenorMonths } : undefined,
+      );
       const result = await buildPassport(
         { ...draft, subject: keypair.publicKeyHex, consent },
         keypair.sign.bind(keypair),
@@ -104,7 +126,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
     } finally {
       setMinting(false);
     }
-  }, [draftArgs, includeIdentity, includeSpending]);
+  }, [draftArgs, includeIdentity, includeSpending, includeMonitoring, activeLoanTenorMonths]);
 
   // Regenerate discards the minted result and routes back through the ceremony.
   const regenerate = useCallback(() => {
@@ -167,10 +189,13 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
         tier0={tier0}
         tier1={tier1}
         tier2={tier2}
+        tier3={tier3}
         includeIdentity={includeIdentity}
         onToggleIdentity={setIncludeIdentity}
         includeSpending={includeSpending}
         onToggleSpending={setIncludeSpending}
+        includeMonitoring={includeMonitoring}
+        onToggleMonitoring={setIncludeMonitoring}
         onConfirm={mint}
         onBack={onBack}
         minting={minting}
