@@ -56,6 +56,7 @@ import type { CreditBand } from '../lib/creditScore';
 import { budgetHash, monthKey } from '../lib/budget';
 import { computeCoverage, type Coverage } from '../lib/coverage';
 import { getKyc, setKyc, type KycIdentity } from '../db/kycRepo';
+import { getOccupation, setOccupation as dbSetOccupation, type Occupation } from '../db/occupationRepo';
 import { getMeta, setMeta } from '../db/metaRepo';
 import { MockEkycProvider } from '../ekyc/mock';
 import type { EkycResult } from '../ekyc/types';
@@ -113,6 +114,10 @@ interface AppData {
   kyc: KycIdentity | null;
   /** Run eKYC for the given name + IC; on success persists + binds the verified identity. */
   verifyIdentity: (fullName: string, nric: string) => Promise<EkycResult>;
+  /** Self-declared occupation context (Brief P), or null when not yet provided. */
+  occupation: Occupation | null;
+  /** Persist the borrower's self-declared occupation context. */
+  saveOccupation: (o: Occupation) => Promise<void>;
   /** Whether the one-time setup has been completed (with or without eKYC). */
   onboardingComplete: boolean;
   /** Mark the one-time setup complete. */
@@ -184,6 +189,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     total: 0,
   });
   const [kyc, setKycState] = useState<KycIdentity | null>(null);
+  const [occupation, setOccupationState] = useState<Occupation | null>(null);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
 
   const refreshAll = useCallback(async () => {
@@ -205,6 +211,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         getKyc(),
         getMeta(ONBOARDING_KEY),
       ]);
+    setOccupationState(await getOccupation());
     setKycState(kycRow);
     setOnboardingComplete(onboardingFlag === 'true');
     setCategories(cats);
@@ -541,6 +548,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     return result;
   }, []);
 
+  const saveOccupation = useCallback(async (o: Occupation): Promise<void> => {
+    await dbSetOccupation(o);
+    setOccupationState(o);
+  }, []);
+
   const recordRepayment = useCallback(
     async (repaymentId: string, onTime: boolean) => {
       await dbMarkRepaymentPaid(repaymentId, onTime);
@@ -563,6 +575,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const value: AppData = {
     kyc,
     verifyIdentity,
+    occupation,
+    saveOccupation,
     onboardingComplete,
     completeOnboarding,
     ready,

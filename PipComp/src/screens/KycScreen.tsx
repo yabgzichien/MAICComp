@@ -13,13 +13,42 @@ import { llmErrorMessage } from '../llm';
 import type { IdentityExtraction } from '../llm/ekycPrompt';
 import { scanIdentityImage } from '../ekyc/scan';
 import { useAppData } from '../state/store';
+import type { EmploymentType } from '../db/occupationRepo';
 import { colors, uiFont } from '../theme';
 import { DocumentScanScreen } from './DocumentScanScreen';
 
+const EMPLOYMENT_OPTIONS: { value: EmploymentType; label: string }[] = [
+  { value: 'salaried', label: 'Salaried' },
+  { value: 'gig', label: 'Gig' },
+  { value: 'self-employed', label: 'Self-employed' },
+  { value: 'micro-business', label: 'Micro-business' },
+];
+
 export function KycScreen({ onBack, onDone }: { onBack: () => void; onDone?: () => void }) {
   const insets = useSafeAreaInsets();
-  const { kyc, verifyIdentity } = useAppData();
+  const { kyc, verifyIdentity, occupation, saveOccupation } = useAppData();
   const finish = onDone ?? onBack;
+
+  // Self-declared occupation (Brief P) — captured once identity is verified, pre-filled if set.
+  const [occ, setOcc] = useState(occupation?.occupation ?? '');
+  const [sector, setSector] = useState(occupation?.sector ?? '');
+  const [employmentType, setEmploymentType] = useState<EmploymentType | null>(occupation?.employmentType ?? null);
+  const [tenure, setTenure] = useState(occupation?.tenureMonths != null ? String(occupation.tenureMonths) : '');
+  const [savingOcc, setSavingOcc] = useState(false);
+
+  async function handleFinish() {
+    const tenureMonths = Math.max(0, Math.round(Number(tenure) || 0));
+    // Save only a complete declaration; a blank form just proceeds (occupation is optional, Tier 1).
+    if (occ.trim() && sector.trim() && employmentType) {
+      setSavingOcc(true);
+      try {
+        await saveOccupation({ occupation: occ.trim(), sector: sector.trim(), employmentType, tenureMonths });
+      } finally {
+        setSavingOcc(false);
+      }
+    }
+    finish();
+  }
 
   const [name, setName] = useState('');
   const [nric, setNric] = useState('');
@@ -92,19 +121,70 @@ export function KycScreen({ onBack, onDone }: { onBack: () => void; onDone?: () 
         </Card>
 
         {done && kyc ? (
-          <Card style={styles.successCard}>
-            <View style={styles.successHead}>
-              <View style={styles.checkCircle}>
-                <Icon name="check" size={14} color="#fff" stroke={2.6} />
+          <>
+            <Card style={styles.successCard}>
+              <View style={styles.successHead}>
+                <View style={styles.checkCircle}>
+                  <Icon name="check" size={14} color="#fff" stroke={2.6} />
+                </View>
+                <Text style={styles.successTitle}>Identity verified</Text>
               </View>
-              <Text style={styles.successTitle}>Identity verified</Text>
+              <Text style={styles.successName}>{kyc.fullName}</Text>
+              <Text style={styles.successSub}>{kyc.nricMasked} · {kyc.provider}</Text>
+            </Card>
+
+            <Eyebrow style={{ marginTop: 22, marginBottom: 6 }}>Work & income (optional)</Eyebrow>
+            <Text style={styles.occLede}>
+              Self-declared context a lender sees alongside your verified figures. Shared only under a
+              Tier 1 grant, and always labelled &ldquo;self-declared&rdquo; — never presented as verified.
+            </Text>
+
+            <TextInput
+              style={[styles.input, { marginTop: 12 }]}
+              placeholder="Occupation — e.g. Ride-hailing driver"
+              placeholderTextColor={colors.ink3}
+              value={occ}
+              onChangeText={setOcc}
+            />
+            <TextInput
+              style={[styles.input, { marginTop: 10 }]}
+              placeholder="Sector — e.g. Transport"
+              placeholderTextColor={colors.ink3}
+              value={sector}
+              onChangeText={setSector}
+            />
+
+            <Text style={styles.occFieldLabel}>Employment type</Text>
+            <View style={styles.chipRow}>
+              {EMPLOYMENT_OPTIONS.map((o) => {
+                const on = employmentType === o.value;
+                return (
+                  <Pressable
+                    key={o.value}
+                    onPress={() => setEmploymentType(o.value)}
+                    style={[styles.chip, on && styles.chipOn]}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: on }}
+                  >
+                    <Text style={[styles.chipText, on && styles.chipTextOn]}>{o.label}</Text>
+                  </Pressable>
+                );
+              })}
             </View>
-            <Text style={styles.successName}>{kyc.fullName}</Text>
-            <Text style={styles.successSub}>{kyc.nricMasked} · {kyc.provider}</Text>
-            <Pressable style={styles.doneBtn} onPress={finish}>
-              <Text style={styles.doneBtnText}>Done</Text>
+
+            <TextInput
+              style={[styles.input, { marginTop: 14 }]}
+              placeholder="Months in this work — e.g. 18"
+              placeholderTextColor={colors.ink3}
+              keyboardType="number-pad"
+              value={tenure}
+              onChangeText={setTenure}
+            />
+
+            <Pressable style={styles.doneBtn} onPress={handleFinish} disabled={savingOcc}>
+              {savingOcc ? <ActivityIndicator color={colors.onAccent} /> : <Text style={styles.doneBtnText}>Done</Text>}
             </Pressable>
-          </Card>
+          </>
         ) : (
           <>
             <View style={styles.scanRow}>
@@ -207,6 +287,18 @@ const styles = StyleSheet.create({
   successTitle: { fontFamily: uiFont(700), fontSize: 16, color: colors.accentInk },
   successName: { fontFamily: uiFont(700), fontSize: 18, color: colors.ink, marginTop: 14 },
   successSub: { fontFamily: uiFont(500), fontSize: 13, color: colors.ink2, marginTop: 3 },
+
+  occLede: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink3, lineHeight: 17 },
+  occFieldLabel: { fontFamily: uiFont(600), fontSize: 12, color: colors.ink2, marginTop: 16, marginBottom: 8 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999,
+    backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line,
+  },
+  chipOn: { backgroundColor: colors.accentTint, borderColor: colors.accentSoft },
+  chipText: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2 },
+  chipTextOn: { color: colors.accentInk },
+
   doneBtn: { alignItems: 'center', justifyContent: 'center', height: 46, borderRadius: 999, backgroundColor: colors.accent, marginTop: 18 },
   doneBtnText: { fontFamily: uiFont(700), fontSize: 14.5, color: colors.onAccent },
 });

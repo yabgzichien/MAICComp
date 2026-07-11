@@ -36,8 +36,11 @@ function ScopeRows({ rows, dimmed = false }: { rows: ConsentScopeRow[]; dimmed?:
 export function PassportCeremonyScreen({
   tier0,
   tier1,
+  tier2,
   includeIdentity,
   onToggleIdentity,
+  includeSpending,
+  onToggleSpending,
   onConfirm,
   onBack,
   minting,
@@ -45,8 +48,11 @@ export function PassportCeremonyScreen({
 }: {
   tier0: ConsentScopeRow[];
   tier1: ConsentScopeRow[];
+  tier2: ConsentScopeRow[];
   includeIdentity: boolean;
   onToggleIdentity: (on: boolean) => void;
+  includeSpending: boolean;
+  onToggleSpending: (on: boolean) => void;
   onConfirm: () => void;
   onBack: () => void;
   minting: boolean;
@@ -54,6 +60,7 @@ export function PassportCeremonyScreen({
 }) {
   const insets = useSafeAreaInsets();
   const hasIdentity = tier1.length > 0;
+  const hasSpending = tier2.length > 0;
 
   return (
     <View style={styles.root}>
@@ -101,13 +108,13 @@ export function PassportCeremonyScreen({
         {hasIdentity && (
           <Card style={styles.tierCard}>
             <View style={styles.tierHeader}>
-              <Text style={styles.tierEyebrow}>Tier 1 · Verified identity</Text>
+              <Text style={styles.tierEyebrow}>Tier 1 · Identity & occupation</Text>
               <Pressable
                 onPress={() => onToggleIdentity(!includeIdentity)}
                 accessibilityRole="switch"
                 accessibilityState={{ checked: includeIdentity }}
                 aria-checked={includeIdentity}
-                accessibilityLabel="Include verified identity"
+                accessibilityLabel="Include verified identity and occupation"
                 hitSlop={8}
                 style={[styles.switchTrack, includeIdentity && styles.switchTrackOn]}
               >
@@ -117,8 +124,33 @@ export function PassportCeremonyScreen({
             <ScopeRows rows={tier1} dimmed={!includeIdentity} />
             <Text style={styles.identityNote}>
               {includeIdentity
-                ? 'Included so a lender can bind this passport to you. Toggle off to mint without your identity.'
+                ? 'Included so a lender can bind this passport to you. Occupation is self-declared. Toggle off to mint without your identity.'
                 : 'Excluded — this passport will carry anonymous aggregates bound only to your device key.'}
+            </Text>
+          </Card>
+        )}
+
+        {hasSpending && (
+          <Card style={styles.tierCard}>
+            <View style={styles.tierHeader}>
+              <Text style={styles.tierEyebrow}>Tier 2 · Spending behaviour</Text>
+              <Pressable
+                onPress={() => onToggleSpending(!includeSpending)}
+                accessibilityRole="switch"
+                accessibilityState={{ checked: includeSpending }}
+                aria-checked={includeSpending}
+                accessibilityLabel="Include spending-behaviour profile"
+                hitSlop={8}
+                style={[styles.switchTrack, includeSpending && styles.switchTrackOn]}
+              >
+                <View style={styles.switchThumb} />
+              </Pressable>
+            </View>
+            <ScopeRows rows={tier2} dimmed={!includeSpending} />
+            <Text style={styles.identityNote}>
+              {includeSpending
+                ? 'The most detailed tier — your spending mix and the recurring obligations behind your debt-service figure. Short-lived grant; toggle off to keep it private.'
+                : 'Excluded — the lender sees your debt-service total but not the itemised spending behind it.'}
             </Text>
           </Card>
         )}

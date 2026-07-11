@@ -86,6 +86,13 @@ const PROFILES = [
       momentum: { lookbackDays: 90, scoreFrom: 548, scoreTo: 580, coverageDaysFrom: 62, coverageDaysTo: 90, direction: 'rising' },
       repaymentRecord: { onTime: 4, total: 4 },
       sourceTrust: 74,
+      incomeQuality: { variationCoefficient: 0.08, sourceCount: 1, regularityRatio: 1, seasonal: false },
+      occupation: { occupation: 'Factory technician', sector: 'Manufacturing', employmentType: 'salaried', tenureMonths: 28, selfDeclared: true },
+      // Evidenced DSR = the single detected installment (150), matching the assessment figure.
+      spendingProfile: {
+        essentialsRatio: 0.6, expenseVolatility: 0.12, bufferDays: 14, savingsRate: 0.3,
+        obligations: [{ label: 'Motorbike Hire-Purchase', kind: 'installment', monthlyAmount: 150, monthsObserved: 4 }],
+      },
     },
   },
   {
@@ -109,6 +116,17 @@ const PROFILES = [
       momentum: { lookbackDays: 90, scoreFrom: 641, scoreTo: 660, coverageDaysFrom: 55, coverageDaysTo: 90, direction: 'rising' },
       repaymentRecord: { onTime: 2, total: 3 },
       sourceTrust: 52,
+      // Lumpy freelance income — seasonal, several sources — coheres with the low 0.44 confidence.
+      incomeQuality: { variationCoefficient: 0.35, sourceCount: 3, regularityRatio: 0.83, seasonal: true },
+      occupation: { occupation: 'Freelance designer', sector: 'Creative', employmentType: 'self-employed', tenureMonths: 15, selfDeclared: true },
+      // Evidenced DSR = phone installment + internet = 200, matching the assessment figure.
+      spendingProfile: {
+        essentialsRatio: 0.5, expenseVolatility: 0.28, bufferDays: 20, savingsRate: 0.33,
+        obligations: [
+          { label: 'Phone Installment', kind: 'installment', monthlyAmount: 120, monthsObserved: 5 },
+          { label: 'TIME Internet', kind: 'utilities', monthlyAmount: 80, monthsObserved: 5 },
+        ],
+      },
     },
   },
   {
@@ -132,6 +150,10 @@ const PROFILES = [
       // No momentum block: 25 covered days sits under the minimum-history floor — honest absence.
       repaymentRecord: { onTime: 0, total: 0 },
       sourceTrust: 71,
+      incomeQuality: { variationCoefficient: 0.22, sourceCount: 2, regularityRatio: 0.5, seasonal: false },
+      occupation: { occupation: 'Sundry-shop owner', sector: 'Retail', employmentType: 'micro-business', tenureMonths: 8, selfDeclared: true },
+      // No spending profile: 25 days of history can't evidence recurring obligations, so the DSR
+      // stays the self-reported figure — the same honest-absence pattern as the momentum block.
     },
   },
 ];
@@ -153,6 +175,27 @@ for (const profile of PROFILES) {
   const pubKeyHex = Buffer.from(ed.getPublicKey(privKey)).toString('hex');
   const benfordPct = benfordPctOf(p.digitHistogram);
 
+  // Signed consent receipts (Brief I stretch + Brief P), built from the blocks each profile carries
+  // so every attached block rides along legitimately: Tier 0 always (incl. income quality), Tier 1
+  // for identity + occupation, Tier 2 only when a spending profile is present.
+  const consent = [
+    {
+      tier: 0,
+      scope: ['score', 'factors', 'confidence', 'coverage', 'income', 'surplus', 'debtService', 'repayment', ...(p.momentum ? ['momentum'] : []), 'digitHistogram', 'provenance', 'evidence', 'versions', 'incomeQuality'],
+      grantedAt: issuedAt,
+      expiresAt: validUntil,
+    },
+    {
+      tier: 1,
+      scope: ['holderName', 'holderNric', 'holderProvider', 'occupation', 'employment'],
+      grantedAt: issuedAt,
+      expiresAt: validUntil,
+    },
+    ...(p.spendingProfile
+      ? [{ tier: 2, scope: ['essentialsRatio', 'expenseVolatility', 'bufferDays', 'savingsRate', 'obligations'], grantedAt: issuedAt, expiresAt: validUntil }]
+      : []),
+  ];
+
   const passport = {
     subject: pubKeyHex,
     score: p.score,
@@ -168,6 +211,10 @@ for (const profile of PROFILES) {
     ...(p.momentum ? { momentum: p.momentum } : {}),
     provenanceMeta,
     digitHistogram: p.digitHistogram,
+    incomeQuality: p.incomeQuality,
+    occupation: p.occupation,
+    ...(p.spendingProfile ? { spendingProfile: p.spendingProfile } : {}),
+    consent,
   };
 
   const msg = Buffer.from(JSON.stringify(sortKeys(passport)));

@@ -72,6 +72,13 @@ async function init(): Promise<SQLite.SQLiteDatabase> {
       provider     TEXT NOT NULL,
       verified_at  TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS occupation (
+      id               INTEGER PRIMARY KEY CHECK (id = 1),
+      occupation       TEXT NOT NULL,
+      sector           TEXT NOT NULL,
+      employment_type  TEXT NOT NULL,
+      tenure_months    INTEGER NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS app_meta (
       key    TEXT PRIMARY KEY NOT NULL,
       value  TEXT NOT NULL
@@ -238,6 +245,7 @@ export async function resetAllData(): Promise<void> {
       DELETE FROM repayments;
       DELETE FROM loan_applications;
       DELETE FROM loan_products;
+      DELETE FROM occupation;
     `);
     await seedCategories(db);
     await seedProducts(db);

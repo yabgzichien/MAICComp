@@ -94,6 +94,9 @@ const passport = {
     coverageDays: 90,
     avgIncome: 2540,
     avgMonthlySurplus: 520,
+    // Evidenced monthly debt service (Brief P): the sum of the detected recurring obligations
+    // below (70 + 50), no longer a self-reported figure. Kept equal to the prior value so the
+    // sample's decision under the default ladder is unchanged.
     monthlyDebtService: 120,
   },
   holder: {
@@ -101,6 +104,31 @@ const passport = {
     nricMasked: '••••••-••-5678',
     verified: true,
     provider: 'Demo verification (mock)',
+  },
+  // Richer passport blocks (Brief P). Income quality is Tier 0 (aggregate); occupation is Tier 1
+  // (self-declared); the spending profile with its itemised obligations is Tier 2 (behavioural).
+  incomeQuality: {
+    variationCoefficient: 0.18,
+    sourceCount: 1,
+    regularityRatio: 0.83,
+    seasonal: false,
+  },
+  occupation: {
+    occupation: 'Ride-hailing driver',
+    sector: 'Transport',
+    employmentType: 'gig',
+    tenureMonths: 22,
+    selfDeclared: true,
+  },
+  spendingProfile: {
+    essentialsRatio: 0.68,
+    expenseVolatility: 0.15,
+    bufferDays: 9,
+    savingsRate: 0.2,
+    obligations: [
+      { label: 'TNB Electric', kind: 'utilities', monthlyAmount: 70, monthsObserved: 3 },
+      { label: 'Unifi Fibre', kind: 'utilities', monthlyAmount: 50, monthsObserved: 3 },
+    ],
   },
   momentum: {
     lookbackDays: 90,
@@ -112,19 +140,26 @@ const passport = {
   },
   provenanceMeta,
   digitHistogram,
-  // Signed consent receipts (Brief I stretch): Tier 0 aggregates + Tier 1 identity, so the
-  // holder rides along legitimately and the console trust panel shows real consent. Scope
-  // keys mirror tier0ScopeRows/tier1ScopeRows; both grants run to the demo validity window.
+  // Signed consent receipts (Brief I stretch + Brief P): Tier 0 aggregates (incl. income quality),
+  // Tier 1 identity + occupation, Tier 2 spending profile — so every attached block rides along
+  // legitimately and the console trust panel shows real consent. Scope keys mirror
+  // tier0/tier1/tier2ScopeRows; all grants run to the demo validity window.
   consent: [
     {
       tier: 0,
-      scope: ['score', 'factors', 'confidence', 'coverage', 'income', 'surplus', 'debtService', 'repayment', 'momentum', 'digitHistogram', 'provenance', 'evidence', 'versions'],
+      scope: ['score', 'factors', 'confidence', 'coverage', 'income', 'surplus', 'debtService', 'repayment', 'momentum', 'digitHistogram', 'provenance', 'evidence', 'versions', 'incomeQuality'],
       grantedAt: issuedAt,
       expiresAt: validUntil,
     },
     {
       tier: 1,
-      scope: ['holderName', 'holderNric', 'holderProvider'],
+      scope: ['holderName', 'holderNric', 'holderProvider', 'occupation', 'employment'],
+      grantedAt: issuedAt,
+      expiresAt: validUntil,
+    },
+    {
+      tier: 2,
+      scope: ['essentialsRatio', 'expenseVolatility', 'bufferDays', 'savingsRate', 'obligations'],
       grantedAt: issuedAt,
       expiresAt: validUntil,
     },

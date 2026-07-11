@@ -13,7 +13,7 @@ import { Card, TopBar } from '../components/ui';
 import { getOrCreateKeypair } from '../crypto/keys';
 import { issuerSign } from '../crypto/issuer';
 import { buildPassport, type CreditPassport } from '../lib/passport';
-import { buildConsentReceipts, buildPassportDraft, tier0ScopeRows, tier1ScopeRows } from '../lib/consentScopes';
+import { buildConsentReceipts, buildPassportDraft, tier0ScopeRows, tier1ScopeRows, tier2ScopeRows } from '../lib/consentScopes';
 import { useCreditProfile } from '../state/useCreditProfile';
 import { useAppData } from '../state/store';
 import { PassportCeremonyScreen } from './PassportCeremonyScreen';
@@ -29,11 +29,12 @@ function formatDate(iso: string): string {
 
 export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () => void; onOpenKyc?: () => void }) {
   const insets = useSafeAreaInsets();
-  const { profile, score, dataConfidence, coverage, momentum, coachInput } = useCreditProfile();
-  const { kyc } = useAppData();
+  const { profile, score, dataConfidence, coverage, momentum, coachInput, incomeQuality, spendingProfile, obligations } = useCreditProfile();
+  const { kyc, occupation } = useAppData();
 
   const [phase, setPhase] = useState<'consent' | 'minted'>('consent');
   const [includeIdentity, setIncludeIdentity] = useState(true);
+  const [includeSpending, setIncludeSpending] = useState(true);
   const [minting, setMinting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [passport, setPassport] = useState<CreditPassport | null>(null);
@@ -58,12 +59,20 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
       momentum,
       amounts: coachInput.confidenceTxns.map((t) => t.amount),
       identity: kyc ? { fullName: kyc.fullName, nricMasked: kyc.nricMasked, provider: kyc.provider } : null,
+      incomeQuality,
+      obligations,
+      spendingProfile,
+      occupation: occupation
+        ? { occupation: occupation.occupation, sector: occupation.sector, employmentType: occupation.employmentType, tenureMonths: occupation.tenureMonths }
+        : null,
     }),
-    [profile, score, dataConfidence, coverage, momentum, coachInput, kyc]
+    [profile, score, dataConfidence, coverage, momentum, coachInput, kyc, incomeQuality, obligations, spendingProfile, occupation]
   );
-  const previewDraft = useMemo(() => buildPassportDraft({ ...draftArgs, includeIdentity: true }), [draftArgs]);
+  // Preview shows every attachable row (both grants on); the mint step honours the actual toggles.
+  const previewDraft = useMemo(() => buildPassportDraft({ ...draftArgs, includeIdentity: true, includeSpending: true }), [draftArgs]);
   const tier0 = useMemo(() => tier0ScopeRows(previewDraft), [previewDraft]);
   const tier1 = useMemo(() => tier1ScopeRows(previewDraft), [previewDraft]);
+  const tier2 = useMemo(() => tier2ScopeRows(previewDraft), [previewDraft]);
 
   // Mint — only reachable through the ceremony's explicit confirm.
   const mint = useCallback(async () => {
@@ -72,8 +81,9 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
     setShared(false);
     try {
       const keypair = await getOrCreateKeypair();
-      const draft = buildPassportDraft({ ...draftArgs, includeIdentity });
-      // Signed consent receipts (Brief I stretch): Tier 0 always, Tier 1 when identity is shared.
+      const draft = buildPassportDraft({ ...draftArgs, includeIdentity, includeSpending });
+      // Signed consent receipts (Brief I stretch + Brief P): Tier 0 always, Tier 1 when identity or
+      // occupation is shared, Tier 2 when the spending profile is shared.
       const consent = buildConsentReceipts(draft);
       const result = await buildPassport(
         { ...draft, subject: keypair.publicKeyHex, consent },
@@ -94,7 +104,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
     } finally {
       setMinting(false);
     }
-  }, [draftArgs, includeIdentity]);
+  }, [draftArgs, includeIdentity, includeSpending]);
 
   // Regenerate discards the minted result and routes back through the ceremony.
   const regenerate = useCallback(() => {
@@ -156,8 +166,11 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
       <PassportCeremonyScreen
         tier0={tier0}
         tier1={tier1}
+        tier2={tier2}
         includeIdentity={includeIdentity}
         onToggleIdentity={setIncludeIdentity}
+        includeSpending={includeSpending}
+        onToggleSpending={setIncludeSpending}
         onConfirm={mint}
         onBack={onBack}
         minting={minting}

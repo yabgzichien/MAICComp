@@ -417,6 +417,8 @@ function VerifiedCenter({ p, passport, decision, priors, issuerVerified, stackin
         </div>
       )}
 
+      <RicherBlocks p={p} passport={passport} />
+
       {decision ? (
         <AgentPanel p={p} passport={passport} decision={decision} stacking={stacking} />
       ) : (
@@ -425,6 +427,110 @@ function VerifiedCenter({ p, passport, decision, priors, issuerVerified, stackin
             This passport doesn&apos;t carry an affordability assessment, so the AI Assessment Panel can&apos;t run. Verify a passport issued with assessment data.
           </p>
         </div>
+      )}
+    </div>
+  );
+}
+
+// ── Richer passport blocks (Brief P) ────────────────────────────────────────────
+// Occupation (Tier 1, self-declared), income quality (Tier 0), and the spending profile
+// with the itemised obligations that evidence the DSR figure (Tier 2). Each card renders
+// only when its block is present, so a lean or privacy-minimised passport shows fewer cards.
+
+const OBLIGATION_KIND_LABELS: Record<string, string> = {
+  rent: 'Rent',
+  utilities: 'Utilities',
+  installment: 'Installment',
+  other: 'Other',
+};
+
+function StatTile({ p, label, value, sub }: { p: Palette; label: string; value: string; sub?: string }) {
+  return (
+    <div style={{ background: p.surface2, borderRadius: 9, padding: '9px 11px', border: `1px solid ${p.hairline}` }}>
+      <div style={{ fontFamily: FONT.ui, fontSize: 9, fontWeight: 700, color: p.ink3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{label}</div>
+      <div style={{ fontFamily: FONT.num, fontSize: 16, fontWeight: 700, color: p.ink1, marginTop: 3 }}>{value}</div>
+      {sub && <div style={{ fontFamily: FONT.ui, fontSize: 9.5, color: p.ink3, marginTop: 1 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function BlockCard({ p, title, tier, children }: { p: Palette; title: string; tier: string; children: React.ReactNode }) {
+  return (
+    <div style={{ background: p.surface, borderRadius: 12, padding: '12px 16px', boxShadow: p.shadow }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9, gap: 8 }}>
+        <span style={{ fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 700, color: p.ink3, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{title}</span>
+        <span style={{ fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 600, color: p.accentInk, background: p.accentTint, border: `1px solid ${p.accentSoft}`, borderRadius: 5, padding: '2px 8px' }}>{tier}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function RicherBlocks({ p, passport }: { p: Palette; passport: CreditPassport }) {
+  const rm = (n: number): string => `RM${Math.round(n).toLocaleString('en-MY')}`;
+  const pct = (x: number): number => Math.round(x * 100);
+  const { occupation, incomeQuality, spendingProfile } = passport;
+  if (!occupation && !incomeQuality && !spendingProfile) return null;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+      {occupation && (
+        <BlockCard p={p} title="Occupation" tier="Tier 1 · self-declared">
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontFamily: FONT.ui, fontSize: 14, fontWeight: 700, color: p.ink1 }}>{occupation.occupation}</span>
+            <span style={{ fontFamily: FONT.ui, fontSize: 11.5, color: p.ink3 }}>{occupation.sector}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontFamily: FONT.ui, fontSize: 10.5, fontWeight: 600, color: p.ink2, background: p.surface2, border: `1px solid ${p.hairline}`, borderRadius: 6, padding: '3px 9px' }}>
+              {occupation.employmentType}
+            </span>
+            <span style={{ fontFamily: FONT.ui, fontSize: 10.5, fontWeight: 600, color: p.ink2, background: p.surface2, border: `1px solid ${p.hairline}`, borderRadius: 6, padding: '3px 9px' }}>
+              {occupation.tenureMonths} months in role
+            </span>
+          </div>
+          <p style={{ fontFamily: FONT.ui, fontSize: 9.5, color: p.ink3, marginTop: 8, lineHeight: 1.45 }}>
+            Self-declared context — not verified against a registry. Weigh alongside the verified figures, not as evidence.
+          </p>
+        </BlockCard>
+      )}
+
+      {incomeQuality && (
+        <BlockCard p={p} title="Income quality" tier="Tier 0 · aggregate">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(88px, 1fr))', gap: 7 }}>
+            <StatTile p={p} label="Variance" value={`${pct(incomeQuality.variationCoefficient)}%`} sub="month-to-month" />
+            <StatTile p={p} label="Sources" value={String(incomeQuality.sourceCount)} sub="recurring inflows" />
+            <StatTile p={p} label="Regularity" value={`${pct(incomeQuality.regularityRatio)}%`} sub="months w/ income" />
+            <StatTile p={p} label="Pattern" value={incomeQuality.seasonal ? 'Seasonal' : 'Steady'} sub={incomeQuality.seasonal ? 'lumpy earner' : 'consistent'} />
+          </div>
+        </BlockCard>
+      )}
+
+      {spendingProfile && (
+        <BlockCard p={p} title="Spending profile" tier="Tier 2 · behavioural">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(88px, 1fr))', gap: 7 }}>
+            <StatTile p={p} label="Essentials" value={`${pct(spendingProfile.essentialsRatio)}%`} sub="of spend" />
+            <StatTile p={p} label="Volatility" value={`${pct(spendingProfile.expenseVolatility)}%`} sub="expense swing" />
+            <StatTile p={p} label="Buffer" value={`${Math.round(spendingProfile.bufferDays)}d`} sub="of runway" />
+            <StatTile p={p} label="Savings" value={`${pct(spendingProfile.savingsRate)}%`} sub="of income" />
+          </div>
+          {spendingProfile.obligations.length > 0 && (
+            <div style={{ marginTop: 11 }}>
+              <div style={{ fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 700, color: p.ink3, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>
+                Recurring obligations behind the DSR
+              </div>
+              {spendingProfile.obligations.map((o, i) => (
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 76px 66px', alignItems: 'center', padding: '6px 0', borderTop: `1px solid ${p.hairline}` }}>
+                  <span style={{ fontFamily: FONT.ui, fontSize: 11.5, color: p.ink1 }}>{o.label}</span>
+                  <span style={{ fontFamily: FONT.ui, fontSize: 10, fontWeight: 600, color: p.accentInk }}>{OBLIGATION_KIND_LABELS[o.kind] ?? o.kind}</span>
+                  <span style={{ fontFamily: FONT.num, fontSize: 11.5, fontWeight: 700, color: p.ink1, textAlign: 'right' }}>{rm(o.monthlyAmount)}/mo</span>
+                </div>
+              ))}
+              <p style={{ fontFamily: FONT.ui, fontSize: 9.5, color: p.ink3, marginTop: 7, lineHeight: 1.45 }}>
+                The evidenced monthly debt service is the sum of these detected recurring outflows — not a self-reported figure.
+              </p>
+            </div>
+          )}
+        </BlockCard>
       )}
     </div>
   );

@@ -6,7 +6,7 @@
 // task) can only escalate an auto-approve toward manual review — it can never
 // soften a decline or refer, and it never changes maxAmount/installment.
 
-import type { CreditPassport, PassportAssessment } from './passport';
+import type { CreditPassport, PassportAssessment, PassportIncomeQuality, PassportSpendingProfile } from './passport';
 import { MAX_DSR, MIN_CONFIDENCE_TO_APPROVE, type LoanDecision } from './loans';
 
 export type AgentId = 'fraud' | 'credit' | 'affordability' | 'risk' | 'decision';
@@ -75,6 +75,7 @@ export function assessFraud(
   assessment: PassportAssessment,
   provenanceSummary: string,
   stacking?: StackingSignal,
+  incomeQuality?: PassportIncomeQuality,
 ): AgentAssessment {
   const confidencePct = pct(assessment.confidence);
   const baseTone: VerdictTone =
@@ -88,6 +89,14 @@ export function assessFraud(
   const signals = [`Data confidence ${confidencePct}%`, provenanceSummary];
   if (stacking && stackedCount >= 1) {
     signals.push(`Presented ${stackedCount} time(s) before within ${stacking.windowHours}h (last ${stacking.lastAgo})`);
+  }
+  // Brief P: cite declared-versus-observed income. A single average income hides its month-to-month
+  // swing; the passport's income-quality block exposes the observed variance and source count so a
+  // suspiciously flat "declared" figure over lumpy real inflows is visible.
+  if (incomeQuality) {
+    signals.push(
+      `Observed income variance ${pct(incomeQuality.variationCoefficient)}% across ${incomeQuality.sourceCount} source(s)${incomeQuality.seasonal ? ' · seasonal' : ''}`,
+    );
   }
   return {
     id: 'fraud',
@@ -121,7 +130,11 @@ export function assessCredit(passport: CreditPassport): AgentAssessment {
   };
 }
 
-export function assessAffordability(assessment: PassportAssessment, decision: LoanDecision): AgentAssessment {
+export function assessAffordability(
+  assessment: PassportAssessment,
+  decision: LoanDecision,
+  spendingProfile?: PassportSpendingProfile,
+): AgentAssessment {
   const { avgIncome, avgMonthlySurplus, monthlyDebtService } = assessment;
   const dsr = avgIncome > 0 ? monthlyDebtService / avgIncome : 1;
   const surplusRatio = avgIncome > 0 ? avgMonthlySurplus / avgIncome : 0;
@@ -145,6 +158,12 @@ export function assessAffordability(assessment: PassportAssessment, decision: Lo
     }
   }
   const signals = [`DSR ${pct(dsr)}%`, `Surplus ${rm(avgMonthlySurplus)}/mo`, `Approved ${rm(decision.maxAmount)}`];
+  // Brief P: the DSR is only as good as the debt figure behind it. When the passport carries the
+  // spending block, cite the detected recurring obligations that evidence that figure.
+  if (spendingProfile && spendingProfile.obligations.length > 0) {
+    const total = spendingProfile.obligations.reduce((s, o) => s + o.monthlyAmount, 0);
+    signals.push(`${spendingProfile.obligations.length} recurring obligation(s) evidence ${rm(total)}/mo`);
+  }
   return {
     id: 'affordability',
     label: 'Affordability',
@@ -245,9 +264,9 @@ export function runAgentPanel(passport: CreditPassport, decision: LoanDecision, 
   const assessment = passport.assessment;
   if (!assessment) throw new Error('runAgentPanel requires a passport with an assessment block.');
   const specialists = [
-    assessFraud(assessment, passport.provenanceSummary, stacking),
+    assessFraud(assessment, passport.provenanceSummary, stacking, passport.incomeQuality),
     assessCredit(passport),
-    assessAffordability(assessment, decision),
+    assessAffordability(assessment, decision, passport.spendingProfile),
     assessRisk(assessment, passport.repaymentRecord),
   ];
   const orchestrator = assessOrchestrator(specialists, decision);
