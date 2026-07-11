@@ -1267,6 +1267,83 @@ function CapitalMarkets({ p, book, source, setSource }: { p: Palette; book: Pool
   );
 }
 
+// ── Judge tour card (Brief M) ───────────────────────────────────────────────
+// A small dismissible 60-second orientation on load. Boot stays pre-verified on the
+// sample (the ideal first minute) — this card just narrates what's already on screen.
+const TOUR_DISMISSED_KEY = 'pip-console-tour-dismissed';
+const TOUR_STEPS = [
+  'This passport is already verified — meet the sample applicant.',
+  '“Load flagged” — watch fraud get caught in real time.',
+  'Open the credit memo — the audit-ready decision writeup.',
+  'Capital Markets tab (illustrative) — see the pool this book could fund.',
+];
+
+function TourCard({ p, onDismiss }: { p: Palette; onDismiss: () => void }) {
+  return (
+    <div
+      role="dialog"
+      aria-label="Console tour"
+      style={{
+        position: 'fixed',
+        bottom: 20,
+        right: 20,
+        width: 300,
+        zIndex: 50,
+        background: p.surface,
+        borderRadius: 14,
+        border: `1.5px solid ${p.accentSoft}`,
+        boxShadow: '0 10px 34px rgba(0,0,0,0.22)',
+        padding: '15px 17px',
+        animation: 'fade-in-up 0.4s ease-out both',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <span style={{ fontFamily: FONT.ui, fontSize: 10.5, fontWeight: 800, color: p.ink1, letterSpacing: '0.06em', textTransform: 'uppercase' }}>60-second tour</span>
+        <button
+          onClick={onDismiss}
+          aria-label="Dismiss tour"
+          style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: p.ink3, fontSize: 15, lineHeight: 1, padding: 4 }}
+        >
+          ×
+        </button>
+      </div>
+      <ol style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {TOUR_STEPS.map((text, i) => (
+          <li key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <span
+              style={{
+                flexShrink: 0,
+                width: 17,
+                height: 17,
+                borderRadius: '50%',
+                background: p.accentTint,
+                border: `1px solid ${p.accentSoft}`,
+                color: p.accentInk,
+                fontFamily: FONT.num,
+                fontSize: 9.5,
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginTop: 1,
+              }}
+            >
+              {i + 1}
+            </span>
+            <span style={{ fontFamily: FONT.ui, fontSize: 11, color: p.ink2, lineHeight: 1.5 }}>{text}</span>
+          </li>
+        ))}
+      </ol>
+      <button
+        onClick={onDismiss}
+        style={{ width: '100%', marginTop: 12, padding: '7px 0', borderRadius: 8, border: 'none', cursor: 'pointer', background: p.primary, color: 'white', fontFamily: FONT.ui, fontSize: 11, fontWeight: 700 }}
+      >
+        Got it
+      </button>
+    </div>
+  );
+}
+
 export default function Console() {
   const [tab, setTab] = useState<Tab>('verify');
   const [code, setCode] = useState(SAMPLE_CODE);
@@ -1293,6 +1370,24 @@ export default function Console() {
   const [poolSource, setPoolSource] = useState<PoolSource>('live');
   // Adopted risk-based rate (Brief R): null = ladder rate in force; a number = custom-priced.
   const [adoptedRate, setAdoptedRate] = useState<number | null>(null);
+  // Judge tour card (Brief M): defaults hidden (SSR-safe) and only shown once the mount
+  // effect confirms localStorage doesn't already record a dismissal.
+  const [showTour, setShowTour] = useState(false);
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(TOUR_DISMISSED_KEY) !== 'true') setShowTour(true);
+    } catch {
+      // localStorage unavailable (private mode / disabled) — skip the tour rather than crash.
+    }
+  }, []);
+  const dismissTour = () => {
+    setShowTour(false);
+    try {
+      window.localStorage.setItem(TOUR_DISMISSED_KEY, 'true');
+    } catch {
+      // Best-effort persistence; a session that can't write localStorage just re-shows next load.
+    }
+  };
 
   // Boot pre-verifies the sample as a demo convenience — that is not an officer action, so it
   // is not logged; it only reads any history a previous session already recorded.
@@ -1523,6 +1618,7 @@ export default function Console() {
     <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: p.bg }}>
       <Header p={p} tab={tab} setTab={setTab} alert={showAlert} />
       {showAlert && <AlertBanner caseId={flagCaseId} flagTime={flagTime} />}
+      {showTour && <TourCard p={p} onDismiss={dismissTour} />}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
         {tab === 'verify' ? (
           <>

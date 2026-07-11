@@ -21,10 +21,24 @@ const mono = JetBrains_Mono({
   display: 'swap',
 });
 
+const TITLE = 'Pip Credit · Lender Console';
+const DESCRIPTION =
+  'Pip Credit lender console — verify a borrower passport (aggregate-only, privacy-locked), run the deterministic decision engine, and structure micro-sukuk pools. MAIC Nexus 2026.';
+
 export const metadata: Metadata = {
-  title: 'Pip Credit · Lender Console',
-  description:
-    'Pip Credit lender console — verify a borrower passport (aggregate-only, privacy-locked) and structure micro-sukuk pools. MAIC Nexus 2026.',
+  title: TITLE,
+  description: DESCRIPTION,
+  openGraph: {
+    title: TITLE,
+    description: DESCRIPTION,
+    type: 'website',
+    siteName: 'Pip Credit',
+  },
+  twitter: {
+    card: 'summary',
+    title: TITLE,
+    description: DESCRIPTION,
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
