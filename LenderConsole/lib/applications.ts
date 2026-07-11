@@ -188,6 +188,21 @@ export function recordCheckIn(
   );
 }
 
+/** Record that an adverse-action letter was generated for this application (Brief J stretch),
+ *  audit-trailed. Never changes status/resolution — the letter restates the decision, it
+ *  never remakes it. Kind is recorded so the trail shows what TYPE of letter was drafted. */
+export function recordLetterGenerated(
+  apps: ApplicationRecord[],
+  id: string,
+  kind: 'decline' | 'refer' | 'counter-offer',
+  now: Date = new Date(),
+): ApplicationRecord[] {
+  const at = now.toISOString();
+  return apps.map((a) =>
+    a.id === id ? { ...a, audit: [...a.audit, { at, action: 'letter-generated', detail: `${kind} letter drafted` }] } : a,
+  );
+}
+
 /** Approved applications whose most recent check-in still carries active flags — the Watchlist
  *  queue (Brief S), a filtered view of Approved rather than a fifth status value. */
 export function watchlistApplications(apps: ApplicationRecord[]): ApplicationRecord[] {
