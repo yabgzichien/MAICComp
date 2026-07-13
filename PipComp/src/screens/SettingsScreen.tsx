@@ -23,6 +23,7 @@ export function SettingsScreen({ onBack, onMigrate, onOpenLender = () => {}, onO
   const insets = useSafeAreaInsets();
   const { memory, refreshAll, expectedIncome, allocations, hasBudget, resetBudget, resetAllData, loadDemoData } = useAppData();
   const [settings, setSettings] = useState<LLMSettings | null>(null);
+  const [resettingDemo, setResettingDemo] = useState(false);
 
   useEffect(() => {
     loadSettings().then(setSettings);
@@ -50,6 +51,25 @@ export function SettingsScreen({ onBack, onMigrate, onOpenLender = () => {}, onO
       'This deletes all transactions, learned merchants, and your budget, and restores the default categories. This can’t be undone.',
       'Reset',
       () => resetAllData()
+    );
+  };
+
+  // One-tap judge-demo reset (Demo Data Task 8): wipe whatever the last judge did, then reload
+  // the canonical seeded persona  so the next judge always starts from the same clean state.
+  const resetDemoConfirm = () => {
+    confirmAction(
+      'Reset demo?',
+      'This clears everything and reloads the seeded demo persona  any scans or applications you made are discarded.',
+      'Reset demo',
+      async () => {
+        setResettingDemo(true);
+        try {
+          await resetAllData();
+          await loadDemoData();
+        } finally {
+          setResettingDemo(false);
+        }
+      }
     );
   };
 
@@ -181,6 +201,25 @@ export function SettingsScreen({ onBack, onMigrate, onOpenLender = () => {}, onO
           </View>
           <Icon name="chevronRight" size={18} color={colors.ink3} />
         </Pressable>
+
+        <Card style={{ padding: 16, marginTop: 14 }}>
+          <View style={styles.providerRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.providerName}>Reset demo</Text>
+              <Text style={styles.providerSub}>One tap: clear whatever you've mutated and reload the seeded judge persona.</Text>
+            </View>
+            <Pressable onPress={resetDemoConfirm} style={styles.resetBtn} disabled={resettingDemo}>
+              {resettingDemo ? (
+                <ActivityIndicator size="small" color={colors.accent} />
+              ) : (
+                <>
+                  <Icon name="sparkles" size={16} color={colors.accent} />
+                  <Text style={[styles.resetText, { color: colors.accent }]}>Reset demo</Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+        </Card>
 
         <Card style={{ padding: 16, marginTop: 14 }}>
           <View style={styles.providerRow}>
