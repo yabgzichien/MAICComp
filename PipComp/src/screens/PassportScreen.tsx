@@ -7,6 +7,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { PipEmblem } from '../components/CoinMascot';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { FadeIn } from '../components/Motion';
 import { Icon } from '../components/Icon';
 import { Card, TopBar } from '../components/ui';
@@ -253,7 +254,16 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
           <View style={styles.qrBody}>
             <Text style={styles.scanHint}>Present to lender · Scan to verify</Text>
             <View style={styles.qrWrap}>
-              <QRCode value={pasteCode} size={168} color={colors.passportDark} backgroundColor="#ffffff" />
+              <ErrorBoundary
+                fallback={() => (
+                  <View style={[styles.qrFallback, { width: 168, height: 168 }]}>
+                    <Text style={styles.qrFallbackText}>QR unavailable</Text>
+                    <Text style={styles.qrFallbackSub}>Use Share or the code below</Text>
+                  </View>
+                )}
+              >
+                <QRCode value={pasteCode} size={168} ecl="L" color={colors.passportDark} backgroundColor="#ffffff" />
+              </ErrorBoundary>
             </View>
 
             <View style={styles.codeRow}>
@@ -360,6 +370,9 @@ const styles = StyleSheet.create({
   qrBody: { padding: 20, alignItems: 'center', backgroundColor: '#fff' },
   scanHint: { fontFamily: uiFont(500), fontSize: 10.5, color: colors.ink3, marginBottom: 14, letterSpacing: 0.4 },
   qrWrap: { borderRadius: 14, padding: 4, borderWidth: 1, borderColor: colors.line, backgroundColor: '#fff' },
+  qrFallback: { alignItems: 'center', justifyContent: 'center', gap: 4, padding: 12, borderRadius: 10, backgroundColor: colors.surface2 },
+  qrFallbackText: { fontFamily: uiFont(600), fontSize: 12, color: colors.ink },
+  qrFallbackSub: { fontFamily: uiFont(500), fontSize: 10.5, color: colors.ink3, textAlign: 'center' },
   codeRow: { flexDirection: 'row', gap: 8, marginTop: 18, alignSelf: 'stretch' },
   codeField: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surface2, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: colors.line },
   codeText: { flex: 1, fontFamily: numFont(500), fontSize: 12, color: colors.ink2 },

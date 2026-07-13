@@ -17,6 +17,7 @@ import { Platform, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { BottomNav, type NavTab } from './src/components/BottomNav';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { Pip } from './src/components/Pip';
 import { AddFlow } from './src/screens/AddFlow';
 import { AllTransactionsScreen } from './src/screens/AllTransactionsScreen';
@@ -60,7 +61,9 @@ export default function App() {
       <SafeAreaProvider>
         <AppDataProvider>
           <AccentProvider>
-            <Root fontsLoaded={fontsLoaded} />
+            <ErrorBoundary>
+              <Root fontsLoaded={fontsLoaded} />
+            </ErrorBoundary>
           </AccentProvider>
         </AppDataProvider>
         <StatusBar style="dark" />

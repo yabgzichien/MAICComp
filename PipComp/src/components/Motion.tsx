@@ -48,21 +48,38 @@ export function FadeIn({
  * Drive a number from 0 → target with an ease-out curve over `duration`ms on
  * mount. Returns the current value; lands exactly on `target`. Used for the
  * gauge sweep + score count-up. rAF-based so it works on web and native.
+ *
+ * Starts already at `target` (never 0) so the headline number is correct even
+ * before the effect runs, and carries a setTimeout backstop that forces the
+ * final value if rAF stalls (e.g. a backgrounded/hidden tab, where browsers
+ * throttle requestAnimationFrame) instead of leaving the count-up stuck.
  */
 export function useEased(target: number, duration = 950): number {
-  const [val, setVal] = useState(0);
+  const [val, setVal] = useState(target);
   useEffect(() => {
     let raf = 0;
+    let settled = false;
     const start = Date.now();
+    const settle = () => {
+      settled = true;
+      setVal(target);
+    };
     const tick = () => {
       const t = Math.min(1, (Date.now() - start) / duration);
       const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
       setVal(target * eased);
       if (t < 1) raf = requestAnimationFrame(tick);
-      else setVal(target);
+      else settle();
     };
+    setVal(0);
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    const fallback = setTimeout(() => {
+      if (!settled) settle();
+    }, duration + 300);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(fallback);
+    };
   }, [target, duration]);
   return val;
 }

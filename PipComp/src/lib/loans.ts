@@ -376,7 +376,13 @@ export function decideLoan(input: LoanDecisionInput): LoanDecision {
 
   const tier = selectTier(score, coverage.products);
   if (!tier) {
-    const lowest = products.reduce((m, p) => Math.min(m, p.minScore), Infinity);
+    // Coverage narrowed the eligible set to nothing for this request (e.g. this specific
+    // tier isn't in the coverage-allowed set)  the reason is already in coverage.reasons,
+    // so don't also claim a false score shortfall.
+    if (products.length > 0 && coverage.products.length === 0) {
+      return finish(coverage.forceRefer ? 'refer' : 'decline', 0, 0);
+    }
+    const lowest = coverage.products.reduce((m, p) => Math.min(m, p.minScore), Infinity);
     reasons.push({ category: 'policy', text: `Score ${score} is below the minimum tier threshold (${lowest})  application declined.` });
     return finish('decline', 0, 0);
   }

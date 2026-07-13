@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../components/Icon';
 import { Amount, Card, Eyebrow, TopBar } from '../components/ui';
 import { shortDate } from '../lib/dates';
-import { decideLoan, DEFAULT_PRODUCTS, type Decision, type LoanProduct } from '../lib/loans';
+import { decideLoan, DEFAULT_PRODUCTS, type Decision, type LoanDecision, type LoanProduct } from '../lib/loans';
 import type { Repayment, RepaymentStatus } from '../db/loansRepo';
 import { useAppData } from '../state/store';
 import { useCreditProfile } from '../state/useCreditProfile';
@@ -51,7 +51,7 @@ export function LoansScreen({
   onOpenPassport?: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const { profile, score, dataConfidence } = useCreditProfile();
+  const { profile, score, dataConfidence, coverage } = useCreditProfile();
   const { kyc, loanProducts, loanApplications, repayments, repaymentSummary, applyForLoan, recordRepayment, reportDefault } =
     useAppData();
 
@@ -78,7 +78,9 @@ export function LoansScreen({
   const [defaultBusy, setDefaultBusy] = useState<string | null>(null);
   const [defaultError, setDefaultError] = useState('');
 
-  // Preview decision per product, evaluated against the live score & affordability snapshot.
+  // Preview decision per product, evaluated against the live score & affordability snapshot
+  // including the same coverage-tier gate the real apply flow uses (store.applyForLoan), so a
+  // tier card never shows a friendlier outcome than what applying would actually decide.
   // requestedAmount previewed at the product's max  shows the best-case offer for that tier.
   const previews = useMemo(
     () =>
@@ -93,10 +95,12 @@ export function LoansScreen({
           avgIncome: profile.avgIncome,
           requestedAmount: product.maxAmount,
           products: [product],
+          coverageRatio: coverage.ratio,
+          coverageDaysCovered: coverage.daysCovered,
           integrityFloorBreached: dataConfidence.integrityFloorBreached,
         }),
       })),
-    [products, score, profile, dataConfidence]
+    [products, score, profile, coverage, dataConfidence]
   );
 
   const activeApplications = useMemo(
@@ -117,9 +121,12 @@ export function LoansScreen({
     });
   };
 
-  const pickProduct = (product: LoanProduct) => {
+  // Pre-fills the requested amount at what the gated decision actually supports for this tier
+  // (falling back to the tier max only when there's no supportable amount to anchor on, e.g. a
+  // refer/decline preview), never the tier's raw ceiling  matches what apply would approve.
+  const pickProduct = (product: LoanProduct, previewDecision: LoanDecision) => {
     setSelectedProductId(product.id);
-    setRequestedAmount(product.maxAmount);
+    setRequestedAmount(previewDecision.maxAmount > 0 ? previewDecision.maxAmount : product.maxAmount);
     setLastResult(null);
     setApplyError('');
   };
@@ -227,7 +234,7 @@ export function LoansScreen({
           const selected = selectedProductId === product.id;
           const isExpanded = expanded.has(product.id);
           return (
-            <Pressable key={product.id} onPress={() => pickProduct(product)}>
+            <Pressable key={product.id} onPress={() => pickProduct(product, decision)}>
               <Card style={selected ? [styles.offerCard, styles.offerCardSelected] : styles.offerCard}>
                 <View style={styles.offerHeader}>
                   <View style={{ flex: 1 }}>
