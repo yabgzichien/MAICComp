@@ -148,18 +148,30 @@ export function CreditScreen({
             <Text style={styles.factorsHeadAvg}>Avg {avg}/100</Text>
           </View>
           {score.factors.map((f, idx) => {
-            const c = factorColor(f.subScore);
+            const c = f.notYetScored ? colors.ink3 : factorColor(f.subScore);
             return (
               <View key={f.key} style={[styles.factorRow, idx < score.factors.length - 1 && styles.factorDivider]}>
                 <View style={styles.factorLabelRow}>
                   <Text style={styles.factorLabel}>{f.label}</Text>
-                  <Text style={[styles.factorScore, { color: c }]}>
-                    {Math.round(f.subScore)}
-                    <Text style={styles.factorScoreDenom}>/100</Text>
-                  </Text>
+                  {f.notYetScored ? (
+                    <Text style={[styles.factorScore, { color: c }]}>Not yet scored</Text>
+                  ) : (
+                    <Text style={[styles.factorScore, { color: c }]}>
+                      {Math.round(f.subScore)}
+                      <Text style={styles.factorScoreDenom}>/100</Text>
+                    </Text>
+                  )}
                 </View>
                 <View style={styles.factorTrack}>
-                  <View style={{ height: '100%', width: `${Math.round(f.subScore)}%`, borderRadius: 5, backgroundColor: c }} />
+                  <View
+                    style={{
+                      height: '100%',
+                      width: f.notYetScored ? '100%' : `${Math.round(f.subScore)}%`,
+                      borderRadius: 5,
+                      backgroundColor: c,
+                      opacity: f.notYetScored ? 0.25 : 1,
+                    }}
+                  />
                 </View>
                 <Text style={styles.factorEvidence}>{f.evidence}</Text>
                 <Text style={styles.factorExplanation}>{f.explanation}</Text>

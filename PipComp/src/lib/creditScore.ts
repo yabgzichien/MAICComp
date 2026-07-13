@@ -22,11 +22,15 @@ export type CreditBand = 'Building' | 'Fair' | 'Good' | 'Strong' | 'Excellent';
 export interface CreditFactor {
   key: string;
   label: string;
-  subScore: number;     // 0..100
+  subScore: number;     // 0..100  still contributes to the score even when notYetScored
   weight: number;       // weights sum to 1
   contribution: number; // subScore * weight
   evidence: string;
   explanation: string;
+  /** True when this factor has no real evidence yet (e.g. track record with zero repayments)
+   *  and its subScore is a scoring placeholder, not an earned number  the UI should render a
+   *  neutral "not yet scored" state instead of the numeric value. */
+  notYetScored?: boolean;
 }
 
 export interface CreditScore {
@@ -61,7 +65,7 @@ interface FactorDef {
   key: string;
   label: string;
   weight: number;
-  compute: (p: CreditProfile) => { subScore: number; evidence: string; explanation: string };
+  compute: (p: CreditProfile) => { subScore: number; evidence: string; explanation: string; notYetScored?: boolean };
 }
 
 const FACTORS: FactorDef[] = [
@@ -169,6 +173,9 @@ const FACTORS: FactorDef[] = [
           p.repaymentTotal > 0 && p.repaymentOnTime === p.repaymentTotal
             ? 'Perfect repayment record so far.'
             : 'A longer history and on-time repayments build this over time.',
+        // Display-only: no repayments yet means there's no earned track record, even though
+        // tenure alone still contributes `subScore` to the actual score.
+        notYetScored: p.repaymentTotal === 0,
       };
     },
   },
@@ -186,8 +193,17 @@ function confidenceScoreCeiling(confidence: number): number {
 /** Compute the explainable credit score from a profile. Deterministic and pure. */
 export function computeCreditScore(profile: CreditProfile): CreditScore {
   const factors: CreditFactor[] = FACTORS.map((f) => {
-    const { subScore, evidence, explanation } = f.compute(profile);
-    return { key: f.key, label: f.label, subScore, weight: f.weight, contribution: subScore * f.weight, evidence, explanation };
+    const { subScore, evidence, explanation, notYetScored } = f.compute(profile);
+    return {
+      key: f.key,
+      label: f.label,
+      subScore,
+      weight: f.weight,
+      contribution: subScore * f.weight,
+      evidence,
+      explanation,
+      ...(notYetScored ? { notYetScored } : {}),
+    };
   });
   const raw = factors.reduce((s, f) => s + f.contribution, 0); // 0..100
   const conf = clamp(profile.confidence, 0, 1);

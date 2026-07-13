@@ -37,6 +37,27 @@ describe('computeCreditScore', () => {
     const low = computeCreditScore({ ...strong, confidence: 0.5 }).score;
     expect(low).toBeLessThan(high);
   });
+
+  it('flags track_record as notYetScored when there have been zero repayments, even though tenure still contributes a real subScore', () => {
+    const noLoans: CreditProfile = { ...strong, repaymentOnTime: 0, repaymentTotal: 0 };
+    const r = computeCreditScore(noLoans);
+    const trackRecord = r.factors.find((f) => f.key === 'track_record')!;
+    expect(trackRecord.notYetScored).toBe(true);
+    expect(trackRecord.subScore).toBeGreaterThan(0); // tenure alone still scores it
+  });
+
+  it('does not flag track_record once there is any repayment history', () => {
+    const r = computeCreditScore(strong); // repaymentTotal: 3
+    const trackRecord = r.factors.find((f) => f.key === 'track_record')!;
+    expect(trackRecord.notYetScored).toBeUndefined();
+  });
+
+  it('never sets notYetScored on any other factor', () => {
+    const r = computeCreditScore({ ...strong, repaymentOnTime: 0, repaymentTotal: 0 });
+    for (const f of r.factors) {
+      if (f.key !== 'track_record') expect(f.notYetScored).toBeUndefined();
+    }
+  });
 });
 
 describe('bandFor', () => {
