@@ -63,7 +63,7 @@ export interface CoachInput {
 
 /** One piece of a document handed to a document-capable model. */
 export type DocPart =
-  | { kind: 'binary'; base64: string; mimeType: string } // PDF / image — read server-side
+  | { kind: 'binary'; base64: string; mimeType: string } // PDF / image  read server-side
   | { kind: 'text'; text: string }; // CSV / XLSX / DOCX flattened to text
 
 export interface DocExtractInput {

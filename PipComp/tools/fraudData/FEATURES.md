@@ -1,4 +1,4 @@
-# Fraud Feature Vector — Canonical Format
+# Fraud Feature Vector  Canonical Format
 
 Used by: `tools/fraudData/generate.js` (generator) and `src/lib/fraudFeatures.ts` (Task A2, live extraction).
 
@@ -39,4 +39,4 @@ The label is an integer: **0 = genuine, 1 = fabricated**.
 - For `merchant_entropy`: count occurrences per `merchantKey`, compute Shannon entropy, divide by `log2(uniqueMerchants + 1)`.
 - For `amount_cv`: if mean is 0, return 0.
 - All features must be clamped to [0, 1] before writing to the vector.
-- Feature order is fixed — do not reorder.
+- Feature order is fixed  do not reorder.

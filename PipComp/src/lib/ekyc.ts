@@ -1,10 +1,10 @@
 // src/lib/ekyc.ts
 // Pure Malaysian NRIC (MyKad) logic: validate structure, extract date-of-birth, gender,
-// and state-of-birth, and mask for display. No UI/DB imports — unit-tested.
+// and state-of-birth, and mask for display. No UI/DB imports  unit-tested.
 //
 // NRIC format: YYMMDD-PB-###G (12 digits). YYMMDD = birth date; PB = birthplace/state code;
 // ### = serial; G = final digit (odd = male, even = female). This is real, deterministic
-// structure defined by JPN — the substantive core behind the (otherwise mock) eKYC flow.
+// structure defined by JPN  the substantive core behind the (otherwise mock) eKYC flow.
 
 export type Gender = 'M' | 'F';
 

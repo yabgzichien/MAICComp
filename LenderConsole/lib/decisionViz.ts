@@ -1,4 +1,4 @@
-// Pure layout math for the decision visuals (Brief K). No React, no SVG — these
+// Pure layout math for the decision visuals (Brief K). No React, no SVG  these
 // helpers turn numbers the engine already computed into segment/tick/step layouts,
 // so the components stay dumb and the geometry stays unit-tested.
 
@@ -23,7 +23,7 @@ export interface HeadroomTick {
 export interface HeadroomLayout {
   segments: HeadroomSegment[];
   ticks: HeadroomTick[];
-  /** True when the installment respects both caps — the "inside the safe zone" state. */
+  /** True when the installment respects both caps  the "inside the safe zone" state. */
   safe: boolean;
 }
 
@@ -152,7 +152,7 @@ export interface BenfordChartData {
   expected: number[];
 }
 
-/** Null when the histogram is absent, malformed, or empty — the chart hides gracefully. */
+/** Null when the histogram is absent, malformed, or empty  the chart hides gracefully. */
 export function benfordChart(histogram: number[] | undefined): BenfordChartData | null {
   if (!histogram || histogram.length !== 9) return null;
   const total = histogram.reduce((s, c) => s + c, 0);

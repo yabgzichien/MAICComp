@@ -1,9 +1,9 @@
 // Deterministic "multi-agent" assessment panel. Verdicts, confidence, and cited
-// signals are computed here — never by an LLM. An optional server call (see
+// signals are computed here  never by an LLM. An optional server call (see
 // app/api/agents/route.ts) may replace `rationale` with LLM-generated prose that
 // narrates the SAME verdict; if that call fails or is skipped, the fallback
 // rationale computed here is what renders. The orchestrator (added in a later
-// task) can only escalate an auto-approve toward manual review — it can never
+// task) can only escalate an auto-approve toward manual review  it can never
 // soften a decline or refer, and it never changes maxAmount/installment.
 
 import type { CreditPassport, PassportAssessment, PassportIncomeQuality, PassportSpendingProfile } from './passport';
@@ -44,7 +44,7 @@ const FALLBACK_RATIONALE: Record<AgentId, Record<VerdictTone, string>> = {
   },
   risk: {
     positive: 'Data coverage and repayment history are consistent and recent ({cite}).',
-    caution: 'Coverage or repayment history is partial — treat the picture as incomplete ({cite}).',
+    caution: 'Coverage or repayment history is partial  treat the picture as incomplete ({cite}).',
     negative: "Thin data coverage makes this applicant's pattern hard to verify ({cite}).",
   },
   decision: {
@@ -67,7 +67,7 @@ export interface StackingSignal {
   windowHours: number;
 }
 
-/** Escalation-only: a stacking hit can worsen the fraud tone, never soften it —
+/** Escalation-only: a stacking hit can worsen the fraud tone, never soften it 
  *  the same asymmetry the orchestrator enforces. */
 const STACKING_NEGATIVE_COUNT = 3;
 
@@ -236,7 +236,7 @@ export function assessOrchestrator(specialists: AgentAssessment[], decision: Loa
   } else if (worst.tone === 'negative') {
     // Approve, but a specialist disagrees: escalate toward caution, never override the loan itself.
     tone = 'caution';
-    verdict = 'Dissents — recommends manual review';
+    verdict = 'Dissents  recommends manual review';
     concurs = false;
   } else if (worst.tone === 'caution') {
     tone = 'caution';
@@ -244,7 +244,7 @@ export function assessOrchestrator(specialists: AgentAssessment[], decision: Loa
     concurs = true;
   } else {
     tone = 'positive';
-    verdict = 'Concurs — approve';
+    verdict = 'Concurs  approve';
     concurs = true;
   }
 

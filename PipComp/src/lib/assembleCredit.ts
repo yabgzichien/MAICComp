@@ -1,7 +1,7 @@
 // src/lib/assembleCredit.ts
 // Pure credit-profile assembly, lifted out of useCreditProfile so it can be replayed at any `now`
 // (which is what Credit Momentum needs). Filters transactions to those on/before `now`, then runs
-// the same deterministic engines the hook used. No UI/DB imports — unit-tested.
+// the same deterministic engines the hook used. No UI/DB imports  unit-tested.
 import { computeCreditScore, type CreditProfile, type CreditScore } from './creditScore';
 import { computeCoverage, type Coverage } from './coverage';
 import { computeDataConfidence, type ConfidenceTxn, type DataConfidence } from './dataConfidence';
@@ -39,7 +39,7 @@ function txnTime(t: Transaction): number {
 /**
  * Assemble the credit profile + score as of `now`. At the real current time this is byte-identical
  * to the old useCreditProfile assembly; at a past `now` it replays the profile the borrower had then
- * (transaction-derived signals only — net worth and repayment count are held at the passed values,
+ * (transaction-derived signals only  net worth and repayment count are held at the passed values,
  * since they are not dated in the store).
  */
 export function assembleCredit(input: CreditInputs, now: Date = new Date()): AssembledCredit {

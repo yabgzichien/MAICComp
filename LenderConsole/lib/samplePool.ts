@@ -1,5 +1,5 @@
 // lib/samplePool.ts
-// Runtime port of PipComp/tools/securitizationData/generate.js (seed 1337) — instead
+// Runtime port of PipComp/tools/securitizationData/generate.js (seed 1337)  instead
 // of committing the 9,000-line generated data file, the console reproduces the IDENTICAL
 // 1,000-loan demo pool deterministically at module load. Used as the Capital Markets
 // "sample" source and the empty-book fallback (Brief Q). xorshift32 + the exact rand()

@@ -1,7 +1,7 @@
 // src/lib/lenderDirectory.ts
 // Borrower-side client for the lender directory the Lender Console publishes at
 // GET /api/lenders (the Lender Match flywheel). One-directional by design: only the
-// lender's PUBLIC criteria travel (a rate-sheet equivalent) — no borrower data is ever
+// lender's PUBLIC criteria travel (a rate-sheet equivalent)  no borrower data is ever
 // sent; the Coach simulates against the fetched ladder entirely on-device.
 //
 // Untrusted network input: every entry is validated field-by-field (the
@@ -12,7 +12,7 @@
 import { DEFAULT_PRODUCTS, type LenderPolicy, type LoanProduct } from './loans';
 
 /** One published lender: display identity + its loan product ladder, and (Brief N)
- *  optionally the affordability thresholds the lender's console decides with —
+ *  optionally the affordability thresholds the lender's console decides with 
  *  when present, the Coach simulates under them, so "what this lender would say"
  *  tracks their real, current policy. Absent on older consoles (back-compat). */
 export interface LenderProfile {
@@ -30,11 +30,11 @@ export interface LenderDirectory {
   offline: boolean;
 }
 
-/** Shown when the console is unreachable — the Coach keeps working against the built-in ladder. */
+/** Shown when the console is unreachable  the Coach keeps working against the built-in ladder. */
 export const OFFLINE_LENDER: LenderProfile = {
   id: 'offline',
   name: 'Generic ladder (offline)',
-  blurb: 'Standard Pip product ladder — shown when no lender directory is reachable.',
+  blurb: 'Standard Pip product ladder  shown when no lender directory is reachable.',
   brandColor: '#5b6770',
   products: DEFAULT_PRODUCTS,
 };
@@ -91,7 +91,7 @@ function parsePolicy(raw: unknown): LenderPolicy | null {
   };
 }
 
-/** Validate one lender entry; a single malformed product invalidates the whole entry —
+/** Validate one lender entry; a single malformed product invalidates the whole entry 
  *  a partial ladder could silently mis-tier a borrower, which is worse than no ladder.
  *  Same rule for a malformed published policy: mis-simulating a lender's thresholds is
  *  worse than skipping the lender. A MISSING policy is fine (older console, defaults). */

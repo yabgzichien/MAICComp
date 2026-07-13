@@ -21,7 +21,7 @@ function dayOf(iso: string | null): string | null {
  *
  * - Amount is compared with a small epsilon to tolerate float noise.
  * - "Same day" uses the candidate's own date when present, otherwise `today`
- *   (the scan day) — an item with no readable date is assumed to be from today.
+ *   (the scan day)  an item with no readable date is assumed to be from today.
  * - A saved transaction's day is its `date` when present, else the day of `createdAt`.
  *
  * Returns the first matching transaction, or null.

@@ -1,11 +1,11 @@
 // src/lib/coverage.ts
-// Pure, deterministic data-coverage metric — measures how complete the borrower's
+// Pure, deterministic data-coverage metric  measures how complete the borrower's
 // recorded financial picture is over the trailing 90 days. Counts distinct days that
 // carry at least one *non-manual* transaction (manual entries are excluded as anti-
 // gaming, mirroring the source-trust weighting in dataConfidence). Feeds into both
 // computeDataConfidence (as a completeness term) and decideLoan (as a tier ceiling).
 //
-// No UI/DB imports — unit-tested.
+// No UI/DB imports  unit-tested.
 
 import type { TxnSource } from './types';
 
@@ -17,7 +17,7 @@ export interface CoverageInput {
 }
 
 export interface Coverage {
-  /** 0..1 — daysCovered / windowDays. */
+  /** 0..1  daysCovered / windowDays. */
   ratio: number;
   /** Distinct UTC days in the window that carry at least one contributing transaction. */
   daysCovered: number;

@@ -177,7 +177,7 @@ export function SettingsScreen({ onBack, onMigrate, onOpenLender = () => {}, onO
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.providerName}>Attack Gallery</Text>
-            <Text style={styles.providerSub}>Run known fraud techniques against our own integrity rings — a live self-test.</Text>
+            <Text style={styles.providerSub}>Run known fraud techniques against our own integrity rings  a live self-test.</Text>
           </View>
           <Icon name="chevronRight" size={18} color={colors.ink3} />
         </Pressable>

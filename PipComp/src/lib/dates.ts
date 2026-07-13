@@ -44,11 +44,11 @@ export function fullDateWithWeekday(iso?: string | null): string {
   return `${WEEKDAYS[d.getDay()]}, ${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-/** Strict `YYYY-MM-DD` matcher — the only date-string shape this module rewrites. */
+/** Strict `YYYY-MM-DD` matcher  the only date-string shape this module rewrites. */
 export const ISO_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 /**
- * True if `s` is a strict `YYYY-MM-DD` string AND a *genuinely* valid calendar date —
+ * True if `s` is a strict `YYYY-MM-DD` string AND a *genuinely* valid calendar date 
  * not just something `Date` parses via silent rollover (e.g. `new Date('2026-13-45')`
  * doesn't throw or produce `Invalid Date`, it rolls over to 2027-02-14). We guard
  * against that by round-tripping: construct the UTC date from the captured numbers
@@ -85,13 +85,13 @@ function withYear(iso: string, year: number): string {
  * Apply a user's edit to one transaction's date, with year-propagation:
  * receipts/screenshots are almost always one statement period, so if the user
  * corrects the *year* of one item, that correction is very likely true for the
- * whole batch — apply the new year (month/day untouched) to every other item
+ * whole batch  apply the new year (month/day untouched) to every other item
  * that has a parseable date.
  *
  * - The edited item gets `newDate` verbatim (year, month, day all replaced).
  * - Propagation only fires when the edited item's *original* date was a
  *   parseable `YYYY-MM-DD` string AND `newDate` is also parseable AND the
- *   year actually changed — with no original year, there's nothing to "change".
+ *   year actually changed  with no original year, there's nothing to "change".
  * - Items with `date: null` or unparseable dates are left as-is (nothing to rewrite).
  * - Returns a new array; does not mutate `items`.
  */

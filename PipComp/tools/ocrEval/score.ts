@@ -1,7 +1,7 @@
 // tools/ocrEval/score.ts
 // Step 3 of the OCR eval: align saved extractions against hand-written labels,
 // compute field-level accuracy + missed/hallucinated counts, and regenerate
-// tools/ocrEval/METRICS.md. Offline and idempotent — re-run freely.
+// tools/ocrEval/METRICS.md. Offline and idempotent  re-run freely.
 //
 // Run: npx tsx tools/ocrEval/score.ts
 
@@ -23,14 +23,14 @@ const METRICS_PATH = path.join(ROOT, 'METRICS.md');
 
 const isFiniteNum = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
 
-/** Read + parse JSON, stripping a UTF-8 BOM (charCode 0xFEFF) — Windows editors
+/** Read + parse JSON, stripping a UTF-8 BOM (charCode 0xFEFF)  Windows editors
  *  add one and JSON.parse rejects it; hand-written label files must survive that. */
 function readJson(filePath: string): unknown {
   const raw = fs.readFileSync(filePath, 'utf8');
   return JSON.parse(raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw);
 }
 
-/** Defensive label parsing — a typo'd label file should name itself, not crash the run. */
+/** Defensive label parsing  a typo'd label file should name itself, not crash the run. */
 function parseLabelFile(raw: unknown, file: string): LabelRow[] {
   const rows = (raw as { rows?: unknown })?.rows;
   if (!Array.isArray(rows)) throw new Error(`${file}: expected { "rows": [...] }`);
@@ -47,7 +47,7 @@ function parseLabelFile(raw: unknown, file: string): LabelRow[] {
 
 function main(): void {
   if (!fs.existsSync(LABELS_DIR)) {
-    console.error(`No labels folder. Create ${LABELS_DIR} — one <stem>.json per screenshot (schema in README.md).`);
+    console.error(`No labels folder. Create ${LABELS_DIR}  one <stem>.json per screenshot (schema in README.md).`);
     process.exit(1);
   }
   if (!fs.existsSync(EXTRACTIONS_DIR)) {
@@ -64,7 +64,7 @@ function main(): void {
     const stem = path.basename(file, '.json');
     const extractionPath = path.join(EXTRACTIONS_DIR, `${stem}.json`);
     if (!fs.existsSync(extractionPath)) {
-      console.warn(`  ${stem}: labeled but not extracted yet — skipping (run run.ts).`);
+      console.warn(`  ${stem}: labeled but not extracted yet  skipping (run run.ts).`);
       continue;
     }
     unmatchedExtractions--;
@@ -85,7 +85,7 @@ function main(): void {
   }
 
   if (unmatchedExtractions > 0)
-    console.warn(`  Note: ${unmatchedExtractions} extraction(s) have no label file — not scored.`);
+    console.warn(`  Note: ${unmatchedExtractions} extraction(s) have no label file  not scored.`);
   if (items.length === 0) {
     console.error('Nothing to score: no screenshot has BOTH a label file and an extraction.');
     process.exit(1);
@@ -112,7 +112,7 @@ function main(): void {
   const o = score.overall;
   console.log(`Scored ${items.length} screenshot(s): ${o.matched}/${o.labelRows} rows aligned, ` +
     `${o.missed} missed, ${o.hallucinated} hallucinated.`);
-  console.log(`Field accuracy — amount ${(o.field.amount * 100).toFixed(1)}% · date ${(o.field.date * 100).toFixed(1)}% · ` +
+  console.log(`Field accuracy  amount ${(o.field.amount * 100).toFixed(1)}% · date ${(o.field.date * 100).toFixed(1)}% · ` +
     `direction ${(o.field.direction * 100).toFixed(1)}% · merchant ${(o.field.merchant * 100).toFixed(1)}%`);
   console.log(`Written: METRICS.md · dataset/out/results.json · dataset/out/failures.json`);
 }

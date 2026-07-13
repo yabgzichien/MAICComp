@@ -1,6 +1,6 @@
 // src/llm/categoryGuessPrompt.ts
 // Prompt + pure parser for guessing a category for merchants the app has never
-// seen before (no learned-memory match). Only ever called for that subset —
+// seen before (no learned-memory match). Only ever called for that subset 
 // see AddFlow.onExtracted. The parser is dependency-free and unit-tested; the
 // network call lives in the provider.
 
@@ -34,7 +34,7 @@ export const CATEGORY_GUESS_SYSTEM_PROMPT =
   'You are a categorization assistant for a personal expenses app. Given a short list of ' +
   "transactions and the user's own category list, guess the single best-fitting category id " +
   'for each transaction from its merchant name. If a merchant gives no real signal (e.g. an ' +
-  'unfamiliar or generic name), return null for it rather than guessing — never invent a ' +
+  'unfamiliar or generic name), return null for it rather than guessing  never invent a ' +
   'category id that is not in the provided list. Output ONLY JSON, no prose, no markdown fences.';
 
 function categoryLines(categories: CategoryOption[]): string {
@@ -65,7 +65,7 @@ function stripFence(s: string): string {
 /**
  * Parse the model's JSON reply into an original-index -> categoryId-or-null map.
  * A value naming an unknown category id, or one whose kind doesn't match that
- * item's kind, is dropped to null rather than trusted — never invents a category.
+ * item's kind, is dropped to null rather than trusted  never invents a category.
  * Throws CategoryGuessParseError only if the whole reply isn't a JSON object.
  */
 export function parseCategoryGuess(content: string, items: GuessableItem[], categories: CategoryOption[]): Record<number, string | null> {

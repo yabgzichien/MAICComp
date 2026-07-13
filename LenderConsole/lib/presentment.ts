@@ -1,9 +1,9 @@
-// Ported verbatim from PipComp/src/lib/presentment.ts (Brief G) — keep the two
+// Ported verbatim from PipComp/src/lib/presentment.ts (Brief G)  keep the two
 // files in sync, same as the loans.ts / passport.ts port pairs.
 //
 // Pure anti-stacking helpers. A "presentment" is one verification of a passport at a lender.
 // If the same passport is presented to (m)any lenders in a short window, that is classic
-// loan-stacking — surface it. Pure + unit-tested; the lender console owns the log state.
+// loan-stacking  surface it. Pure + unit-tested; the lender console owns the log state.
 //
 // Production note: a real deployment shares the presentment log across lenders via a registry
 // (the same backend that hosts issuer signing). The in-app log demonstrates the mechanic.
@@ -16,7 +16,7 @@ export interface Presentment {
   lender?: string;
 }
 
-/** Stable id for a passport — the subject public key uniquely identifies the borrower. */
+/** Stable id for a passport  the subject public key uniquely identifies the borrower. */
 export function presentmentKey(passport: CreditPassport): string {
   return passport.subject;
 }

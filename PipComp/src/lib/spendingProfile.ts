@@ -1,5 +1,5 @@
 // src/lib/spendingProfile.ts (Brief P)
-// Pure spending-behaviour signals over the borrower's own ledger — a Tier 2 (behavioural)
+// Pure spending-behaviour signals over the borrower's own ledger  a Tier 2 (behavioural)
 // block. Lender-facing EVIDENCE only; it does not feed creditScore.ts. No UI/DB imports.
 
 import type { Transaction } from './types';

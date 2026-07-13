@@ -4,7 +4,7 @@
 // borrower app ships. Keep the two in sync when changing the risk math.
 //
 // One deviation from the source: PipComp imports CreditBand from ./creditScore,
-// which the console does not have — so the union is defined locally here. The
+// which the console does not have  so the union is defined locally here. The
 // console's passport carries band as a free string; loanPD already defaults an
 // unrecognised band to the weakest PD, so an unexpected value fails safe.
 //

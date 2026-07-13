@@ -15,7 +15,7 @@ export const ATTACK_SYSTEM_PROMPT =
   'You are a fraud-risk security analyst writing a terse incident report. In at most 3 short ' +
   'sentences, plain text, no preamble: state what the attack tried, how the deterministic integrity ' +
   'engine responded (which signals fired, the confidence and the loan outcome), and the verdict. ' +
-  'Use ONLY the facts provided — never invent a signal or change the verdict.';
+  'Use ONLY the facts provided  never invent a signal or change the verdict.';
 
 /** Build the compact incident-report prompt from a computed attack result. */
 export function buildAttackPrompt(result: AttackResult): string {
@@ -34,13 +34,13 @@ export function buildAttackPrompt(result: AttackResult): string {
   ].join('\n');
 }
 
-/** Deterministic incident line used when the LLM is unavailable — never invents facts. */
+/** Deterministic incident line used when the LLM is unavailable  never invents facts. */
 export function attackFallback(result: AttackResult): string {
   const outcome =
     result.verdict === 'caught'
       ? result.floorBreached
-        ? `blocked — integrity floor breached, loan ${result.decision}`
-        : `caught — confidence capped to ${pct(result.confidence)}, loan ${result.decision}`
+        ? `blocked  integrity floor breached, loan ${result.decision}`
+        : `caught  confidence capped to ${pct(result.confidence)}, loan ${result.decision}`
       : result.verdict === 'flagged'
         ? `approved but flagged (confidence ${pct(result.confidence)})`
         : `slipped through (confidence ${pct(result.confidence)})`;

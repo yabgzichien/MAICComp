@@ -142,7 +142,7 @@ async function init(): Promise<SQLite.SQLiteDatabase> {
   `);
 
   // Migration: add the `kind` column for databases created before income
-  // categories existed. Throws "duplicate column" on fresh DBs — ignore.
+  // categories existed. Throws "duplicate column" on fresh DBs  ignore.
   try {
     await db.execAsync("ALTER TABLE categories ADD COLUMN kind TEXT NOT NULL DEFAULT 'expense'");
   } catch {
@@ -172,8 +172,8 @@ async function init(): Promise<SQLite.SQLiteDatabase> {
 
 /**
  * Idempotently insert every default category (INSERT OR IGNORE keeps custom and
- * existing rows untouched) so upgrades pick up newly-added defaults — including
- * the income categories — then make sure income ids carry kind='income'.
+ * existing rows untouched) so upgrades pick up newly-added defaults  including
+ * the income categories  then make sure income ids carry kind='income'.
  */
 async function ensureSeedCategories(db: SQLite.SQLiteDatabase): Promise<void> {
   await seedCategories(db);
@@ -224,8 +224,8 @@ async function seedProducts(db: SQLite.SQLiteDatabase): Promise<void> {
 }
 
 /**
- * Wipe every user table — transactions, learned merchants, the whole budget,
- * and all categories (custom + default) — then restore the default categories,
+ * Wipe every user table  transactions, learned merchants, the whole budget,
+ * and all categories (custom + default)  then restore the default categories,
  * all in a single transaction. Used by the "Reset all data" action in Settings.
  */
 export async function resetAllData(): Promise<void> {

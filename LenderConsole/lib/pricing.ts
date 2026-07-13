@@ -1,8 +1,8 @@
 // lib/pricing.ts (Brief R)
-// Deterministic risk-based pricing assistant. Computed AFTER decideLoan — it never
+// Deterministic risk-based pricing assistant. Computed AFTER decideLoan  it never
 // changes approve/refer/decline or the affordable principal (adopting a rate re-runs
 // the engine at the new APR; that lives in the console). PD reuses securitization.ts's
-// band mapping. The suggested rate is clamped to the tier's ladder APR (a ceiling — the
+// band mapping. The suggested rate is clamped to the tier's ladder APR (a ceiling  the
 // assistant discounts strong files, it never surcharges past the published ladder) and
 // floored at the lender's cost of funds. Pure; no UI imports.
 
@@ -14,7 +14,7 @@ const pct = (x: number): string => `${(x * 100).toFixed(1)}%`;
 
 export interface PricingInputs {
   band: CreditBand;
-  /** The applicant's tier APR — the ceiling the suggestion is clamped to. */
+  /** The applicant's tier APR  the ceiling the suggestion is clamped to. */
   ladderApr: number;
   /** Lender's blended annual cost of funds (policy field). */
   costOfFunds: number;
@@ -47,7 +47,7 @@ export interface PricingSuggestion {
 
 export function priceLoan(inputs: PricingInputs): PricingSuggestion {
   const lgd = inputs.lgd ?? DEFAULT_ASSUMPTIONS.lgd;
-  const pd = loanPD(inputs.band, 0); // approved loans cleared the fraud gate — band-driven PD
+  const pd = loanPD(inputs.band, 0); // approved loans cleared the fraud gate  band-driven PD
   const expectedLossRate = pd * lgd;
   const breakEvenRate = inputs.costOfFunds + expectedLossRate;
   const suggestedRate = clamp(breakEvenRate + inputs.targetReturn, inputs.costOfFunds, inputs.ladderApr);
@@ -64,7 +64,7 @@ export function priceLoan(inputs: PricingInputs): PricingSuggestion {
     `Default probability ${pct(pd)} for the ${inputs.band} band → expected loss ${pct(expectedLossRate)} (LGD ${pct(lgd)}).`,
     `Break-even ${pct(breakEvenRate)} = cost of funds ${pct(inputs.costOfFunds)} + expected loss ${pct(expectedLossRate)}.`,
     discountBps > 0
-      ? `Suggested ${pct(suggestedRate)} meets the ${pct(inputs.targetReturn)} target return — a ${discountBps} bps discount on the ${pct(inputs.ladderApr)} ladder rate for a lower-risk file.`
+      ? `Suggested ${pct(suggestedRate)} meets the ${pct(inputs.targetReturn)} target return  a ${discountBps} bps discount on the ${pct(inputs.ladderApr)} ladder rate for a lower-risk file.`
       : `Ladder rate ${pct(inputs.ladderApr)} stands: break-even + target sits at or above it, and the assistant never prices above the published ladder.`,
   ];
 
@@ -84,7 +84,7 @@ export function priceLoan(inputs: PricingInputs): PricingSuggestion {
 /**
  * The adoption path: replace one tier's APR so decideLoan can re-run the affordability
  * check at the adopted rate (a lower rate frees headroom; a higher rate would tighten it
- * and could reduce the offered principal). The engine itself is unchanged — this only
+ * and could reduce the offered principal). The engine itself is unchanged  this only
  * swaps the input rate for the matched tier, matched by label.
  */
 export function repriceProducts(products: LoanProduct[], tierLabel: string, apr: number): LoanProduct[] {

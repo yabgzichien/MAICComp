@@ -1,5 +1,5 @@
 // src/lib/incomeQuality.ts (Brief P)
-// Pure, on-device income-quality signals over the borrower's own transactions — an
+// Pure, on-device income-quality signals over the borrower's own transactions  an
 // aggregate, non-identifying block (Tier 0). Lender-facing EVIDENCE only: it does not
 // feed creditScore.ts (the score formula is unchanged), it gives the underwriter the
 // "how do they earn?" context a single average income hides. No UI/DB imports.
@@ -17,7 +17,7 @@ export interface IncomeQuality {
   seasonal: boolean;
 }
 
-/** Month key (YYYY-MM) for a transaction — its own date when present, else when logged. */
+/** Month key (YYYY-MM) for a transaction  its own date when present, else when logged. */
 function monthKeyOf(t: Transaction): string {
   return (t.date ?? t.createdAt).slice(0, 7);
 }
@@ -56,7 +56,7 @@ export function computeIncomeQuality(transactions: Transaction[]): IncomeQuality
   const variationCoefficient = m > 0 ? stdev(monthlyTotals) / m : 0;
   const sourceCount = [...monthsByMerchant.values()].filter((mset) => mset.size >= 2).length;
   const regularityRatio = monthsObserved > 0 ? totalByMonth.size / monthsObserved : 0;
-  // Seasonal: with enough history, income lands in a minority of months (a lumpy earner —
+  // Seasonal: with enough history, income lands in a minority of months (a lumpy earner 
   // gig/harvest/commission). Timing concentration is the signal; amount swings are the
   // separate variationCoefficient axis.
   const seasonal = monthsObserved >= 3 && regularityRatio < 0.6;

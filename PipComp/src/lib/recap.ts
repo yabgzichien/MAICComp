@@ -1,6 +1,6 @@
 // src/lib/recap.ts
 // Pure, deterministic helpers for the monthly income-statement recap. No UI or
-// database imports — everything here is unit-tested.
+// database imports  everything here is unit-tested.
 import { txnMonthKey, type Allocations } from './budget';
 import type { Transaction } from './types';
 

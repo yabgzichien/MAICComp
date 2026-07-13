@@ -1,7 +1,7 @@
 // src/lib/fraudModel.ts
 // Pure-JS logistic regression inference for fraud/fabrication detection.
 // Loads exported model weights and produces a probability + per-feature contributions.
-// No API key, fully offline, deterministic — same input always yields same output.
+// No API key, fully offline, deterministic  same input always yields same output.
 
 import weights from './fraudModelWeights.json';
 import { type FraudFeatures, toFeatureVector } from './fraudFeatures';
@@ -27,7 +27,7 @@ export interface FraudScore {
 
 /**
  * Scores a FraudFeatures record using the exported logistic regression model.
- * Pure function — no side effects, no I/O.
+ * Pure function  no side effects, no I/O.
  */
 export function scoreFraud(features: FraudFeatures): FraudScore {
   const { featureNames, weights: coefs, bias, featureMeans, featureStds } = weights;

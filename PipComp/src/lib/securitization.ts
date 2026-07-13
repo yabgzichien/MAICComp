@@ -1,6 +1,6 @@
 // src/lib/securitization.ts
 // Pure, deterministic securitization engine: turns a pool of scored Pip Credit loans
-// into sized, rated Sukuk/ABS tranches. No UI/DB imports — unit-tested.
+// into sized, rated Sukuk/ABS tranches. No UI/DB imports  unit-tested.
 //
 // Principle (matching the rest of the system): the AI supplies the upstream risk signals
 // (credit-score band + ML fraud probability); this engine only structures and rates, using

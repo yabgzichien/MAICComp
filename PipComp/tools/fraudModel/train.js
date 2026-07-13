@@ -145,7 +145,7 @@ console.log(`Weights written to ${weightsPath}`);
 
 // ── Write METRICS.md ─────────────────────────────────────────────────────────
 const metricsPath = path.resolve(__dirname, 'METRICS.md');
-const metricsContent = `# Fraud Model — Training Metrics
+const metricsContent = `# Fraud Model  Training Metrics
 
 ## Results
 
@@ -164,8 +164,8 @@ const metricsContent = `# Fraud Model — Training Metrics
 
 ## Dataset source
 
-**Semi-real.** The *genuine* class is computed from real bank transactions — the **Berka
-(PKDD'99) Czech-bank dataset** (~5,300 accounts, ~1M transactions, CC0) — so the genuine
+**Semi-real.** The *genuine* class is computed from real bank transactions  the **Berka
+(PKDD'99) Czech-bank dataset** (~5,300 accounts, ~1M transactions, CC0)  so the genuine
 behaviour (Benford distribution, inter-transaction gaps, amount dispersion) is real. The *fraud*
 class is those same real accounts run through \`tools/fraudRealData/perturb.ts\` (partial, varied
 fabrication). Rebuild with \`npx tsx tools/fraudRealData/build.ts\` then re-run this trainer.

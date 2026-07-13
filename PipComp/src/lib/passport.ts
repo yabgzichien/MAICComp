@@ -1,5 +1,5 @@
 /**
- * Credit Passport — build, sign, and verify a tamper-evident borrower credential.
+ * Credit Passport  build, sign, and verify a tamper-evident borrower credential.
  *
  * The passport contains aggregate credit data (score, factors, provenance summary)
  * but never raw transactions. A SHA-256 "evidence hash" of the aggregates gives
@@ -16,7 +16,7 @@ ed.hashes.sha512 = sha512;
 
 /**
  * Lender-relevant aggregates carried inside the (signed) passport so the lender
- * runs its decision on the borrower's real numbers — not values re-derived from
+ * runs its decision on the borrower's real numbers  not values re-derived from
  * the score. These are aggregates, not raw transactions, so privacy is preserved.
  */
 export interface PassportAssessment {
@@ -29,7 +29,7 @@ export interface PassportAssessment {
 }
 
 /**
- * Signed score *trajectory* — the borrower's momentum. Thin-file borrowers can't show a high
+ * Signed score *trajectory*  the borrower's momentum. Thin-file borrowers can't show a high
  * level, but they can show verifiable upward direction. Re-derived from the same dated evidence.
  */
 export interface PassportMomentum {
@@ -41,7 +41,7 @@ export interface PassportMomentum {
   direction: 'rising' | 'flat' | 'falling';
 }
 
-/** Verified holder identity (eKYC) bound into the passport. Masked IC only — no raw NRIC. */
+/** Verified holder identity (eKYC) bound into the passport. Masked IC only  no raw NRIC. */
 export interface PassportHolder {
   name: string;
   nricMasked: string;
@@ -50,7 +50,7 @@ export interface PassportHolder {
 }
 
 /**
- * Version stamps of the logic that produced this passport — the scoring/confidence
+ * Version stamps of the logic that produced this passport  the scoring/confidence
  * engine, the loan-policy constants, and the fraud-model weights (see lib/versions.ts).
  * Signed alongside the rest, so a disputed decision can be re-run against exactly
  * the logic that made it.
@@ -61,7 +61,7 @@ export interface PassportProvenanceMeta {
   modelWeightsVersion: string;
 }
 
-/** Self-declared occupation context (Brief P) — Tier 1, labelled self-declared to the lender. */
+/** Self-declared occupation context (Brief P)  Tier 1, labelled self-declared to the lender. */
 export interface PassportOccupation {
   occupation: string;
   sector: string;
@@ -70,7 +70,7 @@ export interface PassportOccupation {
   selfDeclared: true;
 }
 
-/** Income-quality evidence (Brief P) — Tier 0, aggregate and non-identifying. */
+/** Income-quality evidence (Brief P)  Tier 0, aggregate and non-identifying. */
 export interface PassportIncomeQuality {
   variationCoefficient: number;
   sourceCount: number;
@@ -86,7 +86,7 @@ export interface PassportObligation {
   monthsObserved: number;
 }
 
-/** Spending-behaviour evidence (Brief P) — Tier 2, with the itemised obligations behind DSR. */
+/** Spending-behaviour evidence (Brief P)  Tier 2, with the itemised obligations behind DSR. */
 export interface PassportSpendingProfile {
   essentialsRatio: number;
   expenseVolatility: number;
@@ -103,17 +103,17 @@ export type ConsentTier = 0 | 1 | 2 | 3;
  * A signed consent receipt (Brief I stretch): proof, embedded in the passport, of exactly
  * which tier the borrower granted, the fields it covers, when it was granted, and when it
  * expires. Because buildPassport signs the whole canonicalized passport, receipts are
- * tamper-evident for free — a lender can prove consent field-by-field. An expired grant
+ * tamper-evident for free  a lender can prove consent field-by-field. An expired grant
  * degrades only its own block ("consent lapsed"), never the whole passport.
  */
 export interface ConsentReceipt {
   tier: ConsentTier;
   scope: string[];   // field names shared under this tier
   grantedAt: string; // ISO
-  expiresAt: string; // ISO — may be shorter than the passport's own validUntil
+  expiresAt: string; // ISO  may be shorter than the passport's own validUntil
 }
 
-/** The portable, signable credential — no raw transactions. */
+/** The portable, signable credential  no raw transactions. */
 export interface CreditPassport {
   subject: string;
   score: number;
@@ -134,7 +134,7 @@ export interface CreditPassport {
   provenanceMeta?: PassportProvenanceMeta;
   /**
    * Counts of leading digits 1–9 (index 0 = digit 1) across the transaction amounts
-   * behind the score — nine aggregate numbers, never raw transactions. Lets a lender
+   * behind the score  nine aggregate numbers, never raw transactions. Lets a lender
    * chart the observed distribution against Benford's expected curve.
    * Optional; absent on pre-v2 passports.
    */
@@ -158,7 +158,7 @@ export interface PassportInput {
   provenanceSummary: string;
   /**
    * Pre-aggregated numbers used to derive `evidenceHash`.
-   * These are NOT raw transactions — they are already-summarised figures
+   * These are NOT raw transactions  they are already-summarised figures
    * (e.g. monthly income totals, factor sub-scores).
    */
   aggregates: Record<string, number>;
@@ -186,7 +186,7 @@ export interface VerifyResult {
   valid: boolean;
   tampered: boolean;
   reasons: string[];
-  /** Tiers whose consent grant has expired — the block is present but "lapsed" (not a failure). */
+  /** Tiers whose consent grant has expired  the block is present but "lapsed" (not a failure). */
   lapsedTiers?: ConsentTier[];
 }
 
@@ -367,7 +367,7 @@ function freshnessProblem(passport: CreditPassport, now: Date): string | null {
  * Produce a deterministic JSON string of a passport.
  * Keys are sorted alphabetically at every level of nesting.
  *
- * Note: Array element order is preserved — only object keys within each
+ * Note: Array element order is preserved  only object keys within each
  * element are sorted alphabetically. This is intentional, as the order of
  * factorSummary must be stable for cryptographic signing.
  */
@@ -380,7 +380,7 @@ export function canonicalize(passport: CreditPassport): string {
  * Provides a cryptographic anchor to the pre-aggregated source material
  * without exposing individual transaction records.
  *
- * Aggregates must be pre-validated by the caller — keys and values should be
+ * Aggregates must be pre-validated by the caller  keys and values should be
  * stable and deterministic to ensure reproducible hashing.
  */
 export function evidenceHashOf(aggregates: Record<string, number>): string {
@@ -394,7 +394,7 @@ export function evidenceHashOf(aggregates: Record<string, number>): string {
  * Build a `CreditPassport` from `input`, sign it, and return the passport
  * together with a hex-encoded Ed25519 signature.
  *
- * The injected `sign` function is used — no private key material is handled here,
+ * The injected `sign` function is used  no private key material is handled here,
  * making the function straightforward to test with any keypair.
  */
 export async function buildPassport(
@@ -457,7 +457,7 @@ export async function buildPassport(
 /**
  * Verify that a passport's signature is valid for the given public key.
  *
- * Synchronous — `@noble/ed25519` verify is sync when `hashes.sha512` is wired.
+ * Synchronous  `@noble/ed25519` verify is sync when `hashes.sha512` is wired.
  */
 export function verifyPassport(
   passport: CreditPassport,
@@ -501,14 +501,14 @@ export function verifyPassport(
       return { valid: false, tampered: true, reasons: ['Signature verification failed'] };
     }
 
-    // Issuer attestation (optional): proves Pip — not just the holder — issued this passport.
+    // Issuer attestation (optional): proves Pip  not just the holder  issued this passport.
     // Without it, a holder's own signature only proves "not altered", not "issued by Pip".
     if (issuer) {
       if (issuer.signature.length !== 128 || !HEX_RE.test(issuer.signature) || issuer.publicKeyHex.length !== 64 || !HEX_RE.test(issuer.publicKeyHex)) {
         return {
           valid: false,
           tampered: false,
-          reasons: ['Missing or malformed issuer signature — not a Pip-issued passport'],
+          reasons: ['Missing or malformed issuer signature  not a Pip-issued passport'],
         };
       }
       const issuerValid = ed.verify(
@@ -520,7 +520,7 @@ export function verifyPassport(
         return {
           valid: false,
           tampered: false,
-          reasons: ['Issuer signature invalid — not issued by Pip (possible self-minted passport)'],
+          reasons: ['Issuer signature invalid  not issued by Pip (possible self-minted passport)'],
         };
       }
     }

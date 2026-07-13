@@ -137,7 +137,7 @@ export async function upsertDailyBalanceEntry(accountId: string, value: number, 
   }
 }
 
-/** Create a live-priced investment holding (no opening balance entry — value is derived from price). */
+/** Create a live-priced investment holding (no opening balance entry  value is derived from price). */
 export async function addHolding(
   name: string,
   sub: string,

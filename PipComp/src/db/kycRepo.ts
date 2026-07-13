@@ -1,5 +1,5 @@
 // src/db/kycRepo.ts
-// Persists the verified identity (masked only — the raw IC is never stored). Single-row
+// Persists the verified identity (masked only  the raw IC is never stored). Single-row
 // table, mirrors budgetRepo.
 import { getDb } from './db';
 

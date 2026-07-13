@@ -32,7 +32,7 @@ export const colors = {
 } as const;
 
 /**
- * Five score-band colors from the approved redesign — a warm→deep-green ramp.
+ * Five score-band colors from the approved redesign  a warm→deep-green ramp.
  * Used by the credit gauge, the dashboard mini band-bar, and the lender band bar.
  */
 export const bandColors = {
@@ -57,13 +57,13 @@ export const radius = {
  * until loaded RN falls back to the system font, so these are safe to reference.
  */
 export const fonts = {
-  // UI — Hanken Grotesk
+  // UI  Hanken Grotesk
   regular: 'HankenGrotesk_400Regular',
   medium: 'HankenGrotesk_500Medium',
   semibold: 'HankenGrotesk_600SemiBold',
   bold: 'HankenGrotesk_700Bold',
   extrabold: 'HankenGrotesk_800ExtraBold',
-  // Amounts / display — Space Grotesk (tabular figures)
+  // Amounts / display  Space Grotesk (tabular figures)
   numMedium: 'SpaceGrotesk_500Medium',
   numSemibold: 'SpaceGrotesk_600SemiBold',
   numBold: 'SpaceGrotesk_700Bold',

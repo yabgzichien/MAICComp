@@ -103,7 +103,7 @@ export function NetWorthScreen({ onBack, onOpenSettings = () => {} }: { onBack: 
   const delta = series.length >= 2 ? nw.net - series[series.length - 2] : null;
   const prevMonth = monthShorts[monthShorts.length - 2] ?? '';
 
-  // Safe to branch here — all hooks above have run unconditionally.
+  // Safe to branch here  all hooks above have run unconditionally.
   if (scanning) {
     return <BalanceScanScreen onClose={() => setScanning(false)} onOpenSettings={onOpenSettings} />;
   }
@@ -351,7 +351,7 @@ function PriceStamp({ asOf, refreshing, onRefresh }: { asOf: string | null; refr
   return (
     <View style={styles.priceStamp}>
       <View style={styles.liveDot} />
-      <Text style={styles.priceStampText}>Prices as of {timeOf(asOf) || '—'} today</Text>
+      <Text style={styles.priceStampText}>Prices as of {timeOf(asOf) || ''} today</Text>
       <Pressable onPress={onRefresh} style={styles.refreshBtn} hitSlop={6}>
         {refreshing ? (
           <ActivityIndicator size="small" color={colors.accent} />

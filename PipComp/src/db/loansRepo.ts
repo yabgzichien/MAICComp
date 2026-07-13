@@ -5,16 +5,16 @@ import type { Decision, LoanDecision, LoanProduct } from '../lib/loans';
 
 // --- Status enums --------------------------------------------------------
 // loan_applications.status: lifecycle of an application after a decision is recorded.
-//   'active'    — approved/referred and currently being repaid (or awaiting first repayment)
-//   'completed' — all scheduled repayments paid off
-//   'defaulted' — borrower failed to repay; reported as a default
+//   'active'     approved/referred and currently being repaid (or awaiting first repayment)
+//   'completed'  all scheduled repayments paid off
+//   'defaulted'  borrower failed to repay; reported as a default
 export type ApplicationStatus = 'active' | 'completed' | 'defaulted';
 
 // repayments.status: per-installment lifecycle.
-//   'scheduled' — not yet due / not yet paid
-//   'paid'      — paid on or before the due date
-//   'late'      — paid after the due date
-//   'defaulted' — never paid; the application was reported as defaulted
+//   'scheduled'  not yet due / not yet paid
+//   'paid'       paid on or before the due date
+//   'late'       paid after the due date
+//   'defaulted'  never paid; the application was reported as defaulted
 export type RepaymentStatus = 'scheduled' | 'paid' | 'late' | 'defaulted';
 
 // --- Row shapes (raw SQLite columns) -------------------------------------
@@ -174,7 +174,7 @@ export async function createApplication(
 
 /**
  * Update an application's lifecycle status (e.g. when a default is reported).
- * Mirrors `markRepaymentPaid`'s thin-update idiom — the caller decides the new status.
+ * Mirrors `markRepaymentPaid`'s thin-update idiom  the caller decides the new status.
  */
 export async function markApplicationStatus(applicationId: string, status: ApplicationStatus): Promise<void> {
   const db = await getDb();
@@ -271,7 +271,7 @@ export async function listRepayments(applicationId?: string): Promise<Repayment[
  * Track-record summary for the credit-score "repayment history" factor:
  * `total` = every repayment that has actually been paid (status 'paid' or 'late'),
  * `onTime` = the subset of those paid on or before their due date (status 'paid').
- * Scheduled-but-not-yet-due repayments are excluded — they're not a track record yet.
+ * Scheduled-but-not-yet-due repayments are excluded  they're not a track record yet.
  */
 export async function repaymentSummary(): Promise<RepaymentSummary> {
   const db = await getDb();

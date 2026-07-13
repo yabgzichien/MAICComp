@@ -2,7 +2,7 @@
 // Pure prompt builder + deterministic fallback for the Passport Builder Coach. The plan's numbers
 // are all computed by src/lib/coachPlan.ts; the LLM only narrates them. When the LLM is
 // unavailable, `coachPlanFallback` produces a scripted line from the same computed plan, so the
-// feature degrades to real numbers without prose. No network/DB imports — unit-tested.
+// feature degrades to real numbers without prose. No network/DB imports  unit-tested.
 import type { CoachAction, CoachPlan } from '../lib/coachPlan';
 
 function rm(n: number): string {
@@ -15,7 +15,7 @@ function pct(x: number): string {
 export const COACH_SYSTEM_PROMPT =
   'You are Pip, a warm, encouraging personal-credit coach for a Malaysian micro-entrepreneur. ' +
   'Reply in at most 3 short sentences, plain text, no preamble, no lists. Explain the one or two ' +
-  'highest-impact steps and exactly what each unlocks. Use ONLY the numbers provided — never invent ' +
+  'highest-impact steps and exactly what each unlocks. Use ONLY the numbers provided  never invent ' +
   'or recompute a score, confidence, or loan amount.';
 
 /** One line of the plan, phrased so the model can narrate it without changing any figure. */
@@ -55,7 +55,7 @@ export function buildCoachPrompt(plan: CoachPlan): string {
   return [
     header,
     blocker,
-    'Simulated next steps (numbers already computed — narrate them, do not change them):',
+    'Simulated next steps (numbers already computed  narrate them, do not change them):',
     ...plan.actions.map(actionLine),
     'Warmly explain the one or two highest-impact steps and what each unlocks, using these exact numbers.',
   ]
@@ -63,7 +63,7 @@ export function buildCoachPrompt(plan: CoachPlan): string {
     .join('\n');
 }
 
-/** Deterministic one-line summary used when the LLM is unavailable — never invents numbers. */
+/** Deterministic one-line summary used when the LLM is unavailable  never invents numbers. */
 export function coachPlanFallback(plan: CoachPlan): string {
   const top = plan.actions[0];
   if (!top) {

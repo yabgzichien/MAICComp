@@ -160,7 +160,7 @@ export function BalanceScanScreen({ onClose, onOpenSettings }: { onClose: () => 
     if (!selectedAccount || amount <= 0) return;
     const next = Math.round((currentVal + amount) * 100) / 100;
     await setBalance(selectedAccount.id, next, todayISO());
-    setDoneMsg(`Added RM ${fmt(amount)} to ${selectedAccount.name} — new balance RM ${fmt(next)}.`);
+    setDoneMsg(`Added RM ${fmt(amount)} to ${selectedAccount.name}  new balance RM ${fmt(next)}.`);
     setPhase('done');
   };
   const doCreate = async () => {
@@ -182,7 +182,7 @@ export function BalanceScanScreen({ onClose, onOpenSettings }: { onClose: () => 
         {phase === 'pick' && (
           <>
             <PipSays expr="curious">
-              <BubbleText>Snap or pick a screenshot of a <B>bank account, e-wallet, loan statement, or crypto wallet</B> — I'll read it and figure out what to do with it.</BubbleText>
+              <BubbleText>Snap or pick a screenshot of a <B>bank account, e-wallet, loan statement, or crypto wallet</B>  I'll read it and figure out what to do with it.</BubbleText>
             </PipSays>
             <View style={{ gap: 14, marginTop: 22 }}>
               <SourceButton icon="camera" title="Take a photo" sub="Point at your balance" onPress={takePhoto} disabled={busy} />
@@ -221,7 +221,7 @@ export function BalanceScanScreen({ onClose, onOpenSettings }: { onClose: () => 
                 <InstitutionBadge inst={institution} fallbackText={rawProvider} size={44} />
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={styles.detectedName} numberOfLines={1}>{institution?.name ?? rawProvider ?? 'Unrecognized provider'}</Text>
-                  <Text style={styles.detectedSub}>{institution ? (institution.kind === 'bank' ? 'Bank' : 'E-Wallet') : 'Not in our bank list — type a name below'}</Text>
+                  <Text style={styles.detectedSub}>{institution ? (institution.kind === 'bank' ? 'Bank' : 'E-Wallet') : 'Not in our bank list  type a name below'}</Text>
                 </View>
               </View>
 
@@ -230,7 +230,7 @@ export function BalanceScanScreen({ onClose, onOpenSettings }: { onClose: () => 
                 <Text style={styles.rm}>RM</Text>
                 <TextInput value={amountText} onChangeText={setAmountText} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colors.ink3} style={styles.amountInput} autoFocus={amount === 0} />
               </View>
-              {amount === 0 && <Text style={styles.hint}>I couldn't read a clear amount — enter it to continue.</Text>}
+              {amount === 0 && <Text style={styles.hint}>I couldn't read a clear amount  enter it to continue.</Text>}
             </Card>
 
             {!forceCreate && matches.length > 1 && !selectedMatchId && (

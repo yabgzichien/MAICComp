@@ -1,5 +1,5 @@
 // src/db/occupationRepo.ts (Brief P)
-// Persists the borrower's self-declared occupation context — a single-row table, mirroring
+// Persists the borrower's self-declared occupation context  a single-row table, mirroring
 // kycRepo/budgetRepo. Self-declared (not verified against any registry); the passport labels
 // it as such so the lender never presents it as evidence. Attached only under a Tier 1 grant.
 import { getDb } from './db';

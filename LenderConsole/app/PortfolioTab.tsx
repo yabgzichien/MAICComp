@@ -1,7 +1,7 @@
 'use client';
 
-// Portfolio tab (Brief Q): the lender's approved book — exposure, weighted risk, expected
-// loss, band/purpose breakdowns, and concentration warnings — with a bridge action that
+// Portfolio tab (Brief Q): the lender's approved book  exposure, weighted risk, expected
+// loss, band/purpose breakdowns, and concentration warnings  with a bridge action that
 // structures the live book in Capital Markets. No new risk math: buildPortfolio maps the
 // approved-applications store into the pool shape and reuses securitization.ts's aggregates.
 
@@ -42,10 +42,10 @@ export default function PortfolioTab({ p, apps, onStructure }: { p: Palette; app
   const stats: { label: string; value: string }[] = [
     { label: 'Total Exposure', value: formatPoolMoney(book.totalExposure) },
     { label: 'Approved Loans', value: book.loanCount.toLocaleString('en-MY') },
-    { label: 'Wtd-Avg Score', value: empty ? '—' : String(Math.round(book.weightedAvgScore)) },
-    { label: 'Wtd-Avg PD', value: empty ? '—' : pct1(book.weightedAvgPD) },
-    { label: 'Expected Loss', value: empty ? '—' : pct2(book.expectedLossRate) },
-    { label: 'Wtd Data Confidence', value: empty ? '—' : pct1(book.weightedAvgConfidence) },
+    { label: 'Wtd-Avg Score', value: empty ? '' : String(Math.round(book.weightedAvgScore)) },
+    { label: 'Wtd-Avg PD', value: empty ? '' : pct1(book.weightedAvgPD) },
+    { label: 'Expected Loss', value: empty ? '' : pct2(book.expectedLossRate) },
+    { label: 'Wtd Data Confidence', value: empty ? '' : pct1(book.weightedAvgConfidence) },
   ];
 
   return (
@@ -56,7 +56,7 @@ export default function PortfolioTab({ p, apps, onStructure }: { p: Palette; app
             <SectionLabel color={p.ink3}>Portfolio · Approved Book</SectionLabel>
             <h2 style={{ fontFamily: FONT.ui, fontSize: 22, fontWeight: 800, color: p.ink1, letterSpacing: '-0.4px', marginTop: 4, marginBottom: 5 }}>Loan Book Overview</h2>
             <p style={{ fontFamily: FONT.ui, fontSize: 11.5, color: p.ink3, maxWidth: 620, lineHeight: 1.5 }}>
-              Every loan you approve in the pipeline books here. Structure it into rated tranches in one click — <strong style={{ color: p.ink2 }}>approve → book → securitize</strong>, one continuous flow.
+              Every loan you approve in the pipeline books here. Structure it into rated tranches in one click  <strong style={{ color: p.ink2 }}>approve → book → securitize</strong>, one continuous flow.
             </p>
           </div>
           <button
@@ -70,7 +70,7 @@ export default function PortfolioTab({ p, apps, onStructure }: { p: Palette; app
         </div>
       </div>
 
-      {/* Headline cells — same dark grammar as the Capital Markets pool summary. */}
+      {/* Headline cells  same dark grammar as the Capital Markets pool summary. */}
       <div style={{ background: 'linear-gradient(135deg, #0e1812 0%, #17211a 100%)', padding: '22px 40px', display: 'flex', alignItems: 'stretch', flexShrink: 0, flexWrap: 'wrap', gap: 16 }}>
         {stats.map((s, i) => (
           <React.Fragment key={s.label}>
@@ -105,7 +105,7 @@ export default function PortfolioTab({ p, apps, onStructure }: { p: Palette; app
                     <circle cx="8" cy="12" r="0.85" fill="#b87000" />
                   </svg>
                   <p style={{ fontFamily: FONT.ui, fontSize: 11, color: '#7a5c00', lineHeight: 1.5 }}>
-                    <strong>Concentration:</strong> {Math.round(c.pct * 100)}% of exposure is {c.kind === 'band' ? `${c.label}-band` : `for "${c.label}"`} — above the {Math.round(0.4 * 100)}% guidance. Diversify before scaling this pool.
+                    <strong>Concentration:</strong> {Math.round(c.pct * 100)}% of exposure is {c.kind === 'band' ? `${c.label}-band` : `for "${c.label}"`}  above the {Math.round(0.4 * 100)}% guidance. Diversify before scaling this pool.
                   </p>
                 </div>
               ))}

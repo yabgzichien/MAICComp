@@ -17,7 +17,7 @@ export interface DetectedObligation {
 
 export interface ObligationSummary {
   obligations: DetectedObligation[];
-  /** Σ monthlyAmount — the evidenced monthly debt service (recurring committed outflows). */
+  /** Σ monthlyAmount  the evidenced monthly debt service (recurring committed outflows). */
   evidencedMonthlyDebtService: number;
 }
 

@@ -101,7 +101,7 @@ export function AddFlow({
       setSuggestions(learned.map((s, i) => s ?? (guessed[i] ? { categoryId: guessed[i]!, source: 'guess' } : null)));
     } catch {
       // Enhancement-only: any failure (network, timeout, bad reply) just falls
-      // back to today's behavior — no suggestion for that merchant.
+      // back to today's behavior  no suggestion for that merchant.
       setSuggestions(learned);
     }
     setPhase('categorize');

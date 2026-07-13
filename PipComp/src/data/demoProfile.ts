@@ -26,17 +26,17 @@ const iso = (d: Date): string =>
  *  - ~RM2,500/mo gig income vs ~RM1,900/mo spend → a healthy surplus (a real, bankable saver);
  *  - spending recorded on only a handful of distinct days/month → **thin coverage (~20 of 90
  *    days)**, so the borrower starts **gated to the RM500 Emergency tier** despite the healthy
- *    cash-flow — the "un-assessable" starting point.
- *  - a motorbike hire-purchase liability — a genuine debt signal.
+ *    cash-flow  the "un-assessable" starting point.
+ *  - a motorbike hire-purchase liability  a genuine debt signal.
  *
- * Result: the coach's headline lever is live — extending recorded history to 30 days flips the
- * offer from Emergency REFER to an **approved Starter loan (~RM3.8k)** — the "make the un-assessable
+ * Result: the coach's headline lever is live  extending recorded history to 30 days flips the
+ * offer from Emergency REFER to an **approved Starter loan (~RM3.8k)**  the "make the un-assessable
  * assessable" beat, made interactive. Building an on-time repayment record lifts the score too.
  */
 export async function loadDemoProfile(): Promise<void> {
   const now = new Date();
 
-  // [merchant, base amount, day-of-month] — concentrated on ~5 distinct days → thin coverage.
+  // [merchant, base amount, day-of-month]  concentrated on ~5 distinct days → thin coverage.
   const basket: [string, number, number][] = [
     ['Rumah Sewa', 780, 3],
     ['Pasar Mini Aziz', 380, 3],
@@ -61,11 +61,11 @@ export async function loadDemoProfile(): Promise<void> {
       });
     }
     // Older months (outside the recent 90-day window) are deliberately sparser, so the borrower's
-    // recorded history *ramps up* — an honest rising Credit Momentum, while current coverage stays thin.
+    // recorded history *ramps up*  an honest rising Credit Momentum, while current coverage stays thin.
     const monthBasket = m >= 3 ? basket.slice(0, 3) : basket;
     monthBasket.forEach(([name, base, day], i) => {
       const d = monthDate(m, day);
-      if (d > now) return; // never future-date — keeps the coverage signal honest
+      if (d > now) return; // never future-date  keeps the coverage signal honest
       txns.push({
         merchantRaw: name,
         merchantKey: merchantKey(name),
@@ -79,6 +79,6 @@ export async function loadDemoProfile(): Promise<void> {
   }
   await addTransactions(txns);
 
-  // A motorbike hire-purchase — a real debt signal a credit-invisible worker would carry.
+  // A motorbike hire-purchase  a real debt signal a credit-invisible worker would carry.
   await addAccount('Motor Loan (Honda EX5)', 'liability', 'car_loan', 15800, iso(monthDate(0, 1)));
 }

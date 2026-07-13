@@ -1,6 +1,6 @@
 // Pure planner for the Underwriting Copilot / Audit-Trail Memo. It assembles the
-// credit memo a loan officer would write — including a Consumer Credit Act 2025
-// affordability finding — entirely from data already on screen: the verified
+// credit memo a loan officer would write  including a Consumer Credit Act 2025
+// affordability finding  entirely from data already on screen: the verified
 // passport, the deterministic `decideLoan` result, and the `runAgentPanel` verdicts.
 // No LLM, no UI imports. The LLM (see app/api/memo/route.ts) only narrates the
 // `summary` and `rationale` prose; if it is absent, `fallbackNarrative` renders
@@ -17,7 +17,7 @@ const pct = (x: number): number => Math.round(x * 100);
 
 const DECISION_LABEL: Record<Decision, string> = {
   approve: 'Approved',
-  refer: 'Refer — manual review',
+  refer: 'Refer  manual review',
   decline: 'Declined',
 };
 
@@ -60,7 +60,7 @@ export interface MemoRationaleGroup {
 }
 
 /** The counter-offer note (Brief L). Present only when the engine's offered amount was
- *  positive and below the request — carries the original request, the countered amount,
+ *  positive and below the request  carries the original request, the countered amount,
  *  and the engine's own reason for the reduction (never an invented one). Null otherwise. */
 export interface MemoCounterOffer {
   originalRequest: number;
@@ -82,7 +82,7 @@ export interface CreditMemo {
   findings: MemoFinding[];
   rationale: string[];
   /** The rationale grouped by adverse-action category, non-empty groups only.
-   *  Empty when the decision predates categorized reasons — renderers fall back to `rationale`. */
+   *  Empty when the decision predates categorized reasons  renderers fall back to `rationale`. */
   groupedRationale: MemoRationaleGroup[];
   compliance: ComplianceLine[];
   conditions: string[];
@@ -114,7 +114,7 @@ function toFinding(a: AgentAssessment): MemoFinding {
 }
 
 /** The CCA-2025 affordability duties, each as requirement → evidence → met/not-met,
- * derived from the SAME thresholds `decideLoan` used (the active LenderPolicy — Brief N),
+ * derived from the SAME thresholds `decideLoan` used (the active LenderPolicy  Brief N),
  * so it can never contradict the verdict. */
 function buildCompliance(passport: CreditPassport, decision: LoanDecision, policy: LenderPolicy): ComplianceLine[] {
   const a = passport.assessment;
@@ -174,7 +174,7 @@ function buildConditions(decision: LoanDecision): string[] {
   }
 }
 
-/** An officer's queue resolution (Brief O) — surfaces in the memo's conditions. */
+/** An officer's queue resolution (Brief O)  surfaces in the memo's conditions. */
 export interface MemoResolution {
   outcome: 'approved' | 'declined';
   rationale: string;
@@ -201,7 +201,7 @@ export function buildCreditMemo(
   };
 
   // Counter-offer note (Brief L): present only when the offer was reduced below the request.
-  // The constraint comes from the engine's own reason strings via the pure helper — never invented.
+  // The constraint comes from the engine's own reason strings via the pure helper  never invented.
   const counterOffer: MemoCounterOffer | null =
     decision.maxAmount > 0 && requestedAmount > 0 && decision.maxAmount < requestedAmount
       ? { originalRequest: requestedAmount, counteredAmount: decision.maxAmount, constraint: drivingConstraintFrom(decision) }
@@ -215,7 +215,7 @@ export function buildCreditMemo(
     groupedRationale: groupRationale(decision),
     compliance: buildCompliance(passport, decision, policy),
     conditions: resolution
-      ? [`Officer resolution — ${resolution.outcome} by ${resolution.officer}: "${resolution.rationale}" (recorded in the application audit trail).`, ...buildConditions(decision)]
+      ? [`Officer resolution  ${resolution.outcome} by ${resolution.officer}: "${resolution.rationale}" (recorded in the application audit trail).`, ...buildConditions(decision)]
       : buildConditions(decision),
     counterOffer,
     pricing,
@@ -235,7 +235,7 @@ export function memoToMarkdown(memo: CreditMemo): string {
   lines.push('');
   lines.push('## Decision');
   lines.push('');
-  lines.push(`**${memo.decision.label}** — up to ${rm(memo.decision.maxAmount)} at ${rm(memo.decision.installment)}/mo.`);
+  lines.push(`**${memo.decision.label}**  up to ${rm(memo.decision.maxAmount)} at ${rm(memo.decision.installment)}/mo.`);
   lines.push('');
   if (memo.pricing) {
     const pr = memo.pricing;
@@ -247,7 +247,7 @@ export function memoToMarkdown(memo: CreditMemo): string {
   lines.push('## Panel findings');
   lines.push('');
   for (const f of memo.findings) {
-    lines.push(`- **${f.label}:** ${f.verdict} (${f.confidence}%) — ${f.signals.join('; ')}`);
+    lines.push(`- **${f.label}:** ${f.verdict} (${f.confidence}%)  ${f.signals.join('; ')}`);
   }
   lines.push('');
   lines.push('## Rationale');
@@ -263,10 +263,10 @@ export function memoToMarkdown(memo: CreditMemo): string {
     for (const r of memo.rationale) lines.push(`- ${r}`);
     lines.push('');
   }
-  lines.push('## Consumer Credit Act 2025 — affordability assessment');
+  lines.push('## Consumer Credit Act 2025  affordability assessment');
   lines.push('');
   for (const c of memo.compliance) {
-    lines.push(`- ${c.met ? '✓ Met' : '✗ Not met'} — ${c.requirement}. ${c.evidence}.`);
+    lines.push(`- ${c.met ? '✓ Met' : '✗ Not met'}  ${c.requirement}. ${c.evidence}.`);
   }
   lines.push('');
   if (memo.counterOffer) {

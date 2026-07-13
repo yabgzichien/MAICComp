@@ -2,7 +2,7 @@
 
 // Lender Policy Editor (Brief N): the lender edits the affordability thresholds and
 // product ladder the decision engine runs with. Saving PUTs to /api/policy (server-side
-// JSON store) — the SAME store GET /api/lenders publishes TEKUN's entry from, so what
+// JSON store)  the SAME store GET /api/lenders publishes TEKUN's entry from, so what
 // the lender configures here is exactly what borrowers are coached toward (the flywheel).
 // Validation is the shared pure lib (policyStore.ts); the server re-validates on PUT.
 
@@ -87,7 +87,7 @@ function formToCandidate(t: ThresholdForm, rows: LadderRow[]): unknown {
 const THRESHOLD_FIELDS: { key: keyof ThresholdForm; label: string; suffix: string; hint: string }[] = [
   { key: 'maxDsrPct', label: 'DSR cap', suffix: '%', hint: 'Total debt service (existing + new installment) over income may not exceed this.' },
   { key: 'surplusSharePct', label: 'Installment share of surplus', suffix: '%', hint: 'An installment may not consume more than this share of average monthly surplus.' },
-  { key: 'confidenceFloorPct', label: 'Confidence floor', suffix: '%', hint: 'Below this data confidence, never auto-approve — refer to a human.' },
+  { key: 'confidenceFloorPct', label: 'Confidence floor', suffix: '%', hint: 'Below this data confidence, never auto-approve  refer to a human.' },
   { key: 'emergencyDays', label: 'Emergency-only gate', suffix: 'days', hint: 'Below this many covered days (of the last 90): Emergency tier only, forced referral.' },
   { key: 'fullLadderDays', label: 'Full-ladder gate', suffix: 'days', hint: 'From this many covered days the full ladder opens; below it, Starter and below.' },
   { key: 'minCoveragePct', label: 'Coverage ratio floor', suffix: '%', hint: 'Even with a full window, coverage below this still caps eligibility to Starter.' },
@@ -95,7 +95,7 @@ const THRESHOLD_FIELDS: { key: keyof ThresholdForm; label: string; suffix: strin
 
 /** Pricing inputs for the risk-based pricing assistant (Brief R). */
 const PRICING_FIELDS: { key: keyof ThresholdForm; label: string; suffix: string; hint: string }[] = [
-  { key: 'costOfFundsPct', label: 'Cost of funds', suffix: '% p.a.', hint: 'Your blended annual funding cost — the floor the assistant never prices below.' },
+  { key: 'costOfFundsPct', label: 'Cost of funds', suffix: '% p.a.', hint: 'Your blended annual funding cost  the floor the assistant never prices below.' },
   { key: 'targetReturnPct', label: 'Target net return', suffix: '% p.a.', hint: 'Net margin above break-even the assistant aims for when discounting a strong file.' },
 ];
 
@@ -156,7 +156,7 @@ export default function PolicyTab({
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2500);
     } catch {
-      setErrors(['Could not reach the policy store — is the console server running?']);
+      setErrors(['Could not reach the policy store  is the console server running?']);
     } finally {
       setSaving(false);
     }
@@ -178,7 +178,7 @@ export default function PolicyTab({
   return (
     <div style={{ flex: 1, background: p.bg, overflowY: 'auto' }}>
       <div style={{ padding: '20px 40px 18px', background: p.surface, borderBottom: `1px solid ${p.hairline}` }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
+        <div style={{ maxWidth: 1080, margin: '0 auto', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
           <div>
             <SectionLabel color={p.ink3}>Policy · TEKUN Nasional</SectionLabel>
             <h2 style={{ fontFamily: FONT.ui, fontSize: 22, fontWeight: 800, color: p.ink1, letterSpacing: '-0.4px', marginTop: 4, marginBottom: 5 }}>
@@ -191,13 +191,13 @@ export default function PolicyTab({
           </div>
           <div style={{ textAlign: 'right', flexShrink: 0 }}>
             <p style={{ fontFamily: FONT.ui, fontSize: 10.5, color: p.ink3 }}>
-              {stored.updatedAt ? `Last updated ${new Date(stored.updatedAt).toLocaleString('en-MY')}` : 'Policy defaults — never edited'}
+              {stored.updatedAt ? `Last updated ${new Date(stored.updatedAt).toLocaleString('en-MY')}` : 'Policy defaults  never edited'}
             </p>
           </div>
         </div>
       </div>
 
-      <div style={{ padding: '18px 40px 26px', display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 1080 }}>
+      <div style={{ padding: '18px 40px 26px', display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 1080, margin: '0 auto' }}>
         {/* ── Affordability thresholds ── */}
         <div style={{ background: p.surface, borderRadius: 12, padding: '14px 18px', boxShadow: p.shadow }}>
           <SectionLabel color={p.ink3}>Affordability thresholds</SectionLabel>
@@ -231,7 +231,7 @@ export default function PolicyTab({
             ))}
           </div>
           <p style={{ fontFamily: FONT.ui, fontSize: 9.5, color: p.ink3, lineHeight: 1.5, marginTop: 10 }}>
-            The assistant suggests a rate that meets your target return, <strong style={{ color: p.ink2 }}>clamped to the tier ladder as a ceiling</strong> — it discounts strong files, it never surcharges past the published rate.
+            The assistant suggests a rate that meets your target return, <strong style={{ color: p.ink2 }}>clamped to the tier ladder as a ceiling</strong>  it discounts strong files, it never surcharges past the published rate.
           </p>
         </div>
 
@@ -240,7 +240,7 @@ export default function PolicyTab({
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
             <SectionLabel color={p.ink3}>Product ladder</SectionLabel>
             <p style={{ fontFamily: FONT.ui, fontSize: 9.5, color: p.ink3 }}>
-              Tier slots are fixed (emergency · starter · growth · scale) — the coverage gates key on them. Naming is yours.
+              Tier slots are fixed (emergency · starter · growth · scale)  the coverage gates key on them. Naming is yours.
             </p>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: `0.9fr ${LADDER_COLS.map((c) => c.width).join(' ')} 34px`, gap: '6px 10px', alignItems: 'center', marginTop: 10 }}>
@@ -332,13 +332,13 @@ export default function PolicyTab({
           </button>
           {savedFlash && (
             <span style={{ fontFamily: FONT.ui, fontSize: 11.5, fontWeight: 700, color: p.primary }}>
-              ✓ Saved — decisions and the published directory now use this policy
+              ✓ Saved  decisions and the published directory now use this policy
             </span>
           )}
         </div>
 
         <p style={{ fontFamily: FONT.ui, fontSize: 9.5, color: p.ink3, lineHeight: 1.55, maxWidth: 720 }}>
-          The engine stays deterministic: these numbers parameterize the same auditable rules — nothing here changes how a decision is computed,
+          The engine stays deterministic: these numbers parameterize the same auditable rules  nothing here changes how a decision is computed,
           only the thresholds it is computed against. Adverse-action reasons quote the active values automatically.
         </p>
       </div>

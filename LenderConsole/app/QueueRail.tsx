@@ -1,6 +1,6 @@
 'use client';
 
-// Queue rail (Brief O) — the left edge of the two-pane workbench. Lists the four
+// Queue rail (Brief O)  the left edge of the two-pane workbench. Lists the four
 // queues with counts and age badges; Referred shows oldest first (the pure
 // orderQueue rule), because the longest-waiting file is the officer's next job.
 
@@ -137,7 +137,29 @@ export default function QueueRail({
                     background: selected ? p.accentTint : p.surface,
                   }}
                 >
-                  <p style={{ fontFamily: FONT.ui, fontSize: 11, fontWeight: 700, color: p.ink1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.applicantLabel}</p>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                    <span style={{ fontFamily: FONT.ui, fontSize: 11, fontWeight: 700, color: p.ink1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{a.applicantLabel}</span>
+                    {a.source === 'direct' && (
+                      <span
+                        title="Submitted by the borrower via direct apply  no officer transcribed this"
+                        style={{
+                          fontFamily: FONT.ui,
+                          fontSize: 8,
+                          fontWeight: 800,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em',
+                          padding: '1px 4px',
+                          borderRadius: 4,
+                          background: '#d3f9d8',
+                          color: '#2b8a3e',
+                          marginLeft: 4,
+                          flexShrink: 0
+                        }}
+                      >
+                        direct
+                      </span>
+                    )}
+                  </div>
                   <p style={{ fontFamily: FONT.num, fontSize: 9.5, color: p.ink3, marginTop: 2 }}>
                     {rm(a.requestedAmount)} · filed {formatAgo(a.filedAt)}
                   </p>

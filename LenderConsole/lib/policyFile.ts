@@ -16,7 +16,7 @@ export const POLICY_FILE_PATH = path.join(process.cwd(), '.data', 'policy.json')
 export function readStoredPolicy(filePath: string = POLICY_FILE_PATH): StoredPolicy {
   try {
     const raw = fs.readFileSync(filePath, 'utf8');
-    // BOM tolerance — Windows editors prepend one and JSON.parse rejects it.
+    // BOM tolerance  Windows editors prepend one and JSON.parse rejects it.
     const parsed = JSON.parse(raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw) as StoredPolicy & { updatedAt?: unknown };
     const v = validateStoredPolicy(parsed);
     if (!v.ok) return DEFAULT_STORED_POLICY;

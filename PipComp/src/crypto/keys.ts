@@ -5,7 +5,7 @@
  *   (hardware-backed secure enclave / keystore).
  * - Web: secure-store is unavailable, so the key is persisted in the browser's
  *   localStorage instead (falling back to in-memory if even that is blocked).
- *   This is a demo-grade store — fine for the web artifact, not production —
+ *   This is a demo-grade store  fine for the web artifact, not production 
  *   but it persists across reloads so the passport signs and verifies end-to-end.
  */
 
@@ -35,11 +35,11 @@ function hexToBytes(hex: string): Uint8Array {
   return result;
 }
 
-/** Exactly 64 lowercase/uppercase hex chars — a valid 32-byte private key seed. */
+/** Exactly 64 lowercase/uppercase hex chars  a valid 32-byte private key seed. */
 const HEX_PRIVKEY_RE = /^[0-9a-f]{64}$/i;
 
 export interface Keypair {
-  /** Hex-encoded 32-byte Ed25519 public key — the portable subject id. */
+  /** Hex-encoded 32-byte Ed25519 public key  the portable subject id. */
   publicKeyHex: string;
   /** Sign arbitrary bytes with the stored private key. Returns a 64-byte signature. */
   sign(bytes: Uint8Array): Promise<Uint8Array>;
@@ -79,7 +79,7 @@ async function writeStoredKey(hex: string): Promise<void> {
     try {
       if (typeof localStorage !== 'undefined') localStorage.setItem(STORE_KEY, hex);
     } catch {
-      // localStorage blocked (private browsing) — the in-memory copy still works this session.
+      // localStorage blocked (private browsing)  the in-memory copy still works this session.
     }
     return;
   }
@@ -123,7 +123,7 @@ async function _init(): Promise<Keypair> {
   }
 
   const privKey = hexToBytes(privKeyHex);
-  // Use sync path — powered by the sha512 we wired above.
+  // Use sync path  powered by the sha512 we wired above.
   const publicKeyBytes = ed.getPublicKey(privKey);
   const publicKeyHex = bytesToHex(publicKeyBytes);
 

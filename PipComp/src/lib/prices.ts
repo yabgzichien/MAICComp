@@ -1,6 +1,6 @@
 // src/lib/prices.ts
 // Pure, deterministic helpers for live-priced holdings (Yahoo Finance). No
-// network/UI/DB — the network adapter lives in src/prices/. All unit-tested.
+// network/UI/DB  the network adapter lives in src/prices/. All unit-tested.
 import { currentValue } from './networth';
 import type { Account, BalanceEntry, PriceQuote } from './types';
 
@@ -36,7 +36,7 @@ export function cryptoUsdResults(results: TickerResult[]): TickerResult[] {
     .map((r) => ({ ...r, name: r.name.replace(/\s+[A-Z]{3}$/, '') }));
 }
 
-/** The only supported commodities — one canonical entry each (avoids Yahoo's many gold/silver futures). */
+/** The only supported commodities  one canonical entry each (avoids Yahoo's many gold/silver futures). */
 export const COMMODITIES: TickerResult[] = [
   { id: 'GC=F', ticker: 'Gold', name: 'Gold', type: 'COMMODITY' },
   { id: 'SI=F', ticker: 'Silver', name: 'Silver', type: 'COMMODITY' },

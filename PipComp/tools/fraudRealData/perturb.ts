@@ -3,7 +3,7 @@
 // the fraud layer defends against. Used to build the adversarial (fraud) class from real records.
 //
 // The manipulations are applied PROBABILISTICALLY at a given `intensity`, because real
-// fabrication is partial and uneven — that variety is what makes the fraud class overlap the
+// fabrication is partial and uneven  that variety is what makes the fraud class overlap the
 // genuine class (a believable AUC < 1) instead of being a clean separating block.
 //
 // Pure + unit-tested. At the default intensity 1 every manipulation is fully applied (the
@@ -17,7 +17,7 @@ function addDays(isoDay: string, n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** mulberry32 — small deterministic PRNG so dataset building is reproducible. */
+/** mulberry32  small deterministic PRNG so dataset building is reproducible. */
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
@@ -30,7 +30,7 @@ function mulberry32(seed: number): () => number {
 }
 
 export interface PerturbOptions {
-  /** 0..1 — probability each manipulation is applied per transaction. Default 1 (full). */
+  /** 0..1  probability each manipulation is applied per transaction. Default 1 (full). */
   intensity?: number;
   /** PRNG seed for reproducibility. */
   seed?: number;

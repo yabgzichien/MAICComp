@@ -1,6 +1,6 @@
 // src/lib/import.ts
 // Pure, deterministic helpers for importing transactions from a document.
-// No UI / database / file-system imports — everything here is unit-tested.
+// No UI / database / file-system imports  everything here is unit-tested.
 import { DEFAULT_EXPENSE_ID, DEFAULT_INCOME_ID } from '../data/categories';
 import { findDuplicate } from './duplicates';
 import { suggestForMerchant } from './recommend';

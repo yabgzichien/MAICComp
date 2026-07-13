@@ -1,7 +1,7 @@
 // src/lib/momentum.ts
-// Pure "Credit Momentum" — the borrower's score/coverage *trajectory*, recomputed from the same
+// Pure "Credit Momentum"  the borrower's score/coverage *trajectory*, recomputed from the same
 // dated transaction evidence the passport anchors (never a separate log). Thin-file borrowers can't
-// show a high level, but they can show verifiable upward direction. No UI/DB imports — unit-tested.
+// show a high level, but they can show verifiable upward direction. No UI/DB imports  unit-tested.
 import { assembleCredit, type CreditInputs } from './assembleCredit';
 
 export type MomentumDirection = 'rising' | 'flat' | 'falling';
@@ -20,8 +20,8 @@ export interface Momentum {
 const DEFAULT_LOOKBACK_DAYS = 90;
 /** Score moves within ±this over the window read as "flat" (noise, not a trend). */
 const FLAT_BAND = 5;
-/** Minimum-history floor (Brief D): the from-point must itself rest on meaningful data —
- *  at least this many covered days at (now − lookback) — before a trajectory is claimed.
+/** Minimum-history floor (Brief D): the from-point must itself rest on meaningful data 
+ *  at least this many covered days at (now − lookback)  before a trajectory is claimed.
  *  Below it no block is emitted: an absent block is honest; a universal "rising" that every
  *  brand-new user gets for free is not. */
 const MIN_FROM_COVERAGE_DAYS = 30;
@@ -32,7 +32,7 @@ const DAY_MS = 86_400_000;
  * engines over the transactions on/before each date. Only transaction-derived signals move (net
  * worth and repayment count are held), so this is the honest data-growth trajectory.
  *
- * Returns null when the from-point had fewer than MIN_FROM_COVERAGE_DAYS covered days —
+ * Returns null when the from-point had fewer than MIN_FROM_COVERAGE_DAYS covered days 
  * there is no meaningful baseline to measure a trajectory from.
  */
 export function computeMomentum(

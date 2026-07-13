@@ -1,5 +1,5 @@
 // tools/ocrEval/lib.ts
-// Pure scoring core for the OCR extraction-accuracy eval. No I/O, no network —
+// Pure scoring core for the OCR extraction-accuracy eval. No I/O, no network 
 // run.ts produces extractions, score.ts feeds them here, tests exercise this
 // file directly. Uses the app's own merchantKey so "merchant correct" means
 // exactly what the app's learning loop means by it.
@@ -16,15 +16,15 @@ export interface LabelRow {
 
 /** A blank, schema-shaped label file for one screenshot (see score.ts's
  *  parseLabelFile / README.md). scaffold.ts writes one of these per unlabeled
- *  image. The single placeholder row is DELIBERATELY invalid — empty merchant,
- *  amount 0 — so a template left unfilled fails loudly in score.ts and names its
+ *  image. The single placeholder row is DELIBERATELY invalid  empty merchant,
+ *  amount 0  so a template left unfilled fails loudly in score.ts and names its
  *  own file, instead of silently scoring as a real ground-truth row. */
 export function blankLabelTemplate(): { _README: string; rows: LabelRow[] } {
   return {
     _README:
       'Label EVERY visible transaction row. amount is positive (direction "in"|"out" carries the sign); ' +
       'date is "YYYY-MM-DD" or null when the screenshot shows none. Replace this placeholder and add one ' +
-      'object per row. Label independently of the model output — do not copy the extraction.',
+      'object per row. Label independently of the model output  do not copy the extraction.',
     rows: [{ merchant: '', amount: 0, date: null, direction: 'out' }],
   };
 }
@@ -50,7 +50,7 @@ export interface Alignment {
   pairs: AlignedPair[];
   /** Ground-truth rows the pipeline failed to produce. */
   missed: LabelRow[];
-  /** Extracted rows with no ground-truth counterpart — invented data. */
+  /** Extracted rows with no ground-truth counterpart  invented data. */
   hallucinated: EvalExtractedRow[];
 }
 
@@ -74,13 +74,13 @@ const directionOf = (t: EvalExtractedRow['type']): LabelRow['direction'] => (t =
  * Fuzzy bipartite alignment of extracted rows against ground truth.
  *
  * A (label, extracted) pair is ELIGIBLE to align when the amount matches to the
- * sen, OR the merchant key matches and the dates are within one day — i.e. a
+ * sen, OR the merchant key matches and the dates are within one day  i.e. a
  * misread amount still aligns via merchant+date, and a misread merchant still
  * aligns via amount, but rows with nothing in common never pair up (they count
  * as one missed + one hallucinated, which is the honest reading).
  *
  * Among eligible pairs, greedy assignment by descending similarity:
- * amount match 4 · same day 2 (±1 day 1) · merchant key 2 · direction 1 —
+ * amount match 4 · same day 2 (±1 day 1) · merchant key 2 · direction 1 
  * so an exact-day candidate always beats an adjacent-day one for the same
  * amount, and ties break on input order (stable).
  */
@@ -247,7 +247,7 @@ export function renderMetricsMd(
   const missRate = o.labelRows > 0 ? o.missed / o.labelRows : 0;
 
   const lines: string[] = [];
-  lines.push('# OCR Extraction — Accuracy Metrics');
+  lines.push('# OCR Extraction  Accuracy Metrics');
   lines.push('');
   lines.push(`Generated ${meta.generatedAt} by \`tools/ocrEval/score.ts\` · model: \`${meta.model}\` · our figures.`);
   lines.push('');
@@ -286,23 +286,23 @@ export function renderMetricsMd(
   lines.push(
     '**Semi-manual.** Screenshots are real Malaysian bank/e-wallet transaction views ' +
       'supplied and hand-labeled by the team (label schema in README.md); the pipeline under ' +
-      'test is the exact production path — the same Groq vision adapter, prompt, and ' +
+      'test is the exact production path  the same Groq vision adapter, prompt, and ' +
       'defensive parser the app ships (`GroqProvider.extract` → `parseExtraction`). ' +
       'Alignment is fuzzy bipartite matching (amount to the sen, OR merchant key + date ' +
       'within one day); field accuracy is measured over aligned rows, while missed and ' +
-      'hallucinated rows are reported separately — those two numbers matter most.'
+      'hallucinated rows are reported separately  those two numbers matter most.'
   );
   lines.push('');
   lines.push('## Known failure modes');
   lines.push('');
-  lines.push('See `dataset/out/failures.json` (kept out of git — may reference real merchants) for the itemized list.');
+  lines.push('See `dataset/out/failures.json` (kept out of git  may reference real merchants) for the itemized list.');
   lines.push('');
   lines.push('## Mitigations in the product');
   lines.push('');
   lines.push(
     'Every extraction lands on a review screen where the user corrects rows before saving, ' +
       'and provenance weighting means screenshot-derived data never carries verified-source ' +
-      'trust. Prompts are **not tuned** against this eval set — an eval you tuned against is not an eval.'
+      'trust. Prompts are **not tuned** against this eval set  an eval you tuned against is not an eval.'
   );
   lines.push('');
   return lines.join('\n');

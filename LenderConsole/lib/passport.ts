@@ -1,7 +1,7 @@
-// Passport verification — ported from the borrower app (PipComp/src/lib/passport.ts
+// Passport verification  ported from the borrower app (PipComp/src/lib/passport.ts
 // + src/crypto/issuer.ts) so the lender console can cryptographically verify a real
 // pasted passport: holder signature (proves "not altered") + pinned issuer signature
-// (proves "issued by Pip", not self-minted). Aggregate-only — no raw transactions.
+// (proves "issued by Pip", not self-minted). Aggregate-only  no raw transactions.
 
 import * as ed from '@noble/ed25519';
 import { sha512 } from '@noble/hashes/sha2.js';
@@ -10,7 +10,7 @@ import { sha512 } from '@noble/hashes/sha2.js';
 ed.hashes.sha512 = sha512;
 
 /** Pip's pinned issuer public key (must match PipComp/src/data/issuerKey.ts). */
-export const ISSUER_PUBLIC_KEY_HEX = 'a120cfba5cc785efec44681cb59eb55bb41077c419c9afd7eaa9ba228150747b';
+export const ISSUER_PUBLIC_KEY_HEX = '8dc15c7d6a78f02e689ea9c1c816bac128d82f081d9b181d7c7fe5414638aa0c';
 
 export interface PassportAssessment {
   confidence: number;
@@ -44,7 +44,7 @@ export interface PassportProvenanceMeta {
   modelWeightsVersion: string;
 }
 
-/** Richer passport blocks (Brief P) — verbatim shapes from PipComp/src/lib/passport.ts. */
+/** Richer passport blocks (Brief P)  verbatim shapes from PipComp/src/lib/passport.ts. */
 export interface PassportOccupation {
   occupation: string;
   sector: string;
@@ -76,7 +76,7 @@ export interface PassportSpendingProfile {
  *  3 = post-disbursement monitoring (re-share updated aggregates while a loan is active). */
 export type ConsentTier = 0 | 1 | 2 | 3;
 
-/** A signed consent receipt (Brief I stretch) — see PipComp/src/lib/passport.ts (verbatim port). */
+/** A signed consent receipt (Brief I stretch)  see PipComp/src/lib/passport.ts (verbatim port). */
 export interface ConsentReceipt {
   tier: ConsentTier;
   scope: string[];
@@ -99,7 +99,7 @@ export interface CreditPassport {
   momentum?: PassportMomentum;
   /** Version stamps of the producing logic (optional; absent on pre-v2 passports). */
   provenanceMeta?: PassportProvenanceMeta;
-  /** Leading-digit counts 1–9 (index 0 = digit 1) of the amounts behind the score —
+  /** Leading-digit counts 1–9 (index 0 = digit 1) of the amounts behind the score 
    *  nine aggregate numbers, never raw transactions. Optional; absent pre-v2. */
   digitHistogram?: number[];
   /** Signed consent receipts (Brief I stretch). Optional; absent on pre-consent passports. */
@@ -114,7 +114,7 @@ export interface VerifyResult {
   valid: boolean;
   tampered: boolean;
   reasons: string[];
-  /** Tiers whose consent grant has expired — the block is present but "lapsed" (not a failure). */
+  /** Tiers whose consent grant has expired  the block is present but "lapsed" (not a failure). */
   lapsedTiers?: ConsentTier[];
 }
 
@@ -287,14 +287,14 @@ export function verifyPassport(
     const msgBytes = new TextEncoder().encode(canonicalize(passport));
     const holderValid = ed.verify(hexToBytes(signature), msgBytes, hexToBytes(passport.subject));
     if (!holderValid) {
-      return { valid: false, tampered: true, reasons: ['Holder signature verification failed — passport was altered.'] };
+      return { valid: false, tampered: true, reasons: ['Holder signature verification failed  passport was altered.'] };
     }
 
     if (!issuerSignature || issuerSignature.length !== 128 || !HEX_RE.test(issuerSignature)) {
       return {
         valid: false,
         tampered: false,
-        reasons: ['Missing or malformed issuer signature — not a Pip-issued passport (possible self-minted).'],
+        reasons: ['Missing or malformed issuer signature  not a Pip-issued passport (possible self-minted).'],
       };
     }
     const issuerValid = ed.verify(hexToBytes(issuerSignature), msgBytes, hexToBytes(ISSUER_PUBLIC_KEY_HEX));
@@ -302,7 +302,7 @@ export function verifyPassport(
       return {
         valid: false,
         tampered: false,
-        reasons: ['Issuer signature invalid — not issued by Pip (possible self-minted passport).'],
+        reasons: ['Issuer signature invalid  not issued by Pip (possible self-minted passport).'],
       };
     }
 
@@ -347,7 +347,7 @@ export function parsePassportCode(raw: string): ParsedCode {
   try {
     obj = JSON.parse(raw.trim());
   } catch {
-    throw new Error("Couldn't read the code — it doesn't look like a valid passport. Paste the full code from the Pip app.");
+    throw new Error("Couldn't read the code  it doesn't look like a valid passport. Paste the full code from the Pip app.");
   }
   const o = obj as Partial<ParsedCode>;
   if (!o || typeof o !== 'object' || !o.passport || typeof o.signature !== 'string') {

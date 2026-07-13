@@ -2,7 +2,7 @@
 // Pure, deterministic "Passport Builder Coach" simulator. Given a borrower's current profile,
 // it re-runs the real engines (computeDataConfidence, computeCreditScore, decideLoan) under a
 // candidate action and reports the honest before→after deltas. The AI never computes these
-// numbers; it only narrates the plan this module produces. No UI/DB imports — unit-tested.
+// numbers; it only narrates the plan this module produces. No UI/DB imports  unit-tested.
 import { computeCreditScore, type CreditBand, type CreditProfile } from './creditScore';
 import type { Coverage } from './coverage';
 import { computeDataConfidence, type ConfidenceTxn } from './dataConfidence';
@@ -43,7 +43,7 @@ export interface CoachAction {
   /** Compact magnitude chip, e.g. "+10 days" or "−RM300/mo". */
   magnitude: string;
   sim: CoachSim;
-  /** Ranking metric — higher is a bigger win. Decision jump ≫ amount gain ≫ score gain. */
+  /** Ranking metric  higher is a bigger win. Decision jump ≫ amount gain ≫ score gain. */
   impact: number;
   /** Whether this action actually moves the offer (score, decision, or amount). */
   changed: boolean;
@@ -76,7 +76,7 @@ export interface Evaluation {
   loan: LoanDecision;
 }
 
-/** The requested amount we probe `decideLoan` with — the top of the ladder, so the returned
+/** The requested amount we probe `decideLoan` with  the top of the ladder, so the returned
  *  `maxAmount` reveals the true ceiling the applicant qualifies for under this scenario. */
 function probeAmount(products: LoanProduct[]): number {
   return products.reduce((m, p) => Math.max(m, p.maxAmount), 0);
@@ -202,8 +202,8 @@ export interface StressPoint {
 const STRESS_DIPS = [0.1, 0.2, 0.3];
 
 /**
- * Stress-test a scenario's loan offer against downward income shocks. A dip cuts income and — since
- * spending is unchanged — the surplus by the same ringgit amount, then re-runs the real decision
+ * Stress-test a scenario's loan offer against downward income shocks. A dip cuts income and  since
+ * spending is unchanged  the surplus by the same ringgit amount, then re-runs the real decision
  * engine. This is the forward-looking affordability check the CCA-2025 duty points at: not just
  * "can they afford it today" but "does the offer still hold if the gig economy softens".
  */
@@ -248,11 +248,11 @@ const CONSTRAINT_LABEL: Record<Constraint, string> = {
   coverage: 'Thin data coverage',
   confidence: 'Low data confidence',
   affordability: 'A tight monthly surplus',
-  none: 'Nothing — you already reach the top offer',
+  none: 'Nothing  you already reach the top offer',
 };
 
 /**
- * Find the single policy constraint that, if relaxed on its own, most improves the offer — the
+ * Find the single policy constraint that, if relaxed on its own, most improves the offer  the
  * borrower's binding constraint. Each is relaxed by overriding just its input and re-running the
  * real engine; the largest genuine improvement over the baseline wins. A relaxation that overshoots
  * into an unaffordable tier (a worse outcome) scores zero, so it never masquerades as the blocker.
@@ -314,7 +314,7 @@ export function diagnoseConstraint(input: CoachPlanInput): ConstraintDiagnosis {
 const DECISION_RANK: Record<Decision, number> = { decline: 0, refer: 1, approve: 2 };
 
 /** Ranking metric for an action. A decision jump (decline→refer→approve) dominates any RM gain,
- *  which in turn dominates a raw score gain — so the plan leads with what changes the outcome. */
+ *  which in turn dominates a raw score gain  so the plan leads with what changes the outcome. */
 function impactOf(sim: CoachSim): number {
   const decisionGain = DECISION_RANK[sim.decisionTo] - DECISION_RANK[sim.decisionFrom];
   const amountGain = sim.maxAmountTo - sim.maxAmountFrom;
@@ -330,7 +330,7 @@ function rm(n: number): string {
  *  The engine default; a lender's published policy (Brief N) may move it. */
 const COVERAGE_GATE_DAYS = 30;
 
-/** The Emergency-only gate in force for this input — the lender's published gate when present. */
+/** The Emergency-only gate in force for this input  the lender's published gate when present. */
 function gateDaysOf(input: CoachPlanInput): number {
   return input.policy?.emergencyOnlyBelowDays ?? COVERAGE_GATE_DAYS;
 }
@@ -370,7 +370,7 @@ function coverageMilestones(daysCovered: number, windowDays: number, gateDays: n
   return targets;
 }
 
-/** For an approved offer, the largest income dip it survives — otherwise undefined. */
+/** For an approved offer, the largest income dip it survives  otherwise undefined. */
 function stressOf(
   input: CoachPlanInput,
   sim: CoachSim,
@@ -398,7 +398,7 @@ function coverageActionAt(input: CoachPlanInput, target: number): CoachAction {
   };
 }
 
-/** Build an on-time repayment record — omitted when it changes nothing (e.g. record already perfect). */
+/** Build an on-time repayment record  omitted when it changes nothing (e.g. record already perfect). */
 function trackRecordAction(input: CoachPlanInput): CoachAction | null {
   const sim = simulateTrackRecord(input, TRACK_RECORD_COUNT);
   if (!simChanged(sim)) return null;
@@ -414,16 +414,16 @@ function trackRecordAction(input: CoachPlanInput): CoachAction | null {
 
 /**
  * Assemble the full coach plan: a ranked list of levers that genuinely improve the outcome, plus
- * the preset what-if chips. Pure — every number comes from the deterministic engines via `evaluate`.
+ * the preset what-if chips. Pure  every number comes from the deterministic engines via `evaluate`.
  * Flat surplus chips carry an honest reason: blocked by the coverage gate, too small a step, or
- * already at the tier ceiling — never a misleading "try a bigger step" when nothing would help.
+ * already at the tier ceiling  never a misleading "try a bigger step" when nothing would help.
  */
 export function buildCoachPlan(input: CoachPlanInput): CoachPlan {
   const b = baseline(input);
   const win = input.coverage.windowDays || 90;
 
   // A coverage milestone that would *decline* (e.g. more history qualifies a higher tier the
-  // borrower's surplus can't yet afford) is misleading to offer as an unlock — drop it. The honest
+  // borrower's surplus can't yet afford) is misleading to offer as an unlock  drop it. The honest
   // path in that case is the surplus lever, which stays available.
   const gateDays = gateDaysOf(input);
   const coverageActions = coverageMilestones(input.coverage.daysCovered, win, gateDays)
@@ -443,11 +443,11 @@ export function buildCoachPlan(input: CoachPlanInput): CoachPlan {
     let note: string | undefined;
     if (!changed) {
       if (coverageBlocks) {
-        note = `Reach ${gateDays} days of recorded history first — trimming spending can't lift an Emergency-tier offer.`;
+        note = `Reach ${gateDays} days of recorded history first  trimming spending can't lift an Emergency-tier offer.`;
       } else if (anyStepHelps) {
         note = 'Free up a little more to move your offer.';
       } else {
-        note = 'You can already afford your tier maximum — history and score are your levers now.';
+        note = 'You can already afford your tier maximum  history and score are your levers now.';
       }
     }
     return {
@@ -469,8 +469,8 @@ export function buildCoachPlan(input: CoachPlanInput): CoachPlan {
   const track = trackRecordAction(input);
   const bestSurplus = surpluses.reduce((best, s) => (s.impact > best.impact ? s : best));
 
-  // The ranked plan surfaces only levers that move the *offer* (decision or amount) — the nearest
-  // coverage milestone, the best surplus step, a repayment record — most-valuable first. Levers that
+  // The ranked plan surfaces only levers that move the *offer* (decision or amount)  the nearest
+  // coverage milestone, the best surplus step, a repayment record  most-valuable first. Levers that
   // only nudge the score (e.g. an early repayment record while coverage still gates the tier) stay in
   // the explorable what-ifs rather than cluttering "your next steps".
   const movesOffer = (a: CoachAction) =>

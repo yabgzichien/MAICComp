@@ -1,6 +1,6 @@
 /**
  * Pip issuer signer. Produces the issuer signature that attests "Pip issued this
- * passport" — distinct from the holder signature that proves "the holder controls
+ * passport"  distinct from the holder signature that proves "the holder controls
  * the subject key". The lender console pins ISSUER_PUBLIC_KEY_HEX and requires both.
  *
  * DEMO LIMITATION: the issuer secret is bundled on-device (src/data/issuerKey.ts).

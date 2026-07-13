@@ -68,7 +68,7 @@ export function CreditGauge({
       {/* Background track */}
       <Path d={arcD(0, 1)} stroke="rgba(20,40,30,0.08)" strokeWidth={SW} fill="none" />
 
-      {/* Band segments — achieved at full opacity, future dimmed */}
+      {/* Band segments  achieved at full opacity, future dimmed */}
       {BANDS.map((b, i) => (
         <Path
           key={i}

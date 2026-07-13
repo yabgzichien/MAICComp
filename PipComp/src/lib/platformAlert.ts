@@ -1,5 +1,5 @@
 // src/lib/platformAlert.ts
-// react-native-web's Alert.alert() is a hard no-op (no dialog, no callback — see
+// react-native-web's Alert.alert() is a hard no-op (no dialog, no callback  see
 // node_modules/react-native-web/src/exports/Alert), so every confirm/notify in this
 // app silently did nothing on web. These wrappers fall back to window.alert/confirm
 // on web and keep native behavior (RN's real Alert) everywhere else.

@@ -1,5 +1,5 @@
 // Console-side persistence for the presentment log (Brief G). localStorage-backed
-// and per-console by design — the honest simplification presentment.ts documents:
+// and per-console by design  the honest simplification presentment.ts documents:
 // a real deployment shares this log across lenders via a registry. Storage is
 // injectable so the pure behavior is testable without a browser; without any
 // storage (SSR render pass) reads return [] and writes are no-ops.
@@ -37,6 +37,6 @@ export function recordPresentment(entry: Presentment, storage: Storage | null = 
   try {
     storage.setItem(LOG_KEY, JSON.stringify([...readPresentmentLog(storage), entry]));
   } catch {
-    // Quota/security errors degrade to "no log", same as SSR — never break verification.
+    // Quota/security errors degrade to "no log", same as SSR  never break verification.
   }
 }

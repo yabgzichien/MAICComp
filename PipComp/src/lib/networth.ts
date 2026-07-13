@@ -1,5 +1,5 @@
 // src/lib/networth.ts
-// Pure, deterministic balance-sheet logic. No UI/DB imports — unit-tested.
+// Pure, deterministic balance-sheet logic. No UI/DB imports  unit-tested.
 import type { Account, AccountKind, BalanceEntry, TxnType } from './types';
 
 export interface ClassMeta {

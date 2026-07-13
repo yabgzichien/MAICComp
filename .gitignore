@@ -51,11 +51,6 @@ Thoughts.md
 *.pptx
 *.ppt
 
-# ─── Tests (excluded by request) ──────────────────────────────────────────────
-__tests__/
-*.test.ts
-*.test.tsx
-
 # ─── Environment & secrets (the .env.example template stays committed) ────────
 .env
 .env.*
@@ -70,6 +65,11 @@ __tests__/
 *.pem
 *.mobileprovision
 .vercel
+
+# ─── Issuer signing secret (rotated 2026-07-12 after the prior key was found
+# committed/public; keep the new one untracked from here on — the .example
+# stays committed as a template, run tools/issuerKey/generate.js after cloning) ──
+PipComp/src/data/issuerKey.ts
 
 # ─── Root allowlist — only the two app folders + README/.gitignore are ever ───
 # committed at the repo root (decks, screenshots, scratch exports, etc. stay

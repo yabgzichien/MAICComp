@@ -13,8 +13,8 @@ Return a JSON object exactly in this shape:
 {
   "transactions": [
     {
-      "merchant": "string — the payee / description / narration as shown",
-      "amount": number — positive value, no currency symbol,
+      "merchant": "string  the payee / description / narration as shown",
+      "amount": number  positive value, no currency symbol,
       "direction": "out" for money leaving the account (spending), "in" for money received,
       "date": "YYYY-MM-DD if derivable, otherwise null",
       "category": "the category/label from the source if the document has one, otherwise null",
@@ -49,7 +49,7 @@ Return a JSON object exactly in this shape:
   "holdings": [
     {
       "ticker": "the coin's ticker symbol in uppercase, e.g. BTC, ETH, SOL",
-      "quantity": number — the AMOUNT of coins held (not its fiat value)
+      "quantity": number  the AMOUNT of coins held (not its fiat value)
     }
   ]
 }
@@ -61,24 +61,24 @@ Rules:
 - If you cannot read a coin's quantity, omit that row. Output JSON only.`;
 
 export const SNAPSHOT_SYSTEM_PROMPT =
-  'You read a screenshot of a personal finance app — a bank account, e-wallet, ' +
-  'loan/credit statement, or a crypto wallet/exchange — and return ONLY JSON ' +
+  'You read a screenshot of a personal finance app  a bank account, e-wallet, ' +
+  'loan/credit statement, or a crypto wallet/exchange  and return ONLY JSON ' +
   'describing what it shows. Never add prose, explanations, or markdown fences.';
 
 export const SNAPSHOT_USER_PROMPT = `Identify what this screenshot shows and return JSON in exactly this shape:
 {
   "kind": "balance" | "holdings" | "unknown",
-  "provider": "the bank, e-wallet, or platform name shown (e.g. \\"Touch 'n Go eWallet\\", \\"Maybank\\", \\"Binance\\"), read from a logo, header, or app branding — null if you can't tell",
-  "accountKind": "asset" | "liability" | null — only for kind \\"balance\\": \\"asset\\" for a deposit/wallet/savings balance, \\"liability\\" for an outstanding loan/credit-card/BNPL amount; null otherwise,
-  "amount": number | null — only for kind \\"balance\\": the main balance or outstanding amount, with currency symbols and thousands separators removed (e.g. "RM 1,234.50" -> 1234.50),
-  "holdings": [{ "ticker": "uppercase coin symbol", "quantity": number }] — only for kind \\"holdings\\"
+  "provider": "the bank, e-wallet, or platform name shown (e.g. \\"Touch 'n Go eWallet\\", \\"Maybank\\", \\"Binance\\"), read from a logo, header, or app branding  null if you can't tell",
+  "accountKind": "asset" | "liability" | null  only for kind \\"balance\\": \\"asset\\" for a deposit/wallet/savings balance, \\"liability\\" for an outstanding loan/credit-card/BNPL amount; null otherwise,
+  "amount": number | null  only for kind \\"balance\\": the main balance or outstanding amount, with currency symbols and thousands separators removed (e.g. "RM 1,234.50" -> 1234.50),
+  "holdings": [{ "ticker": "uppercase coin symbol", "quantity": number }]  only for kind \\"holdings\\"
 }
 
 Rules:
 - kind "balance" = a bank account, e-wallet, savings/current account, or loan/credit statement showing one main MYR amount.
 - kind "holdings" = a crypto wallet or exchange showing coin balances.
 - kind "unknown" = neither is clearly shown.
-- For "balance": use the primary account balance or outstanding loan amount — NOT available credit, rewards points, or interest. Omit holdings (empty array). If you cannot read a clear amount, set amount to null but still report kind "balance" if it's clearly that kind of screenshot.
+- For "balance": use the primary account balance or outstanding loan amount  NOT available credit, rewards points, or interest. Omit holdings (empty array). If you cannot read a clear amount, set amount to null but still report kind "balance" if it's clearly that kind of screenshot.
 - For "holdings": use each coin's QUANTITY, never its fiat/USD/MYR value. Omit amount (null). Skip rows without a readable quantity.
 - Output JSON only.`;
 
@@ -90,7 +90,7 @@ export const BALANCE_USER_PROMPT = `Return the main balance or amount shown in t
 { "amount": number }
 
 Rules:
-- Use the primary account balance or the outstanding loan amount — NOT available credit, rewards points, or interest.
+- Use the primary account balance or the outstanding loan amount  NOT available credit, rewards points, or interest.
 - Remove currency symbols and thousands separators (e.g. "RM 1,234.50" → 1234.50).
 - If you cannot read a single clear amount, return { "amount": null }.
 - Output JSON only.`;

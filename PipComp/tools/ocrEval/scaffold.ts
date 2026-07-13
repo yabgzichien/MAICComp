@@ -1,7 +1,7 @@
 // tools/ocrEval/scaffold.ts
 // Optional aid for step 1 of the OCR eval (see README.md). Scans dataset/images/
 // and writes a blank, schema-shaped label template into dataset/labels/ for every
-// screenshot that doesn't already have one — so hand-labeling is filling blanks,
+// screenshot that doesn't already have one  so hand-labeling is filling blanks,
 // not remembering the schema. NEVER overwrites an existing label file, so your
 // work is safe to re-run against. Offline, spends no API calls.
 //
@@ -44,7 +44,7 @@ function main(): void {
     }
     fs.writeFileSync(labelPath, JSON.stringify(blankLabelTemplate(), null, 2) + '\n');
     created++;
-    console.log(`  ${stem}.json — template created`);
+    console.log(`  ${stem}.json  template created`);
   }
 
   console.log(`Done. ${created} template(s) created, ${skipped} already labeled (left untouched).`);

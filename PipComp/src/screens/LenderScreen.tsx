@@ -67,13 +67,13 @@ export function LenderScreen({ onBack }: { onBack: () => void }) {
       signature = parsed.signature;
       issuerSignature = parsed.issuerSignature;
     } catch {
-      setVerifyError('Invalid code format — paste the full passport code from the borrower app');
+      setVerifyError('Invalid code format  paste the full passport code from the borrower app');
       setVerifying(false);
       return;
     }
 
     const publicKeyHex = passport.subject;
-    // Require the Pip issuer attestation — a self-minted passport (holder signs their own
+    // Require the Pip issuer attestation  a self-minted passport (holder signs their own
     // score) carries no valid issuer signature and is rejected here.
     const result = verifyPassport(passport, signature, publicKeyHex, {
       publicKeyHex: ISSUER_PUBLIC_KEY_HEX,
@@ -242,7 +242,7 @@ export function LenderScreen({ onBack }: { onBack: () => void }) {
             : <FailureCard result={verifyResult} />
         )}
 
-        {/* Anti-stacking warning — same passport presented again recently */}
+        {/* Anti-stacking warning  same passport presented again recently */}
         {verifyResult?.valid && stacking && stacking.length > 0 && (
           <Card style={styles.stackingCard}>
             <View style={styles.resultRow}>
@@ -252,12 +252,12 @@ export function LenderScreen({ onBack }: { onBack: () => void }) {
             <Text style={styles.stackingBody}>
               This passport was already presented {stacking.length} time
               {stacking.length > 1 ? 's' : ''} recently (most recent {formatAgo(stacking[0].at)}).
-              The borrower may be applying to multiple lenders at once — review before disbursing.
+              The borrower may be applying to multiple lenders at once  review before disbursing.
             </Text>
           </Card>
         )}
 
-        {/* Loan assessment input — shown only after a successful verification */}
+        {/* Loan assessment input  shown only after a successful verification */}
         {verifyResult?.valid && (
           <Card style={styles.loanInputCard}>
             <Text style={styles.inputLabel}>Loan amount requested (RM)</Text>
@@ -334,7 +334,7 @@ function CapitalMarketsSection() {
 
       <Card style={styles.introCard}>
         <Text style={styles.introText}>
-          Explainable tranche ratings from a pool of fraud-checked, individually-scored micro-loans —
+          Explainable tranche ratings from a pool of fraud-checked, individually-scored micro-loans 
           turning inclusive lending into an instrument institutions can fund.
         </Text>
       </Card>
@@ -417,7 +417,7 @@ function CapitalMarketsSection() {
       ))}
 
       <Text style={styles.noteText}>
-        Ratings are computed deterministically from the pool's expected loss — a weaker pool is
+        Ratings are computed deterministically from the pool's expected loss  a weaker pool is
         downgraded, not rubber-stamped. The AI supplies the upstream risk; the structuring is
         transparent and auditable.
       </Text>
@@ -518,7 +518,7 @@ function SuccessCard({ result }: { result: VerifyResult }) {
 function FailureCard({ result }: { result: VerifyResult }) {
   const { tampered, reasons } = result;
   const headline = tampered
-    ? 'Signature mismatch — passport may have been altered'
+    ? 'Signature mismatch  passport may have been altered'
     : 'Verification failed';
 
   return (
@@ -603,7 +603,7 @@ function LoanDecisionCard({ decision, confidence }: { decision: LoanDecision; co
       <View style={styles.confidenceBadge}>
         <Icon name="check" size={13} color={colors.accentInk} stroke={2.5} />
         <Text style={styles.confidenceText}>
-          Passport verified — data confidence:{' '}
+          Passport verified  data confidence:{' '}
           {typeof confidence === 'number' ? `${Math.round(confidence * 100)}%` : 'n/a'}
         </Text>
       </View>
@@ -641,7 +641,7 @@ const styles = StyleSheet.create({
   segmentText: { fontFamily: uiFont(600), fontSize: 13.5, color: colors.ink2 },
   segmentTextActive: { color: colors.onAccent },
 
-  // Capital Markets — pool summary
+  // Capital Markets  pool summary
   poolCard: { padding: 16, marginBottom: 14 },
   poolGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -6 },
   poolCell: { width: '33.33%', paddingHorizontal: 6, marginBottom: 12 },
@@ -654,7 +654,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Capital Markets — waterfall
+  // Capital Markets  waterfall
   waterfallCard: { padding: 16, marginBottom: 14 },
   waterfallBar: {
     flexDirection: 'row',
@@ -668,7 +668,7 @@ const styles = StyleSheet.create({
   legendDot: { width: 10, height: 10, borderRadius: 999 },
   legendText: { fontFamily: uiFont(600), fontSize: 12, color: colors.ink2 },
 
-  // Capital Markets — tranche cards
+  // Capital Markets  tranche cards
   trancheCard: { padding: 16, marginBottom: 12 },
   trancheHead: {
     flexDirection: 'row',

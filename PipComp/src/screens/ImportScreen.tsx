@@ -76,7 +76,7 @@ export function ImportScreen({ onClose, onOpenSettings }: { onClose: () => void;
       setPhase('extracting');
       const items = await provider.extractDocument({ apiKey: c.apiKey, model: c.model, parts });
       if (items.length === 0) {
-        // The file was read fine — it just has no transactions (e.g. a statement
+        // The file was read fine  it just has no transactions (e.g. a statement
         // for a period with no account activity). Not an error.
         setPhase('empty');
         return;
@@ -170,7 +170,7 @@ export function ImportScreen({ onClose, onOpenSettings }: { onClose: () => void;
           <>
             <PipSays expr="curious">
               <BubbleText>
-                I read <B>{fileName}</B>, but it has <B>no transactions</B> to import — this statement shows no account activity for its period. Try one that covers a month with transactions.
+                I read <B>{fileName}</B>, but it has <B>no transactions</B> to import  this statement shows no account activity for its period. Try one that covers a month with transactions.
               </BubbleText>
             </PipSays>
             <View style={{ marginTop: 22 }}>

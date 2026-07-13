@@ -1,8 +1,8 @@
-// Application queues store (Brief O) — the console's persistent pipeline. Pure
+// Application queues store (Brief O)  the console's persistent pipeline. Pure
 // array-in/array-out logic plus an injectable-Storage wrapper (same pattern as
 // presentmentStore). No UI imports.
 //
-// The one inviolable rule — the override matrix — mirrors the orchestrator's
+// The one inviolable rule  the override matrix  mirrors the orchestrator's
 // escalation-only asymmetry documented in agents.ts: an officer can resolve a
 // REFER either way and can DECLINE an engine approve (tighten), but can never
 // APPROVE an engine decline (soften). resolveApplication throws on violations.
@@ -35,15 +35,15 @@ export interface CheckIn {
 
 export interface ApplicationRecord {
   id: string;
-  /** The full pasted code — the detail pane rehydrates by re-running evaluate on it. */
+  /** The full pasted code  the detail pane rehydrates by re-running evaluate on it. */
   passportCode: string;
   subject: string;
   applicantLabel: string;
   requestedAmount: number;
   purpose?: DeclaredPurpose;
-  /** The engine's verdict at filing. Never rewritten — resolutions live in `resolution`. */
+  /** The engine's verdict at filing. Never rewritten  resolutions live in `resolution`. */
   engineDecision: Decision;
-  /** Offer terms at filing — the portfolio/early-warning specs read these off approved rows. */
+  /** Offer terms at filing  the portfolio/early-warning specs read these off approved rows. */
   offeredAmount: number;
   installment: number;
   tierLabel?: string;
@@ -57,6 +57,7 @@ export interface ApplicationRecord {
   /** Post-disbursement check-ins (Brief S), oldest first. Absent/empty on applications that
    *  predate monitoring or have never been re-verified. */
   checkIns?: CheckIn[];
+  source?: 'direct' | 'officer';
 }
 
 export interface FileApplicationInput {
@@ -69,6 +70,7 @@ export interface FileApplicationInput {
   installment: number;
   tierLabel?: string;
   purpose?: DeclaredPurpose;
+  source?: 'direct' | 'officer';
 }
 
 const OFFICER = 'Hamdan Z.';
@@ -80,7 +82,7 @@ function statusFor(verdict: Decision): ApplicationStatus {
 
 /**
  * File one verified+assessed passport as an application. Dedupe: the same subject
- * asking for the same amount is the same application — re-verifying it does not
+ * asking for the same amount is the same application  re-verifying it does not
  * file again (the presentment log already records repeat verifications).
  */
 export function fileApplication(
@@ -94,6 +96,11 @@ export function fileApplication(
   const at = now.toISOString();
   const status = statusFor(input.engineDecision);
   const resolved = status !== 'referred' && status !== 'new';
+  
+  const auditDetail = input.source === 'direct'
+    ? 'submitted by borrower via direct apply'
+    : (resolved ? `engine ${input.engineDecision}  resolved as filed` : 'engine refer  awaiting officer decision');
+
   const record: ApplicationRecord = {
     id: `${input.subject.slice(0, 8)}-${now.getTime().toString(36)}-${input.requestedAmount}`,
     passportCode: input.passportCode,
@@ -102,8 +109,8 @@ export function fileApplication(
     requestedAmount: input.requestedAmount,
     ...(input.purpose ? { purpose: input.purpose } : {}),
     engineDecision: input.engineDecision,
-    offeredAmount: input.offeredAmount,
-    installment: input.installment,
+    offeredAmount: decisionOutcome(input.engineDecision, input.offeredAmount),
+    installment: decisionOutcome(input.engineDecision, input.installment),
     ...(input.tierLabel ? { tierLabel: input.tierLabel } : {}),
     status,
     filedAt: at,
@@ -113,18 +120,23 @@ export function fileApplication(
       {
         at,
         action: 'filed',
-        detail: resolved ? `engine ${input.engineDecision} — resolved as filed` : 'engine refer — awaiting officer decision',
+        detail: auditDetail,
       },
     ],
+    ...(input.source ? { source: input.source } : {}),
   };
   return { apps: [...apps, record], filed: true, id: record.id };
+}
+
+function decisionOutcome(verdict: Decision, value: number): number {
+  return verdict === 'decline' ? 0 : value;
 }
 
 /**
  * Resolve an application. Enforces the override matrix:
  *   referred → approved | declined   (either way, rationale required)
  *   approved → declined              (an officer can always tighten)
- *   declined → approved              (NEVER — throws)
+ *   declined → approved              (NEVER  throws)
  */
 export function resolveApplication(
   apps: ApplicationRecord[],
@@ -138,7 +150,7 @@ export function resolveApplication(
   if (!app) throw new Error(`No application with id ${id}.`);
   if (!rationale.trim()) throw new Error('A one-line rationale is required to resolve an application.');
   if (app.status === 'declined' && outcome === 'approved') {
-    throw new Error('An engine or officer decline can never be overturned to an approval — escalation only.');
+    throw new Error('An engine or officer decline can never be overturned to an approval  escalation only.');
   }
   if (app.status === 'approved' && outcome === 'approved') {
     throw new Error('Already approved.');
@@ -166,7 +178,7 @@ export function addNote(apps: ApplicationRecord[], id: string, note: string, now
 /**
  * Record a post-disbursement check-in (Brief S): appends the re-verified passport code and its
  * flags to the application's check-in history, audit-trailed. Never changes `status` or
- * `resolution` — a check-in informs the officer, it never re-decides the loan.
+ * `resolution`  a check-in informs the officer, it never re-decides the loan.
  */
 export function recordCheckIn(
   apps: ApplicationRecord[],
@@ -179,7 +191,7 @@ export function recordCheckIn(
   const checkIn: CheckIn = { at, passportCode, flags };
   const detail =
     flags.length === 0
-      ? 'clean — no flags'
+      ? 'clean  no flags'
       : `${flags.length} flag(s): ${flags.map((f) => `${f.key} (${f.severity})`).join(', ')}`;
   return apps.map((a) =>
     a.id === id
@@ -189,7 +201,7 @@ export function recordCheckIn(
 }
 
 /** Record that an adverse-action letter was generated for this application (Brief J stretch),
- *  audit-trailed. Never changes status/resolution — the letter restates the decision, it
+ *  audit-trailed. Never changes status/resolution  the letter restates the decision, it
  *  never remakes it. Kind is recorded so the trail shows what TYPE of letter was drafted. */
 export function recordLetterGenerated(
   apps: ApplicationRecord[],
@@ -203,7 +215,7 @@ export function recordLetterGenerated(
   );
 }
 
-/** Approved applications whose most recent check-in still carries active flags — the Watchlist
+/** Approved applications whose most recent check-in still carries active flags  the Watchlist
  *  queue (Brief S), a filtered view of Approved rather than a fifth status value. */
 export function watchlistApplications(apps: ApplicationRecord[]): ApplicationRecord[] {
   return apps.filter((a) => {
@@ -223,7 +235,7 @@ export function orderQueue(apps: ApplicationRecord[], status: ApplicationStatus)
   return [...inQueue].sort((a, b) => (asc ? a.filedAt.localeCompare(b.filedAt) : b.filedAt.localeCompare(a.filedAt)));
 }
 
-// ── localStorage wrapper (injectable, SSR-safe — presentmentStore pattern) ────
+// ── localStorage wrapper (injectable, SSR-safe  presentmentStore pattern) ────
 
 const STORE_KEY = 'pip-applications';
 
@@ -262,6 +274,9 @@ export function writeApplications(apps: ApplicationRecord[], storage: Storage | 
   try {
     storage.setItem(STORE_KEY, JSON.stringify(apps));
   } catch {
-    // Quota/security failures degrade to an in-memory-only session — never break the console.
+    // Quota/security failures degrade to an in-memory-only session  never break the console.
   }
 }
+
+export { isRecord as isApplicationRecord };
+

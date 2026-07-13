@@ -4,7 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { Institution } from '../lib/institutions';
 import { uiFont } from '../theme';
 
-/** A brand-toned monogram badge for a recognized bank/e-wallet — fallback to a neutral "?" tile when unrecognized. */
+/** A brand-toned monogram badge for a recognized bank/e-wallet  fallback to a neutral "?" tile when unrecognized. */
 export function InstitutionBadge({ inst, fallbackText, size = 36 }: { inst: Institution | null; fallbackText?: string | null; size?: number }) {
   const text = inst?.monogram ?? (fallbackText ? fallbackText.trim().slice(0, 3).toUpperCase() : '?');
   const bg = inst?.color ?? '#9aa7a0';

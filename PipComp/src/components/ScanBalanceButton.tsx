@@ -51,7 +51,7 @@ export function ScanBalanceButton({ onResult }: { onResult: (amount: number) => 
 
   const start = () => {
     if (busy) return;
-    // RN-web has no native action-sheet Alert — go straight to the file picker on web.
+    // RN-web has no native action-sheet Alert  go straight to the file picker on web.
     if (Platform.OS === 'web') { pickGallery(); return; }
     Alert.alert('Scan balance', 'Read the amount from a screenshot or photo.', [
       { text: 'Take photo', onPress: takePhoto },

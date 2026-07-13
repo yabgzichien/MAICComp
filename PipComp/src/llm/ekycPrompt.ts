@@ -19,7 +19,7 @@ export class IdentityParseError extends Error {
 
 export const IDENTITY_SYSTEM_PROMPT =
   'You read a photo of a Malaysian identity document (MyKad IC or passport) and return ONLY ' +
-  'JSON. Never invent data — if a field is unreadable, use null.';
+  'JSON. Never invent data  if a field is unreadable, use null.';
 
 export const IDENTITY_USER_PROMPT =
   'Extract the holder identity from this document photo. Return strict JSON with exactly these ' +

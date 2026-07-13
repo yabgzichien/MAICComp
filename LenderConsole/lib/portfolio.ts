@@ -1,7 +1,7 @@
 // lib/portfolio.ts (Brief Q)
 // Pure: maps the approved-applications store (Brief O) into the pool-loan shape
 // securitization.ts consumes, and computes the Portfolio dashboard aggregates. No new
-// risk math — PD, expected loss, and tranching all reuse securitization.ts; this module
+// risk math  PD, expected loss, and tranching all reuse securitization.ts; this module
 // only maps and aggregates. No UI/DB imports.
 
 import type { ApplicationRecord } from './applications';
@@ -15,7 +15,7 @@ export const CONCENTRATION_THRESHOLD = 0.4;
 const BAND_ORDER: CreditBand[] = ['Building', 'Fair', 'Good', 'Strong', 'Excellent'];
 
 /** Display apr/tenor by band (from the DEFAULT_PRODUCTS ladder). These do NOT affect the
- *  risk math — securitization.ts weights by band/fraud/principal only — they are carried
+ *  risk math  securitization.ts weights by band/fraud/principal only  they are carried
  *  for parity with the sample pool's shape and any later per-loan display. */
 const BAND_TERMS: Record<CreditBand, { apr: number; tenorMonths: number }> = {
   Building: { apr: 0.28, tenorMonths: 12 },
@@ -56,7 +56,7 @@ export interface Portfolio {
   weightedAvgScore: number;
   weightedAvgPD: number;
   expectedLossRate: number;
-  /** Principal-weighted data confidence — the AI-depth signal, reported alongside PD
+  /** Principal-weighted data confidence  the AI-depth signal, reported alongside PD
    *  rather than folded into it (approved loans already cleared the confidence gate). */
   weightedAvgConfidence: number;
   bandBreakdown: BreakdownRow[];

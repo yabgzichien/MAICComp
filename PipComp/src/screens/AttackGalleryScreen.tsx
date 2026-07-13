@@ -126,7 +126,7 @@ export function AttackGalleryScreen({ onBack }: { onBack: () => void }) {
           </Text>
           <Text style={styles.heroSub}>
             We run known fraud techniques against our own Phase-11 integrity rings. Every result below is
-            computed by the deterministic engine — not claimed.
+            computed by the deterministic engine  not claimed.
           </Text>
         </Card>
 
@@ -136,7 +136,7 @@ export function AttackGalleryScreen({ onBack }: { onBack: () => void }) {
 
         <Text style={styles.footer}>
           Known residual: a fully self-consistent fabricated ledger behind a verified-looking payer is
-          only defeated by source-of-truth income (open banking / MyInvois) — on the roadmap.
+          only defeated by source-of-truth income (open banking / MyInvois)  on the roadmap.
         </Text>
       </ScrollView>
     </FadeIn>

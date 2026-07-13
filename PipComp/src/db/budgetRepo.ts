@@ -86,7 +86,7 @@ export async function getSnapshots(): Promise<Record<string, { income: number; a
     try {
       allocations = JSON.parse(r.allocations) as Record<string, number>;
     } catch {
-      // corrupt row — treat as no allocations
+      // corrupt row  treat as no allocations
     }
     map[r.month] = { income: r.income, allocations };
   }

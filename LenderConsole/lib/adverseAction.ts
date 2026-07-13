@@ -1,7 +1,7 @@
 // Adverse-action letter builder (Brief J stretch). One click on any resolved decline,
 // refer, or counter-offer produces a borrower-facing letter: the decision, principal
 // reasons rewritten to second person, what evidence was relied on, and what would most
-// improve a future application. Deterministic — the LLM (see app/api/adverseAction/
+// improve a future application. Deterministic  the LLM (see app/api/adverseAction/
 // route.ts) only narrates prose atop these SAME facts and can never change a number,
 // reason, or verdict. No delivery mechanism: this only assembles the text; the UI layer
 // renders it as a copy/print modal, never sends it anywhere.
@@ -55,7 +55,7 @@ export interface AdverseActionLetter {
   caveat: string;
 }
 
-export const LETTER_CAVEAT = 'Template — review before sending. Not legal advice.';
+export const LETTER_CAVEAT = 'Template  review before sending. Not legal advice.';
 
 const rm = (n: number): string => `RM${Math.round(n).toLocaleString('en-MY')}`;
 
@@ -88,33 +88,33 @@ function dataReliedFrom(passport: CreditPassport): DataRelied {
 
 /**
  * Known reason templates from loans.ts, rewritten to second-person borrower prose. Matched
- * by exact pattern so numbers are never recomputed or invented — only the surrounding
+ * by exact pattern so numbers are never recomputed or invented  only the surrounding
  * language changes. Any reason that doesn't match a known template is returned verbatim
  * (never blank), so a future loans.ts wording change degrades gracefully instead of breaking.
  */
 const REASON_REWRITES: Array<[RegExp, string]> = [
   [
-    /^Serious adverse record on file — application declined\.$/,
+    /^Serious adverse record on file  application declined\.$/,
     'You have a serious adverse record on file, and this application has been declined as a result.',
   ],
   [
-    /^Minor adverse record on file — routed to manual review instead of auto-approval\.$/,
+    /^Minor adverse record on file  routed to manual review instead of auto-approval\.$/,
     'You have a minor adverse record on file, so this application has been routed to manual review instead of being approved automatically.',
   ],
   [
-    /^Data-integrity check: the income pattern could not be validated automatically — declined pending manual verification with the lender\.$/,
+    /^Data-integrity check: the income pattern could not be validated automatically  declined pending manual verification with the lender\.$/,
     'The income pattern on your application could not be validated automatically, so it has been declined pending manual verification with us.',
   ],
   [
-    /^Score (\d+) is below the minimum tier threshold \((\d+)\) — application declined\.$/,
+    /^Score (\d+) is below the minimum tier threshold \((\d+)\)  application declined\.$/,
     'Your score of $1 is below our minimum threshold of $2 for any of our loan products, so this application has been declined.',
   ],
   [
-    /^We could not verify enough of the recorded data \(confidence (\d+)%, below the (\d+)% auto-approval floor\) — routed to manual review\. More verified history would strengthen this application\.$/,
+    /^We could not verify enough of the recorded data \(confidence (\d+)%, below the (\d+)% auto-approval floor\)  routed to manual review\. More verified history would strengthen this application\.$/,
     'We could not verify enough of your recorded financial data (confidence $1%, below our $2% auto-approval threshold), so this application has been routed to manual review.',
   ],
   [
-    /^Auto-approval blocked by coverage policy — routed to manual review\.$/,
+    /^Auto-approval blocked by coverage policy  routed to manual review\.$/,
     'Automatic approval was blocked by our data-coverage policy, so this application has been routed to manual review.',
   ],
   [
@@ -126,7 +126,7 @@ const REASON_REWRITES: Array<[RegExp, string]> = [
     'With $2 days of tracked activity in the last 90 ($1% coverage), your eligibility is currently capped to our Starter Capital tier and below.',
   ],
   [
-    /^(\d+)\+ days of history but coverage is only (\d+)% — eligibility capped to Starter Capital and below until coverage reaches (\d+)%\.$/,
+    /^(\d+)\+ days of history but coverage is only (\d+)%  eligibility capped to Starter Capital and below until coverage reaches (\d+)%\.$/,
     'You have $1+ days of history, but your data coverage is only $2%, so your eligibility is capped to our Starter Capital tier and below until coverage reaches $3%.',
   ],
   [
@@ -157,19 +157,19 @@ function toSecondPerson(text: string): string {
 
 const IMPROVEMENT_TEXT: Record<ImprovementConstraint, string> = {
   coverage:
-    'Building a longer verified transaction history — more tracked days of income and spending — is the single change most likely to improve a future application.',
+    'Building a longer verified transaction history  more tracked days of income and spending  is the single change most likely to improve a future application.',
   confidence:
     'Providing more consistently verifiable transaction history would raise our confidence in your data and most improve a future application.',
   affordability:
-    'Increasing your monthly surplus — for example through higher income, lower recurring expenses, or less existing debt service — is the change most likely to improve a future application.',
+    'Increasing your monthly surplus  for example through higher income, lower recurring expenses, or less existing debt service  is the change most likely to improve a future application.',
   record:
     'This outcome reflects a record on file rather than your recent financial data; please contact us directly to discuss it.',
-  none: 'No single gap stands out — your current application already reflects strong, verified data.',
+  none: 'No single gap stands out  your current application already reflects strong, verified data.',
 };
 
 /**
  * The dominant, borrower-actionable constraint behind a decline or refer, read off the
- * SAME categorized reasons the letter already cites (no counterfactual re-run — the console
+ * SAME categorized reasons the letter already cites (no counterfactual re-run  the console
  * doesn't have the borrower-side data coachPlan.ts uses for that). Record and integrity
  * issues are compliance matters, not data gaps, so they take priority when present.
  */
@@ -201,7 +201,7 @@ function decisionStatementFor(kind: LetterKind, requestedAmount: number, co: Ret
 
 /**
  * Build the letter for a resolved decline, refer, or counter-offer. Returns null for a
- * clean approve with no counter-offer — there is nothing adverse to explain.
+ * clean approve with no counter-offer  there is nothing adverse to explain.
  */
 export function buildAdverseActionLetter(
   passport: CreditPassport,
@@ -236,11 +236,11 @@ const KIND_LABEL: Record<LetterKind, string> = {
   'counter-offer': 'Counter-offer',
 };
 
-/** Deterministic plain-text rendering for copy/download — no LLM prose baked in, same
+/** Deterministic plain-text rendering for copy/download  no LLM prose baked in, same
  *  convention as creditMemo.ts's memoToMarkdown (narration is a screen-only enhancement). */
 export function letterToText(letter: AdverseActionLetter): string {
   const lines: string[] = [];
-  lines.push(`ADVERSE-ACTION LETTER — ${KIND_LABEL[letter.kind]}`);
+  lines.push(`ADVERSE-ACTION LETTER  ${KIND_LABEL[letter.kind]}`);
   lines.push(`${letter.applicant} · ${letter.date}`);
   lines.push('');
   lines.push(letter.decisionStatement);

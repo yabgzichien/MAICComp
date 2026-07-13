@@ -2,7 +2,7 @@
 
 // Adverse-action letter modal (Brief J stretch). Follows CreditMemo.tsx's pattern:
 // deterministic sections render immediately, an optional narration call smooths the
-// opening/closing prose without changing any reason or figure, and a copy action —
+// opening/closing prose without changing any reason or figure, and a copy action 
 // no delivery mechanism, this only assembles text for the officer to send themselves.
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -87,7 +87,7 @@ export default function AdverseActionLetterModal({
         setTimeout(() => setCopied(false), 2000);
       })
       .catch(() => {
-        // Clipboard permission denied — the text is still fully visible/selectable/printable.
+        // Clipboard permission denied  the text is still fully visible/selectable/printable.
       });
   }
 
@@ -178,7 +178,7 @@ export default function AdverseActionLetterModal({
           </Section>
 
           <p style={{ fontFamily: FONT.ui, fontSize: 9.5, color: p.ink3, lineHeight: 1.55 }}>
-            This letter restates a decision made by the deterministic policy engine — it does not itself decide anything, and every figure and reason
+            This letter restates a decision made by the deterministic policy engine  it does not itself decide anything, and every figure and reason
             traces back to that decision.
           </p>
         </div>

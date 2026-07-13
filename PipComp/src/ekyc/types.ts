@@ -1,6 +1,6 @@
 // src/ekyc/types.ts
 // eKYC provider seam. The mock provider validates NRIC structure today; a real provider
-// (MyDigital ID / CTOS / Innov8tif) implements the same interface later — the UI and the
+// (MyDigital ID / CTOS / Innov8tif) implements the same interface later  the UI and the
 // passport binding do not change when the real one drops in.
 
 import type { Gender } from '../lib/ekyc';

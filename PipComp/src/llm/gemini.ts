@@ -36,7 +36,7 @@ interface GenOpts {
   json?: boolean;
   maxTokens?: number;
   temperature?: number;
-  /** Disable model "thinking" — keeps short, capped replies from being eaten by reasoning. */
+  /** Disable model "thinking"  keeps short, capped replies from being eaten by reasoning. */
   noThinking?: boolean;
 }
 
@@ -77,7 +77,7 @@ async function callGemini(model: string, apiKey: string, parts: GeminiPart[], op
     if (res.status === 429) throw new LLMError('rate_limit', 'Rate limit reached.');
     if (res.status === 401 || res.status === 403) throw new LLMError('auth', msg || 'API key rejected.');
     // Gemini returns 400 "API key not valid" for a bad key, but also 400 for many
-    // other request problems — only the former is an auth issue.
+    // other request problems  only the former is an auth issue.
     if (res.status === 400 && /api[_ ]?key[_ ]?(not\s*valid|invalid)/i.test(msg)) {
       throw new LLMError('auth', 'API key rejected.');
     }

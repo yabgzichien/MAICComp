@@ -1,9 +1,9 @@
-// Pure builder for the downloadable "decision file" — the lender's retained evidence
+// Pure builder for the downloadable "decision file"  the lender's retained evidence
 // bundle for one assessed passport. Self-contained by design: it embeds the credential
 // with BOTH signatures so the file can be independently re-verified years later
 // (dispute / audit), alongside the verification outcome recorded at decision time,
 // the deterministic decision with its reasons, and the credit memo as drafted.
-// Nothing here can change a verdict or an amount — it only packages them.
+// Nothing here can change a verdict or an amount  it only packages them.
 
 import type { CreditPassport, VerifyResult } from './passport';
 import { ISSUER_PUBLIC_KEY_HEX } from './passport';
@@ -15,14 +15,14 @@ export interface DecisionFile {
   fileVersion: 1;
   generatedAt: string;
   /** Outcome of cryptographic verification at decision time, plus the pinned issuer
-   *  key it was checked against — so the file states what was trusted and why. */
+   *  key it was checked against  so the file states what was trusted and why. */
   verification: {
     valid: boolean;
     tampered: boolean;
     reasons: string[];
     issuerPublicKeyHex: string;
   };
-  /** The full signed credential — passport + holder signature + issuer signature.
+  /** The full signed credential  passport + holder signature + issuer signature.
    *  Enough to re-run verification independently of this console. */
   credential: {
     passport: CreditPassport;

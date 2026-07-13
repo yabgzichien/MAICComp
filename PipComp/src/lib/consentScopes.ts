@@ -1,5 +1,5 @@
 /**
- * Consent ceremony — single source of truth for what a minted passport carries.
+ * Consent ceremony  single source of truth for what a minted passport carries.
  *
  * `buildPassportDraft` assembles the exact `PassportInput` (minus the signing
  * subject, which only exists at mint time) that a confirmed ceremony will sign.
@@ -8,7 +8,7 @@
  *
  * The Tier 0 disclosure map below is exhaustive over the draft's keys: adding a
  * field to `PassportInput` fails compilation here until the ceremony discloses
- * it — the display list cannot silently drift from the signed payload.
+ * it  the display list cannot silently drift from the signed payload.
  */
 
 import type { ConsentReceipt, PassportInput } from './passport';
@@ -24,14 +24,14 @@ import { ENGINE_VERSION, MODEL_WEIGHTS_VERSION, POLICY_VERSION } from './version
 /** Everything of the signed passport input except the subject key (mint-time only). */
 export type PassportDraft = Omit<PassportInput, 'subject'>;
 
-/** Verified identity as the ceremony needs it — a structural subset of kycRepo's KycIdentity. */
+/** Verified identity as the ceremony needs it  a structural subset of kycRepo's KycIdentity. */
 export interface ConsentIdentity {
   fullName: string;
   nricMasked: string;
   provider: string;
 }
 
-/** Self-declared occupation as the ceremony needs it — a structural subset of occupationRepo's
+/** Self-declared occupation as the ceremony needs it  a structural subset of occupationRepo's
  *  Occupation (kept structural so this pure lib never imports the DB layer). */
 export interface ConsentOccupation {
   occupation: string;
@@ -45,14 +45,14 @@ export interface PassportDraftArgs {
   score: CreditScore;
   dataConfidence: DataConfidence;
   coverage: Coverage;
-  /** Null when the borrower is below momentum's minimum-history floor — no block is carried. */
+  /** Null when the borrower is below momentum's minimum-history floor  no block is carried. */
   momentum: Momentum | null;
-  /** Transaction amounts behind the confidence run — the digit histogram's input. */
+  /** Transaction amounts behind the confidence run  the digit histogram's input. */
   amounts: number[];
   identity: ConsentIdentity | null;
   /** Tier 1 grant: carry the verified identity (and self-declared occupation) into the passport. */
   includeIdentity: boolean;
-  /** Income-quality evidence (Brief P, Tier 0) — always carried; aggregate and non-identifying. */
+  /** Income-quality evidence (Brief P, Tier 0)  always carried; aggregate and non-identifying. */
   incomeQuality: IncomeQuality;
   /** Detected recurring obligations (Brief P): their sum evidences the assessment's monthly debt
    *  service (Tier 0), and the itemised list rides inside the Tier 2 spending block. */
@@ -72,14 +72,14 @@ export interface ConsentScopeRow {
   detail: string;
 }
 
-/** Whole-ringgit display without Intl (Hermes locale-data gaps — same reasoning as lib/format.ts). */
+/** Whole-ringgit display without Intl (Hermes locale-data gaps  same reasoning as lib/format.ts). */
 function rm(n: number): string {
   const negative = n < 0;
   const grouped = String(Math.round(Math.abs(n))).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   return (negative ? '-RM' : 'RM') + grouped;
 }
 
-/** Assemble the passport input a confirmed ceremony will sign. Pure — deterministic given args. */
+/** Assemble the passport input a confirmed ceremony will sign. Pure  deterministic given args. */
 export function buildPassportDraft(args: PassportDraftArgs): PassportDraft {
   const { profile, score, dataConfidence, coverage, momentum, amounts, identity, includeIdentity } = args;
   const { incomeQuality, obligations, spendingProfile, occupation, includeSpending } = args;
@@ -120,7 +120,7 @@ export function buildPassportDraft(args: PassportDraftArgs): PassportDraft {
       avgMonthlySurplus: profile.avgSurplus,
       monthlyDebtService,
     },
-    // Income quality (Tier 0): aggregate, non-identifying — always carried.
+    // Income quality (Tier 0): aggregate, non-identifying  always carried.
     incomeQuality: {
       variationCoefficient: incomeQuality.variationCoefficient,
       sourceCount: incomeQuality.sourceCount,
@@ -187,7 +187,7 @@ type RowBuilder = (d: PassportDraft) => ConsentScopeRow[];
  * to the identity tier ('tier1'). Literal key order = display order.
  *
  * `consent` is excluded: it is the receipt of what is shared, not itself a shared
- * aggregate — it records the very grants this ceremony produces. The Tier 1/2 Brief P
+ * aggregate  it records the very grants this ceremony produces. The Tier 1/2 Brief P
  * blocks (occupation/spendingProfile) are also excluded here: they are disclosed by their
  * own tiered ceremony sections when attached (see buildConsentReceipts and the ceremony's
  * Tier 1/2 rows). incomeQuality IS a Tier 0 aggregate, so it carries a builder below. Every
@@ -236,7 +236,7 @@ const TIER0_DISCLOSURE: { [K in keyof Omit<PassportDraft, 'consent' | 'occupatio
           {
             key: 'digitHistogram',
             label: 'Leading-digit histogram',
-            detail: `9 digit counts across ${d.digitHistogram.reduce((s, n) => s + n, 0)} amounts — no individual amounts`,
+            detail: `9 digit counts across ${d.digitHistogram.reduce((s, n) => s + n, 0)} amounts  no individual amounts`,
           },
         ]
       : [],
@@ -245,7 +245,7 @@ const TIER0_DISCLOSURE: { [K in keyof Omit<PassportDraft, 'consent' | 'occupatio
     {
       key: 'evidence',
       label: 'Evidence fingerprint',
-      detail: `SHA-256 fingerprint of ${Object.keys(d.aggregates).length} aggregate figures — a hash, not the figures`,
+      detail: `SHA-256 fingerprint of ${Object.keys(d.aggregates).length} aggregate figures  a hash, not the figures`,
     },
   ],
   provenanceMeta: (d) =>
@@ -271,7 +271,7 @@ const TIER0_DISCLOSURE: { [K in keyof Omit<PassportDraft, 'consent' | 'occupatio
   holder: 'tier1',
 };
 
-/** Tier 0 — the aggregate fields every passport carries, with their real values. */
+/** Tier 0  the aggregate fields every passport carries, with their real values. */
 export function tier0ScopeRows(draft: PassportDraft): ConsentScopeRow[] {
   return (Object.keys(TIER0_DISCLOSURE) as (keyof Omit<PassportDraft, 'consent' | 'occupation' | 'spendingProfile'>)[]).flatMap((k) => {
     const builder = TIER0_DISCLOSURE[k];
@@ -286,7 +286,7 @@ const EMPLOYMENT_LABELS: Record<ConsentOccupation['employmentType'], string> = {
   'micro-business': 'Micro-business',
 };
 
-/** Tier 1 — the verified identity rows plus the self-declared occupation; empty when the draft
+/** Tier 1  the verified identity rows plus the self-declared occupation; empty when the draft
  *  carries neither block (i.e. the borrower excluded identity at the ceremony). */
 export function tier1ScopeRows(draft: PassportDraft): ConsentScopeRow[] {
   const rows: ConsentScopeRow[] = [];
@@ -308,7 +308,7 @@ export function tier1ScopeRows(draft: PassportDraft): ConsentScopeRow[] {
   return rows;
 }
 
-/** Tier 2 — the spending-behaviour rows, including the itemised obligations behind the DSR;
+/** Tier 2  the spending-behaviour rows, including the itemised obligations behind the DSR;
  *  empty when the draft carries no spending block. */
 export function tier2ScopeRows(draft: PassportDraft): ConsentScopeRow[] {
   const s = draft.spendingProfile;
@@ -323,10 +323,10 @@ export function tier2ScopeRows(draft: PassportDraft): ConsentScopeRow[] {
 }
 
 /**
- * Tier 3 — post-disbursement monitoring (Brief S). Not data carried inside the passport (no
+ * Tier 3  post-disbursement monitoring (Brief S). Not data carried inside the passport (no
  * new block): a receipt-only grant that "the borrower will re-share updated aggregates while
  * this loan is active", with its own expiry set from the loan's tenor rather than the fixed
- * validity windows below. Pure — the row is the same whether shown in the ceremony preview or
+ * validity windows below. Pure  the row is the same whether shown in the ceremony preview or
  * signed into the receipt.
  */
 export function monitoringScopeRow(tenorMonths: number): ConsentScopeRow {
@@ -338,12 +338,12 @@ export function monitoringScopeRow(tenorMonths: number): ConsentScopeRow {
 }
 
 // The passport itself is valid 30 days; aggregate consent expires with it, while a verified
-// identity grant is longer-lived (a year) — "identity long-lived, spending profile short"
+// identity grant is longer-lived (a year)  "identity long-lived, spending profile short"
 // (privacy-modes spec). Short-lived grants stand in for a revocation registry.
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TIER0_VALIDITY_MS = 30 * DAY_MS;
 const TIER1_VALIDITY_MS = 365 * DAY_MS;
-// Behavioural spending data is the most sensitive tier, so its grant is the shortest-lived —
+// Behavioural spending data is the most sensitive tier, so its grant is the shortest-lived 
 // "identity long-lived, spending profile short" (privacy-modes spec). It expires with the passport.
 const TIER2_VALIDITY_MS = 30 * DAY_MS;
 /** Average month length used to turn a loan's tenor (whole months) into a Tier 3 expiry offset. */
@@ -353,7 +353,7 @@ const MONTH_MS = 30.44 * DAY_MS;
  * The signed consent receipts for a confirmed ceremony (Brief I stretch). Each tier's scope
  * is the list of field keys the draft actually carries, so the receipt can never disagree
  * with the disclosed rows. A Tier 1 receipt is produced exactly when the draft carries a holder
- * or occupation block, and a Tier 2 receipt when it carries a spending block — which is what
+ * or occupation block, and a Tier 2 receipt when it carries a spending block  which is what
  * buildPassport requires before it will attach those blocks. `monitoring` (Brief S) is separate
  * from the draft: it is never a passport block, just a Tier 3 grant with its own expiry derived
  * from the loan's tenor, produced only when the ceremony is minting against an active loan and

@@ -7,7 +7,7 @@ import { colors, radius, uiFont } from '../theme';
 
 /**
  * A text field that suggests known Malaysian banks/e-wallets as the user types,
- * each row showing a brand-toned badge + name. Free typing always remains valid —
+ * each row showing a brand-toned badge + name. Free typing always remains valid 
  * a match is a convenience, never a requirement. The dropdown renders in normal
  * layout flow (pushes content down) rather than as an overlay, since this field
  * always sits inside a scroll view.

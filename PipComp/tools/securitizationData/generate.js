@@ -19,7 +19,7 @@
 const fs = require('fs');
 const path = require('path');
 
-// ── Seeded PRNG (xorshift32) — reproducible runs ────────────────────────────────
+// ── Seeded PRNG (xorshift32)  reproducible runs ────────────────────────────────
 let _seed = 1337;
 function rand() {
   _seed ^= _seed << 13;

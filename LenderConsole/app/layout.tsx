@@ -23,7 +23,7 @@ const mono = JetBrains_Mono({
 
 const TITLE = 'Pip Credit · Lender Console';
 const DESCRIPTION =
-  'Pip Credit lender console — verify a borrower passport (aggregate-only, privacy-locked), run the deterministic decision engine, and structure micro-sukuk pools. MAIC Nexus 2026.';
+  'Pip Credit lender console  verify a borrower passport (aggregate-only, privacy-locked), run the deterministic decision engine, and structure micro-sukuk pools. MAIC Nexus 2026.';
 
 export const metadata: Metadata = {
   title: TITLE,

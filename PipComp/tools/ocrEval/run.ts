@@ -1,13 +1,13 @@
 // tools/ocrEval/run.ts
 // Step 2 of the OCR eval: feed every screenshot in dataset/images/ through the
-// REAL production extraction path — the same Groq vision adapter, prompt, and
-// defensive parser the app ships (GroqProvider.extract → parseExtraction) —
+// REAL production extraction path  the same Groq vision adapter, prompt, and
+// defensive parser the app ships (GroqProvider.extract → parseExtraction) 
 // and save the raw structured rows for scoring. Scoring itself is offline and
 // re-runnable (score.ts); this script is the only step that spends API calls.
 //
 // Run:  npx tsx tools/ocrEval/run.ts [--force]
 // Key:  GROQ_API_KEY or EXPO_PUBLIC_GROQ_API_KEY env var, or .env.local.
-// Pace: sequential, OCR_EVAL_DELAY_MS between calls (default 3000ms — Groq's
+// Pace: sequential, OCR_EVAL_DELAY_MS between calls (default 3000ms  Groq's
 //       free tier is generous per-minute but vision calls are heavy; 3s keeps
 //       a 50-image run comfortably under limits). One retry on rate-limit
 //       after a 20s backoff.
@@ -62,7 +62,7 @@ async function main(): Promise<void> {
   }
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
-  console.log(`OCR eval runner — ${images.length} image(s), model ${model}, ${DELAY_MS}ms pacing.`);
+  console.log(`OCR eval runner  ${images.length} image(s), model ${model}, ${DELAY_MS}ms pacing.`);
   let done = 0;
   let skipped = 0;
   let failed = 0;
@@ -83,17 +83,17 @@ async function main(): Promise<void> {
       rows = await GroqProvider.extract({ apiKey, model, imageBase64, mimeType });
     } catch (e) {
       if (e instanceof LLMError && e.code === 'rate_limit') {
-        console.warn(`  ${stem}: rate-limited — backing off 20s and retrying once…`);
+        console.warn(`  ${stem}: rate-limited  backing off 20s and retrying once…`);
         await sleep(20_000);
         try {
           rows = await GroqProvider.extract({ apiKey, model, imageBase64, mimeType });
         } catch (e2) {
-          console.error(`  ${stem}: FAILED after retry — ${e2 instanceof Error ? e2.message : e2}`);
+          console.error(`  ${stem}: FAILED after retry  ${e2 instanceof Error ? e2.message : e2}`);
           failed++;
           continue;
         }
       } else {
-        console.error(`  ${stem}: FAILED — ${e instanceof Error ? e.message : e}`);
+        console.error(`  ${stem}: FAILED  ${e instanceof Error ? e.message : e}`);
         failed++;
         continue;
       }
@@ -112,7 +112,7 @@ async function main(): Promise<void> {
     await sleep(DELAY_MS);
   }
 
-  console.log(`Done. ${done} extracted, ${skipped} skipped (already present — use --force to redo), ${failed} failed.`);
+  console.log(`Done. ${done} extracted, ${skipped} skipped (already present  use --force to redo), ${failed} failed.`);
   console.log('Next: npx tsx tools/ocrEval/score.ts');
 }
 

@@ -71,7 +71,7 @@ export async function addCategory(
 }
 
 /**
- * The two generic categories that can never be deleted — they are the
+ * The two generic categories that can never be deleted  they are the
  * reassignment targets when other categories are removed.
  */
 export const PROTECTED_CATEGORY_IDS = ['other', 'income'];

@@ -1,7 +1,7 @@
 // Post-disbursement early warning (Brief S). Pure diff between the at-approval passport (or
 // most recent prior check-in) and a fresh check-in: income change, surplus change, coverage
 // trend, momentum direction, repayment record delta. Threshold breaches produce flags with a
-// severity and an evidence string. No UI, no engine changes — informs the officer only; a flag
+// severity and an evidence string. No UI, no engine changes  informs the officer only; a flag
 // can never restructure, notify, or accelerate anything on its own.
 
 import type { CreditPassport } from './passport';
@@ -19,7 +19,7 @@ export interface EarlyWarningResult {
   flags: EarlyWarningFlag[];
 }
 
-// Thresholds — named constants, one-line justification each.
+// Thresholds  named constants, one-line justification each.
 /** Income erosion below this share reads as noise, not a signal. */
 const INCOME_DROP_WATCH = 0.15;
 /** Beyond this share of income lost, the loan needs officer attention now, not at the next check-in. */
@@ -49,7 +49,7 @@ function pctDrop(from: number, to: number): number {
 /**
  * Compare a check-in passport against the baseline (the at-approval file, or the most recent
  * prior check-in) and produce severity-graded flags with an evidence string each. Independent
- * per signal — a passport can carry any combination of flags, or none.
+ * per signal  a passport can carry any combination of flags, or none.
  */
 export function diffCheckIn(baseline: CreditPassport, checkIn: CreditPassport): EarlyWarningResult {
   const flags: EarlyWarningFlag[] = [];
@@ -77,7 +77,7 @@ export function diffCheckIn(baseline: CreditPassport, checkIn: CreditPassport): 
 
     const coverageDrop = a0.coverageDays - a1.coverageDays;
     if (coverageDrop >= COVERAGE_STAGNATION_CRITICAL_DAYS) {
-      flags.push({ key: 'coverage-stagnation', severity: 'critical', evidence: `Data coverage dropped ${coverageDrop} days (${a0.coverageDays}d → ${a1.coverageDays}d) — tracking may have stopped` });
+      flags.push({ key: 'coverage-stagnation', severity: 'critical', evidence: `Data coverage dropped ${coverageDrop} days (${a0.coverageDays}d → ${a1.coverageDays}d)  tracking may have stopped` });
     } else if (coverageDrop >= COVERAGE_STAGNATION_WATCH_DAYS) {
       flags.push({ key: 'coverage-stagnation', severity: 'watch', evidence: `Data coverage dropped ${coverageDrop} days (${a0.coverageDays}d → ${a1.coverageDays}d)` });
     }
@@ -94,7 +94,7 @@ export function diffCheckIn(baseline: CreditPassport, checkIn: CreditPassport): 
     });
   }
 
-  // Only meaningful once new repayments have actually been recorded since the baseline —
+  // Only meaningful once new repayments have actually been recorded since the baseline 
   // an unchanged record is not new information, however the ratio happens to read.
   const r0 = baseline.repaymentRecord;
   const r1 = checkIn.repaymentRecord;
@@ -116,7 +116,7 @@ export type MonitoringStatus = 'active' | 'expired' | 'not-granted';
 
 /**
  * Tier 3 monitoring status read off a passport's own signed consent receipts. A lapsed grant
- * renders as 'expired', never as a silently-unmonitored loan — the officer always sees which
+ * renders as 'expired', never as a silently-unmonitored loan  the officer always sees which
  * state applies.
  */
 export function monitoringStatus(passport: CreditPassport, now: Date = new Date()): MonitoringStatus {

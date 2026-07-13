@@ -1,11 +1,11 @@
 'use client';
 
 // Decision visuals (Brief K), rendered with Recharts (2026-07-07 revision: swapped
-// from hand-rolled SVG to a charting library by explicit instruction — Recharts
+// from hand-rolled SVG to a charting library by explicit instruction  Recharts
 // chosen for its declarative React composition, SVG output, and ComposedChart
 // support for the Benford bars+curve combo). All geometry/data still comes from
 // the pure, unit-tested helpers in lib/decisionViz.ts; these components remain
-// presentation-only. Animations stay off — the exclusion list (no gauges, radar,
+// presentation-only. Animations stay off  the exclusion list (no gauges, radar,
 // 3D, count-ups) from Visualisation.md still applies.
 
 import {

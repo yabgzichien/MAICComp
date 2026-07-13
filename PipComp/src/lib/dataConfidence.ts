@@ -1,5 +1,5 @@
 // src/lib/dataConfidence.ts
-// Pure, deterministic data-authenticity scoring. No UI/DB imports — unit-tested.
+// Pure, deterministic data-authenticity scoring. No UI/DB imports  unit-tested.
 import type { TxnSource, TxnType } from './types';
 import { extractFraudFeatures } from './fraudFeatures';
 import { scoreFraud } from './fraudModel';
@@ -18,7 +18,7 @@ export interface ConfidenceTxn {
   source: TxnSource;
   merchantKey?: string;
   date?: string | null;
-  /** income vs expense — required for the asymmetric-fraud integrity rings (Section 4 of the
+  /** income vs expense  required for the asymmetric-fraud integrity rings (Section 4 of the
    *  confidence-hardening plan). Optional for back-compat: when absent on every row the rings
    *  are inert and confidence is computed exactly as before. */
   type?: TxnType;
@@ -54,7 +54,7 @@ export function provenanceTrust(sources: TxnSource[]): number {
 
 /**
  * Counts of leading digits 1–9 across the given amounts (index 0 = digit 1).
- * Aggregate-only — shared by `benfordConformity` and the passport's signed
+ * Aggregate-only  shared by `benfordConformity` and the passport's signed
  * `digitHistogram` block, so both always describe the same evidence.
  */
 export function leadingDigitHistogram(amounts: number[]): number[] {
@@ -81,7 +81,7 @@ function benfordEligibleAmounts(amounts: number[]): number[] {
 /**
  * True when the amounts span too narrow a range for Benford analysis to be informative.
  * Dispersion measure: log10 of the p90/p10 ratio of the eligible absolute amounts, using
- * nearest-rank percentiles — robust to a handful of outlier rows, unlike max/min.
+ * nearest-rank percentiles  robust to a handful of outlier rows, unlike max/min.
  */
 function benfordRangeTooNarrow(amounts: number[]): boolean {
   const xs = benfordEligibleAmounts(amounts).sort((a, b) => a - b);
@@ -93,7 +93,7 @@ function benfordRangeTooNarrow(amounts: number[]): boolean {
 /**
  * Conformity of leading digits to Benford's Law, 0..1 (1 = perfect).
  * Neutral 0.5 when there are too few amounts to judge (<30), and neutral 0.5 when the
- * amounts span too narrow a range for the law to apply (see BENFORD_MIN_DISPERSION_DECADES) —
+ * amounts span too narrow a range for the law to apply (see BENFORD_MIN_DISPERSION_DECADES) 
  * the same convention, because in both cases the check is unreliable, not failed.
  */
 export function benfordConformity(amounts: number[]): number {
@@ -129,7 +129,7 @@ function duplicateRatio(txns: ConfidenceTxn[]): number {
 }
 
 // ── Asymmetric-fraud integrity rings ──────────────────────────────────────────
-// These attack the income stream specifically — row-by-row and by provenance — the axes
+// These attack the income stream specifically  row-by-row and by provenance  the axes
 // the global aggregates above ignore. A fraudster who leaves 90% of genuine transactions
 // intact and injects a few fabricated high-income rows barely moves Benford / round / dup /
 // entropy / CV, but those few rows are loud here. See docs/confidence-hardening.md.
@@ -145,10 +145,10 @@ const VERIFIED_PAYER_TOKENS = [
   'grab', 'shopee', 'foodpanda', 'lazada', 'government', 'kerajaan', 'jabatan', 'kementerian',
 ];
 
-/** Merchant-QR receipt patterns — money in from customers via a DuitNow QR / QRPay stand.
+/** Merchant-QR receipt patterns  money in from customers via a DuitNow QR / QRPay stand.
  *  Real sales income for hawkers and stall owners, so this tier is NEUTRAL: no verified
  *  bonus, no generic penalty. Ad-hoc transfer wording ("duitnow transfer", "transfer from",
- *  "cash deposit", third-party transfers) deliberately does NOT match — it stays generic. */
+ *  "cash deposit", third-party transfers) deliberately does NOT match  it stays generic. */
 const QR_MERCHANT_PAYER_TOKENS = ['duitnow qr', 'qrpay', 'qr pay', 'qr payment', 'merchant qr'];
 
 /** Below 0.40 the loans engine cannot auto-approve (its MIN_CONFIDENCE_TO_APPROVE is 0.50),
@@ -164,7 +164,7 @@ function median(xs: number[]): number {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
-/** Median absolute deviation — robust to the very outlier we are hunting (unlike σ, which the
+/** Median absolute deviation  robust to the very outlier we are hunting (unlike σ, which the
  *  outlier itself inflates, hiding the fraud behind a threshold it then clears). */
 function mad(xs: number[], med: number): number {
   if (xs.length === 0) return 0;
@@ -175,9 +175,9 @@ export type IncomePayerTier = 'verified' | 'qr-merchant' | 'generic';
 
 /**
  * Three-tier payer classification (Brief D). `verified` = registered commercial/statutory
- * source. `qr-merchant` = DuitNow QR / QRPay receipt — a hawker's real sales, neutral.
+ * source. `qr-merchant` = DuitNow QR / QRPay receipt  a hawker's real sales, neutral.
  * `generic` = everything else: ad-hoc transfers ("duitnow transfer", "transfer from",
- * "funds transfer", "cash deposit", third-party wording), blanks, and bare personal names —
+ * "funds transfer", "cash deposit", third-party wording), blanks, and bare personal names 
  * income we cannot tie to any documentable source, penalized as before.
  */
 export function classifyIncomePayer(t: ConfidenceTxn): IncomePayerTier {
@@ -188,7 +188,7 @@ export function classifyIncomePayer(t: ConfidenceTxn): IncomePayerTier {
   return 'generic';
 }
 
-/** True when an income row's payer is in the generic tier — undocumented P2P-style income.
+/** True when an income row's payer is in the generic tier  undocumented P2P-style income.
  *  Only this tier is penalized; `p2pIncomeValueRatio` and the weak-source outlier check both
  *  key off it, so the QR-merchant tier is neutral everywhere by construction. */
 export function isGenericIncomePayer(t: ConfidenceTxn): boolean {
@@ -196,9 +196,9 @@ export function isGenericIncomePayer(t: ConfidenceTxn): boolean {
 }
 
 /**
- * Ring 1.1 — running-balance reconciliation. For rows that carry a balance and a date, the
+ * Ring 1.1  running-balance reconciliation. For rows that carry a balance and a date, the
  * ledger must satisfy balance[t] = balance[t-1] + signedAmount[t] (income +, expense −). A pair
- * that violates this (beyond a rounding tolerance) is a "discontinuous step-function" — the
+ * that violates this (beyond a rounding tolerance) is a "discontinuous step-function"  the
  * fingerprint of a row pasted in without recomputing surrounding balances. Income-coincident
  * breaks are the injected-salary signature. Inert when no balances are present.
  */
@@ -231,7 +231,7 @@ export function reconcileBalances(txns: ConfidenceTxn[]): {
 }
 
 /**
- * Ring 1.2 — robust income point-anomaly. Modified z-score (Iglewicz–Hoaglin) of each income
+ * Ring 1.2  robust income point-anomaly. Modified z-score (Iglewicz–Hoaglin) of each income
  * amount against the income stream's own median/MAD. Returns the worst score and whether that
  * outlier row also entered through a weak door (manual source or a generic/undocumented payer).
  */
@@ -256,7 +256,7 @@ export function incomePointAnomaly(txns: ConfidenceTxn[]): { maxModZ: number; we
   return { maxModZ, weakSource };
 }
 
-/** Ring 2.2 — share of income *value* from generic/undocumented payers (0..1). */
+/** Ring 2.2  share of income *value* from generic/undocumented payers (0..1). */
 export function p2pIncomeValueRatio(txns: ConfidenceTxn[]): number {
   const income = txns.filter((t) => t.type === 'income' && t.amount > 0);
   const total = income.reduce((s, t) => s + t.amount, 0);
@@ -266,7 +266,7 @@ export function p2pIncomeValueRatio(txns: ConfidenceTxn[]): number {
 }
 
 /**
- * Ring 2.1 — income-to-expense skew. Flags a month whose income spikes past 2.5× its peers'
+ * Ring 2.1  income-to-expense skew. Flags a month whose income spikes past 2.5× its peers'
  * median while spending stays flat (real income growth comes with some spending response).
  */
 export function incomeMonthlySkew(txns: ConfidenceTxn[]): boolean {
@@ -296,7 +296,7 @@ export function incomeMonthlySkew(txns: ConfidenceTxn[]): boolean {
 }
 
 /**
- * Ring 3.1 — source isolation gap. The verified-pipeline share of expense *value* minus that of
+ * Ring 3.1  source isolation gap. The verified-pipeline share of expense *value* minus that of
  * income *value*. Large when the cheap-to-fake healthy points (expenses) are authentically
  * captured but the valuable income leans on the weakest manual pipeline.
  */
@@ -319,7 +319,7 @@ export interface IncomeIntegrity {
 }
 
 /**
- * Ring 3.2 — orchestrate the rings into a soft penalty, a hard cap, and a DECLINE floor.
+ * Ring 3.2  orchestrate the rings into a soft penalty, a hard cap, and a DECLINE floor.
  * Soft penalties dampen; a single hard condition caps to REFER; two or more (or a broken income
  * balance chain) breach the floor → DECLINE. Pure and deterministic.
  */
@@ -329,7 +329,7 @@ export function assessIncomeIntegrity(txns: ConfidenceTxn[]): IncomeIntegrity {
   let hardConditions = 0;
   let floorBreached = false;
 
-  // Ring 1.1 — running-balance reconciliation
+  // Ring 1.1  running-balance reconciliation
   const recon = reconcileBalances(txns);
   if (recon.reconcilablePairs > 0) {
     if (recon.incomeCoincidentBreaks > 0) {
@@ -348,7 +348,7 @@ export function assessIncomeIntegrity(txns: ConfidenceTxn[]): IncomeIntegrity {
     }
   }
 
-  // Ring 1.2 — robust income point-anomaly
+  // Ring 1.2  robust income point-anomaly
   const anom = incomePointAnomaly(txns);
   if (anom.maxModZ > 3.5) {
     if (anom.weakSource) {
@@ -364,7 +364,7 @@ export function assessIncomeIntegrity(txns: ConfidenceTxn[]): IncomeIntegrity {
     }
   }
 
-  // Ring 2.2 — merchant-to-income entity alignment
+  // Ring 2.2  merchant-to-income entity alignment
   const p2p = p2pIncomeValueRatio(txns);
   if (p2p > 0.5) {
     penalty += clamp((p2p - 0.5) / 0.5, 0, 1) * 0.2;
@@ -375,13 +375,13 @@ export function assessIncomeIntegrity(txns: ConfidenceTxn[]): IncomeIntegrity {
     });
   }
 
-  // Ring 2.1 — income-to-expense skew
+  // Ring 2.1  income-to-expense skew
   if (incomeMonthlySkew(txns)) {
     penalty += 0.15;
     reasons.push({ key: 'integrity_income_skew', ok: false, detail: 'an income spike is not mirrored by any spending response' });
   }
 
-  // Ring 3.1 — source isolation
+  // Ring 3.1  source isolation
   const iso = sourceIsolationGap(txns);
   if (iso > 0.6) {
     hardConditions++;
@@ -466,7 +466,7 @@ export function computeDataConfidence(
   const plausibility = clamp(expRatio / PLAUSIBLE_EXPENSE_FLOOR, 0, 1);
   const plausibilityPenalty = plausibilityProvided ? (1 - plausibility) * 0.25 : 0;
 
-  // Asymmetric-fraud integrity rings — inert (no penalty, no reasons) unless rows carry `type`,
+  // Asymmetric-fraud integrity rings  inert (no penalty, no reasons) unless rows carry `type`,
   // so back-compat callers behave exactly as before.
   const hasTypeData = txns.some((t) => t.type === 'income' || t.type === 'expense');
   const integrity: IncomeIntegrity = hasTypeData
@@ -511,7 +511,7 @@ export function computeDataConfidence(
       ok,
       detail: ok
         ? `expenses ${Math.round(expRatio * 100)}% of income`
-        : `expenses only ${Math.round(expRatio * 100)}% of income — picture may be incomplete`,
+        : `expenses only ${Math.round(expRatio * 100)}% of income  picture may be incomplete`,
     });
   }
 

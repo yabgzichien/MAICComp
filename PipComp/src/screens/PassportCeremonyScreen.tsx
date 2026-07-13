@@ -94,12 +94,12 @@ export function PassportCeremonyScreen({
           <Text style={styles.heading}>Review before you mint</Text>
         </View>
         <Text style={styles.lede}>
-          Nothing has left your phone yet. Minting creates a signed passport carrying exactly the fields below — confirm
+          Nothing has left your phone yet. Minting creates a signed passport carrying exactly the fields below  confirm
           to generate it, or go back and nothing is created.
         </Text>
 
         <View style={styles.guardCard}>
-          <GuardLine text="Aggregates only — never your raw transactions." />
+          <GuardLine text="Aggregates only  never your raw transactions." />
           <GuardLine text="Sharing happens only when you show or send the code." />
         </View>
 
@@ -133,7 +133,7 @@ export function PassportCeremonyScreen({
             <Text style={styles.identityNote}>
               {includeIdentity
                 ? 'Included so a lender can bind this passport to you. Occupation is self-declared. Toggle off to mint without your identity.'
-                : 'Excluded — this passport will carry anonymous aggregates bound only to your device key.'}
+                : 'Excluded  this passport will carry anonymous aggregates bound only to your device key.'}
             </Text>
           </Card>
         )}
@@ -157,8 +157,8 @@ export function PassportCeremonyScreen({
             <ScopeRows rows={tier2} dimmed={!includeSpending} />
             <Text style={styles.identityNote}>
               {includeSpending
-                ? 'The most detailed tier — your spending mix and the recurring obligations behind your debt-service figure. Short-lived grant; toggle off to keep it private.'
-                : 'Excluded — the lender sees your debt-service total but not the itemised spending behind it.'}
+                ? 'The most detailed tier  your spending mix and the recurring obligations behind your debt-service figure. Short-lived grant; toggle off to keep it private.'
+                : 'Excluded  the lender sees your debt-service total but not the itemised spending behind it.'}
             </Text>
           </Card>
         )}
@@ -182,8 +182,8 @@ export function PassportCeremonyScreen({
             <ScopeRows rows={[tier3]} dimmed={!includeMonitoring} />
             <Text style={styles.identityNote}>
               {includeMonitoring
-                ? 'Lets the lender ask for a fresh check-in while your loan is active — you choose when to share one. Toggle off to skip ongoing monitoring.'
-                : 'Excluded — the lender only sees this passport, never a check-in, unless you regenerate with this on.'}
+                ? 'Lets the lender ask for a fresh check-in while your loan is active  you choose when to share one. Toggle off to skip ongoing monitoring.'
+                : 'Excluded  the lender only sees this passport, never a check-in, unless you regenerate with this on.'}
             </Text>
           </Card>
         )}
@@ -199,11 +199,11 @@ export function PassportCeremonyScreen({
           {minting ? (
             <ActivityIndicator color={colors.onAccent} />
           ) : (
-            <Text style={styles.confirmText}>I consent — mint my passport</Text>
+            <Text style={styles.confirmText}>I consent  mint my passport</Text>
           )}
         </Pressable>
         <Pressable onPress={onBack} disabled={minting} hitSlop={6} style={styles.cancelBtn}>
-          <Text style={styles.cancelText}>Cancel — nothing is generated</Text>
+          <Text style={styles.cancelText}>Cancel  nothing is generated</Text>
         </Pressable>
       </ScrollView>
     </View>

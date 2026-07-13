@@ -88,7 +88,7 @@ export function AttachScreen({
         <View style={{ paddingHorizontal: 18, paddingTop: 8 }}>
           <PipSays expr="curious">
             <BubbleText>
-              Snap or pick a <B>transaction screenshot</B> — I’ll pull out each line and help you file it.
+              Snap or pick a <B>transaction screenshot</B>  I’ll pull out each line and help you file it.
             </BubbleText>
           </PipSays>
         </View>

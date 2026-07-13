@@ -1,5 +1,5 @@
 // lib/poolView.ts (Brief Q)
-// Pure formatting of a SecuritizationResult into the Capital Markets display grammar —
+// Pure formatting of a SecuritizationResult into the Capital Markets display grammar 
 // the headline stat cells and the tranche cards. Kept out of the component so the
 // source toggle (sample vs live book) is testable: same engine, different pool in.
 
@@ -27,7 +27,7 @@ export function poolStatCells(summary: PoolSummary): StatCell[] {
   ];
 }
 
-/** Rating badge colours — driven by the computed rating, so a downgraded pool visibly
+/** Rating badge colours  driven by the computed rating, so a downgraded pool visibly
  *  shifts amber/red rather than always showing the sample's green 'A'. */
 export function ratingStyle(rating: Rating): { color: string; bg: string } {
   if (rating === 'AAA' || rating === 'AA' || rating === 'A') return { color: '#1f8a5b', bg: '#dbece5' };

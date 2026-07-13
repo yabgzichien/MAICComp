@@ -1,7 +1,7 @@
 // Pure policy validation + defaults for the Lender Policy Editor (Brief N).
-// Client-safe (no fs — file I/O lives in policyFile.ts, server-only): the Policy tab
+// Client-safe (no fs  file I/O lives in policyFile.ts, server-only): the Policy tab
 // imports this for live field validation, the /api/policy route for PUT validation,
-// and /api/lenders composes TEKUN's published entry from the same stored shape —
+// and /api/lenders composes TEKUN's published entry from the same stored shape 
 // so what the lender configures is exactly what borrowers are coached toward.
 
 import { DEFAULT_POLICY, DEFAULT_PRODUCTS, type LenderPolicy, type LoanProduct } from './loans';
@@ -20,7 +20,7 @@ export const DEFAULT_STORED_POLICY: StoredPolicy = {
 };
 
 /** The engine's coverage gates keep products by these ids (applyCoverageTierFilter),
- *  so a ladder using any other id would silently fall out of thin-coverage eligibility —
+ *  so a ladder using any other id would silently fall out of thin-coverage eligibility 
  *  same rule lenderRegistry.ts documents. Lender-specific naming belongs in `label`. */
 export const CANONICAL_TIER_IDS = ['emergency', 'starter', 'growth', 'scale'] as const;
 
@@ -35,7 +35,7 @@ const COVERAGE_WINDOW_DAYS = 90;
 /**
  * Field-by-field validation: every failure names its field so the editor can point at
  * the exact input (and a malformed PUT is rejected with an actionable message, never a
- * blanket 400). On success, returns a CLEAN value — only known keys are kept, so junk
+ * blanket 400). On success, returns a CLEAN value  only known keys are kept, so junk
  * can't ride into the persisted file.
  */
 export function validateStoredPolicy(raw: unknown): PolicyValidation {
@@ -79,7 +79,7 @@ export function validateStoredPolicy(raw: unknown): PolicyValidation {
       fullLadderFromDays !== undefined &&
       emergencyOnlyBelowDays > fullLadderFromDays
     ) {
-      errors.push('policy.emergencyOnlyBelowDays: cannot exceed policy.fullLadderFromDays — the gates would invert.');
+      errors.push('policy.emergencyOnlyBelowDays: cannot exceed policy.fullLadderFromDays  the gates would invert.');
     }
     if (errors.length === 0) {
       const products = validateProducts(o.products, errors);
@@ -131,7 +131,7 @@ function validateProducts(raw: unknown, errors: string[]): LoanProduct[] | undef
     if (typeof id !== 'string' || !(CANONICAL_TIER_IDS as readonly string[]).includes(id)) {
       errors.push(`${at}.id: must be one of ${CANONICAL_TIER_IDS.join(' | ')} (the engine's coverage gates key on these).`);
     } else if (seen.has(id)) {
-      errors.push(`${at}.id: duplicate tier "${id}" — each slot may appear once.`);
+      errors.push(`${at}.id: duplicate tier "${id}"  each slot may appear once.`);
     } else {
       seen.add(id);
     }
@@ -164,5 +164,5 @@ export const APR_WARN_THRESHOLD = 0.3;
 export function aprWarnings(products: LoanProduct[]): string[] {
   return products
     .filter((p) => p.apr > APR_WARN_THRESHOLD)
-    .map((p) => `${p.label}: ${Math.round(p.apr * 100)}% APR is above the ${Math.round(APR_WARN_THRESHOLD * 100)}% advisory ceiling — high-cost credit draws scrutiny under the CCA 2025.`);
+    .map((p) => `${p.label}: ${Math.round(p.apr * 100)}% APR is above the ${Math.round(APR_WARN_THRESHOLD * 100)}% advisory ceiling  high-cost credit draws scrutiny under the CCA 2025.`);
 }

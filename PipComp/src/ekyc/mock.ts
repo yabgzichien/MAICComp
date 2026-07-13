@@ -1,5 +1,5 @@
 // src/ekyc/mock.ts
-// Mock eKYC provider — validates NRIC structure and (in lieu of real document/liveness
+// Mock eKYC provider  validates NRIC structure and (in lieu of real document/liveness
 // checks) returns verified. CLEARLY a demo: it confirms the IC is well-formed and extracts
 // real DOB/gender/state, but does not check the IC against any registry. A real provider
 // (MyDigital ID / CTOS) implements EkycProvider.verify with document OCR + liveness.

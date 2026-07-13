@@ -1,11 +1,11 @@
 // src/lib/attackGallery.ts
-// Adversarial "Attack Gallery" — a curated corpus of known fraud techniques run *deterministically*
+// Adversarial "Attack Gallery"  a curated corpus of known fraud techniques run *deterministically*
 // through the Phase-11 integrity rings + ML fraud model + loan engine, with a pass/fail verdict per
 // attack. This is the honest "we tried to break our own system" beat: a fixed corpus (reliable on
 // stage) rather than an open-ended adversarial loop, and it will honestly report anything that slips
 // through. The LLM only narrates the already-computed result (see src/llm/attackPrompt.ts).
 //
-// No UI/DB imports — pure and unit-tested.
+// No UI/DB imports  pure and unit-tested.
 import { computeDataConfidence, assessIncomeIntegrity, type ConfidenceTxn } from './dataConfidence';
 import { decideLoan, DEFAULT_PRODUCTS, type Decision } from './loans';
 
@@ -84,7 +84,7 @@ export const ATTACKS: AttackDef[] = [
     id: 'all-p2p-income',
     name: 'All-P2P income',
     technique:
-      'Present every income row as an anonymous DuitNow transfer from friends — no verifiable commercial payer behind any ringgit of the claimed income.',
+      'Present every income row as an anonymous DuitNow transfer from friends  no verifiable commercial payer behind any ringgit of the claimed income.',
     build: () => [
       ...genuineExpenses(),
       ...[2000, 2100, 1950, 2050, 2000, 2100].map((amount, i) => ({
@@ -126,7 +126,7 @@ export const ATTACKS: AttackDef[] = [
     id: 'income-only',
     name: 'Income-only curated statement',
     technique:
-      'Upload only the income side of the ledger and hide all spending, to look like a high earner with no outgoings — an implausible picture the plausibility check catches.',
+      'Upload only the income side of the ledger and hide all spending, to look like a high earner with no outgoings  an implausible picture the plausibility check catches.',
     build: () => [
       ...genuineIncome(),
       ...[2600, 2700, 2550].map((amount, i) => ({
@@ -143,7 +143,7 @@ export const ATTACKS: AttackDef[] = [
     id: 'balance-break',
     name: 'Ledger balance break',
     technique:
-      'Paste a fake salary row into a running-balance statement without recomputing the surrounding balances — the running balance no longer reconciles across the injected income row.',
+      'Paste a fake salary row into a running-balance statement without recomputing the surrounding balances  the running balance no longer reconciles across the injected income row.',
     build: () => [
       { amount: 1000, source: 'extracted', type: 'income', date: '2026-01-01', balance: 1000, merchantRaw: 'ACME SDN BHD' },
       { amount: 100, source: 'extracted', type: 'expense', date: '2026-01-02', balance: 900, merchantRaw: 'Kedai 1' },
@@ -155,7 +155,7 @@ export const ATTACKS: AttackDef[] = [
     id: 'source-isolation',
     name: 'Source-isolation gap',
     technique:
-      'Authentically capture the cheap-to-prove expenses (extracted) but hand-type the valuable income (manual) — the valuable side leans entirely on the weakest, least-verifiable pipeline.',
+      'Authentically capture the cheap-to-prove expenses (extracted) but hand-type the valuable income (manual)  the valuable side leans entirely on the weakest, least-verifiable pipeline.',
     build: () => [
       ...genuineExpenses(),
       ...[1500, 1550, 1480, 1520, 1510, 1490].map((amount, i) => ({
@@ -172,7 +172,7 @@ export const ATTACKS: AttackDef[] = [
 
 // ── Runner ────────────────────────────────────────────────────────────────────
 
-// The favourable profile the fraudster is *trying* to fake — a clean Good-band applicant with
+// The favourable profile the fraudster is *trying* to fake  a clean Good-band applicant with
 // enough surplus that affordability would clear. Coverage is set to full so the ONLY thing that can
 // stop the fraud is the data-integrity layer: this isolates and demonstrates the Phase-11 rings.
 const PROBE_SCORE = 690;

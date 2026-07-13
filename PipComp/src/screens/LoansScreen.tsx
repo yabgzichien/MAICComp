@@ -79,7 +79,7 @@ export function LoansScreen({
   const [defaultError, setDefaultError] = useState('');
 
   // Preview decision per product, evaluated against the live score & affordability snapshot.
-  // requestedAmount previewed at the product's max — shows the best-case offer for that tier.
+  // requestedAmount previewed at the product's max  shows the best-case offer for that tier.
   const previews = useMemo(
     () =>
       products.map((product) => ({
@@ -160,7 +160,7 @@ export function LoansScreen({
     try {
       await recordRepayment(repayment.id, true);
       setRepayMsg(
-        `Marked the ${shortDate(repayment.dueDate)} repayment as paid on time — open Credit to see how your track record affected your score.`
+        `Marked the ${shortDate(repayment.dueDate)} repayment as paid on time  open Credit to see how your track record affected your score.`
       );
     } catch (e) {
       setRepayError(e instanceof Error ? e.message : 'Could not record the repayment.');
@@ -220,7 +220,7 @@ export function LoansScreen({
         {/* 1. Offers list */}
         <Eyebrow style={{ marginBottom: 10 }}>Offers for you</Eyebrow>
         <Text style={styles.intro}>
-          Based on your Pip Score ({score.score} · {score.band}), here's what each tier would likely decide —
+          Based on your Pip Score ({score.score} · {score.band}), here's what each tier would likely decide 
           tap one to apply.
         </Text>
         {previews.map(({ product, decision }) => {
@@ -393,7 +393,7 @@ export function LoansScreen({
               <Text style={styles.fieldLabel}>Share a check-in</Text>
               <Text style={styles.muted}>
                 If you granted ongoing monitoring when you minted your passport, re-sharing a fresh one lets your
-                lender see your updated numbers before a repayment is ever missed — the same signed passport, just
+                lender see your updated numbers before a repayment is ever missed  the same signed passport, just
                 current.
               </Text>
               <Pressable onPress={onOpenPassport} style={[styles.applyBtn, { backgroundColor: colors.accent }]}>
@@ -416,7 +416,7 @@ export function LoansScreen({
           </View>
           <Text style={styles.demoBody}>
             {nextScheduled
-              ? `Mark your next scheduled repayment (due ${shortDate(nextScheduled.dueDate)}, ${'RM' + Math.round(nextScheduled.amount).toLocaleString('en-MY')}) as paid on time. Your repayment-history factor — and your Pip Score — should move. Re-open Credit to confirm.`
+              ? `Mark your next scheduled repayment (due ${shortDate(nextScheduled.dueDate)}, ${'RM' + Math.round(nextScheduled.amount).toLocaleString('en-MY')}) as paid on time. Your repayment-history factor  and your Pip Score  should move. Re-open Credit to confirm.`
               : 'Apply for a loan above to schedule repayments, then come back to simulate one being paid on time.'}
           </Text>
           {nextScheduled && (
@@ -449,7 +449,7 @@ export function LoansScreen({
           </View>
           <Text style={styles.demoBody}>
             Marks an active application as defaulted and (in a future phase) would notify a credit bureau like CTOS.
-            No real bureau is connected — this is a mock for demo purposes only.
+            No real bureau is connected  this is a mock for demo purposes only.
           </Text>
           {activeApplications.length > 0 ? (
             activeApplications.map((app) => (

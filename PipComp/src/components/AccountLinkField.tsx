@@ -9,7 +9,7 @@ import { Icon, type IconName } from './Icon';
 /**
  * Optional control to link a transaction to an asset/liability account. When an
  * account is picked, an effect toggle (adds to / reduces) appears. Presentational
- * — the parent owns selectedId + effect and decides the default effect on select.
+ *  the parent owns selectedId + effect and decides the default effect on select.
  */
 export function AccountLinkField({
   accounts,

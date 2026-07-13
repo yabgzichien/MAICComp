@@ -126,10 +126,10 @@ export function DashboardScreen({
           <EmptyState />
         ) : (
           <>
-            {/* 1 — Streak */}
+            {/* 1  Streak */}
             <StreakCard streak={streak} dots={dots} coverage={coverage.daysCovered} />
 
-            {/* 2 — Cash flow + where it goes */}
+            {/* 2  Cash flow + where it goes */}
             <CashFlowCard
               net={net}
               received={received}
@@ -139,7 +139,7 @@ export function DashboardScreen({
               onSeeAll={onOpenBreakdown}
             />
 
-            {/* 3 — Compact credit card */}
+            {/* 3  Compact credit card */}
             <CreditCompactCard
               score={score.score}
               band={score.band}
@@ -190,7 +190,7 @@ export function DashboardScreen({
           </>
         )}
 
-        {/* Scan CTA (kept — the core capture loop) */}
+        {/* Scan CTA (kept  the core capture loop) */}
         <View style={{ paddingHorizontal: 16, marginTop: 14 }}>
           <PrimaryButton onPress={onScan} height={54}>
             <Icon name="camera" size={21} color="#fff" />
@@ -214,7 +214,7 @@ function HeaderIcon({ name, onPress }: { name: IconName; onPress: () => void }) 
 
 /* ── Streak card ── */
 function StreakCard({ streak, dots, coverage }: { streak: number; dots: boolean[]; coverage: number }) {
-  // Subtle flame flicker — driven entirely on the native thread (no per-frame JS).
+  // Subtle flame flicker  driven entirely on the native thread (no per-frame JS).
   const flicker = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(

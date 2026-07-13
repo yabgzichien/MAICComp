@@ -2,7 +2,7 @@
 /**
  * tools/fraudData/generate.js
  * LEGACY (Phase A) synthetic generator. SUPERSEDED by the semi-real pipeline
- * `tools/fraudRealData/build.ts` (real Berka genuine class + perturbed fraud). Do NOT run this —
+ * `tools/fraudRealData/build.ts` (real Berka genuine class + perturbed fraud). Do NOT run this 
  * it would overwrite dataset.json with fully-synthetic, perfectly-separable data (AUC 1.0). Kept
  * for reference only.
  *
@@ -11,16 +11,16 @@
  *
  * Run:  node tools/fraudData/generate.js
  *
- * CANONICAL FEATURE VECTOR (index 0-8) — must match src/lib/fraudFeatures.ts (Task A2):
- *   0  provenance_trust   — weighted source trust 0..1 (SOURCE_WEIGHT: verified=1.0, extracted/imported=0.7, manual=0.4)
- *   1  benford_conformity — Benford's Law conformity 0..1 (0.5 if <30 amounts)
- *   2  round_ratio        — fraction of amounts divisible by 100
- *   3  duplicate_ratio    — fraction of duplicate-looking rows (merchant+amount+date)
- *   4  gap_mean           — mean inter-transaction gap in days / 30, clamped 0..1
- *   5  gap_variance       — variance of gaps in days / 100, clamped 0..1
- *   6  merchant_entropy   — Shannon entropy / log2(uniqueMerchants+1), clamped 0..1
- *   7  amount_mean_norm   — mean amount / 5000, clamped 0..1
- *   8  amount_cv          — std/mean of amounts, clamped 0..1
+ * CANONICAL FEATURE VECTOR (index 0-8)  must match src/lib/fraudFeatures.ts (Task A2):
+ *   0  provenance_trust    weighted source trust 0..1 (SOURCE_WEIGHT: verified=1.0, extracted/imported=0.7, manual=0.4)
+ *   1  benford_conformity  Benford's Law conformity 0..1 (0.5 if <30 amounts)
+ *   2  round_ratio         fraction of amounts divisible by 100
+ *   3  duplicate_ratio     fraction of duplicate-looking rows (merchant+amount+date)
+ *   4  gap_mean            mean inter-transaction gap in days / 30, clamped 0..1
+ *   5  gap_variance        variance of gaps in days / 100, clamped 0..1
+ *   6  merchant_entropy    Shannon entropy / log2(uniqueMerchants+1), clamped 0..1
+ *   7  amount_mean_norm    mean amount / 5000, clamped 0..1
+ *   8  amount_cv           std/mean of amounts, clamped 0..1
  *
  * Label: 0 = genuine, 1 = fabricated.
  */
@@ -30,7 +30,7 @@ const fs = require('fs');
 const path = require('path');
 
 // ---------------------------------------------------------------------------
-// Seeded PRNG (xorshift32) — reproducible runs
+// Seeded PRNG (xorshift32)  reproducible runs
 // ---------------------------------------------------------------------------
 let _seed = 42;
 function rand() {
@@ -76,7 +76,7 @@ function gaussianNoise(mean, stddev) {
 }
 
 // ---------------------------------------------------------------------------
-// Feature computation — mirrors what dataConfidence.ts + fraudFeatures.ts compute
+// Feature computation  mirrors what dataConfidence.ts + fraudFeatures.ts compute
 // ---------------------------------------------------------------------------
 
 function provenanceTrust(sources) {
@@ -326,7 +326,7 @@ function main() {
   console.log('\n--- Verification ---');
   console.log(`Total rows: ${dataset.length} (genuine: ${genuine.length}, fabricated: ${fabricated.length})`);
 
-  console.log(`mean round_ratio (fabricated): ${fabRoundRatio.toFixed(4)} — expect >0.3`);
+  console.log(`mean round_ratio (fabricated): ${fabRoundRatio.toFixed(4)}  expect >0.3`);
   if (fabRoundRatio <= 0.3) {
     console.error('FAIL: fabricated round_ratio should be >0.3');
     process.exit(1);
@@ -334,7 +334,7 @@ function main() {
     console.log('  PASS');
   }
 
-  console.log(`mean merchant_entropy — genuine: ${genuineEntropy.toFixed(4)}, fabricated: ${fabricatedEntropy.toFixed(4)} — expect genuine > fabricated`);
+  console.log(`mean merchant_entropy  genuine: ${genuineEntropy.toFixed(4)}, fabricated: ${fabricatedEntropy.toFixed(4)}  expect genuine > fabricated`);
   if (genuineEntropy <= fabricatedEntropy) {
     console.error('FAIL: genuine merchant_entropy should be > fabricated');
     process.exit(1);
@@ -342,7 +342,7 @@ function main() {
     console.log('  PASS');
   }
 
-  console.log(`mean benford_conformity — genuine: ${genuineBenford.toFixed(4)}, fabricated: ${fabricatedBenford.toFixed(4)} — expect genuine > fabricated`);
+  console.log(`mean benford_conformity  genuine: ${genuineBenford.toFixed(4)}, fabricated: ${fabricatedBenford.toFixed(4)}  expect genuine > fabricated`);
   if (genuineBenford <= fabricatedBenford) {
     console.error('FAIL: genuine benford_conformity should be > fabricated');
     process.exit(1);

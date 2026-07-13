@@ -254,7 +254,7 @@ export function RecapScreen({ onBack, onOpenCalendar }: { onBack: () => void; on
         const cat = catById[o.catId] ?? fallback;
         out.push({
           type: 'warn',
-          text: `${cat.label} over by RM ${fmt(o.over)} — RM ${fmt(o.spent)} of ${fmt(o.allocated)}${o.allocated > 0 ? ` (${o.pct}%)` : ''}.`,
+          text: `${cat.label} over by RM ${fmt(o.over)}  RM ${fmt(o.spent)} of ${fmt(o.allocated)}${o.allocated > 0 ? ` (${o.pct}%)` : ''}.`,
         });
       }
     }
@@ -295,7 +295,7 @@ export function RecapScreen({ onBack, onOpenCalendar }: { onBack: () => void; on
         )}
       </View>
 
-      {/* Month picker — most-recent on the right */}
+      {/* Month picker  most-recent on the right */}
       <ScrollView
         ref={stripRef}
         horizontal
@@ -376,7 +376,7 @@ export function RecapScreen({ onBack, onOpenCalendar }: { onBack: () => void; on
         <View style={{ height: 8 }} />
       </ScrollView>
 
-      {/* Month dropdown — reliable selector on every platform (web mouse can't drag the strip) */}
+      {/* Month dropdown  reliable selector on every platform (web mouse can't drag the strip) */}
       <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setPickerOpen(false)}>
           <Pressable style={[styles.modalSheet, { paddingBottom: insets.bottom + 16 }]} onPress={() => {}}>
@@ -421,7 +421,7 @@ const styles = StyleSheet.create({
   navBtn: { width: 36, height: 36, borderRadius: 999, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', ...shadowCard },
   navTitle: { flex: 1, textAlign: 'center', fontFamily: uiFont(700), fontSize: 16, color: colors.ink },
 
-  // month picker — keep the strip its natural height; pills must not stretch vertically
+  // month picker  keep the strip its natural height; pills must not stretch vertically
   monthScroll: { flexGrow: 0, flexShrink: 0 },
   monthStrip: { paddingHorizontal: 16, paddingTop: 2, paddingBottom: 10, gap: 6, alignItems: 'center' },
   monthChip: { paddingHorizontal: 17, paddingVertical: 6, borderRadius: 20, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.line, ...shadowCard },
@@ -433,7 +433,7 @@ const styles = StyleSheet.create({
   // Split in two: the shadow (incl. Android `elevation`) lives on this outer,
   // unclipped wrapper, while `hero` below clips the gradient/blob to the
   // rounded corners. Combining overflow:'hidden' with elevation on the same
-  // View clips Android's shadow into a glitchy rectangular offset — this
+  // View clips Android's shadow into a glitchy rectangular offset  this
   // wrapper/content split is the standard fix.
   heroShadowWrap: { marginHorizontal: 16, borderRadius: 26 },
   hero: { borderRadius: 26, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 16, overflow: 'hidden' },

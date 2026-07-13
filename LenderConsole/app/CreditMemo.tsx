@@ -40,9 +40,9 @@ export default function CreditMemoModal({
   requestedAmount: number;
   stacking?: StackingSignal;
   resolution?: MemoResolution;
-  /** Active lender policy (Brief N) — the compliance section cites its thresholds. */
+  /** Active lender policy (Brief N)  the compliance section cites its thresholds. */
   policy?: LenderPolicy;
-  /** Risk-based pricing note (Brief R) — ladder + adopted rate + rationale. */
+  /** Risk-based pricing note (Brief R)  ladder + adopted rate + rationale. */
   pricing?: MemoPricing | null;
   onClose: () => void;
 }) {
@@ -138,7 +138,7 @@ export default function CreditMemoModal({
           {/* Decision */}
           <Section p={p} title="Decision">
             <p style={{ fontFamily: FONT.ui, fontSize: 13, fontWeight: 700, color: p.ink1 }}>
-              {memo.decision.label} — RM {Math.round(memo.decision.maxAmount).toLocaleString('en-MY')}
+              {memo.decision.label}  RM {Math.round(memo.decision.maxAmount).toLocaleString('en-MY')}
               <span style={{ fontWeight: 500, color: p.ink3 }}> · RM {Math.round(memo.decision.installment).toLocaleString('en-MY')}/mo</span>
             </p>
             <p style={{ fontFamily: FONT.ui, fontSize: 11, color: p.ink3, marginTop: 3 }}>
@@ -166,7 +166,7 @@ export default function CreditMemoModal({
             </div>
           </Section>
 
-          {/* Rationale — grouped by adverse-action category (Brief J); flat fallback otherwise. */}
+          {/* Rationale  grouped by adverse-action category (Brief J); flat fallback otherwise. */}
           <Section p={p} title="Rationale">
             <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink1, lineHeight: 1.6, marginBottom: 8 }}>{narrative.rationale}</p>
             {memo.groupedRationale.length > 0 ? (

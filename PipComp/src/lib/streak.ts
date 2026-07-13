@@ -1,5 +1,5 @@
 // src/lib/streak.ts
-// Pure recording-streak helper — pure motivation, NOT a credit signal. It counts
+// Pure recording-streak helper  pure motivation, NOT a credit signal. It counts
 // consecutive days the user logged at least one transaction (any source, including
 // manual), with a one-day grace so recording every other day keeps the streak alive.
 //

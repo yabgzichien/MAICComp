@@ -1,6 +1,6 @@
 // src/screens/OnboardingScreen.tsx
 // One-time setup. The user can verify identity (eKYC) now to unlock credit & financing, or
-// skip and use Pip as a plain money tracker — eKYC is required later only to borrow.
+// skip and use Pip as a plain money tracker  eKYC is required later only to borrow.
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -36,7 +36,7 @@ export function OnboardingScreen() {
         <Card style={styles.choiceCard}>
           <View style={styles.choiceHead}>
             <Icon name="check" size={16} color={colors.accentInk} stroke={2.5} />
-            <Text style={styles.choiceTitle}>Verify identity — unlock credit & loans</Text>
+            <Text style={styles.choiceTitle}>Verify identity  unlock credit & loans</Text>
           </View>
           <Text style={styles.choiceBody}>
             A quick identity check (demo) binds your Credit Passport to you, so lenders can trust
@@ -48,7 +48,7 @@ export function OnboardingScreen() {
         </Card>
 
         <Pressable style={styles.skipBtn} onPress={() => void completeOnboarding()}>
-          <Text style={styles.skipText}>Skip for now — just track my money</Text>
+          <Text style={styles.skipText}>Skip for now  just track my money</Text>
         </Pressable>
         <Text style={styles.skipHint}>You can verify later from the Credit Passport screen.</Text>
       </ScrollView>

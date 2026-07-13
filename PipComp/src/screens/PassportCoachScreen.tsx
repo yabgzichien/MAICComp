@@ -1,7 +1,7 @@
 // src/screens/PassportCoachScreen.tsx
 // The Passport Builder Coach: a guide-and-simulate surface. Every number shown is computed by
 // src/lib/coachPlan.ts re-running the real engines; the LLM only narrates the plan. Degrades to a
-// deterministic scripted line when no API key / network / on timeout — the numbers are always real.
+// deterministic scripted line when no API key / network / on timeout  the numbers are always real.
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,7 +31,7 @@ function decisionLabel(d: CoachSim['decisionTo']): string {
   return d === 'approve' ? 'Likely approved' : d === 'refer' ? 'Refer for review' : 'Likely declined';
 }
 
-// Short, honest badges for the lender strip — policy projections, never approvals.
+// Short, honest badges for the lender strip  policy projections, never approvals.
 const VERDICT_SHORT: Record<CoachSim['decisionTo'], string> = {
   approve: 'Likely eligible',
   refer: 'Manual review',
@@ -40,9 +40,9 @@ const VERDICT_SHORT: Record<CoachSim['decisionTo'], string> = {
 
 /** Plain-English resilience line for an approved offer under income shocks (feature B). */
 function stressLabel(dipPct: number): string {
-  if (dipPct >= 20) return `Resilient — this offer holds even a ${dipPct}% income dip`;
+  if (dipPct >= 20) return `Resilient  this offer holds even a ${dipPct}% income dip`;
   if (dipPct >= 10) return `Holds a ${dipPct}% income dip`;
-  return 'Tight — even a 10% income dip would strain it';
+  return 'Tight  even a 10% income dip would strain it';
 }
 
 /** Where "Start now" deep-links for each lever (feature G). */
@@ -233,7 +233,7 @@ export function PassportCoachScreen({
           )}
         </Card>
 
-        {/* Lender strip — the flywheel: pick whose published criteria to coach against */}
+        {/* Lender strip  the flywheel: pick whose published criteria to coach against */}
         {dir && selectedLender && (
           <>
             <Text style={styles.sectionLabel}>COACHING AGAINST</Text>
@@ -276,7 +276,7 @@ export function PassportCoachScreen({
               })}
             </ScrollView>
             {dir.offline ? (
-              <Text style={styles.offlineNote}>Lender directory unreachable — coaching against the generic Pip ladder.</Text>
+              <Text style={styles.offlineNote}>Lender directory unreachable  coaching against the generic Pip ladder.</Text>
             ) : (
               <Text style={styles.lenderBlurb}>{selectedLender.blurb}</Text>
             )}

@@ -1,5 +1,5 @@
 // src/screens/PassportScreen.tsx
-// Two-phase flow (Brief I): the consent ceremony first — nothing mints on mount —
+// Two-phase flow (Brief I): the consent ceremony first  nothing mints on mount 
 // then the signed passport card. Regenerate routes back through the ceremony.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
@@ -62,7 +62,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
     };
   }, []);
 
-  // The exact draft a confirm will sign — the ceremony's rows derive from it.
+  // The exact draft a confirm will sign  the ceremony's rows derive from it.
   const draftArgs = useMemo(
     () => ({
       profile,
@@ -91,7 +91,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
     [activeLoanTenorMonths]
   );
 
-  // Mint — only reachable through the ceremony's explicit confirm.
+  // Mint  only reachable through the ceremony's explicit confirm.
   const mint = useCallback(async () => {
     setMinting(true);
     setError(null);
@@ -182,7 +182,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
     );
   }
 
-  // Consent ceremony — the only path to minting.
+  // Consent ceremony  the only path to minting.
   if (phase !== 'minted' || !passport || !signature) {
     return (
       <PassportCeremonyScreen

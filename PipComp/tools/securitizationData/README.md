@@ -8,7 +8,7 @@ Seeded generator for the Capital Markets demo pool used by the lender console.
 node tools/securitizationData/generate.js
 ```
 
-This writes `src/data/samplePool.ts` — a typed `SAMPLE_POOL: PoolLoan[]` of ~1,000
+This writes `src/data/samplePool.ts`  a typed `SAMPLE_POOL: PoolLoan[]` of ~1,000
 micro-loans (~RM6.5M total). The seed (`1337`) is fixed, so regenerating reproduces the
 exact same pool. Each loan carries `principal`, `apr`, `tenorMonths`, `score`, `band`, and a
 `fraudProb` (the upstream ML fraud signal). The pool models credit-invisible

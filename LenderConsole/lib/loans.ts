@@ -1,4 +1,4 @@
-// Deterministic loan-decision engine — ported verbatim from the borrower app
+// Deterministic loan-decision engine  ported verbatim from the borrower app
 // (PipComp/src/lib/loans.ts) so the console runs the SAME policy the borrower sees.
 // Pure: same input → same output, with a human-readable reason per step.
 
@@ -17,11 +17,11 @@ export interface DecisionReason {
   text: string;
 }
 
-/** Display headings for grouped reason rendering — one source of truth for both apps' UIs. */
+/** Display headings for grouped reason rendering  one source of truth for both apps' UIs. */
 export const REASON_CATEGORY_LABELS: Record<ReasonCategory, string> = {
-  affordability: 'Affordability — capacity to repay',
-  'data-quality': 'Data quality — what we could not verify',
-  integrity: 'Integrity — automated validation',
+  affordability: 'Affordability  capacity to repay',
+  'data-quality': 'Data quality  what we could not verify',
+  integrity: 'Integrity  automated validation',
   policy: 'Policy & tier',
   record: 'Credit record',
 };
@@ -49,11 +49,11 @@ export interface DecisionBreakdown {
   tierMinAmount: number;
   /** The requested amount clamped into the tier's principal range. */
   tierCeiling: number;
-  /** Largest principal whose installment fits the surplus-share cap (may exceed the ceiling — then it didn't bite). */
+  /** Largest principal whose installment fits the surplus-share cap (may exceed the ceiling  then it didn't bite). */
   surplusCapPrincipal: number;
-  /** Largest principal whose installment fits the DSR cap (may exceed the ceiling — then it didn't bite). */
+  /** Largest principal whose installment fits the DSR cap (may exceed the ceiling  then it didn't bite). */
   dsrCapPrincipal: number;
-  /** The final offered principal — equals maxAmount; 0 on an affordability decline. */
+  /** The final offered principal  equals maxAmount; 0 on an affordability decline. */
   offered: number;
 }
 
@@ -95,11 +95,11 @@ export const MAX_DSR = 0.4;
 /**
  * Lender-owned affordability + coverage thresholds (Brief N). The engine's reason
  * strings template these values, so a lender's custom caps are cited automatically.
- * Every field defaults to the value that was previously hardcoded — an omitted
+ * Every field defaults to the value that was previously hardcoded  an omitted
  * policy reproduces the historical behaviour exactly (regression-guard tested).
  */
 export interface LenderPolicy {
-  /** Below this confidence, never auto-approve — refer for human review. */
+  /** Below this confidence, never auto-approve  refer for human review. */
   minConfidenceToApprove: number;
   /** An installment may not exceed this share of average monthly surplus. */
   maxInstallmentShareOfSurplus: number;
@@ -221,7 +221,7 @@ function applyCoverageTierFilter(
       products: keep(['emergency', 'starter']),
       forceRefer: false,
       reasons: [
-        { category: 'data-quality', text: `${policy.fullLadderFromDays}+ days of history but coverage is only ${pct}% — eligibility capped to Starter Capital and below until coverage reaches ${Math.round(policy.minCoverageRatioForFullLadder * 100)}%.` },
+        { category: 'data-quality', text: `${policy.fullLadderFromDays}+ days of history but coverage is only ${pct}%  eligibility capped to Starter Capital and below until coverage reaches ${Math.round(policy.minCoverageRatioForFullLadder * 100)}%.` },
       ],
     };
   }
@@ -257,16 +257,16 @@ export function decideLoan(input: LoanDecisionInput): LoanDecision {
   });
 
   if (adverseRecord === 'hard') {
-    reasons.push({ category: 'record', text: 'Serious adverse record on file — application declined.' });
+    reasons.push({ category: 'record', text: 'Serious adverse record on file  application declined.' });
     return finish('decline', 0, 0);
   }
 
   // Data-integrity floor (asymmetric-fraud rings). Worded as a verification requirement,
-  // not an accusation — automated validation failing is a reason for human review, not a verdict on the person.
+  // not an accusation  automated validation failing is a reason for human review, not a verdict on the person.
   if (integrityFloorBreached) {
     reasons.push({
       category: 'integrity',
-      text: 'Data-integrity check: the income pattern could not be validated automatically — declined pending manual verification with the lender.',
+      text: 'Data-integrity check: the income pattern could not be validated automatically  declined pending manual verification with the lender.',
     });
     return finish('decline', 0, 0);
   }
@@ -277,7 +277,7 @@ export function decideLoan(input: LoanDecisionInput): LoanDecision {
   const tier = selectTier(score, coverage.products);
   if (!tier) {
     const lowest = products.reduce((m, p) => Math.min(m, p.minScore), Infinity);
-    reasons.push({ category: 'policy', text: `Score ${score} is below the minimum tier threshold (${lowest}) — application declined.` });
+    reasons.push({ category: 'policy', text: `Score ${score} is below the minimum tier threshold (${lowest})  application declined.` });
     return finish('decline', 0, 0);
   }
   reasons.push({ category: 'policy', text: `Qualifies for the "${tier.label}" tier (requires score ≥ ${tier.minScore}, scored ${score}).` });
@@ -314,18 +314,18 @@ export function decideLoan(input: LoanDecisionInput): LoanDecision {
   }
 
   if (adverseRecord === 'soft') {
-    reasons.push({ category: 'record', text: 'Minor adverse record on file — routed to manual review instead of auto-approval.' });
+    reasons.push({ category: 'record', text: 'Minor adverse record on file  routed to manual review instead of auto-approval.' });
     return finish('refer', principal, installment);
   }
   if (confidence < policy.minConfidenceToApprove) {
     reasons.push({
       category: 'data-quality',
-      text: `We could not verify enough of the recorded data (confidence ${Math.round(confidence * 100)}%, below the ${Math.round(policy.minConfidenceToApprove * 100)}% auto-approval floor) — routed to manual review. More verified history would strengthen this application.`,
+      text: `We could not verify enough of the recorded data (confidence ${Math.round(confidence * 100)}%, below the ${Math.round(policy.minConfidenceToApprove * 100)}% auto-approval floor)  routed to manual review. More verified history would strengthen this application.`,
     });
     return finish('refer', principal, installment);
   }
   if (coverage.forceRefer) {
-    reasons.push({ category: 'data-quality', text: 'Auto-approval blocked by coverage policy — routed to manual review.' });
+    reasons.push({ category: 'data-quality', text: 'Auto-approval blocked by coverage policy  routed to manual review.' });
     return finish('refer', principal, installment);
   }
 

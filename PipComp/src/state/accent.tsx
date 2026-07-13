@@ -15,7 +15,7 @@ export const GREEN_ACCENT: AccentTheme = {
   accentTint: '#eff7f4',
 };
 
-/** Alert amber/yellow — used while a duplicate warning is showing. */
+/** Alert amber/yellow  used while a duplicate warning is showing. */
 export const ALERT_ACCENT: AccentTheme = {
   accent: '#d98a00',
   accentInk: '#8a5a00',

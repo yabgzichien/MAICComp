@@ -1,6 +1,6 @@
 // src/lib/creditScore.ts
 // Pure, deterministic, explainable credit scoring over a CreditProfile.
-// No UI/DB imports — unit-tested. The AI never computes these numbers.
+// No UI/DB imports  unit-tested. The AI never computes these numbers.
 
 export interface CreditProfile {
   months: number;               // months of transaction history (tenure)
@@ -174,13 +174,13 @@ const FACTORS: FactorDef[] = [
   },
 ];
 
-/** Highest score the data confidence will let us *display* — trust scored, not assumed.
+/** Highest score the data confidence will let us *display*  trust scored, not assumed.
  * Below 0.30 → top of Building; 0.45 → top of Fair; 0.60 → top of Strong; otherwise uncapped. */
 function confidenceScoreCeiling(confidence: number): number {
   if (confidence < 0.3) return 499; // Building ceiling
   if (confidence < 0.4) return 619; // Fair ceiling
   if (confidence < 0.6) return 819; // Strong ceiling
-  return 900; // uncapped — Excellent reachable
+  return 900; // uncapped  Excellent reachable
 }
 
 /** Compute the explainable credit score from a profile. Deterministic and pure. */

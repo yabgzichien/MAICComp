@@ -246,7 +246,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, [refreshAll]);
 
   // Targeted refresh for loan actions: only the three loan-derived slices change
-  // (applications, repayments, the on-time/total summary) — refetching the other
+  // (applications, repayments, the on-time/total summary)  refetching the other
   // ~10 pieces of state via `refreshAll` would be wasted work. Mirrors the
   // narrowly-scoped refetches in `saveTransactionEdits`/`addAccount`. Products are
   // static after seeding (see db.ts's `init`), so they're intentionally excluded.
@@ -476,7 +476,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   // Decide and persist a loan application for a specific product the user picked.
   // We resolve the requested product and evaluate `decideLoan` against just that one tier
   // (rather than the full ladder): the user is applying for a specific offer, so the
-  // decision should reflect whether *that* product is appropriate for them — not silently
+  // decision should reflect whether *that* product is appropriate for them  not silently
   // upgrade/downgrade them to a different tier than the one they asked for. `decideLoan`
   // picks the highest tier the score qualifies for among the `products` it's given, so
   // passing only the requested product makes it evaluate "does this applicant qualify for

@@ -1,6 +1,6 @@
 // Pure prompt-building + response-parsing for the adverse-action letter narrator. Kept out
 // of the API route so it can be unit-tested. The LLM is only ever asked to smooth the prose
-// of an ALREADY-assembled letter — never to invent a reason, change a figure, or soften a
+// of an ALREADY-assembled letter  never to invent a reason, change a figure, or soften a
 // verdict. See app/api/adverseAction/route.ts for the wiring.
 
 export interface LetterBrief {
@@ -20,8 +20,8 @@ export interface ChatMessage {
 export const LETTER_SYSTEM_PROMPT =
   'You are a loan-officer writing assistant drafting a borrower-facing adverse-action letter. ' +
   'A deterministic policy engine has ALREADY decided the outcome and the reasons behind it. ' +
-  'Write two things: "opening" — a warm, honest 2-3 sentence paragraph explaining the decision ' +
-  'and its reasons in plain language; and "closing" — a short, encouraging paragraph presenting ' +
+  'Write two things: "opening"  a warm, honest 2-3 sentence paragraph explaining the decision ' +
+  'and its reasons in plain language; and "closing"  a short, encouraging paragraph presenting ' +
   'the given improvement note. Use ONLY the supplied facts and reasons. Never invent a number, ' +
   'never soften or change the verdict, never add a reason that was not given. Return ONLY a ' +
   'JSON object: {"opening": "...", "closing": "..."}.';

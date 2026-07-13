@@ -1,7 +1,7 @@
 // src/lib/institutions.ts
 // Pure, deterministic lookup of Malaysian banks/e-wallets, used to recognize the
 // institution in a scanned screenshot and to render a brand-toned badge for it.
-// No UI/DB imports — unit-tested.
+// No UI/DB imports  unit-tested.
 import { isHolding } from './prices';
 import type { Account } from './types';
 
@@ -64,7 +64,7 @@ export const INSTITUTIONS: Institution[] = [
 
 const norm = (s: string): string => s.trim().toLowerCase();
 
-/** Whole-word, case-insensitive containment — avoids "BI" matching inside "BigPay". */
+/** Whole-word, case-insensitive containment  avoids "BI" matching inside "BigPay". */
 function containsWord(haystack: string, needle: string): boolean {
   const esc = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(`\\b${esc}\\b`, 'i').test(haystack);
@@ -74,7 +74,7 @@ function containsWord(haystack: string, needle: string): boolean {
  * Match free text (typically a vision model's guess at the institution shown in
  * a screenshot) to a known institution. Ranked: exact name/alias match first,
  * then the text containing the canonical name, then a whole-word alias hit.
- * Returns null if nothing matches reasonably — callers fall back to the raw text.
+ * Returns null if nothing matches reasonably  callers fall back to the raw text.
  */
 export function matchInstitution(text: string | null | undefined): Institution | null {
   if (!text) return null;
@@ -117,7 +117,7 @@ export function searchInstitutions(query: string): Institution[] {
   return out.slice(0, 6);
 }
 
-/** True if `accountName` plausibly names `inst` — name match or whole-word alias match. */
+/** True if `accountName` plausibly names `inst`  name match or whole-word alias match. */
 function accountNamesInstitution(accountName: string, inst: Institution): boolean {
   const an = norm(accountName);
   const instName = norm(inst.name);
@@ -127,7 +127,7 @@ function accountNamesInstitution(accountName: string, inst: Institution): boolea
 
 /**
  * Find this user's existing (non-holding, non-archived) accounts that plausibly
- * belong to `institution` — or, when the screenshot's provider wasn't recognized
+ * belong to `institution`  or, when the screenshot's provider wasn't recognized
  * against the curated list, fall back to a loose match against the raw provider
  * text the model reported. Returns [] when neither is available.
  */

@@ -7,7 +7,7 @@ e-wallet screenshots, through the exact production path the app ships
 ## Three steps
 
 1. **Collect + label** (human). Drop 30–50 screenshots into `dataset/images/`,
-   named `<app>__<name>.png` (e.g. `maybank__aug-1.png`, `tng__wallet-2.jpg`) —
+   named `<app>__<name>.png` (e.g. `maybank__aug-1.png`, `tng__wallet-2.jpg`) 
    the `<app>` prefix drives the per-app breakdown. For each image, write
    `dataset/labels/<same-stem>.json`:
 
@@ -15,7 +15,7 @@ e-wallet screenshots, through the exact production path the app ships
 
    `date` is `"YYYY-MM-DD"` or `null` when the screenshot shows none;
    `direction` is `"in"` (money received) or `"out"`. Label every visible row.
-   **Label independently from the model's output** — correcting the model's own
+   **Label independently from the model's output**  correcting the model's own
    extraction biases the ground truth toward agreement.
 
    Optional aid: after adding the images, run `npx tsx tools/ocrEval/scaffold.ts`
@@ -36,10 +36,10 @@ e-wallet screenshots, through the exact production path the app ships
 ## Ground rules
 
 - `dataset/` is **gitignored** (root `.gitignore` covers it): screenshots are
-  real financial data — only code and the aggregate `METRICS.md` are committed.
+  real financial data  only code and the aggregate `METRICS.md` are committed.
   Use your own accounts' screenshots; no third-party PII.
 - **Do not tune the extraction prompt against this set.** An eval you tuned
-  against is not an eval — prompt improvements need a fresh holdout.
+  against is not an eval  prompt improvements need a fresh holdout.
 - Scoring method: fuzzy row alignment (amount exact to the sen, OR merchant
   key + date within one day), field accuracy over aligned rows, missed and
   hallucinated rows reported separately. Details in `lib.ts`; unit tests in
