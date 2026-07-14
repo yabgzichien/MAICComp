@@ -22,6 +22,11 @@ export interface LenderProfile {
    *  decides with, so borrower-side simulations track the lender's real criteria.
    *  Optional for wire back-compat with borrower apps that predate it. */
   policy?: LenderPolicy;
+  /** The console persona for this lender (Lender Tenancy spec)  a fictional loan
+   *  officer whose name/initials the header and resolution audit trail show while
+   *  operating as this lender. TEKUN keeps the console's original persona. */
+  officer: string;
+  officerInitials: string;
 }
 
 export const LENDER_REGISTRY: LenderProfile[] = [
@@ -33,6 +38,8 @@ export const LENDER_REGISTRY: LenderProfile[] = [
     // Reuses the engine's ladder unchanged, so today's console behaviour is identical.
     products: DEFAULT_PRODUCTS,
     policy: DEFAULT_POLICY,
+    officer: 'Hamdan Z.',
+    officerInitials: 'HZ',
   },
   {
     id: 'koperasi-sejahtera',
@@ -44,6 +51,8 @@ export const LENDER_REGISTRY: LenderProfile[] = [
       { id: 'growth', label: 'Anggota Growth', minScore: 680, minAmount: 5000, maxAmount: 12000, tenorMonths: 18, apr: 0.12 },
     ],
     policy: DEFAULT_POLICY,
+    officer: 'Siti Fatimah',
+    officerInitials: 'SF',
   },
   {
     id: 'dana-niaga',
@@ -55,17 +64,21 @@ export const LENDER_REGISTRY: LenderProfile[] = [
       { id: 'starter', label: 'Niaga Flex', minScore: 600, minAmount: 2000, maxAmount: 8000, tenorMonths: 12, apr: 0.24 },
     ],
     policy: DEFAULT_POLICY,
+    officer: 'Ravi Kumar',
+    officerInitials: 'RK',
   },
 ];
 
 /**
- * Publish the directory with TEKUN's entry composed from the STORED policy (Brief N):
- * the ladder + thresholds the Policy tab edits are exactly what borrowers are coached
- * toward. The two demo lenders stay static  they exist to give the borrower-side
- * picker genuine variation, not to be editable.
+ * Publish the directory with every lender's entry composed from ITS OWN stored policy
+ * (Brief N + Lender Tenancy spec): the ladder + thresholds each lender's Policy tab edits
+ * are exactly what borrowers are coached toward, for all three registry lenders, not just
+ * TEKUN. `storedByLenderId` is keyed by lender id; a lender missing from the map (e.g. an
+ * older single-lender caller) keeps its static registry defaults.
  */
-export function composeRegistry(stored: StoredPolicy): LenderProfile[] {
-  return LENDER_REGISTRY.map((l) =>
-    l.id === 'tekun' ? { ...l, products: stored.products, policy: stored.policy } : l,
-  );
+export function composeRegistry(storedByLenderId: Record<string, StoredPolicy>): LenderProfile[] {
+  return LENDER_REGISTRY.map((l) => {
+    const stored = storedByLenderId[l.id];
+    return stored ? { ...l, products: stored.products, policy: stored.policy } : l;
+  });
 }

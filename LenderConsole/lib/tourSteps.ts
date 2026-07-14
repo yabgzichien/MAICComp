@@ -17,7 +17,7 @@ export const CONSOLE_TOUR_STEPS: ConsoleTourStep[] = [
     id: 'sample',
     tab: 'verify',
     title: 'A verified sample applicant',
-    body: 'This passport is already verified. Meet the sample applicant.',
+    body: 'This passport is already verified. Meet the sample applicant. Switch lenders anytime from the header.',
   },
   {
     id: 'trust',

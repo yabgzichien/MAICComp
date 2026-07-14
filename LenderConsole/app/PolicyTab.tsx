@@ -112,10 +112,14 @@ export default function PolicyTab({
   p,
   stored,
   onSaved,
+  lenderId,
+  lenderName,
 }: {
   p: Palette;
   stored: StoredPolicy;
   onSaved: (s: StoredPolicy) => void;
+  lenderId: string;
+  lenderName: string;
 }) {
   const [thresholds, setThresholds] = useState<ThresholdForm>(() => toThresholdForm(stored.policy));
   const [rows, setRows] = useState<LadderRow[]>(() => toLadderRows(stored.products));
@@ -143,7 +147,7 @@ export default function PolicyTab({
     setSaving(true);
     setErrors([]);
     try {
-      const res = await fetch('/api/policy', {
+      const res = await fetch(`/api/policy?lender=${lenderId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(candidate),
@@ -181,7 +185,7 @@ export default function PolicyTab({
       <div style={{ padding: '20px 40px 18px', background: p.surface, borderBottom: `1px solid ${p.hairline}` }}>
         <div style={{ maxWidth: 1080, margin: '0 auto', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
           <div>
-            <SectionLabel color={p.ink2}>Policy · TEKUN Nasional</SectionLabel>
+            <SectionLabel color={p.ink2}>Policy · {lenderName}</SectionLabel>
             <h2 style={{ fontFamily: FONT.ui, fontSize: 22, fontWeight: 800, color: p.ink1, letterSpacing: '-0.4px', marginTop: 4, marginBottom: 5 }}>
               Lender Policy Editor
             </h2>

@@ -61,7 +61,8 @@ describe('LENDER_REGISTRY (GET /api/lenders payload)', () => {
   });
 });
 
-// ── composeRegistry (Brief N): TEKUN's entry published from the stored policy ─
+// ── composeRegistry (Brief N + Lender Tenancy spec): every lender's entry published
+// from ITS OWN stored policy, keyed by lender id ────────────────────────────────
 
 describe('composeRegistry', () => {
   const custom: StoredPolicy = {
@@ -70,29 +71,41 @@ describe('composeRegistry', () => {
     updatedAt: '2026-07-08T00:00:00.000Z',
   };
 
-  it("replaces ONLY TEKUN's products and policy with the stored values", () => {
-    const out = composeRegistry(custom);
+  it("replaces ONLY the mapped lender's products and policy with the stored values", () => {
+    const out = composeRegistry({ tekun: custom });
     const tekun = out.find((l) => l.id === 'tekun')!;
     expect(tekun.products).toEqual(custom.products);
     expect(tekun.policy).toEqual(custom.policy);
   });
 
-  it('leaves the two demo lenders untouched by the stored policy', () => {
-    const out = composeRegistry(custom);
+  it('leaves lenders absent from the map untouched (their static registry defaults)', () => {
+    const out = composeRegistry({ tekun: custom });
     const koperasi = out.find((l) => l.id === 'koperasi-sejahtera')!;
     const dana = out.find((l) => l.id === 'dana-niaga')!;
     expect(koperasi.products).toEqual(LENDER_REGISTRY.find((l) => l.id === 'koperasi-sejahtera')!.products);
     expect(dana.products).toEqual(LENDER_REGISTRY.find((l) => l.id === 'dana-niaga')!.products);
   });
 
+  it('composes each lender independently when more than one is mapped', () => {
+    const koperasiCustom: StoredPolicy = { policy: DEFAULT_POLICY, products: [{ id: 'starter', label: 'Custom Koperasi', minScore: 700, minAmount: 1000, maxAmount: 3000, tenorMonths: 6, apr: 0.1 }] };
+    const out = composeRegistry({ tekun: custom, 'koperasi-sejahtera': koperasiCustom });
+    expect(out.find((l) => l.id === 'tekun')!.products).toEqual(custom.products);
+    expect(out.find((l) => l.id === 'koperasi-sejahtera')!.products).toEqual(koperasiCustom.products);
+    expect(out.find((l) => l.id === 'dana-niaga')!.products).toEqual(LENDER_REGISTRY.find((l) => l.id === 'dana-niaga')!.products);
+  });
+
   it('never-edited defaults reproduce the static registry\'s TEKUN entry exactly', () => {
-    const out = composeRegistry({ policy: DEFAULT_POLICY, products: DEFAULT_PRODUCTS });
+    const out = composeRegistry({ tekun: { policy: DEFAULT_POLICY, products: DEFAULT_PRODUCTS } });
     const tekun = out.find((l) => l.id === 'tekun')!;
     expect(tekun.products).toBe(DEFAULT_PRODUCTS);
     expect(tekun.policy).toEqual(DEFAULT_POLICY);
   });
 
+  it('an empty map reproduces the static registry exactly', () => {
+    expect(composeRegistry({})).toEqual(LENDER_REGISTRY);
+  });
+
   it('publishes exactly three lenders, same as the static registry, regardless of stored policy', () => {
-    expect(composeRegistry(custom)).toHaveLength(3);
+    expect(composeRegistry({ tekun: custom })).toHaveLength(3);
   });
 });

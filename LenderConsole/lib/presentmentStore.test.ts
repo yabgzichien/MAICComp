@@ -68,3 +68,31 @@ describe('recordPresentment', () => {
     expect(() => recordPresentment({ id: 'a', at: '2026-06-01T00:00:00.000Z' }, failing)).not.toThrow();
   });
 });
+
+// ── Lender Tenancy spec: no cross-lender leakage ──────────────────────────────
+// A TEKUN presentment must not trigger another lender's stacking warning  the shared
+// cross-lender registry is exactly what the backend MVP sells, not this per-console log.
+
+describe('lender scoping', () => {
+  it("a TEKUN presentment (default lender id) does not appear in another lender's log", () => {
+    const s = fakeStorage();
+    recordPresentment({ id: 'shared-subject', at: '2026-06-01T00:00:00.000Z' }, s);
+    expect(readPresentmentLog(s)).toHaveLength(1);
+    expect(readPresentmentLog(s, 'koperasi-sejahtera')).toEqual([]);
+  });
+
+  it('two lenders keep fully independent logs in the same storage', () => {
+    const s = fakeStorage();
+    recordPresentment({ id: 'shared-subject', at: '2026-06-01T00:00:00.000Z' }, s, 'tekun');
+    recordPresentment({ id: 'shared-subject', at: '2026-06-02T00:00:00.000Z' }, s, 'koperasi-sejahtera');
+    expect(readPresentmentLog(s, 'tekun')).toHaveLength(1);
+    expect(readPresentmentLog(s, 'koperasi-sejahtera')).toHaveLength(1);
+    expect(readPresentmentLog(s, 'dana-niaga')).toEqual([]);
+  });
+
+  it("omitting lenderId defaults to TEKUN and reads the pre-tenancy unsuffixed key (back-compat)", () => {
+    const s = fakeStorage({ 'pip-presentment-log': JSON.stringify([{ id: 'legacy', at: '2026-01-01T00:00:00.000Z' }]) });
+    expect(readPresentmentLog(s)).toEqual([{ id: 'legacy', at: '2026-01-01T00:00:00.000Z' }]);
+    expect(readPresentmentLog(s, 'tekun')).toEqual([{ id: 'legacy', at: '2026-01-01T00:00:00.000Z' }]);
+  });
+});

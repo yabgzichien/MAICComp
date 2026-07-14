@@ -4,7 +4,7 @@
 // borrower's simulation against these ladders happens entirely on their device.
 
 import { NextResponse } from 'next/server';
-import { composeRegistry } from '../../../lib/lenderRegistry';
+import { composeRegistry, LENDER_REGISTRY } from '../../../lib/lenderRegistry';
 import { readStoredPolicy } from '../../../lib/policyFile';
 
 const CORS_HEADERS = {
@@ -14,9 +14,13 @@ const CORS_HEADERS = {
 };
 
 export async function GET() {
-  // TEKUN's entry is composed from the stored policy (Brief N): the ladder the
-  // Policy tab edits is the ladder borrowers are coached toward  the flywheel.
-  return NextResponse.json(composeRegistry(await readStoredPolicy()), { headers: CORS_HEADERS });
+  // Every lender's entry is composed from ITS OWN stored policy (Brief N + Lender
+  // Tenancy spec): the ladder each lender's Policy tab edits is the ladder borrowers are
+  // coached toward  the flywheel, for all three registry lenders, not just TEKUN.
+  const storedByLenderId = Object.fromEntries(
+    await Promise.all(LENDER_REGISTRY.map(async (l) => [l.id, await readStoredPolicy(undefined, l.id)] as const))
+  );
+  return NextResponse.json(composeRegistry(storedByLenderId), { headers: CORS_HEADERS });
 }
 
 export async function OPTIONS() {

@@ -244,8 +244,17 @@ export function orderQueue(apps: ApplicationRecord[], status: ApplicationStatus)
 }
 
 // ── localStorage wrapper (injectable, SSR-safe  presentmentStore pattern) ────
+// Keyed by lender id (Lender Tenancy spec, 2026-07-12): entering the console as a
+// different lender shows THAT lender's own pipeline, not TEKUN's. `lenderId` defaults
+// to 'tekun', which keeps the original, unsuffixed key  so a pipeline seeded before
+// multi-tenancy shipped is still TEKUN's.
 
 const STORE_KEY = 'pip-applications';
+const DEFAULT_LENDER_ID = 'tekun';
+
+function keyFor(lenderId: string): string {
+  return lenderId === DEFAULT_LENDER_ID ? STORE_KEY : `${STORE_KEY}:${lenderId}`;
+}
 
 function defaultStorage(): Storage | null {
   return typeof window === 'undefined' ? null : window.localStorage;
@@ -265,10 +274,10 @@ function isRecord(x: unknown): x is ApplicationRecord {
   );
 }
 
-export function readApplications(storage: Storage | null = defaultStorage()): ApplicationRecord[] {
+export function readApplications(storage: Storage | null = defaultStorage(), lenderId: string = DEFAULT_LENDER_ID): ApplicationRecord[] {
   if (!storage) return [];
   try {
-    const raw = storage.getItem(STORE_KEY);
+    const raw = storage.getItem(keyFor(lenderId));
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed.filter(isRecord) : [];
@@ -277,10 +286,10 @@ export function readApplications(storage: Storage | null = defaultStorage()): Ap
   }
 }
 
-export function writeApplications(apps: ApplicationRecord[], storage: Storage | null = defaultStorage()): void {
+export function writeApplications(apps: ApplicationRecord[], storage: Storage | null = defaultStorage(), lenderId: string = DEFAULT_LENDER_ID): void {
   if (!storage) return;
   try {
-    storage.setItem(STORE_KEY, JSON.stringify(apps));
+    storage.setItem(keyFor(lenderId), JSON.stringify(apps));
   } catch {
     // Quota/security failures degrade to an in-memory-only session  never break the console.
   }

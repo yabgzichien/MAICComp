@@ -229,6 +229,35 @@ describe('localStorage round-trip', () => {
     const read = readApplications(s);
     expect(read[0].source).toBeUndefined();
   });
+
+  // ── Lender Tenancy spec: no cross-lender leakage ───────────────────────────
+  // Entering the console as a different lender must show that lender's own pipeline.
+
+  it("a TEKUN pipeline (default lender id) is invisible to another lender", () => {
+    const s = fakeStorage();
+    const { apps } = file([]);
+    writeApplications(apps, s);
+    expect(readApplications(s)).toEqual(apps);
+    expect(readApplications(s, 'koperasi-sejahtera')).toEqual([]);
+  });
+
+  it('two lenders keep fully independent pipelines in the same storage', () => {
+    const s = fakeStorage();
+    const tekunApps = file([]).apps;
+    const koperasiApps = file([], { requestedAmount: 2500 }).apps;
+    writeApplications(tekunApps, s, 'tekun');
+    writeApplications(koperasiApps, s, 'koperasi-sejahtera');
+    expect(readApplications(s, 'tekun')).toEqual(tekunApps);
+    expect(readApplications(s, 'koperasi-sejahtera')).toEqual(koperasiApps);
+    expect(readApplications(s, 'dana-niaga')).toEqual([]);
+  });
+
+  it('omitting lenderId defaults to TEKUN and reads the pre-tenancy unsuffixed key (back-compat)', () => {
+    const s = fakeStorage();
+    const { apps } = file([]);
+    writeApplications(apps, s);
+    expect(readApplications(s)).toEqual(readApplications(s, 'tekun'));
+  });
 });
 
 describe('isApplicationRecord', () => {

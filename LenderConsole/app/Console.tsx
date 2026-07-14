@@ -28,6 +28,7 @@ import { buildDecisionFile, decisionFileName } from '../lib/decisionFile';
 import { caseIdFor, flagTimeLabel } from '../lib/caseRef';
 import { runAgentPanel, type StackingSignal } from '../lib/agents';
 import { CONSOLE_TOUR_STEPS, clampConsoleTourStep, type ConsoleTourTab } from '../lib/tourSteps';
+import { LENDER_REGISTRY, type LenderProfile } from '../lib/lenderRegistry';
 import { buildCreditMemo } from '../lib/creditMemo';
 import { counterOfferFor } from '../lib/counterOffer';
 import { findRecentPresentments, formatAgo, presentmentKey, type Presentment } from '../lib/presentment';
@@ -106,7 +107,7 @@ function evaluate(code: string, amountStr: string, stored: StoredPolicy): ViewSt
   }
 }
 
-function BrandMark({ p, onRestartTour }: { p: Palette; onRestartTour: () => void }) {
+function BrandMark({ p, onRestartTour, activeLender }: { p: Palette; onRestartTour: () => void; activeLender: LenderProfile }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0 }}>
       <button
@@ -123,11 +124,11 @@ function BrandMark({ p, onRestartTour }: { p: Palette; onRestartTour: () => void
       <span style={{ fontFamily: FONT.ui, fontSize: 14, fontWeight: 800, color: p.ink1, whiteSpace: 'nowrap' }}>Pip Credit</span>
       <span style={{ fontSize: 15, color: p.ink3, fontWeight: 300 }}>·</span>
       <span style={{ fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 600, color: p.ink2, whiteSpace: 'nowrap' }}>Lender Console</span>
-      <div style={{ marginLeft: 8, padding: '3px 9px 3px 8px', borderRadius: 6, background: '#0f2d5c', display: 'flex', alignItems: 'center', gap: 5 }}>
+      <div style={{ marginLeft: 8, padding: '3px 9px 3px 8px', borderRadius: 6, background: activeLender.brandColor, display: 'flex', alignItems: 'center', gap: 5 }}>
         <svg width="9" height="10" viewBox="0 0 10 11" fill="none">
           <path d="M5 1L1 3.5v3.8l4 2.7 4-2.7V3.5L5 1z" fill="rgba(255,255,255,0.18)" stroke="rgba(255,255,255,0.55)" strokeWidth="1" />
         </svg>
-        <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: 'white', letterSpacing: '0.08em' }}>TEKUN</span>
+        <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: 'white', letterSpacing: '0.08em' }}>{activeLender.name.split(' ')[0].toUpperCase()}</span>
       </div>
     </div>
   );
@@ -164,10 +165,11 @@ function DemoModeChip({ p }: { p: Palette }) {
   );
 }
 
-function Header({ p, tab, setTab, alert, onRestartTour }: { p: Palette; tab: Tab; setTab: (t: Tab) => void; alert: boolean; onRestartTour: () => void }) {
+function Header({ p, tab, setTab, alert, onRestartTour, activeLender, onSwitchLender }: { p: Palette; tab: Tab; setTab: (t: Tab) => void; alert: boolean; onRestartTour: () => void; activeLender: LenderProfile; onSwitchLender: (id: string) => void }) {
+  const [menuOpen, setMenuOpen] = useState(false);
   return (
-    <div style={{ height: 50, background: p.surface, borderBottom: alert ? `2px solid ${p.primary}` : `1px solid ${p.hairline}`, display: 'flex', alignItems: 'center', padding: '0 22px', flexShrink: 0 }}>
-      <BrandMark p={p} onRestartTour={onRestartTour} />
+    <div style={{ height: 50, background: p.surface, borderBottom: alert ? `2px solid ${p.primary}` : `1px solid ${p.hairline}`, display: 'flex', alignItems: 'center', padding: '0 22px', flexShrink: 0, position: 'relative' }}>
+      <BrandMark p={p} onRestartTour={onRestartTour} activeLender={activeLender} />
       <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
         <div style={{ display: 'flex', background: p.surface2, borderRadius: 10, padding: 3, gap: 2, border: `1px solid ${p.hairline}` }}>
           {([['verify', 'Verify Passport'], ['portfolio', 'Portfolio'], ['capital', 'Capital Markets'], ['policy', 'Policy']] as [Tab, string][]).map(([key, label]) => {
@@ -188,12 +190,54 @@ function Header({ p, tab, setTab, alert, onRestartTour }: { p: Palette; tab: Tab
           Restart tour
         </button>
         <DemoModeChip p={p} />
-        <div style={{ textAlign: 'right' }}>
-          <p style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 600, color: p.ink1, lineHeight: 1 }}>Hamdan Z.</p>
-          <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5 }}>Loan Officer · TEKUN</p>
-        </div>
-        <div style={{ width: 30, height: 30, borderRadius: '50%', background: p.primary, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: 'white' }}>HZ</span>
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px 4px', borderRadius: 8 }}
+          >
+            <div style={{ textAlign: 'right' }}>
+              <p style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 600, color: p.ink1, lineHeight: 1 }}>{activeLender.officer}</p>
+              <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5 }}>Loan Officer · {activeLender.name.split(' ')[0]}</p>
+            </div>
+            <div style={{ width: 30, height: 30, borderRadius: '50%', background: activeLender.brandColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: 'white' }}>{activeLender.officerInitials}</span>
+            </div>
+            <svg width="9" height="6" viewBox="0 0 9 6" fill="none" style={{ flexShrink: 0 }}>
+              <path d="M1 1L4.5 4.5L8 1" stroke={p.ink3} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          {menuOpen && (
+            <>
+              <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 60 }} />
+              <div
+                role="menu"
+                aria-label="Switch lender"
+                style={{ position: 'absolute', top: 42, right: 0, width: 260, background: p.surface, borderRadius: 12, border: `1px solid ${p.hairline}`, boxShadow: '0 12px 34px rgba(0,0,0,0.18)', zIndex: 61, overflow: 'hidden' }}
+              >
+                <p style={{ fontFamily: FONT.ui, fontSize: 11, fontWeight: 700, color: p.ink3, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '10px 14px 6px' }}>Switch lender</p>
+                {LENDER_REGISTRY.map((l) => (
+                  <button
+                    key={l.id}
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onSwitchLender(l.id);
+                    }}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '9px 14px', border: 'none', cursor: 'pointer', background: l.id === activeLender.id ? p.accentTint : 'transparent', textAlign: 'left' }}
+                  >
+                    <div style={{ width: 22, height: 22, borderRadius: 6, background: l.brandColor, flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, color: p.ink1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.name}</p>
+                      <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>{l.officer}</p>
+                    </div>
+                    {l.id === activeLender.id && <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.primary }}>✓</span>}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -894,7 +938,7 @@ function PricingStrip({ p, pricing, adopted, onAdopt }: { p: Palette; pricing: P
   );
 }
 
-function RightDecision({ p, passport, decision, credential, amount, setAmount, onAssess, onCounterOffer, isCounterOffer, stacking, selectedApp, onResolve, onGenerateLetter, purpose, setPurpose, policy, policyUpdatedAt, pricing, adoptedRate, onAdoptRate }: { p: Palette; passport: CreditPassport | null; decision: LoanDecision | null; credential: Credential | null; amount: string; setAmount: (s: string) => void; onAssess: () => void; onCounterOffer?: (counterAmount: number) => void; isCounterOffer?: boolean; stacking?: StackingSignal; selectedApp?: ApplicationRecord | null; onResolve?: (outcome: 'approved' | 'declined', rationale: string) => void; onGenerateLetter?: () => void; purpose?: DeclaredPurpose | null; setPurpose?: (p: DeclaredPurpose | null) => void; policy?: LenderPolicy; policyUpdatedAt?: string; pricing?: PricingSuggestion | null; adoptedRate?: number | null; onAdoptRate?: (rate: number) => void }) {
+function RightDecision({ p, passport, decision, credential, amount, setAmount, onAssess, onCounterOffer, isCounterOffer, stacking, selectedApp, onResolve, onGenerateLetter, purpose, setPurpose, policy, policyUpdatedAt, pricing, adoptedRate, onAdoptRate, lenderName }: { p: Palette; passport: CreditPassport | null; decision: LoanDecision | null; credential: Credential | null; amount: string; setAmount: (s: string) => void; onAssess: () => void; onCounterOffer?: (counterAmount: number) => void; isCounterOffer?: boolean; stacking?: StackingSignal; selectedApp?: ApplicationRecord | null; onResolve?: (outcome: 'approved' | 'declined', rationale: string) => void; onGenerateLetter?: () => void; purpose?: DeclaredPurpose | null; setPurpose?: (p: DeclaredPurpose | null) => void; policy?: LenderPolicy; policyUpdatedAt?: string; pricing?: PricingSuggestion | null; adoptedRate?: number | null; onAdoptRate?: (rate: number) => void; lenderName: string }) {
   const [memoOpen, setMemoOpen] = useState(false);
   const [letterOpen, setLetterOpen] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
@@ -940,7 +984,7 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
         <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>Deterministic · policy-enforced · audit-ready</p>
         {/* Which policy produced this verdict (Brief N)  an officer always knows. */}
         <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, marginTop: 3 }}>
-          Evaluated under <strong style={{ color: p.ink2 }}>TEKUN policy</strong>
+          Evaluated under <strong style={{ color: p.ink2 }}>{lenderName} policy</strong>
           {policyUpdatedAt ? ` · last updated ${new Date(policyUpdatedAt).toLocaleDateString('en-MY')}` : ' · defaults'}
         </p>
       </div>
@@ -1365,6 +1409,10 @@ function CapitalMarkets({ p, book, source, setSource }: { p: Palette; book: Pool
 // sample (the ideal first minute)  this card just narrates what's already on screen.
 const TOUR_DISMISSED_KEY = 'pip-console-tour-dismissed';
 const TOUR_STEP_KEY = 'pip-console-tour-step';
+// Active lender persona (Lender Tenancy spec, 2026-07-12): persisted so a refresh stays
+// "signed in" as the chosen lender, same storage pattern as the tour dismissal above.
+const ACTIVE_LENDER_KEY = 'pip-console-active-lender';
+const DEFAULT_LENDER_ID = 'tekun';
 /** Console judge tour (Judge Tour spec, 2026-07-12)  the Brief-M static tip list upgraded
  *  to the same step-card wizard as the borrower app. Non-modal: it never traps focus or
  *  blocks the console underneath. `onTab` switches the console's real tab state; the wizard
@@ -1446,6 +1494,43 @@ function TourCard({
   );
 }
 
+/** Persona picker (Lender Tenancy spec, 2026-07-12): the console's entry screen. One click
+ *  scopes the entire workbench to a registry lender  tenancy, not authentication, so there
+ *  are no credentials to check and no session to establish. */
+function PersonaPicker({ onSelect }: { onSelect: (id: string) => void }) {
+  return (
+    <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#f4f6f4', padding: 24 }}>
+      <div style={{ textAlign: 'center', marginBottom: 28 }}>
+        <p style={{ fontFamily: FONT.ui, fontSize: 20, fontWeight: 800, color: '#1a2b22' }}>Pip Credit · Lender Console</p>
+        <p style={{ fontFamily: FONT.ui, fontSize: 12.5, color: '#5d6b63', marginTop: 4 }}>Demo  select a lender, no credentials.</p>
+      </div>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 900 }}>
+        {LENDER_REGISTRY.map((l) => (
+          <button
+            key={l.id}
+            onClick={() => onSelect(l.id)}
+            style={{
+              width: 260,
+              textAlign: 'left',
+              padding: '20px 20px 18px',
+              borderRadius: 16,
+              border: '1.5px solid rgba(20,40,30,0.10)',
+              background: 'white',
+              cursor: 'pointer',
+              boxShadow: '0 6px 24px rgba(20,40,30,0.08)',
+            }}
+          >
+            <div style={{ width: 34, height: 34, borderRadius: 9, background: l.brandColor, marginBottom: 14 }} />
+            <p style={{ fontFamily: FONT.ui, fontSize: 15, fontWeight: 800, color: '#1a2b22', marginBottom: 6 }}>{l.name}</p>
+            <p style={{ fontFamily: FONT.ui, fontSize: 12, color: '#5d6b63', lineHeight: 1.5, marginBottom: 14 }}>{l.blurb}</p>
+            <p style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 600, color: l.brandColor }}>Enter as {l.officer} →</p>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Console() {
   const [tab, setTab] = useState<Tab>('verify');
   const [code, setCode] = useState(SAMPLE_CODE);
@@ -1520,25 +1605,73 @@ export default function Console() {
     }
   };
 
-  // Boot pre-verifies the sample as a demo convenience  that is not an officer action, so it
-  // is not logged; it only reads any history a previous session already recorded.
-  useEffect(() => {
-    if (state.status === 'valid') {
-      setPriors(findRecentPresentments(readPresentmentLog(), presentmentKey(state.passport)));
-    }
-    setApps(readApplications());
-    // Load the persisted policy; if it differs from the defaults, re-run the boot decision
-    // under it so the on-screen verdict matches the policy note.
-    fetch('/api/policy')
+  // Active lender persona (Lender Tenancy spec): scopes policy, pipeline, and book to
+  // one of the three registry lenders. Tenancy, not authentication  no credentials, no
+  // session, just a stored id (same pattern as the tour dismissal above).
+  const [activeLenderId, setActiveLenderIdState] = useState(DEFAULT_LENDER_ID);
+  const [showPersonaPicker, setShowPersonaPicker] = useState(false);
+  const activeLender: LenderProfile = LENDER_REGISTRY.find((l) => l.id === activeLenderId) ?? LENDER_REGISTRY[0];
+
+  /** Loads everything scoped to `lenderId`: its stored policy (which re-evaluates
+   *  whatever passport code/amount are currently on screen), its own applications
+   *  pipeline, and  if that re-evaluation yields a valid passport  its own
+   *  presentment log. Used on boot and on every lender switch. */
+  const loadForLender = (lenderId: string, codeUsed: string, amountUsed: string) => {
+    setApps(readApplications(undefined, lenderId));
+    fetch(`/api/policy?lender=${lenderId}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((sp: StoredPolicy | null) => {
         if (!sp) return;
         setStoredPolicy(sp);
-        if (sp.updatedAt) setState(evaluate(SAMPLE_CODE, '10,000', sp));
+        const next = evaluate(codeUsed, amountUsed, sp);
+        setState(next);
+        setPriors(next.status === 'valid' ? findRecentPresentments(readPresentmentLog(undefined, lenderId), presentmentKey(next.passport)) : []);
       })
       .catch(() => {});
+  };
+
+  // Boot pre-verifies the sample as a demo convenience  that is not an officer action, so it
+  // is not logged; it only reads any history a previous session already recorded. A saved
+  // lender id skips straight to that lender's workbench; none saved shows the picker.
+  useEffect(() => {
+    let lenderId = DEFAULT_LENDER_ID;
+    try {
+      const saved = window.localStorage.getItem(ACTIVE_LENDER_KEY);
+      if (saved && LENDER_REGISTRY.some((l) => l.id === saved)) {
+        lenderId = saved;
+      } else {
+        setShowPersonaPicker(true);
+      }
+    } catch {
+      // localStorage unavailable  falls through to the TEKUN default without a picker.
+    }
+    setActiveLenderIdState(lenderId);
+    loadForLender(lenderId, SAMPLE_CODE, '10,000');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /** One click enters (or re-enters) the console as `lenderId`: persists the choice,
+   *  returns to the Verify tab, and reloads that lender's own policy/pipeline (Lender
+   *  Tenancy spec item 2). Available both from the entry picker and the header switcher. */
+  const switchLender = (lenderId: string) => {
+    setActiveLenderIdState(lenderId);
+    try {
+      window.localStorage.setItem(ACTIVE_LENDER_KEY, lenderId);
+    } catch {
+      // Best-effort persistence; a session that can't write localStorage just re-picks next load.
+    }
+    setShowPersonaPicker(false);
+    setTab('verify');
+    setFlagged(false);
+    setFlaggedAt(null);
+    setIsCounterOffer(false);
+    setAdoptedRate(null);
+    setSelectedAppId(null);
+    setPurpose(null);
+    setCode(SAMPLE_CODE);
+    setAmount('10,000');
+    loadForLender(lenderId, SAMPLE_CODE, '10,000');
+  };
 
   /** A saved policy takes effect immediately: keep it in state and re-evaluate whatever
    *  is currently loaded so the Verify tab can never show a verdict from a stale policy. */
@@ -1551,14 +1684,14 @@ export default function Console() {
 
   const syncApps = (next: ApplicationRecord[]) => {
     setApps(next);
-    writeApplications(next);
+    writeApplications(next, undefined, activeLenderId);
   };
 
   /** Log an explicit verification as a presentment; priors exclude the one being recorded. */
   const logPresentment = (passport: CreditPassport) => {
     const id = presentmentKey(passport);
-    setPriors(findRecentPresentments(readPresentmentLog(), id));
-    recordPresentment({ id, at: new Date().toISOString(), lender: 'TEKUN' });
+    setPriors(findRecentPresentments(readPresentmentLog(undefined, activeLenderId), id));
+    recordPresentment({ id, at: new Date().toISOString(), lender: activeLender.name }, undefined, activeLenderId);
   };
 
   const filingInput = (codeUsed: string, passport: CreditPassport, decision: LoanDecision, amountNum: number, declared?: DeclaredPurpose | null): FileApplicationInput => ({
@@ -1684,7 +1817,7 @@ export default function Console() {
     setState(next);
     setSelectedAppId(app.id);
     setPurpose(app.purpose ?? null);
-    if (next.status === 'valid') setPriors(findRecentPresentments(readPresentmentLog(), presentmentKey(next.passport)));
+    if (next.status === 'valid') setPriors(findRecentPresentments(readPresentmentLog(undefined, activeLenderId), presentmentKey(next.passport)));
   };
 
   const onPasteNew = () => {
@@ -1695,7 +1828,7 @@ export default function Console() {
 
   const onResolve = (outcome: 'approved' | 'declined', rationale: string) => {
     if (!selectedAppId) return;
-    syncApps(resolveApplication(apps, selectedAppId, outcome, rationale));
+    syncApps(resolveApplication(apps, selectedAppId, outcome, rationale, new Date(), activeLender.officer));
   };
 
   /** Records that an adverse-action letter was generated (Brief J stretch), audit-trailed 
@@ -1718,7 +1851,7 @@ export default function Console() {
       })),
       { code: SAMPLE_CODE, amount: 10000, purpose: { category: 'stock', note: 'Stock for the raya season' } },
     ];
-    let next = readApplications();
+    let next = readApplications(undefined, activeLenderId);
     seeds.forEach((seed, i) => {
       const s = evaluate(seed.code, String(seed.amount), storedPolicy);
       if (s.status === 'valid' && s.decision) {
@@ -1756,9 +1889,11 @@ export default function Console() {
   const stackingSignal: StackingSignal | undefined =
     priors.length > 0 ? { priorCount: priors.length, lastAgo: formatAgo(priors[0].at), windowHours: 24 } : undefined;
 
+  if (showPersonaPicker) return <PersonaPicker onSelect={switchLender} />;
+
   return (
     <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: p.bg }}>
-      <Header p={p} tab={tab} setTab={setTab} alert={showAlert} onRestartTour={restartTour} />
+      <Header p={p} tab={tab} setTab={setTab} alert={showAlert} onRestartTour={restartTour} activeLender={activeLender} onSwitchLender={switchLender} />
       {showAlert && <AlertBanner caseId={flagCaseId} flagTime={flagTime} />}
       {showTour && (
         <TourCard p={p} stepIndex={tourStepIndex} onTab={setTab} onNext={tourNext} onBack={tourBack} onExit={dismissTour} />
@@ -1769,14 +1904,14 @@ export default function Console() {
             <QueueRail p={p} apps={apps} selectedId={selectedAppId} onSelect={onSelectApp} onSeed={onSeed} onPasteNew={onPasteNew} />
             <LeftPanel p={p} flagged={flagged} statusValid={flagged ? false : statusValid} code={code} setCode={setCode} onVerify={onVerify} onLoadSample={onLoadSample} onLoadFlagged={onLoadFlagged} />
             {showAlert ? <CenterAlert p={p} flagTime={flagTime} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} lapsedTiers={state.credential.verification.lapsedTiers} /> : <InvalidCenter p={p} reasons={state.reasons} />}
-            {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} onCounterOffer={onCounterOffer} isCounterOffer={isCounterOffer} stacking={stackingSignal} selectedApp={selectedApp} onResolve={onResolve} onGenerateLetter={onGenerateLetter} purpose={purpose} setPurpose={setPurpose} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} pricing={pricing} adoptedRate={adoptedRate} onAdoptRate={onAdoptRate} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} />}
+            {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} onCounterOffer={onCounterOffer} isCounterOffer={isCounterOffer} stacking={stackingSignal} selectedApp={selectedApp} onResolve={onResolve} onGenerateLetter={onGenerateLetter} purpose={purpose} setPurpose={setPurpose} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} pricing={pricing} adoptedRate={adoptedRate} onAdoptRate={onAdoptRate} lenderName={activeLender.name} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} lenderName={activeLender.name} />}
           </>
         ) : tab === 'portfolio' ? (
           <PortfolioTab p={palette(false)} apps={apps} onStructure={() => { setPoolSource('live'); setTab('capital'); }} />
         ) : tab === 'capital' ? (
           <CapitalMarkets p={palette(false)} book={book} source={poolSource} setSource={setPoolSource} />
         ) : (
-          <PolicyTab key={storedPolicy.updatedAt ?? 'defaults'} p={palette(false)} stored={storedPolicy} onSaved={onPolicySaved} />
+          <PolicyTab key={`${activeLenderId}:${storedPolicy.updatedAt ?? 'defaults'}`} p={palette(false)} stored={storedPolicy} onSaved={onPolicySaved} lenderId={activeLenderId} lenderName={activeLender.name} />
         )}
       </div>
     </div>
