@@ -83,5 +83,5 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   compactText: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink },
-  compactSub: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, textAlign: 'center' },
+  compactSub: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, textAlign: 'center' },
 });

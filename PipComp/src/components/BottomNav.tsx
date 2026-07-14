@@ -42,13 +42,24 @@ export function BottomNav({ active, onNavigate }: { active: NavTab; onNavigate: 
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 10) + 8 }]}>
       {TABS.map(({ key, label }) => {
         const on = key === active;
+        // The icon stays ink3 (decoration); the label is meaningful nav text so it gets ink2
+        // ink3 measures ~2.2-2.5:1 contrast, below what body/label text needs.
         const tint = on ? colors.accent : colors.ink3;
+        const labelColor = on ? colors.accent : colors.ink2;
         return (
-          <Pressable key={key} onPress={() => onNavigate(key)} style={styles.tab} hitSlop={6}>
+          <Pressable
+            key={key}
+            onPress={() => onNavigate(key)}
+            style={styles.tab}
+            hitSlop={6}
+            accessibilityRole="tab"
+            accessibilityLabel={label}
+            accessibilityState={{ selected: on }}
+          >
             <Svg width={22} height={22} viewBox="0 0 24 24">
               {ICONS[key](tint, key === 'home' && on ? colors.accent : 'none')}
             </Svg>
-            <Text style={[styles.label, { color: tint, fontFamily: uiFont(on ? 700 : 500) }]}>{label}</Text>
+            <Text style={[styles.label, { color: labelColor, fontFamily: uiFont(on ? 700 : 500) }]}>{label}</Text>
           </Pressable>
         );
       })}
@@ -66,5 +77,5 @@ const styles = StyleSheet.create({
     paddingTop: 9,
   },
   tab: { flex: 1, alignItems: 'center', gap: 3, paddingVertical: 2 },
-  label: { fontSize: 10 },
+  label: { fontSize: 11 },
 });

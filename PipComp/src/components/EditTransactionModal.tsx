@@ -207,11 +207,11 @@ const styles = StyleSheet.create({
   },
   toggleBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 9, borderRadius: 999 },
   toggleBtnOn: { backgroundColor: colors.surface, shadowColor: '#102018', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
-  toggleText: { fontFamily: uiFont(600), fontSize: 14, color: colors.ink3 },
+  toggleText: { fontFamily: uiFont(600), fontSize: 14, color: colors.ink2 },
   toggleTextOn: { color: colors.ink },
   fieldLabel: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2, marginBottom: 8 },
   amountRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  rmPrefix: { fontFamily: numFont(600), fontSize: 18, color: colors.ink3 },
+  rmPrefix: { fontFamily: numFont(600), fontSize: 18, color: colors.ink2 },
   amountInput: {
     flex: 1,
     fontFamily: numFont(700),

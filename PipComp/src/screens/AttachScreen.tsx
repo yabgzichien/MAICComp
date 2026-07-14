@@ -208,14 +208,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sourceTitle: { fontFamily: uiFont(700), fontSize: 15.5, color: colors.ink },
-  sourceSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink3, marginTop: 1 },
+  sourceSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 1 },
   hint: {
     paddingHorizontal: 24,
     paddingTop: 26,
     textAlign: 'center',
     fontFamily: uiFont(500),
     fontSize: 12.5,
-    color: colors.ink3,
+    color: colors.ink2,
     lineHeight: 18,
   },
 });

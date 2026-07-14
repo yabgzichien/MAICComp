@@ -87,6 +87,9 @@ export function CategoryChip({
     <Pressable
       onPress={onPress}
       style={[styles.chip, selected && { borderColor: theme.accent, backgroundColor: theme.accentTint }]}
+      accessibilityRole="radio"
+      accessibilityLabel={category.label}
+      accessibilityState={{ selected }}
     >
       <CatBadge category={category} size={34} rad={10} />
       <Text style={styles.chipLabel} numberOfLines={1}>
@@ -148,14 +151,22 @@ export function IconButton({
   onPress,
   size = 20,
   color = colors.ink,
+  accessibilityLabel,
 }: {
   name: IconName;
   onPress: () => void;
   size?: number;
   color?: string;
+  /** Icon-only buttons have no visible text, so screen readers need this to announce anything. */
+  accessibilityLabel?: string;
 }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? name}
+    >
       <Icon name={name} size={size} color={color} />
     </Pressable>
   );
@@ -177,6 +188,8 @@ export function PrimaryButton({
     <Pressable
       onPress={onPress}
       disabled={disabled}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}
       style={({ pressed }) => [
         styles.btnPrimary,
         {
@@ -210,10 +223,12 @@ export function TopBar({
 }) {
   return (
     <View style={styles.topbar}>
-      {onBack && <IconButton name="chevronLeft" onPress={onBack} />}
-      <Text style={styles.topbarTitle}>{title}</Text>
+      {onBack && <IconButton name="chevronLeft" onPress={onBack} accessibilityLabel="Go back" />}
+      <Text style={styles.topbarTitle} accessibilityRole="header">
+        {title}
+      </Text>
       {right}
-      {onClose && <IconButton name="x" onPress={onClose} size={19} />}
+      {onClose && <IconButton name="x" onPress={onClose} size={19} accessibilityLabel="Close" />}
     </View>
   );
 }
@@ -249,14 +264,16 @@ const styles = StyleSheet.create({
   vt: { flexDirection: 'row', backgroundColor: colors.surface2, borderRadius: 999, padding: 3, borderWidth: 1, borderColor: colors.line2 },
   vtBtn: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999 },
   vtBtnOn: { backgroundColor: colors.accent },
-  vtText: { fontFamily: uiFont(700), fontSize: 12.5, color: colors.ink3 },
+  // ink3 is decoration-only (~2.2-2.5:1 contrast); these carry meaning (the unselected
+  // toggle option, section labels) so they get ink2.
+  vtText: { fontFamily: uiFont(700), fontSize: 12.5, color: colors.ink2 },
   vtTextOn: { color: '#fff' },
   eyebrow: {
     fontFamily: uiFont(700),
     fontSize: 11.5,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: colors.ink3,
+    color: colors.ink2,
   },
   bold: { fontFamily: uiFont(700), color: colors.ink },
   card: {

@@ -341,7 +341,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   providerName: { fontFamily: uiFont(700), fontSize: 15, color: colors.ink },
-  providerSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink3, marginTop: 1 },
+  providerSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 1 },
   fieldLabel: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2 },
   fieldBox: {
     backgroundColor: colors.surface2,
@@ -367,7 +367,7 @@ const styles = StyleSheet.create({
   },
   testBtnText: { fontFamily: uiFont(600), fontSize: 14.5, color: colors.accent },
   result: { fontFamily: uiFont(600), fontSize: 13, lineHeight: 18 },
-  help: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink3, lineHeight: 17, paddingHorizontal: 4, paddingTop: 12 },
+  help: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, lineHeight: 17, paddingHorizontal: 4, paddingTop: 12 },
   migrateRow: { padding: 16, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line2 },
   resetBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 8 },
   resetText: { fontFamily: uiFont(600), fontSize: 13.5 },

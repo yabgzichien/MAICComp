@@ -18,14 +18,14 @@ const pct2 = (x: number): string => `${(x * 100).toFixed(2)}%`;
 function BreakdownTable({ p, title, rows, accent }: { p: Palette; title: string; rows: BreakdownRow[]; accent: string }) {
   return (
     <div style={{ background: p.surface, borderRadius: 12, padding: '14px 16px', boxShadow: p.shadow, flex: 1, minWidth: 280 }}>
-      <SectionLabel color={p.ink3}>{title}</SectionLabel>
+      <SectionLabel color={p.ink2}>{title}</SectionLabel>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 8 }}>
-        {rows.length === 0 && <p style={{ fontFamily: FONT.ui, fontSize: 11, color: p.ink3 }}>No approved loans yet.</p>}
+        {rows.length === 0 && <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>No approved loans yet.</p>}
         {rows.map((r) => (
           <div key={r.label} style={{ display: 'grid', gridTemplateColumns: '1.1fr 90px 60px', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontFamily: FONT.ui, fontSize: 11.5, fontWeight: 500, color: p.ink1 }}>{r.label}</span>
+            <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 500, color: p.ink1 }}>{r.label}</span>
             <MiniBar pct={r.pct * 100} color={accent} track={p.hairline} />
-            <span style={{ fontFamily: FONT.num, fontSize: 11, color: p.ink2, textAlign: 'right' }}>
+            <span style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink2, textAlign: 'right' }}>
               {formatPoolMoney(r.exposure)} · {Math.round(r.pct * 100)}%
             </span>
           </div>
@@ -53,9 +53,9 @@ export default function PortfolioTab({ p, apps, onStructure }: { p: Palette; app
       <div style={{ padding: '20px 40px 18px', background: p.surface, borderBottom: `1px solid ${p.hairline}`, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
           <div>
-            <SectionLabel color={p.ink3}>Portfolio · Approved Book</SectionLabel>
+            <SectionLabel color={p.ink2}>Portfolio · Approved Book</SectionLabel>
             <h2 style={{ fontFamily: FONT.ui, fontSize: 22, fontWeight: 800, color: p.ink1, letterSpacing: '-0.4px', marginTop: 4, marginBottom: 5 }}>Loan Book Overview</h2>
-            <p style={{ fontFamily: FONT.ui, fontSize: 11.5, color: p.ink3, maxWidth: 620, lineHeight: 1.5 }}>
+            <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, maxWidth: 620, lineHeight: 1.5 }}>
               Every loan you approve in the pipeline books here. Structure it into rated tranches in one click  <strong style={{ color: p.ink2 }}>approve → book → securitize</strong>, one continuous flow.
             </p>
           </div>
@@ -75,7 +75,7 @@ export default function PortfolioTab({ p, apps, onStructure }: { p: Palette; app
         {stats.map((s, i) => (
           <React.Fragment key={s.label}>
             <div style={{ flex: 1, minWidth: 110, display: 'flex', flexDirection: 'column', gap: 7 }}>
-              <span style={{ fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 600, color: 'rgba(255,255,255,0.38)', letterSpacing: '0.10em', textTransform: 'uppercase' }}>{s.label}</span>
+              <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.38)', letterSpacing: '0.10em', textTransform: 'uppercase' }}>{s.label}</span>
               <span style={{ fontFamily: FONT.num, fontSize: 27, fontWeight: 700, color: 'white', letterSpacing: '-0.5px', lineHeight: 1 }}>{s.value}</span>
             </div>
             {i < stats.length - 1 && <div style={{ width: 1, background: 'rgba(255,255,255,0.08)' }} />}
@@ -87,7 +87,7 @@ export default function PortfolioTab({ p, apps, onStructure }: { p: Palette; app
         <div style={{ padding: '40px', flex: 1 }}>
           <div style={{ maxWidth: 520, padding: '18px 20px', borderRadius: 12, background: p.surface, border: `1px solid ${p.hairline}`, boxShadow: p.shadow }}>
             <p style={{ fontFamily: FONT.ui, fontSize: 13, fontWeight: 700, color: p.ink1, marginBottom: 6 }}>No approved loans yet</p>
-            <p style={{ fontFamily: FONT.ui, fontSize: 11.5, color: p.ink3, lineHeight: 1.6 }}>
+            <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.6 }}>
               Approve applications on the Verify tab (or seed the pipeline) and they book here automatically. The Capital Markets tab shows the illustrative sample pool until then.
             </p>
           </div>
@@ -104,7 +104,7 @@ export default function PortfolioTab({ p, apps, onStructure }: { p: Palette; app
                     <line x1="8" y1="6" x2="8" y2="10" stroke="#b87000" strokeWidth="1.5" strokeLinecap="round" />
                     <circle cx="8" cy="12" r="0.85" fill="#b87000" />
                   </svg>
-                  <p style={{ fontFamily: FONT.ui, fontSize: 11, color: '#7a5c00', lineHeight: 1.5 }}>
+                  <p style={{ fontFamily: FONT.ui, fontSize: 12, color: '#7a5c00', lineHeight: 1.5 }}>
                     <strong>Concentration:</strong> {Math.round(c.pct * 100)}% of exposure is {c.kind === 'band' ? `${c.label}-band` : `for "${c.label}"`}  above the {Math.round(0.4 * 100)}% guidance. Diversify before scaling this pool.
                   </p>
                 </div>
@@ -119,7 +119,7 @@ export default function PortfolioTab({ p, apps, onStructure }: { p: Palette; app
 
           <div style={{ padding: '4px 40px 24px', marginTop: 'auto' }}>
             <div style={{ padding: '11px 18px', borderRadius: 10, background: p.surface, border: `1px solid ${p.hairline}`, boxShadow: p.shadow }}>
-              <p style={{ fontFamily: FONT.ui, fontSize: 10.5, color: p.ink3, lineHeight: 1.6 }}>
+              <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.6 }}>
                 Pool PD is driven by verified credit band (approved loans already cleared the fraud and confidence gates); data confidence is reported alongside, not re-priced into PD. Declared purpose stands in for sector until verified occupation ships.
               </p>
             </div>

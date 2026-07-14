@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 15, paddingVertical: 11 },
   divider: { borderTopWidth: 1, borderTopColor: colors.line2 },
   merchant: { fontFamily: uiFont(600), fontSize: 14, color: colors.ink },
-  cat: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink3, marginTop: 1 },
+  cat: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, marginTop: 1 },
   footer: {
     position: 'absolute',
     left: 0,

@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.accentSoft, paddingHorizontal: 8,
   },
   scanBtnText: { fontFamily: uiFont(700), fontSize: 13, color: colors.accent },
-  scanHint: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink3, textAlign: 'center', marginTop: 8 },
+  scanHint: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, textAlign: 'center', marginTop: 8 },
   input: {
     fontFamily: uiFont(500), fontSize: 15, color: colors.ink,
     backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line,
@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
   },
   verifyBtnDisabled: { opacity: 0.45 },
   verifyBtnText: { fontFamily: uiFont(700), fontSize: 15, color: colors.onAccent },
-  privacyNote: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink3, lineHeight: 17, marginTop: 12, textAlign: 'center' },
+  privacyNote: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, lineHeight: 17, marginTop: 12, textAlign: 'center' },
 
   successCard: { padding: 18, marginTop: 6, backgroundColor: colors.accentTint, borderColor: colors.accentSoft },
   successHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
   successName: { fontFamily: uiFont(700), fontSize: 18, color: colors.ink, marginTop: 14 },
   successSub: { fontFamily: uiFont(500), fontSize: 13, color: colors.ink2, marginTop: 3 },
 
-  occLede: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink3, lineHeight: 17 },
+  occLede: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, lineHeight: 17 },
   occFieldLabel: { fontFamily: uiFont(600), fontSize: 12, color: colors.ink2, marginTop: 16, marginBottom: 8 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {

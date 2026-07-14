@@ -390,7 +390,7 @@ function DateEditor({ value, onChange }: { value: string | null; onChange: (d: s
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  counter: { fontFamily: uiFont(700), fontSize: 13, color: colors.ink3 },
+  counter: { fontFamily: uiFont(700), fontSize: 13, color: colors.ink2 },
   focus: {
     marginTop: 14,
     paddingHorizontal: 18,
@@ -400,9 +400,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   focusMerchant: { fontFamily: uiFont(700), fontSize: 16, color: colors.ink },
-  focusSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink3, marginTop: 2 },
+  focusSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 2 },
   dateTap: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6, alignSelf: 'flex-start' },
-  dateText: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink3 },
+  dateText: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2 },
   dateInput: {
     fontFamily: uiFont(600),
     fontSize: 12.5,
@@ -418,7 +418,7 @@ const styles = StyleSheet.create({
   },
   amountTap: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   amountEditRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  rmPrefix: { fontFamily: numFont(600), fontSize: 16, color: colors.ink3 },
+  rmPrefix: { fontFamily: numFont(600), fontSize: 16, color: colors.ink2 },
   amountInput: {
     fontFamily: numFont(700),
     fontSize: 24,
@@ -435,7 +435,7 @@ const styles = StyleSheet.create({
   typeToggle: { flexDirection: 'row', backgroundColor: colors.surface2, borderRadius: 999, padding: 4, marginTop: 16, borderWidth: 1, borderColor: colors.line2 },
   typeBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: 999 },
   typeBtnOn: { backgroundColor: colors.surface, shadowColor: '#102018', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
-  typeText: { fontFamily: uiFont(600), fontSize: 13.5, color: colors.ink3 },
+  typeText: { fontFamily: uiFont(600), fontSize: 13.5, color: colors.ink2 },
   typeTextOn: { color: colors.ink },
   grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12, marginHorizontal: -5 },
   gridCell: { width: '50%', paddingHorizontal: 5, paddingBottom: 10 },
@@ -483,5 +483,5 @@ const styles = StyleSheet.create({
     borderTopColor: colors.line2,
   },
   dropLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, marginBottom: 2 },
-  dropLinkText: { fontFamily: uiFont(600), fontSize: 13.5, color: colors.ink3 },
+  dropLinkText: { fontFamily: uiFont(600), fontSize: 13.5, color: colors.ink2 },
 });

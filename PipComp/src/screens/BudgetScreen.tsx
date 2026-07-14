@@ -163,9 +163,9 @@ const styles = StyleSheet.create({
   catLabel: { fontFamily: uiFont(600), fontSize: 14.5, color: colors.ink, flex: 1 },
   catNums: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2 },
   barTrack: { height: 6, borderRadius: 999, backgroundColor: colors.line, overflow: 'hidden', marginTop: 7 },
-  remaining: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, marginTop: 4 },
+  remaining: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, marginTop: 4 },
   unbudgetedIcon: { width: 36, height: 36, borderRadius: 11, backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center' },
   recapLink: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 18, padding: 16, backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.line2 },
   recapTitle: { fontFamily: uiFont(700), fontSize: 15, color: colors.ink },
-  recapSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink3, marginTop: 1 },
+  recapSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 1 },
 });

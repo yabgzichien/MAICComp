@@ -180,17 +180,17 @@ export default function PolicyTab({
       <div style={{ padding: '20px 40px 18px', background: p.surface, borderBottom: `1px solid ${p.hairline}` }}>
         <div style={{ maxWidth: 1080, margin: '0 auto', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
           <div>
-            <SectionLabel color={p.ink3}>Policy · TEKUN Nasional</SectionLabel>
+            <SectionLabel color={p.ink2}>Policy · TEKUN Nasional</SectionLabel>
             <h2 style={{ fontFamily: FONT.ui, fontSize: 22, fontWeight: 800, color: p.ink1, letterSpacing: '-0.4px', marginTop: 4, marginBottom: 5 }}>
               Lender Policy Editor
             </h2>
-            <p style={{ fontFamily: FONT.ui, fontSize: 11.5, color: p.ink3, maxWidth: 620, lineHeight: 1.5 }}>
+            <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, maxWidth: 620, lineHeight: 1.5 }}>
               Every decision on the Verify tab runs under these thresholds, the audit trail cites them, and{' '}
               <strong style={{ color: p.ink2 }}>the published criteria borrowers are coached toward update with them</strong> (GET /api/lenders).
             </p>
           </div>
           <div style={{ textAlign: 'right', flexShrink: 0 }}>
-            <p style={{ fontFamily: FONT.ui, fontSize: 10.5, color: p.ink3 }}>
+            <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>
               {stored.updatedAt ? `Last updated ${new Date(stored.updatedAt).toLocaleString('en-MY')}` : 'Policy defaults  never edited'}
             </p>
           </div>
@@ -200,16 +200,16 @@ export default function PolicyTab({
       <div style={{ padding: '18px 40px 26px', display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 1080, margin: '0 auto' }}>
         {/* ── Affordability thresholds ── */}
         <div style={{ background: p.surface, borderRadius: 12, padding: '14px 18px', boxShadow: p.shadow }}>
-          <SectionLabel color={p.ink3}>Affordability thresholds</SectionLabel>
+          <SectionLabel color={p.ink2}>Affordability thresholds</SectionLabel>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px 22px', marginTop: 10 }}>
             {THRESHOLD_FIELDS.map((f) => (
               <div key={f.key}>
-                <label style={{ fontFamily: FONT.ui, fontSize: 11, fontWeight: 700, color: p.ink1, display: 'block', marginBottom: 4 }}>{f.label}</label>
+                <label style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink1, display: 'block', marginBottom: 4 }}>{f.label}</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <input value={thresholds[f.key]} onChange={(e) => setThreshold(f.key, e.target.value)} inputMode="numeric" style={{ ...inputStyle, width: 76 }} />
-                  <span style={{ fontFamily: FONT.ui, fontSize: 10.5, color: p.ink3 }}>{f.suffix}</span>
+                  <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>{f.suffix}</span>
                 </div>
-                <p style={{ fontFamily: FONT.ui, fontSize: 9.5, color: p.ink3, lineHeight: 1.45, marginTop: 4 }}>{f.hint}</p>
+                <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.45, marginTop: 4 }}>{f.hint}</p>
               </div>
             ))}
           </div>
@@ -217,20 +217,20 @@ export default function PolicyTab({
 
         {/* ── Pricing (risk-based assistant, Brief R) ── */}
         <div style={{ background: p.surface, borderRadius: 12, padding: '14px 18px', boxShadow: p.shadow }}>
-          <SectionLabel color={p.ink3}>Pricing · risk-based assistant</SectionLabel>
+          <SectionLabel color={p.ink2}>Pricing · risk-based assistant</SectionLabel>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px 22px', marginTop: 10 }}>
             {PRICING_FIELDS.map((f) => (
               <div key={f.key}>
-                <label style={{ fontFamily: FONT.ui, fontSize: 11, fontWeight: 700, color: p.ink1, display: 'block', marginBottom: 4 }}>{f.label}</label>
+                <label style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink1, display: 'block', marginBottom: 4 }}>{f.label}</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <input value={thresholds[f.key]} onChange={(e) => setThreshold(f.key, e.target.value)} inputMode="numeric" style={{ ...inputStyle, width: 76 }} />
-                  <span style={{ fontFamily: FONT.ui, fontSize: 10.5, color: p.ink3 }}>{f.suffix}</span>
+                  <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>{f.suffix}</span>
                 </div>
-                <p style={{ fontFamily: FONT.ui, fontSize: 9.5, color: p.ink3, lineHeight: 1.45, marginTop: 4 }}>{f.hint}</p>
+                <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.45, marginTop: 4 }}>{f.hint}</p>
               </div>
             ))}
           </div>
-          <p style={{ fontFamily: FONT.ui, fontSize: 9.5, color: p.ink3, lineHeight: 1.5, marginTop: 10 }}>
+          <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5, marginTop: 10 }}>
             The assistant suggests a rate that meets your target return, <strong style={{ color: p.ink2 }}>clamped to the tier ladder as a ceiling</strong>  it discounts strong files, it never surcharges past the published rate.
           </p>
         </div>
@@ -238,20 +238,20 @@ export default function PolicyTab({
         {/* ── Product ladder ── */}
         <div style={{ background: p.surface, borderRadius: 12, padding: '14px 18px', boxShadow: p.shadow }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-            <SectionLabel color={p.ink3}>Product ladder</SectionLabel>
-            <p style={{ fontFamily: FONT.ui, fontSize: 9.5, color: p.ink3 }}>
+            <SectionLabel color={p.ink2}>Product ladder</SectionLabel>
+            <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>
               Tier slots are fixed (emergency · starter · growth · scale)  the coverage gates key on them. Naming is yours.
             </p>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: `0.9fr ${LADDER_COLS.map((c) => c.width).join(' ')} 34px`, gap: '6px 10px', alignItems: 'center', marginTop: 10 }}>
-            <span style={{ fontFamily: FONT.ui, fontSize: 9, fontWeight: 700, color: p.ink3, letterSpacing: '0.07em', textTransform: 'uppercase' }}>Slot</span>
+            <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink3, letterSpacing: '0.07em', textTransform: 'uppercase' }}>Slot</span>
             {LADDER_COLS.map((c) => (
-              <span key={c.key} style={{ fontFamily: FONT.ui, fontSize: 9, fontWeight: 700, color: p.ink3, letterSpacing: '0.07em', textTransform: 'uppercase' }}>{c.label}</span>
+              <span key={c.key} style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink3, letterSpacing: '0.07em', textTransform: 'uppercase' }}>{c.label}</span>
             ))}
             <span />
             {rows.map((r, i) => (
               <React.Fragment key={r.id}>
-                <span style={{ fontFamily: FONT.mono, fontSize: 10.5, fontWeight: 600, color: p.accentInk }}>{r.id}</span>
+                <span style={{ fontFamily: FONT.mono, fontSize: 12, fontWeight: 600, color: p.accentInk }}>{r.id}</span>
                 {LADDER_COLS.map((c) => (
                   <input key={c.key} value={r[c.key]} onChange={(e) => setRow(i, c.key, e.target.value)} inputMode={c.key === 'label' ? 'text' : 'numeric'} style={inputStyle} />
                 ))}
@@ -267,7 +267,7 @@ export default function PolicyTab({
           </div>
           {unusedSlots.length > 0 && (
             <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
-              <span style={{ fontFamily: FONT.ui, fontSize: 10, color: p.ink3 }}>Add tier:</span>
+              <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>Add tier:</span>
               {unusedSlots.map((slot) => (
                 <button
                   key={slot}
@@ -279,7 +279,7 @@ export default function PolicyTab({
                       ),
                     );
                   }}
-                  style={{ padding: '4px 12px', borderRadius: 7, border: `1.5px solid ${p.accentSoft}`, background: p.accentTint, color: p.accentInk, cursor: 'pointer', fontFamily: FONT.ui, fontSize: 11, fontWeight: 600 }}
+                  style={{ padding: '4px 12px', borderRadius: 7, border: `1.5px solid ${p.accentSoft}`, background: p.accentTint, color: p.accentInk, cursor: 'pointer', fontFamily: FONT.ui, fontSize: 12, fontWeight: 600 }}
                 >
                   + {slot}
                 </button>
@@ -288,8 +288,8 @@ export default function PolicyTab({
           )}
           {warnings.map((w, i) => (
             <div key={i} style={{ marginTop: 10, padding: '8px 12px', borderRadius: 8, background: '#fdf3dc', border: '1px solid #f5d990', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-              <span style={{ fontFamily: FONT.ui, fontSize: 11, fontWeight: 800, color: p.amber, lineHeight: 1.4 }}>!</span>
-              <p style={{ fontFamily: FONT.ui, fontSize: 10.5, color: '#7a5c00', lineHeight: 1.5 }}>{w}</p>
+              <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 800, color: p.amber, lineHeight: 1.4 }}>!</span>
+              <p style={{ fontFamily: FONT.ui, fontSize: 12, color: '#7a5c00', lineHeight: 1.5 }}>{w}</p>
             </div>
           ))}
         </div>
@@ -298,12 +298,12 @@ export default function PolicyTab({
         {!validation.ok && (
           <div style={{ background: '#fff6f5', border: `1.5px solid ${p.red}33`, borderRadius: 10, padding: '10px 14px' }}>
             {validation.errors.map((e, i) => (
-              <p key={i} style={{ fontFamily: FONT.mono, fontSize: 10.5, color: p.red, lineHeight: 1.7 }}>• {e}</p>
+              <p key={i} style={{ fontFamily: FONT.mono, fontSize: 12, color: p.red, lineHeight: 1.7 }}>• {e}</p>
             ))}
           </div>
         )}
         {errors.map((e, i) => (
-          <p key={i} style={{ fontFamily: FONT.mono, fontSize: 10.5, color: p.red }}>• {e}</p>
+          <p key={i} style={{ fontFamily: FONT.mono, fontSize: 12, color: p.red }}>• {e}</p>
         ))}
 
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -331,13 +331,13 @@ export default function PolicyTab({
             Reset to defaults
           </button>
           {savedFlash && (
-            <span style={{ fontFamily: FONT.ui, fontSize: 11.5, fontWeight: 700, color: p.primary }}>
+            <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.primary }}>
               ✓ Saved  decisions and the published directory now use this policy
             </span>
           )}
         </div>
 
-        <p style={{ fontFamily: FONT.ui, fontSize: 9.5, color: p.ink3, lineHeight: 1.55, maxWidth: 720 }}>
+        <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.55, maxWidth: 720 }}>
           The engine stays deterministic: these numbers parameterize the same auditable rules  nothing here changes how a decision is computed,
           only the thresholds it is computed against. Adverse-action reasons quote the active values automatically.
         </p>

@@ -69,5 +69,5 @@ const styles = StyleSheet.create({
   primaryBtnText: { fontFamily: uiFont(700), fontSize: 15, color: colors.onAccent },
   skipBtn: { alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 999, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, marginTop: 16 },
   skipText: { fontFamily: uiFont(600), fontSize: 14, color: colors.ink2 },
-  skipHint: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink3, textAlign: 'center', marginTop: 10 },
+  skipHint: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, textAlign: 'center', marginTop: 10 },
 });

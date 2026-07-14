@@ -234,12 +234,12 @@ const styles = StyleSheet.create({
   tierEyebrow: {
     fontFamily: uiFont(700),
     fontSize: 11,
-    color: colors.ink3,
+    color: colors.ink2,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
   requiredChip: { backgroundColor: colors.surface2, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: colors.line },
-  requiredText: { fontFamily: uiFont(600), fontSize: 10, color: colors.ink3 },
+  requiredText: { fontFamily: uiFont(600), fontSize: 11, color: colors.ink2 },
 
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 8 },
   rowDivider: { borderTopWidth: 1, borderTopColor: colors.line },
@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     elevation: 2,
   },
-  identityNote: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, lineHeight: 16, marginTop: 10 },
+  identityNote: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, lineHeight: 16, marginTop: 10 },
 
   errorCard: {
     flexDirection: 'row',
@@ -294,5 +294,5 @@ const styles = StyleSheet.create({
   },
   confirmText: { fontFamily: uiFont(700), fontSize: 15, color: colors.onAccent },
   cancelBtn: { alignItems: 'center', paddingVertical: 14 },
-  cancelText: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink3 },
+  cancelText: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2 },
 });

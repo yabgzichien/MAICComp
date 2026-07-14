@@ -147,9 +147,9 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
 
   hero: { padding: 18, borderRadius: 20 },
-  heroKicker: { fontFamily: uiFont(600), fontSize: 10, letterSpacing: 1, color: colors.ink3, marginBottom: 8 },
+  heroKicker: { fontFamily: uiFont(600), fontSize: 11, letterSpacing: 1, color: colors.ink2, marginBottom: 8 },
   heroScore: { fontFamily: numFont(700), fontSize: 30, color: colors.accent },
-  heroScoreDenom: { fontFamily: uiFont(600), fontSize: 15, color: colors.ink3 },
+  heroScoreDenom: { fontFamily: uiFont(600), fontSize: 15, color: colors.ink2 },
   heroSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 8, lineHeight: 18 },
 
   card: { padding: 16, borderRadius: 16, marginTop: 12 },
@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
   technique: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, lineHeight: 18, marginTop: 8 },
 
   resultRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
-  resultLabel: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink3 },
+  resultLabel: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2 },
   resultValue: { fontFamily: numFont(700), fontSize: 12.5, color: colors.ink },
 
   signals: { marginTop: 10, gap: 5, backgroundColor: colors.surface2, borderRadius: 10, padding: 10 },
@@ -171,12 +171,12 @@ const styles = StyleSheet.create({
   narrateText: { fontFamily: uiFont(700), fontSize: 12.5, color: colors.accent },
   report: { marginTop: 12, backgroundColor: colors.accentSoft, borderRadius: 12, padding: 12 },
   reportHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  reportKicker: { fontFamily: uiFont(600), fontSize: 9, letterSpacing: 1, color: colors.accentInk },
+  reportKicker: { fontFamily: uiFont(600), fontSize: 11, letterSpacing: 1, color: colors.accentInk },
   provTag: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   provAi: { backgroundColor: colors.accentTint },
   provComputed: { backgroundColor: colors.surface },
-  provText: { fontFamily: uiFont(700), fontSize: 10, letterSpacing: 0.5 },
+  provText: { fontFamily: uiFont(700), fontSize: 11, letterSpacing: 0.5 },
   reportText: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink, lineHeight: 18, marginTop: 8 },
 
-  footer: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, lineHeight: 17, marginTop: 18, fontStyle: 'italic' },
+  footer: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, lineHeight: 17, marginTop: 18, fontStyle: 'italic' },
 });

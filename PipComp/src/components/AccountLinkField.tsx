@@ -74,6 +74,6 @@ const styles = StyleSheet.create({
   effectRow: { flexDirection: 'row', backgroundColor: colors.surface2, borderRadius: 999, padding: 3, marginTop: 10, borderWidth: 1, borderColor: colors.line2 },
   effectBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: 999 },
   effectBtnOn: { backgroundColor: colors.accent },
-  effectText: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink3 },
+  effectText: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2 },
   effectTextOn: { color: '#fff' },
 });

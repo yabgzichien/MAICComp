@@ -192,12 +192,12 @@ export function BudgetWizard({ onDone }: { onDone: () => void }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  counter: { fontFamily: uiFont(700), fontSize: 13, color: colors.ink3 },
+  counter: { fontFamily: uiFont(700), fontSize: 13, color: colors.ink2 },
   incomeCard: { flexDirection: 'row', alignItems: 'center', padding: 18, gap: 8 },
-  rm: { fontFamily: numFont(600), fontSize: 22, color: colors.ink3 },
+  rm: { fontFamily: numFont(600), fontSize: 22, color: colors.ink2 },
   incomeInput: { flex: 1, fontFamily: numFont(700), fontSize: 30, color: colors.ink, padding: 0 },
-  rmSmall: { fontFamily: numFont(600), fontSize: 14, color: colors.ink3 },
-  hint: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink3, marginTop: 10, marginLeft: 2 },
+  rmSmall: { fontFamily: numFont(600), fontSize: 14, color: colors.ink2 },
+  hint: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 10, marginLeft: 2 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -5 },
   gridCell: { width: '50%', paddingHorizontal: 5, paddingBottom: 10 },
   allocRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, marginBottom: 10 },

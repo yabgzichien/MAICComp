@@ -77,6 +77,6 @@ const styles = StyleSheet.create({
   catLabel: { fontFamily: uiFont(600), fontSize: 14.5, color: colors.ink, flex: 1 },
   catNums: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2 },
   barTrack: { height: 6, borderRadius: 999, backgroundColor: colors.line, overflow: 'hidden', marginTop: 7 },
-  remaining: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, marginTop: 4 },
+  remaining: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, marginTop: 4 },
   unbudgetedIcon: { width: 36, height: 36, borderRadius: 11, backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center' },
 });

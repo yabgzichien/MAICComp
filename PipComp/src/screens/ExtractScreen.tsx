@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 15, paddingVertical: 11 },
   divider: { borderTopWidth: 1, borderTopColor: colors.line2 },
   removeBtn: { width: 26, height: 26, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface2 },
-  removeHint: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink3, marginTop: 10, marginLeft: 2 },
+  removeHint: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, marginTop: 10, marginLeft: 2 },
   initialBox: {
     width: 30,
     height: 30,

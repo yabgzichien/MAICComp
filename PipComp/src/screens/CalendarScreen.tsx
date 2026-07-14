@@ -427,10 +427,10 @@ const styles = StyleSheet.create({
   summaryDot: { width: 6, height: 6, borderRadius: 3 },
   summaryLabel: {
     fontFamily: uiFont(700),
-    fontSize: 9.5,
+    fontSize: 11,
     letterSpacing: 0.9,
     textTransform: 'uppercase',
-    color: colors.ink3,
+    color: colors.ink2,
   },
   summaryAmount: {
     fontFamily: numFont(700),
@@ -448,9 +448,9 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
     fontFamily: uiFont(700),
-    fontSize: 9.5,
+    fontSize: 11,
     letterSpacing: 0.6,
-    color: colors.ink3,
+    color: colors.ink2,
   },
 
   // calendar grid
@@ -485,13 +485,13 @@ const styles = StyleSheet.create({
   cellDaySelected: { color: '#fff', fontFamily: uiFont(700) },
   cellIncome: {
     fontFamily: numFont(600),
-    fontSize: 9,
+    fontSize: 11,
     color: colors.accentInk,
     lineHeight: 12,
   },
   cellExpense: {
     fontFamily: numFont(600),
-    fontSize: 9,
+    fontSize: 11,
     color: colors.red,
     lineHeight: 12,
   },
@@ -503,7 +503,7 @@ const styles = StyleSheet.create({
   },
   cellNetText: {
     fontFamily: numFont(700),
-    fontSize: 8,
+    fontSize: 11,
     lineHeight: 11,
   },
 
@@ -530,7 +530,7 @@ const styles = StyleSheet.create({
   emptyDayText: {
     fontFamily: uiFont(500),
     fontSize: 13.5,
-    color: colors.ink3,
+    color: colors.ink2,
   },
   txnList: {
     backgroundColor: colors.surface,

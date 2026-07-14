@@ -668,7 +668,7 @@ function AddAccountModal({ visible, preset, onClose }: { visible: boolean; prese
               <Text style={[styles.fieldLabel, { marginTop: 18 }]}>Investment</Text>
               <Pressable onPress={() => setSearchOpen(true)} style={styles.pickerBtn}>
                 <Icon name="search" size={16} color={colors.accent} />
-                <Text style={[styles.pickerText, !coin && { color: colors.ink3 }]} numberOfLines={1}>
+                <Text style={[styles.pickerText, !coin && { color: colors.ink2 }]} numberOfLines={1}>
                   {coin ? `${coin.name} · ${qtyUnit}` : 'Search crypto, stocks, gold or silver…'}
                 </Text>
               </Pressable>
@@ -1003,7 +1003,7 @@ const styles = StyleSheet.create({
   hero: { margin: 16, marginTop: 0, borderRadius: 26, padding: 20, overflow: 'hidden', backgroundColor: '#1b6b48', position: 'relative' },
   heroCircle: { position: 'absolute', top: -48, right: -48, width: 160, height: 160, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.05)' },
   heroHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  heroLabel: { fontFamily: uiFont(600), fontSize: 10.5, letterSpacing: 1, textTransform: 'uppercase', color: 'rgba(255,255,255,0.52)' },
+  heroLabel: { fontFamily: uiFont(600), fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: 'rgba(255,255,255,0.52)' },
   heroToggle: { flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.22)', borderRadius: 20, padding: 2, gap: 2 },
   heroToggleBtn: { paddingHorizontal: 14, paddingVertical: 4, borderRadius: 16 },
   heroToggleBtnOn: { backgroundColor: '#fff' },
@@ -1015,16 +1015,16 @@ const styles = StyleSheet.create({
   deltaText: { fontFamily: numFont(700), fontSize: 11.5, color: '#42e893' },
   heroTiles: { flexDirection: 'row', gap: 10, marginBottom: 16 },
   heroTile: { flex: 1, backgroundColor: 'rgba(0,0,0,0.18)', borderRadius: 13, paddingHorizontal: 12, paddingVertical: 9 },
-  heroTileLabel: { fontFamily: uiFont(500), fontSize: 9.5, color: 'rgba(255,255,255,0.45)', marginBottom: 3 },
+  heroTileLabel: { fontFamily: uiFont(500), fontSize: 11, color: 'rgba(255,255,255,0.45)', marginBottom: 3 },
   heroTileVal: { fontFamily: numFont(700), fontSize: 16 },
-  heroMonth: { flex: 1, textAlign: 'center', fontFamily: uiFont(500), fontSize: 9, color: 'rgba(255,255,255,0.3)' },
+  heroMonth: { flex: 1, textAlign: 'center', fontFamily: uiFont(500), fontSize: 11, color: 'rgba(255,255,255,0.3)' },
 
   /* scan row */
   scanRow: { flexDirection: 'row', gap: 9, marginHorizontal: 16, marginBottom: 4 },
   scanBanner: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.accent, borderRadius: 16, padding: 10, paddingRight: 14, shadowColor: colors.accent, shadowOpacity: 0.3, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
   scanIcon: { width: 30, height: 30, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
   scanTitle: { fontFamily: uiFont(700), fontSize: 13, color: '#fff' },
-  scanSub: { fontFamily: uiFont(500), fontSize: 10, color: 'rgba(255,255,255,0.68)', marginTop: 1 },
+  scanSub: { fontFamily: uiFont(500), fontSize: 11, color: 'rgba(255,255,255,0.68)', marginTop: 1 },
   addBtn: { width: 50, height: 50, borderRadius: 14, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
 
   /* group + class labels */
@@ -1032,33 +1032,33 @@ const styles = StyleSheet.create({
   groupLabel: { fontFamily: uiFont(700), fontSize: 12, color: colors.ink2, letterSpacing: 0.4 },
   groupTotal: { fontFamily: numFont(700), fontSize: 13 },
   classChipRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4 },
-  classChipLabel: { fontFamily: uiFont(700), fontSize: 9.5, color: colors.ink3, letterSpacing: 1, textTransform: 'uppercase' },
-  classChipSub: { fontFamily: numFont(600), fontSize: 11, color: colors.ink3 },
+  classChipLabel: { fontFamily: uiFont(700), fontSize: 11, color: colors.ink2, letterSpacing: 1, textTransform: 'uppercase' },
+  classChipSub: { fontFamily: numFont(600), fontSize: 11, color: colors.ink2 },
   classCard: { backgroundColor: colors.surface, borderRadius: 18, marginHorizontal: 16, marginTop: 4, overflow: 'hidden', shadowColor: '#102018', shadowOpacity: 0.12, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 3 },
 
   /* price stamp */
   priceStamp: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 18, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.surface2 },
   liveDot: { width: 7, height: 7, borderRadius: 999, backgroundColor: '#42e893' },
-  priceStampText: { flex: 1, fontFamily: uiFont(500), fontSize: 10, color: colors.ink3 },
+  priceStampText: { flex: 1, fontFamily: uiFont(500), fontSize: 11, color: colors.ink2 },
   refreshBtn: { backgroundColor: colors.accentTint, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 3, minWidth: 64, alignItems: 'center' },
-  refreshText: { fontFamily: uiFont(700), fontSize: 10, color: colors.accent },
+  refreshText: { fontFamily: uiFont(700), fontSize: 11, color: colors.accent },
 
   /* rows */
   row: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 18, paddingVertical: 11 },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: colors.line },
   rowTile: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.accentTint, alignItems: 'center', justifyContent: 'center' },
   rowName: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink },
-  rowSub: { fontFamily: uiFont(500), fontSize: 10.5, color: colors.ink3, marginTop: 1 },
+  rowSub: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink2, marginTop: 1 },
   rowVal: { fontFamily: numFont(700), fontSize: 14, color: colors.ink },
   rowProfit: { fontFamily: numFont(700), fontSize: 11.5, marginTop: 1 },
   badge: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   badgeTick: { fontFamily: numFont(700), fontSize: 11, lineHeight: 13 },
-  badgeLbl: { fontFamily: uiFont(500), fontSize: 8, opacity: 0.75, lineHeight: 9 },
+  badgeLbl: { fontFamily: uiFont(500), fontSize: 11, opacity: 0.75, lineHeight: 9 },
   holdMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
-  holdMeta: { fontFamily: numFont(500), fontSize: 10, color: colors.ink3, flexShrink: 1 },
-  chChip: { fontFamily: numFont(700), fontSize: 10, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1, overflow: 'hidden' },
+  holdMeta: { fontFamily: numFont(500), fontSize: 11, color: colors.ink2, flexShrink: 1 },
+  chChip: { fontFamily: numFont(700), fontSize: 11, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1, overflow: 'hidden' },
   liabNameRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  liabChip: { fontFamily: uiFont(600), fontSize: 9.5, color: colors.red, backgroundColor: '#fff0ef', borderRadius: 7, paddingHorizontal: 7, paddingVertical: 2, overflow: 'hidden' },
+  liabChip: { fontFamily: uiFont(600), fontSize: 11, color: colors.red, backgroundColor: '#fff0ef', borderRadius: 7, paddingHorizontal: 7, paddingVertical: 2, overflow: 'hidden' },
   emptyTitle: { fontFamily: uiFont(700), fontSize: 17, color: colors.ink, marginTop: 12 },
   emptySub: { fontFamily: uiFont(500), fontSize: 13.5, color: colors.ink2, textAlign: 'center', marginTop: 6, lineHeight: 19 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, marginBottom: 10 },
@@ -1070,9 +1070,9 @@ const styles = StyleSheet.create({
   acctRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 15, paddingVertical: 12, marginTop: 2 },
   divider: { borderTopWidth: 1, borderTopColor: colors.line2 },
   acctName: { fontFamily: uiFont(600), fontSize: 14, color: colors.ink },
-  acctMeta: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, marginTop: 2 },
+  acctMeta: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, marginTop: 2 },
   acctVal: { fontFamily: numFont(600), fontSize: 13.5, color: colors.ink2 },
-  asOf: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, textAlign: 'center', marginTop: 16 },
+  asOf: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, textAlign: 'center', marginTop: 16 },
   subRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   subChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line2 },
   subChipOn: { backgroundColor: colors.accent, borderColor: colors.accent },
@@ -1082,7 +1082,7 @@ const styles = StyleSheet.create({
   pickerText: { flex: 1, fontFamily: uiFont(600), fontSize: 15, color: colors.ink },
   holdingSummary: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   holdingTicker: { fontFamily: uiFont(700), fontSize: 15, color: colors.accent, backgroundColor: colors.accentTint, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, overflow: 'hidden' },
-  holdingPrice: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink3 },
+  holdingPrice: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2 },
   holdingValue: { fontFamily: numFont(700), fontSize: 18, color: colors.ink, marginTop: 2 },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 18, paddingTop: 12, backgroundColor: colors.bg, borderTopWidth: 1, borderTopColor: colors.line2 },
 
@@ -1094,7 +1094,7 @@ const styles = StyleSheet.create({
   toggle: { flexDirection: 'row', backgroundColor: colors.surface2, borderRadius: 999, padding: 4, marginBottom: 18, borderWidth: 1, borderColor: colors.line2 },
   toggleBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 9, borderRadius: 999 },
   toggleBtnOn: { backgroundColor: colors.surface, shadowColor: '#102018', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
-  toggleText: { fontFamily: uiFont(600), fontSize: 14, color: colors.ink3 },
+  toggleText: { fontFamily: uiFont(600), fontSize: 14, color: colors.ink2 },
   toggleTextOn: { color: colors.ink },
   fieldLabel: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2, marginBottom: 8 },
   labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
@@ -1104,9 +1104,9 @@ const styles = StyleSheet.create({
   classChipText: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink2 },
   textInput: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, paddingHorizontal: 14, paddingVertical: 13, fontFamily: uiFont(600), fontSize: 16, color: colors.ink },
   amountRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, paddingHorizontal: 14 },
-  rm: { fontFamily: numFont(600), fontSize: 18, color: colors.ink3 },
+  rm: { fontFamily: numFont(600), fontSize: 18, color: colors.ink2 },
   amountInput: { flex: 1, fontFamily: numFont(700), fontSize: 24, color: colors.ink, paddingVertical: 12 },
-  hint: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, marginTop: 6 },
+  hint: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, marginTop: 6 },
   histRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 15, paddingVertical: 11 },
   histDate: { fontFamily: uiFont(500), fontSize: 13, color: colors.ink2 },
   histVal: { fontFamily: numFont(600), fontSize: 13.5, color: colors.ink },

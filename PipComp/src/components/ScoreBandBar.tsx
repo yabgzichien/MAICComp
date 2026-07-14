@@ -67,7 +67,7 @@ export function ScoreDelta({ delta, color = colors.deltaUp }: { delta: number; c
 const styles = StyleSheet.create({
   bar: { borderRadius: 4, overflow: 'hidden', flexDirection: 'row', gap: 2 },
   labels: { flexDirection: 'row', marginTop: 5 },
-  label: { fontSize: 8, flex: 1, textAlign: 'center' },
+  label: { fontSize: 11, flex: 1, textAlign: 'center' },
   deltaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   deltaText: { fontFamily: numFont(700), fontSize: 11 },
 });

@@ -264,7 +264,7 @@ function StreakCard({ streak, dots, coverage }: { streak: number; dots: boolean[
           ))}
         </View>
         <Text style={styles.streakBest}>
-          <Text style={{ color: colors.ink3 }}>Covered </Text>
+          <Text style={{ color: colors.ink2 }}>Covered </Text>
           <Text style={styles.streakBestNum}>{coverage}/90 days</Text>
         </Text>
       </View>
@@ -451,7 +451,7 @@ function EmptyState() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 4, paddingBottom: 12 },
-  date: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink3, marginBottom: 2 },
+  date: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink2, marginBottom: 2 },
   greeting: { fontFamily: uiFont(800), fontSize: 23, color: colors.ink },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headerIcon: { width: 36, height: 36, borderRadius: 999, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', ...shadowCard },
@@ -465,23 +465,23 @@ const styles = StyleSheet.create({
   streakLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   flameTile: { width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(217,138,0,0.10)', alignItems: 'center', justifyContent: 'center' },
   streakNum: { fontFamily: numFont(700), fontSize: 24, color: colors.ink, lineHeight: 26 },
-  streakLabel: { fontFamily: uiFont(500), fontSize: 10.5, color: colors.ink3 },
+  streakLabel: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink2 },
   streakDivider: { width: 1, height: 38, backgroundColor: colors.line },
   dotsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   dot: { width: 23, height: 23, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
   dotDone: { backgroundColor: colors.accent },
   dotTodo: { borderWidth: 2, borderColor: colors.ink3, borderStyle: 'dashed' },
-  streakBest: { fontFamily: uiFont(500), fontSize: 10, textAlign: 'right' },
+  streakBest: { fontFamily: uiFont(500), fontSize: 11, textAlign: 'right' },
   streakBestNum: { fontFamily: numFont(600), color: colors.ink2 },
 
   /* cash flow */
   cashCard: { marginHorizontal: 16, marginTop: 10, padding: 16 },
   cashTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   cashSign: { fontFamily: numFont(700), fontSize: 24, marginRight: 1 },
-  cashSub: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink3, marginTop: 4 },
+  cashSub: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink2, marginTop: 4 },
   incomeBadge: { backgroundColor: colors.accentSoft, borderRadius: 14, paddingHorizontal: 11, paddingVertical: 7, alignItems: 'center' },
   incomeAmt: { fontFamily: numFont(700), fontSize: 13, color: colors.accentInk },
-  incomeLabel: { fontFamily: uiFont(500), fontSize: 10, color: colors.ink2, marginTop: 1 },
+  incomeLabel: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink2, marginTop: 1 },
   cashDivider: { height: 1, backgroundColor: colors.line, marginVertical: 11 },
   spendRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
   spendIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
@@ -489,15 +489,15 @@ const styles = StyleSheet.create({
   spendLabel: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink, flex: 1, marginRight: 8 },
   spendAmt: { fontFamily: numFont(600), fontSize: 12.5, color: colors.ink },
   spendTrack: { height: 4, borderRadius: 4, backgroundColor: colors.line, overflow: 'hidden' },
-  spendPct: { fontFamily: numFont(500), fontSize: 10.5, color: colors.ink3, width: 28, textAlign: 'right' },
+  spendPct: { fontFamily: numFont(500), fontSize: 11, color: colors.ink2, width: 28, textAlign: 'right' },
 
   /* compact credit */
   creditCard: { marginHorizontal: 16, marginTop: 10, padding: 14, paddingHorizontal: 18 },
   creditTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  creditEyebrow: { fontFamily: uiFont(600), fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: colors.ink3 },
+  creditEyebrow: { fontFamily: uiFont(600), fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: colors.ink2 },
   confChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: colors.accentTint, borderRadius: 20, paddingVertical: 3, paddingLeft: 7, paddingRight: 9 },
   confDot: { width: 6, height: 6, borderRadius: 999, backgroundColor: colors.accent },
-  confText: { fontFamily: uiFont(600), fontSize: 9.5, color: colors.accentInk },
+  confText: { fontFamily: uiFont(600), fontSize: 11, color: colors.accentInk },
   creditMain: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   creditScoreCol: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
   creditScore: { fontFamily: numFont(700), fontSize: 46, color: colors.ink, lineHeight: 48 },
@@ -512,7 +512,7 @@ const styles = StyleSheet.create({
   quickItem: { flex: 1, alignItems: 'center', gap: 7 },
   quickIcon: { width: 50, height: 50, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
   quickIconIdle: { backgroundColor: colors.accentTint },
-  quickLabel: { fontSize: 10.5, textAlign: 'center' },
+  quickLabel: { fontSize: 11, textAlign: 'center' },
 
   /* ask pip */
   askWrap: { paddingHorizontal: 16, marginTop: 10 },
@@ -526,7 +526,7 @@ const styles = StyleSheet.create({
   budgetCta: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16 },
   ctaIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.accentTint, alignItems: 'center', justifyContent: 'center' },
   ctaTitle: { fontFamily: uiFont(700), fontSize: 15, color: colors.ink },
-  ctaSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink3, marginTop: 1 },
+  ctaSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 1 },
 
   emptyTitle: { fontFamily: uiFont(700), fontSize: 19, color: colors.ink, marginTop: 14 },
   emptySub: { fontFamily: uiFont(500), fontSize: 14, lineHeight: 20, color: colors.ink2, textAlign: 'center', marginTop: 6 },

@@ -92,6 +92,16 @@ export default function CreditMemoModal({
     provenance === 'pending' ? 'Narrating…' : provenance === 'live' ? 'Live AI narration' : 'Policy summary';
   const chipColor = provenance === 'live' ? p.accentInk : p.ink3;
 
+  // Esc closes the dialog, matching standard modal behavior (the passive tour card already
+  // claims dialog semantics elsewhere in the console; this modal previously had none).
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
   return (
     <div
       onClick={onClose}
@@ -110,19 +120,22 @@ export default function CreditMemoModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="credit-memo-title"
         style={{ width: '100%', maxWidth: 680, background: p.surface, borderRadius: 16, boxShadow: '0 24px 70px rgba(0,0,0,0.35)', overflow: 'hidden' }}
       >
         {/* Header */}
         <div style={{ padding: '18px 24px', borderBottom: `1px solid ${p.hairline}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div>
-            <p style={{ fontFamily: FONT.ui, fontSize: 15, fontWeight: 800, color: p.ink1 }}>Credit Memo</p>
-            <p style={{ fontFamily: FONT.ui, fontSize: 11, color: p.ink3 }}>
+            <p id="credit-memo-title" style={{ fontFamily: FONT.ui, fontSize: 15, fontWeight: 800, color: p.ink1 }}>Credit Memo</p>
+            <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink2 }}>
               {memo.header.applicant}
               {memo.header.nricMasked ? ` · ${memo.header.nricMasked}` : ''} · {memo.header.date}
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontFamily: FONT.ui, fontSize: 10, fontWeight: 700, color: chipColor }}>{chip}</span>
+            <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: chipColor }}>{chip}</span>
             <button onClick={download} style={btn(p, true)}>Download .md</button>
             <button onClick={() => window.print()} style={btn(p, false)}>Print</button>
             <button onClick={onClose} aria-label="Close" style={{ ...btn(p, false), padding: '6px 10px' }}>✕</button>
@@ -141,11 +154,11 @@ export default function CreditMemoModal({
               {memo.decision.label}  RM {Math.round(memo.decision.maxAmount).toLocaleString('en-MY')}
               <span style={{ fontWeight: 500, color: p.ink3 }}> · RM {Math.round(memo.decision.installment).toLocaleString('en-MY')}/mo</span>
             </p>
-            <p style={{ fontFamily: FONT.ui, fontSize: 11, color: p.ink3, marginTop: 3 }}>
+            <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, marginTop: 3 }}>
               Requested RM {Math.round(memo.header.requestedAmount).toLocaleString('en-MY')} · Offered RM {Math.round(memo.header.offeredAmount).toLocaleString('en-MY')}
             </p>
             {memo.pricing && (
-              <p style={{ fontFamily: FONT.ui, fontSize: 11, color: p.ink2, marginTop: 5 }}>
+              <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink2, marginTop: 5 }}>
                 <strong>Pricing:</strong> ladder rate {(memo.pricing.ladderApr * 100).toFixed(1)}%, rate applied {(memo.pricing.adoptedApr * 100).toFixed(1)}%
                 {memo.pricing.adoptedApr < memo.pricing.ladderApr && <span style={{ color: p.accentInk, fontWeight: 700 }}> (risk-based discount)</span>}
               </p>
@@ -157,8 +170,8 @@ export default function CreditMemoModal({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {memo.findings.map((f) => (
                 <div key={f.id} style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
-                  <span style={{ fontFamily: FONT.ui, fontSize: 11, fontWeight: 700, color: p.ink2, minWidth: 92 }}>{f.label}</span>
-                  <span style={{ fontFamily: FONT.ui, fontSize: 11, color: p.ink1 }}>
+                  <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink2, minWidth: 92 }}>{f.label}</span>
+                  <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink1 }}>
                     {f.verdict} <span style={{ color: p.ink3 }}>({f.confidence}%)</span>
                   </span>
                 </div>
@@ -173,10 +186,10 @@ export default function CreditMemoModal({
               <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
                 {memo.groupedRationale.map((g) => (
                   <div key={g.category}>
-                    <p style={{ fontFamily: FONT.ui, fontSize: 9, fontWeight: 700, color: p.ink3, letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 3 }}>{g.label}</p>
+                    <p style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink3, letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 3 }}>{g.label}</p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {g.reasons.map((r, i) => (
-                        <p key={i} style={{ fontFamily: FONT.mono, fontSize: 10, color: p.ink2, lineHeight: 1.5 }}>· {r}</p>
+                        <p key={i} style={{ fontFamily: FONT.mono, fontSize: 12, color: p.ink2, lineHeight: 1.5 }}>· {r}</p>
                       ))}
                     </div>
                   </div>
@@ -185,7 +198,7 @@ export default function CreditMemoModal({
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                 {memo.rationale.map((r, i) => (
-                  <p key={i} style={{ fontFamily: FONT.mono, fontSize: 10, color: p.ink2, lineHeight: 1.5 }}>
+                  <p key={i} style={{ fontFamily: FONT.mono, fontSize: 12, color: p.ink2, lineHeight: 1.5 }}>
                     {String(i + 1).padStart(2, '0')} · {r}
                   </p>
                 ))}
@@ -198,12 +211,12 @@ export default function CreditMemoModal({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
               {memo.compliance.map((c) => (
                 <div key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                  <span style={{ fontFamily: FONT.ui, fontSize: 11, fontWeight: 800, color: c.met ? p.green : p.red, minWidth: 54, flexShrink: 0 }}>
+                  <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 800, color: c.met ? p.green : p.red, minWidth: 54, flexShrink: 0 }}>
                     {c.met ? '✓ Met' : '✗ Not met'}
                   </span>
                   <div>
-                    <p style={{ fontFamily: FONT.ui, fontSize: 11, color: p.ink1, lineHeight: 1.5 }}>{c.requirement}</p>
-                    <p style={{ fontFamily: FONT.mono, fontSize: 9.5, color: p.ink3, lineHeight: 1.5 }}>{c.evidence}</p>
+                    <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink1, lineHeight: 1.5 }}>{c.requirement}</p>
+                    <p style={{ fontFamily: FONT.mono, fontSize: 12, color: p.ink3, lineHeight: 1.5 }}>{c.evidence}</p>
                   </div>
                 </div>
               ))}
@@ -214,12 +227,12 @@ export default function CreditMemoModal({
           <Section p={p} title="Conditions & next steps">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {memo.conditions.map((c, i) => (
-                <p key={i} style={{ fontFamily: FONT.ui, fontSize: 11, color: p.ink2, lineHeight: 1.5 }}>• {c}</p>
+                <p key={i} style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink2, lineHeight: 1.5 }}>• {c}</p>
               ))}
             </div>
           </Section>
 
-          <p style={{ fontFamily: FONT.ui, fontSize: 9.5, color: p.ink3, lineHeight: 1.55 }}>
+          <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.55 }}>
             Advisory drafting over a deterministic decision. Every figure, verdict, and compliance flag is computed by the policy engine; this memo
             restates them and cannot change them.
           </p>
@@ -233,7 +246,7 @@ function Section({ p, title, children }: { p: Palette; title: string; children: 
   return (
     <div>
       <div style={{ marginBottom: 7 }}>
-        <SectionLabel color={p.ink3}>{title}</SectionLabel>
+        <SectionLabel color={p.ink2}>{title}</SectionLabel>
       </div>
       {children}
     </div>
@@ -249,7 +262,7 @@ function btn(p: Palette, primary: boolean): React.CSSProperties {
     background: primary ? p.primary : 'transparent',
     color: primary ? 'white' : p.ink2,
     fontFamily: FONT.ui,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 700,
   };
 }

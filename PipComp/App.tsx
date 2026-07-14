@@ -44,7 +44,27 @@ import { colors, uiFont } from './src/theme';
 
 type Screen = 'home' | 'add' | 'settings' | 'categories' | 'transactions' | 'breakdown' | 'budget' | 'recap' | 'networth' | 'credit' | 'loans' | 'passport' | 'coach' | 'lender' | 'attacks' | 'kyc' | 'calendar';
 
+/**
+ * Web-only: a global :focus-visible outline so keyboard users get a visible focus indicator
+ * on every Pressable/TextInput  RN-web renders these as real DOM elements but doesn't ship
+ * any focus styling itself, and the browser's own default is easy to lose track of amid the
+ * app's custom-styled surfaces. Injected once via a <style> tag rather than per-component,
+ * since RN has no global stylesheet. No-op on native (there's no focus ring to add).
+ */
+function useWebFocusRing() {
+  React.useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const style = document.createElement('style');
+    style.textContent = `:focus-visible { outline: 2px solid ${colors.accent} !important; outline-offset: 2px !important; }`;
+    document.head.appendChild(style);
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+}
+
 export default function App() {
+  useWebFocusRing();
   const [fontsLoaded] = useFonts({
     HankenGrotesk_400Regular,
     HankenGrotesk_500Medium,

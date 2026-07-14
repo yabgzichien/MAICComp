@@ -46,8 +46,8 @@ export function HeadroomBar({ p, assessment, installment, policy }: { p: Palette
   return (
     <div style={{ padding: '12px 20px 0' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-        <span style={{ fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 700, color: p.ink3, letterSpacing: '0.10em', textTransform: 'uppercase' }}>Affordability headroom</span>
-        <span style={{ fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 700, color: installment > 0 ? (layout.safe ? p.accentInk : p.red) : p.ink3, background: installment > 0 ? (layout.safe ? p.accentSoft : '#fde8e8') : 'rgba(20,40,30,0.06)', borderRadius: 5, padding: '2px 8px' }}>
+        <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink3, letterSpacing: '0.10em', textTransform: 'uppercase' }}>Affordability headroom</span>
+        <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: installment > 0 ? (layout.safe ? p.accentInk : p.red) : p.ink3, background: installment > 0 ? (layout.safe ? p.accentSoft : '#fde8e8') : 'rgba(20,40,30,0.06)', borderRadius: 5, padding: '2px 8px' }}>
           {installment > 0 ? (layout.safe ? 'inside both caps' : 'breaches a cap') : 'no installment proposed'}
         </span>
       </div>
@@ -58,7 +58,7 @@ export function HeadroomBar({ p, assessment, installment, policy }: { p: Palette
           <Tooltip
             formatter={(value: unknown, name: unknown) => [pctLabel(Number(value ?? 0)), labels[String(name)] ?? String(name)]}
             labelFormatter={() => 'Share of monthly income'}
-            contentStyle={{ fontFamily: FONT.ui, fontSize: 11, borderRadius: 8, border: `1px solid ${p.hairline}` }}
+            contentStyle={{ fontFamily: FONT.ui, fontSize: 12, borderRadius: 8, border: `1px solid ${p.hairline}` }}
           />
           {layout.segments.map((s) => (
             <Bar key={s.key} dataKey={s.key} stackId="income" fill={colors[s.key]} isAnimationActive={false} barSize={16} />
@@ -70,20 +70,20 @@ export function HeadroomBar({ p, assessment, installment, policy }: { p: Palette
               stroke={p.ink2}
               strokeDasharray="4 3"
               strokeWidth={1.5}
-              label={{ value: t.label, position: 'top', fontSize: 8, fontFamily: FONT.ui, fill: p.ink2 }}
+              label={{ value: t.label, position: 'top', fontSize: 12, fontFamily: FONT.ui, fill: p.ink2 }}
             />
           ))}
         </BarChart>
       </ResponsiveContainer>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 10px', marginTop: 2 }}>
         {layout.segments.filter((s) => s.frac > 0.001).map((s) => (
-          <span key={s.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: FONT.ui, fontSize: 9, color: p.ink3 }}>
+          <span key={s.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>
             <span style={{ width: 8, height: 8, borderRadius: 2, background: colors[s.key], display: 'inline-block' }} />
             {s.label}
           </span>
         ))}
       </div>
-      <p style={{ fontFamily: FONT.ui, fontSize: 9, color: p.ink3, marginTop: 5, lineHeight: 1.5 }}>
+      <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, marginTop: 5, lineHeight: 1.5 }}>
         One month of income ({rm(assessment.avgIncome)}). The installment block must end left of both dashed caps.
       </p>
     </div>
@@ -102,17 +102,17 @@ export function DecisionWaterfall({ p, breakdown, policy }: { p: Palette; breakd
   const notes = w.steps.filter((s) => s.note);
   return (
     <div style={{ padding: '14px 20px 0' }}>
-      <span style={{ fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 700, color: p.ink3, letterSpacing: '0.10em', textTransform: 'uppercase' }}>How the amount was set</span>
+      <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink3, letterSpacing: '0.10em', textTransform: 'uppercase' }}>How the amount was set</span>
       <ResponsiveContainer width="100%" height={138}>
         <BarChart data={data} layout="vertical" margin={{ top: 4, right: 56, bottom: 0, left: 0 }}>
           <XAxis type="number" hide />
-          <YAxis type="category" dataKey="name" width={104} tick={{ fontSize: 9.5, fontFamily: FONT.ui, fill: p.ink2 }} axisLine={false} tickLine={false} />
+          <YAxis type="category" dataKey="name" width={104} tick={{ fontSize: 12, fontFamily: FONT.ui, fill: p.ink2 }} axisLine={false} tickLine={false} />
           <Tooltip
             formatter={(value: unknown) => [rm(Number(value ?? 0)), 'Supportable']}
-            contentStyle={{ fontFamily: FONT.ui, fontSize: 11, borderRadius: 8, border: `1px solid ${p.hairline}` }}
+            contentStyle={{ fontFamily: FONT.ui, fontSize: 12, borderRadius: 8, border: `1px solid ${p.hairline}` }}
           />
           <Bar dataKey="amount" isAnimationActive={false} barSize={9} radius={3}>
-            <LabelList dataKey="amount" position="right" formatter={(v: unknown) => rm(Number(v))} style={{ fontSize: 10, fontFamily: FONT.num, fill: p.ink1 }} />
+            <LabelList dataKey="amount" position="right" formatter={(v: unknown) => rm(Number(v))} style={{ fontSize: 12, fontFamily: FONT.num, fill: p.ink1 }} />
             {data.map((d, i) => (
               <Cell key={i} fill={d.fill} />
             ))}
@@ -122,7 +122,7 @@ export function DecisionWaterfall({ p, breakdown, policy }: { p: Palette; breakd
       {notes.length > 0 && (
         <div style={{ marginTop: 2 }}>
           {notes.map((s) => (
-            <p key={s.key} style={{ fontFamily: FONT.ui, fontSize: 8.5, color: '#8a6100', lineHeight: 1.5 }}>↳ {s.label}: {s.note}</p>
+            <p key={s.key} style={{ fontFamily: FONT.ui, fontSize: 12, color: '#8a6100', lineHeight: 1.5 }}>↳ {s.label}: {s.note}</p>
           ))}
         </div>
       )}
@@ -142,18 +142,18 @@ export function BenfordChart({ p, histogram, tone = 'ok' }: { p: Palette; histog
     <div>
       <ResponsiveContainer width="100%" height={104}>
         <ComposedChart data={data} margin={{ top: 6, right: 4, bottom: 0, left: 4 }}>
-          <XAxis dataKey="digit" tick={{ fontSize: 8, fontFamily: FONT.num, fill: '#7d8a83' }} axisLine={false} tickLine={false} interval={0} />
+          <XAxis dataKey="digit" tick={{ fontSize: 12, fontFamily: FONT.num, fill: '#7d8a83' }} axisLine={false} tickLine={false} interval={0} />
           <YAxis hide />
           <Tooltip
             formatter={(value: unknown, name: unknown) => [pctLabel(Number(value ?? 0)), name === 'observed' ? 'Observed share' : "Benford's expected"]}
             labelFormatter={(d) => `Leading digit ${d}`}
-            contentStyle={{ fontFamily: FONT.ui, fontSize: 11, borderRadius: 8, border: `1px solid ${p.hairline}` }}
+            contentStyle={{ fontFamily: FONT.ui, fontSize: 12, borderRadius: 8, border: `1px solid ${p.hairline}` }}
           />
           <Bar dataKey="observed" fill={barColor} fillOpacity={0.55} isAnimationActive={false} radius={[2, 2, 0, 0]} />
           <Line dataKey="expected" stroke={lineColor} strokeWidth={1.4} strokeDasharray="3 2" dot={{ r: 1.8, fill: lineColor, strokeWidth: 0 }} isAnimationActive={false} />
         </ComposedChart>
       </ResponsiveContainer>
-      <p style={{ fontFamily: FONT.ui, fontSize: 9, color: p.ink3, lineHeight: 1.5, marginTop: 2 }}>
+      <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5, marginTop: 2 }}>
         Bars: observed share of leading digits 1–9 (signed aggregate counts). Dashed curve: Benford&apos;s expected distribution.
         {tone === 'alert' ? ' The clustering away from the curve is the fabrication fingerprint.' : ' Genuine spending hugs the curve.'}
       </p>
@@ -179,11 +179,11 @@ export function MomentumSpark({ p, momentum }: { p: Palette; momentum: PassportM
         <YAxis hide domain={[Math.min(momentum.scoreFrom, momentum.scoreTo) - pad, Math.max(momentum.scoreFrom, momentum.scoreTo) + pad]} />
         <XAxis dataKey="at" hide />
         <Line dataKey="score" stroke={color} strokeWidth={2} dot={{ r: 3, fill: color, strokeWidth: 0 }} isAnimationActive={false}>
-          <LabelList dataKey="score" position="top" style={{ fontSize: 8, fontFamily: FONT.num, fill: '#7d8a83' }} />
+          <LabelList dataKey="score" position="top" style={{ fontSize: 12, fontFamily: FONT.num, fill: '#7d8a83' }} />
         </Line>
       </LineChart>
       <div style={{ width: 64 }}>
-        <p style={{ fontFamily: FONT.ui, fontSize: 8, color: p.ink3, marginBottom: 2 }}>coverage {momentum.coverageDaysFrom}→{momentum.coverageDaysTo}d</p>
+        <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, marginBottom: 2 }}>coverage {momentum.coverageDaysFrom}→{momentum.coverageDaysTo}d</p>
         <div style={{ height: 4, borderRadius: 2, background: 'rgba(20,40,30,0.10)', overflow: 'hidden', marginBottom: 2 }}>
           <div style={{ height: '100%', width: `${covFrom * 100}%`, background: '#9aa7a0', borderRadius: 2 }} />
         </div>

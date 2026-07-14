@@ -94,6 +94,15 @@ export default function AdverseActionLetterModal({
   const chip = provenance === 'pending' ? 'Narrating…' : provenance === 'live' ? 'Live AI narration' : 'Template prose';
   const chipColor = provenance === 'live' ? p.accentInk : p.ink3;
 
+  // Esc closes the dialog, matching standard modal behavior.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
   return (
     <div
       onClick={onClose}
@@ -112,17 +121,20 @@ export default function AdverseActionLetterModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="adverse-action-title"
         style={{ width: '100%', maxWidth: 640, background: p.surface, borderRadius: 16, boxShadow: '0 24px 70px rgba(0,0,0,0.35)', overflow: 'hidden' }}
       >
         <div style={{ padding: '18px 24px', borderBottom: `1px solid ${p.hairline}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div>
-            <p style={{ fontFamily: FONT.ui, fontSize: 15, fontWeight: 800, color: p.ink1 }}>{KIND_LABEL[letter.kind]}</p>
-            <p style={{ fontFamily: FONT.ui, fontSize: 11, color: p.ink3 }}>
+            <p id="adverse-action-title" style={{ fontFamily: FONT.ui, fontSize: 15, fontWeight: 800, color: p.ink1 }}>{KIND_LABEL[letter.kind]}</p>
+            <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink2 }}>
               {letter.applicant} · {letter.date}
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontFamily: FONT.ui, fontSize: 10, fontWeight: 700, color: chipColor }}>{chip}</span>
+            <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: chipColor }}>{chip}</span>
             <button onClick={copyToClipboard} style={btn(p, true)}>{copied ? '✓ Copied' : 'Copy text'}</button>
             <button onClick={() => window.print()} style={btn(p, false)}>Print</button>
             <button onClick={onClose} aria-label="Close" style={{ ...btn(p, false), padding: '6px 10px' }}>✕</button>
@@ -137,7 +149,7 @@ export default function AdverseActionLetterModal({
               background: '#fff8e6',
               border: '1px solid #f0d68a',
               fontFamily: FONT.ui,
-              fontSize: 10.5,
+              fontSize: 12,
               fontWeight: 700,
               color: '#8a6100',
             }}
@@ -150,7 +162,7 @@ export default function AdverseActionLetterModal({
               {narrative ? narrative.opening : letter.decisionStatement}
             </p>
             {letter.counterOffer && (
-              <p style={{ fontFamily: FONT.ui, fontSize: 11, color: p.ink3, marginTop: 6 }}>
+              <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, marginTop: 6 }}>
                 Original request {rm(letter.counterOffer.originalRequest)} · Countered {rm(letter.counterOffer.counteredAmount)} at {rm(letter.counterOffer.installment)}/mo
               </p>
             )}
@@ -159,13 +171,13 @@ export default function AdverseActionLetterModal({
           <Section p={p} title="Principal reasons">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {letter.principalReasons.map((r, i) => (
-                <p key={i} style={{ fontFamily: FONT.mono, fontSize: 10.5, color: p.ink2, lineHeight: 1.55 }}>· {r.text}</p>
+                <p key={i} style={{ fontFamily: FONT.mono, fontSize: 12, color: p.ink2, lineHeight: 1.55 }}>· {r.text}</p>
               ))}
             </div>
           </Section>
 
           <Section p={p} title="Data relied upon">
-            <p style={{ fontFamily: FONT.ui, fontSize: 11.5, color: p.ink1, lineHeight: 1.6 }}>
+            <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink1, lineHeight: 1.6 }}>
               This decision was based on your signed passport (evidence fingerprint <span style={{ fontFamily: FONT.mono }}>{letter.dataRelied.evidenceShort}</span>),
               covering {letter.dataRelied.consentSummary}, issued {letter.dataRelied.issuedAt} and valid until {letter.dataRelied.validUntil}.
             </p>
@@ -177,7 +189,7 @@ export default function AdverseActionLetterModal({
             </p>
           </Section>
 
-          <p style={{ fontFamily: FONT.ui, fontSize: 9.5, color: p.ink3, lineHeight: 1.55 }}>
+          <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.55 }}>
             This letter restates a decision made by the deterministic policy engine  it does not itself decide anything, and every figure and reason
             traces back to that decision.
           </p>
@@ -191,7 +203,7 @@ function Section({ p, title, children }: { p: Palette; title: string; children: 
   return (
     <div>
       <div style={{ marginBottom: 7 }}>
-        <SectionLabel color={p.ink3}>{title}</SectionLabel>
+        <SectionLabel color={p.ink2}>{title}</SectionLabel>
       </div>
       {children}
     </div>
@@ -207,7 +219,7 @@ function btn(p: Palette, primary: boolean): React.CSSProperties {
     background: primary ? p.primary : 'transparent',
     color: primary ? 'white' : p.ink2,
     fontFamily: FONT.ui,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 700,
   };
 }

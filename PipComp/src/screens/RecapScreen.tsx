@@ -440,16 +440,16 @@ const styles = StyleSheet.create({
   heroShadowPos: { shadowColor: '#0c2214', shadowOpacity: 0.28, shadowRadius: 24, shadowOffset: { width: 0, height: 14 }, elevation: 8 },
   heroShadowNeg: { shadowColor: '#5a0a14', shadowOpacity: 0.32, shadowRadius: 24, shadowOffset: { width: 0, height: 14 }, elevation: 8 },
   heroBlob: { position: 'absolute', top: -50, right: -40, width: 160, height: 160, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.05)' },
-  heroEyebrow: { fontFamily: uiFont(600), fontSize: 10, letterSpacing: 1.1, color: 'rgba(255,255,255,0.50)', textTransform: 'uppercase', marginBottom: 16 },
+  heroEyebrow: { fontFamily: uiFont(600), fontSize: 11, letterSpacing: 1.1, color: 'rgba(255,255,255,0.50)', textTransform: 'uppercase', marginBottom: 16 },
   heroLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 10 },
   heroLineBorder: { borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.10)', paddingTop: 10 },
-  heroLineLabel: { fontFamily: uiFont(600), fontSize: 9.5, letterSpacing: 0.9, textTransform: 'uppercase', color: 'rgba(255,255,255,0.46)' },
+  heroLineLabel: { fontFamily: uiFont(600), fontSize: 11, letterSpacing: 0.9, textTransform: 'uppercase', color: 'rgba(255,255,255,0.46)' },
   heroVal: { fontFamily: HERO_NUM, fontSize: 20, color: '#fff' },
   heroNcf: { fontFamily: HERO_NUM, fontSize: 28 },
 
   // net-worth strip
   nwStrip: { marginTop: 16, backgroundColor: 'rgba(0,0,0,0.20)', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  nwLabel: { fontFamily: uiFont(500), fontSize: 9.5, letterSpacing: 0.7, textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)', marginBottom: 3 },
+  nwLabel: { fontFamily: uiFont(500), fontSize: 11, letterSpacing: 0.7, textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)', marginBottom: 3 },
   nwVal: { fontFamily: HERO_NUM, fontSize: 18, color: '#fff' },
   nwDivider: { width: 1, height: 32, backgroundColor: 'rgba(255,255,255,0.12)' },
   nwDeltaRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
@@ -458,11 +458,11 @@ const styles = StyleSheet.create({
   // section headers
   sectionHead: { paddingHorizontal: 18, paddingTop: 16, paddingBottom: 4, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
   sectionLabel: { fontFamily: uiFont(700), fontSize: 12, letterSpacing: 0.3, color: colors.ink2 },
-  sectionSub: { fontFamily: numFont(600), fontSize: 12, color: colors.ink3 },
+  sectionSub: { fontFamily: numFont(600), fontSize: 12, color: colors.ink2 },
   improveHead: { paddingHorizontal: 18, paddingTop: 16, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 9 },
   improveTab: { width: 4, height: 18, borderRadius: 2, backgroundColor: colors.accent },
   signalPill: { marginLeft: 'auto', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 9, backgroundColor: colors.accentSoft },
-  signalText: { fontFamily: uiFont(700), fontSize: 9.5, color: colors.accentInk },
+  signalText: { fontFamily: uiFont(700), fontSize: 11, color: colors.accentInk },
 
   listCard: { marginHorizontal: 16, marginTop: 4, borderRadius: 20, overflow: 'hidden' },
 
@@ -474,14 +474,14 @@ const styles = StyleSheet.create({
   catLabel: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink, flexShrink: 1 },
   catNums: { flexDirection: 'row', alignItems: 'baseline' },
   catActual: { fontFamily: numFont(700), fontSize: 13.5, color: colors.ink },
-  catTarget: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink3 },
+  catTarget: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink2 },
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 7, borderWidth: 1 },
-  badgeText: { fontFamily: uiFont(700), fontSize: 10 },
+  badgeText: { fontFamily: uiFont(700), fontSize: 11 },
   barTrack: { height: 5, borderRadius: 3, backgroundColor: 'rgba(20,40,30,0.07)', overflow: 'hidden' },
   barFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 3 },
   catFoot: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-  catPct: { fontFamily: uiFont(600), fontSize: 9.5 },
-  catBudget: { fontFamily: uiFont(400), fontSize: 9.5, color: colors.ink3 },
+  catPct: { fontFamily: uiFont(600), fontSize: 11 },
+  catBudget: { fontFamily: uiFont(400), fontSize: 11, color: colors.ink2 },
   unbudgetedIcon: { width: 30, height: 30, borderRadius: 9, backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center' },
 
   // insight row
@@ -491,7 +491,7 @@ const styles = StyleSheet.create({
 
   // empty
   emptyPad: { paddingHorizontal: 24, paddingVertical: 40, alignItems: 'center' },
-  emptyText: { fontFamily: uiFont(500), fontSize: 13, lineHeight: 21, color: colors.ink3, textAlign: 'center' },
+  emptyText: { fontFamily: uiFont(500), fontSize: 13, lineHeight: 21, color: colors.ink2, textAlign: 'center' },
 
   // month dropdown
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(16,32,24,0.35)', justifyContent: 'flex-end' },

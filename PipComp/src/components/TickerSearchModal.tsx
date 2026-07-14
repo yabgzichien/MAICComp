@@ -107,6 +107,6 @@ const styles = StyleSheet.create({
   tickerBox: { width: 38, height: 38, borderRadius: 10, backgroundColor: colors.accentTint, alignItems: 'center', justifyContent: 'center' },
   tickerText: { fontFamily: uiFont(700), fontSize: 12, color: colors.accent },
   name: { fontFamily: uiFont(600), fontSize: 14.5, color: colors.ink },
-  sub: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink3, marginTop: 1 },
-  empty: { fontFamily: uiFont(500), fontSize: 13.5, color: colors.ink3, textAlign: 'center', paddingVertical: 24 },
+  sub: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, marginTop: 1 },
+  empty: { fontFamily: uiFont(500), fontSize: 13.5, color: colors.ink2, textAlign: 'center', paddingVertical: 24 },
 });

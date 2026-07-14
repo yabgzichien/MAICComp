@@ -217,7 +217,7 @@ export function ImportScreen({ onClose, onOpenSettings }: { onClose: () => void;
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   busyCard: { marginTop: 22, padding: 22, alignItems: 'center', gap: 12 },
-  busyText: { fontFamily: uiFont(500), fontSize: 13, color: colors.ink3, textAlign: 'center' },
+  busyText: { fontFamily: uiFont(500), fontSize: 13, color: colors.ink2, textAlign: 'center' },
   doneCard: { marginTop: 16, padding: 16 },
   doneText: { fontFamily: uiFont(500), fontSize: 13.5, lineHeight: 19, color: colors.ink2 },
 });

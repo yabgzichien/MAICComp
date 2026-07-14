@@ -42,10 +42,10 @@ export default function QueueRail({
   return (
     <div style={{ width: 212, background: p.surface2, borderRight: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto' }}>
       <div style={{ padding: '14px 12px 10px', borderBottom: `1px solid ${p.hairline}` }}>
-        <p style={{ fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 700, color: p.ink3, letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: 8 }}>Pipeline</p>
+        <p style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink2, letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: 8 }}>Pipeline</p>
         <button
           onClick={onPasteNew}
-          style={{ width: '100%', padding: '7px 0', borderRadius: 8, border: `1.5px dashed ${p.hairline}`, cursor: 'pointer', background: 'transparent', fontFamily: FONT.ui, fontSize: 11, fontWeight: 600, color: p.ink2 }}
+          style={{ width: '100%', padding: '7px 0', borderRadius: 8, border: `1.5px dashed ${p.hairline}`, cursor: 'pointer', background: 'transparent', fontFamily: FONT.ui, fontSize: 12, fontWeight: 600, color: p.ink2 }}
         >
           + Paste new application
         </button>
@@ -53,12 +53,12 @@ export default function QueueRail({
 
       {apps.length === 0 && (
         <div style={{ padding: '14px 12px' }}>
-          <p style={{ fontFamily: FONT.ui, fontSize: 10.5, color: p.ink3, lineHeight: 1.55, marginBottom: 9 }}>
+          <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink2, lineHeight: 1.55, marginBottom: 9 }}>
             No applications yet. Verifying a passport files one automatically, or seed a demo pipeline:
           </p>
           <button
             onClick={onSeed}
-            style={{ width: '100%', padding: '8px 0', borderRadius: 8, border: 'none', cursor: 'pointer', background: p.primary, color: 'white', fontFamily: FONT.ui, fontSize: 11.5, fontWeight: 700 }}
+            style={{ width: '100%', padding: '8px 0', borderRadius: 8, border: 'none', cursor: 'pointer', background: p.primary, color: 'white', fontFamily: FONT.ui, fontSize: 12, fontWeight: 700 }}
           >
             Seed demo pipeline
           </button>
@@ -71,11 +71,11 @@ export default function QueueRail({
         return (
           <div style={{ padding: '10px 8px 4px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px', marginBottom: 5 }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 700, color: '#c0392b', letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: '#c0392b', letterSpacing: '0.07em', textTransform: 'uppercase' }}>
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#c0392b', display: 'inline-block' }} />
                 Watchlist
               </span>
-              <span style={{ fontFamily: FONT.num, fontSize: 10, fontWeight: 700, color: '#c0392b' }}>{watchlist.length}</span>
+              <span style={{ fontFamily: FONT.num, fontSize: 12, fontWeight: 700, color: '#c0392b' }}>{watchlist.length}</span>
             </div>
             {watchlist.map((a) => {
               const selected = a.id === selectedId;
@@ -97,8 +97,8 @@ export default function QueueRail({
                     background: selected ? '#fdecea' : '#fff8f7',
                   }}
                 >
-                  <p style={{ fontFamily: FONT.ui, fontSize: 11, fontWeight: 700, color: p.ink1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.applicantLabel}</p>
-                  <p style={{ fontFamily: FONT.ui, fontSize: 9.5, color: critical ? '#c0392b' : '#a3791f', marginTop: 2, fontWeight: 600 }}>
+                  <p style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.applicantLabel}</p>
+                  <p style={{ fontFamily: FONT.ui, fontSize: 12, color: critical ? '#c0392b' : '#a3791f', marginTop: 2, fontWeight: 600 }}>
                     {latest.flags.length} flag(s){critical ? ' · critical' : ''}
                   </p>
                 </button>
@@ -113,11 +113,11 @@ export default function QueueRail({
         return (
           <div key={status} style={{ padding: '10px 8px 4px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px', marginBottom: 5 }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 700, color: p.ink3, letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink2, letterSpacing: '0.07em', textTransform: 'uppercase' }}>
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: STATUS_COLOR[status], display: 'inline-block' }} />
                 {label}
               </span>
-              <span style={{ fontFamily: FONT.num, fontSize: 10, fontWeight: 700, color: queue.length > 0 ? p.ink1 : p.ink3 }}>{queue.length}</span>
+              <span style={{ fontFamily: FONT.num, fontSize: 12, fontWeight: 700, color: queue.length > 0 ? p.ink1 : p.ink3 }}>{queue.length}</span>
             </div>
             {queue.map((a) => {
               const selected = a.id === selectedId;
@@ -138,13 +138,13 @@ export default function QueueRail({
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                    <span style={{ fontFamily: FONT.ui, fontSize: 11, fontWeight: 700, color: p.ink1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{a.applicantLabel}</span>
+                    <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{a.applicantLabel}</span>
                     {a.source === 'direct' && (
                       <span
                         title="Submitted by the borrower via direct apply  no officer transcribed this"
                         style={{
                           fontFamily: FONT.ui,
-                          fontSize: 8,
+                          fontSize: 12,
                           fontWeight: 800,
                           textTransform: 'uppercase',
                           letterSpacing: '0.05em',
@@ -160,7 +160,7 @@ export default function QueueRail({
                       </span>
                     )}
                   </div>
-                  <p style={{ fontFamily: FONT.num, fontSize: 9.5, color: p.ink3, marginTop: 2 }}>
+                  <p style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink2, marginTop: 2 }}>
                     {rm(a.requestedAmount)} · filed {formatAgo(a.filedAt)}
                   </p>
                 </button>
@@ -171,7 +171,7 @@ export default function QueueRail({
       })}
 
       <div style={{ marginTop: 'auto', padding: '10px 12px' }}>
-        <p style={{ fontFamily: FONT.ui, fontSize: 8.5, color: p.ink3, lineHeight: 1.5 }}>
+        <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink2, lineHeight: 1.5 }}>
           Applications persist in this console&apos;s local store (demo) · one officer persona · age badges are timers, not SLAs.
         </p>
       </div>

@@ -69,5 +69,5 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 9 },
   divider: { borderTopWidth: 1, borderTopColor: colors.line2 },
   name: { fontFamily: uiFont(600), fontSize: 13.5, color: colors.ink },
-  sub: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink3, marginTop: 1 },
+  sub: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink2, marginTop: 1 },
 });

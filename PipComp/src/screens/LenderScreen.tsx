@@ -649,7 +649,7 @@ const styles = StyleSheet.create({
   poolKey: {
     fontFamily: uiFont(600),
     fontSize: 11,
-    color: colors.ink3,
+    color: colors.ink2,
     letterSpacing: 0.3,
     marginTop: 2,
   },
@@ -692,7 +692,7 @@ const styles = StyleSheet.create({
   trancheNumKey: {
     fontFamily: uiFont(600),
     fontSize: 11,
-    color: colors.ink3,
+    color: colors.ink2,
     letterSpacing: 0.3,
     marginTop: 2,
   },
@@ -747,7 +747,7 @@ const styles = StyleSheet.create({
   noteText: {
     fontFamily: uiFont(500),
     fontSize: 12.5,
-    color: colors.ink3,
+    color: colors.ink2,
     lineHeight: 18,
     textAlign: 'center',
     paddingHorizontal: 8,
@@ -898,7 +898,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
-    color: colors.ink3,
+    color: colors.ink2,
     marginBottom: 10,
   },
 
@@ -945,7 +945,7 @@ const styles = StyleSheet.create({
   dateLabelTiny: {
     fontFamily: uiFont(600),
     fontSize: 11,
-    color: colors.ink3,
+    color: colors.ink2,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
     marginBottom: 2,
@@ -1009,7 +1009,7 @@ const styles = StyleSheet.create({
   decisionAmtLabel: {
     fontFamily: uiFont(600),
     fontSize: 11,
-    color: colors.ink3,
+    color: colors.ink2,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
     marginBottom: 3,
@@ -1026,7 +1026,7 @@ const styles = StyleSheet.create({
   auditBullet: {
     fontFamily: uiFont(600),
     fontSize: 13,
-    color: colors.ink3,
+    color: colors.ink2,
     lineHeight: 19,
   },
   auditText: {
