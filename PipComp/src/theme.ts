@@ -69,22 +69,19 @@ export const fonts = {
   numBold: 'SpaceGrotesk_700Bold',
 } as const;
 
-/** RN shadow approximations of --shadow-card / --shadow-pop. */
-export const shadowCard = {
-  shadowColor: '#102018',
-  shadowOpacity: 0.12,
-  shadowRadius: 16,
-  shadowOffset: { width: 0, height: 8 },
-  elevation: 3,
-} as const;
+/** RN shadow approximations of --shadow-card / --shadow-pop. RN-web deprecates the
+ *  shadow-prefixed/elevation style props in favor of the CSS `boxShadow` shorthand
+ *  (console noise otherwise, UI/UX P3.19)  native keeps the real shadow/elevation
+ *  props, since boxShadow isn't a thing there. */
+export const shadowCard = Platform.select({
+  web: { boxShadow: '0 8px 16px rgba(16,32,24,0.12)' },
+  default: { shadowColor: '#102018', shadowOpacity: 0.12, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 3 },
+}) as { boxShadow?: string; shadowColor?: string; shadowOpacity?: number; shadowRadius?: number; shadowOffset?: { width: number; height: number }; elevation?: number };
 
-export const shadowPop = {
-  shadowColor: '#102018',
-  shadowOpacity: 0.18,
-  shadowRadius: 28,
-  shadowOffset: { width: 0, height: 16 },
-  elevation: 8,
-} as const;
+export const shadowPop = Platform.select({
+  web: { boxShadow: '0 16px 28px rgba(16,32,24,0.18)' },
+  default: { shadowColor: '#102018', shadowOpacity: 0.18, shadowRadius: 28, shadowOffset: { width: 0, height: 16 }, elevation: 8 },
+}) as { boxShadow?: string; shadowColor?: string; shadowOpacity?: number; shadowRadius?: number; shadowOffset?: { width: number; height: number }; elevation?: number };
 
 /** Map a desired numeric weight to the matching Space Grotesk family. */
 export function numFont(weight: number): string {

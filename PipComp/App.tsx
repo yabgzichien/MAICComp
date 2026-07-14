@@ -103,7 +103,7 @@ function PhoneFrame({ children }: { children: React.ReactNode }) {
   return (
     <View style={webStyles.backdrop}>
       <View style={webStyles.phone}>
-        <View style={webStyles.statusBar} pointerEvents="none">
+        <View style={[webStyles.statusBar, { pointerEvents: 'none' }]}>
           <View style={webStyles.statusRow}>
             <StatusClock />
             <View style={webStyles.rightIcons}>
@@ -204,6 +204,14 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
     setTourPaused(false);
     void startTour();
   };
+  /** Deep-link off the current step's optional action (UI/UX P3.18: surface the Attack
+   *  Gallery from the tour, not only Settings). Ends the tour and jumps straight there. */
+  const tourAction = () => {
+    if (!currentTourStep?.actionScreen) return;
+    void exitTour();
+    setTourPaused(false);
+    setScreen(currentTourStep.actionScreen as Screen);
+  };
 
   // Persistent bottom nav appears only on the four primary destinations.
   const navTab: NavTab | null =
@@ -259,6 +267,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
           onOpenNetWorth={() => setScreen('networth')}
           onOpenCredit={() => setScreen('credit')}
           onOpenPassport={() => setScreen('passport')}
+          onOpenCoach={() => setScreen('coach')}
         />
       )}
       {screen === 'add' && (
@@ -356,6 +365,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
           onNext={tourNext}
           onBack={tourBack}
           onExit={tourExit}
+          onAction={tourAction}
         />
       )}
       {tourPaused && !tourActive && <TourResumeChip bottomInset={navTab ? 0 : insets.bottom} onResume={tourResume} />}

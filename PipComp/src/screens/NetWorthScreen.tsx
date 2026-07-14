@@ -209,7 +209,7 @@ function HeroCard({
   return (
     <View style={styles.hero}>
       {/* gradient fill */}
-      <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Svg style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}>
         <Defs>
           <LinearGradient id="nwHero" x1="0" y1="0" x2="0.7" y2="1">
             <Stop offset="0" stopColor="#25845e" />
@@ -219,7 +219,7 @@ function HeroCard({
         </Defs>
         <Rect x="0" y="0" width="100%" height="100%" fill="url(#nwHero)" />
       </Svg>
-      <View style={styles.heroCircle} pointerEvents="none" />
+      <View style={[styles.heroCircle, { pointerEvents: 'none' }]} />
 
       <View style={styles.heroHead}>
         <Text style={styles.heroLabel}>Net Worth · 6-month</Text>

@@ -15,6 +15,7 @@ export function TourCard({
   onNext,
   onBack,
   onExit,
+  onAction,
 }: {
   step: TourStep;
   index: number;
@@ -23,9 +24,10 @@ export function TourCard({
   onNext: () => void;
   onBack: () => void;
   onExit: () => void;
+  onAction?: () => void;
 }) {
   return (
-    <View style={[styles.wrap, { paddingBottom: 14 + bottomInset }]} pointerEvents="box-none">
+    <View style={[styles.wrap, { paddingBottom: 14 + bottomInset, pointerEvents: 'box-none' }]}>
       <View style={styles.card} accessibilityRole="none">
         <View style={styles.dots}>
           {Array.from({ length: total }).map((_, i) => (
@@ -34,6 +36,11 @@ export function TourCard({
         </View>
         <Text style={styles.title}>{step.title}</Text>
         <Text style={styles.body}>{step.body}</Text>
+        {step.actionLabel && onAction && (
+          <Pressable onPress={onAction} accessibilityRole="button" accessibilityLabel={step.actionLabel} style={styles.actionBtn} hitSlop={4}>
+            <Text style={styles.actionText}>{step.actionLabel} →</Text>
+          </Pressable>
+        )}
         <View style={styles.row}>
           <Pressable onPress={onExit} accessibilityRole="button" accessibilityLabel="Exit tour" hitSlop={8}>
             <Text style={styles.exit}>Exit</Text>
@@ -57,7 +64,7 @@ export function TourCard({
  *  same step  the tour never fights the user for control. */
 export function TourResumeChip({ bottomInset = 0, onResume }: { bottomInset?: number; onResume: () => void }) {
   return (
-    <View style={[styles.chipWrap, { bottom: 14 + bottomInset }]} pointerEvents="box-none">
+    <View style={[styles.chipWrap, { bottom: 14 + bottomInset, pointerEvents: 'box-none' }]}>
       <Pressable onPress={onResume} accessibilityRole="button" accessibilityLabel="Resume tour" style={styles.chip}>
         <Text style={styles.chipText}>Resume tour</Text>
       </Pressable>
@@ -80,6 +87,8 @@ const styles = StyleSheet.create({
   dotActive: { backgroundColor: colors.accent, width: 16 },
   title: { fontFamily: uiFont(800), fontSize: 15, color: colors.ink, marginBottom: 4 },
   body: { fontFamily: uiFont(500), fontSize: 13.5, color: colors.ink2, lineHeight: 19 },
+  actionBtn: { marginTop: 10, alignSelf: 'flex-start' },
+  actionText: { fontFamily: uiFont(700), fontSize: 13, color: colors.accentInk },
   row: { flexDirection: 'row', alignItems: 'center', marginTop: 14, gap: 12 },
   exit: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink3 },
   secondaryBtn: { paddingVertical: 8, paddingHorizontal: 4 },

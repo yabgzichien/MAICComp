@@ -67,7 +67,7 @@ export function BreakdownScreen({ onBack, onOpenCategory }: { onBack: () => void
           <>
             <View style={styles.pieWrap}>
               <PieChart data={pieData} size={210} thickness={34} />
-              <View style={styles.pieCenter} pointerEvents="none">
+              <View style={[styles.pieCenter, { pointerEvents: 'none' }]}>
                 <Text style={styles.pieEyebrow}>{monthName()}</Text>
                 <Amount value={total} size={22} weight={700} color={kind === 'income' ? colors.accent : colors.ink} />
               </View>

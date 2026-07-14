@@ -57,7 +57,7 @@ export function AddCategoryModal({
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={styles.center} pointerEvents="box-none">
+      <View style={[styles.center, { pointerEvents: 'box-none' }]}>
         <View style={[styles.card, { marginBottom: insets.bottom }]}>
           <View style={styles.head}>
             <Text style={styles.title}>New {kind} category</Text>

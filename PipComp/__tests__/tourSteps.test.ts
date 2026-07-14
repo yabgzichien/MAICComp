@@ -40,6 +40,21 @@ describe('validateTourSteps', () => {
     const steps: TourStep[] = [{ id: 'a', screen: 'home', title: 'A', body: 'a' }];
     expect(validateTourSteps(steps, ['home'])).toEqual([]);
   });
+
+  it('flags a step whose action targets an unknown screen', () => {
+    const steps: TourStep[] = [{ id: 'a', screen: 'home', title: 'A', body: 'a', actionLabel: 'Go', actionScreen: 'attacks' }];
+    expect(validateTourSteps(steps, ['home'])).toContain('step a has an action targeting unknown screen: attacks');
+  });
+
+  it('flags actionLabel/actionScreen set without its pair', () => {
+    const onlyLabel: TourStep[] = [{ id: 'a', screen: 'home', title: 'A', body: 'a', actionLabel: 'Go' }];
+    expect(validateTourSteps(onlyLabel, ['home'])).toContain('step a: actionLabel and actionScreen must be set together');
+  });
+
+  it('accepts a step with a valid action pair', () => {
+    const steps: TourStep[] = [{ id: 'a', screen: 'home', title: 'A', body: 'a', actionLabel: 'Go', actionScreen: 'attacks' }];
+    expect(validateTourSteps(steps, ['home', 'attacks'])).toEqual([]);
+  });
 });
 
 describe('clampTourStep', () => {

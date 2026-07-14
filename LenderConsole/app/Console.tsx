@@ -494,6 +494,21 @@ function VerifiedCenter({ p, passport, decision, priors, issuerVerified, stackin
             <path d="M6 1L1 4v4l5 3 5-3V4L6 1z" fill={p.accentSoft} stroke={p.primary} strokeWidth="1" />
           </svg>
           <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 600, color: p.accentInk }}>Provenance</span>
+          {confidencePct !== null && (
+            <span
+              style={{
+                fontFamily: FONT.ui,
+                fontSize: 12,
+                fontWeight: 700,
+                color: confidencePct >= 60 ? p.primary : confidencePct >= 40 ? '#8a6100' : p.red,
+                background: confidencePct >= 60 ? p.accentSoft : confidencePct >= 40 ? '#fdf3dc' : '#fde8e8',
+                borderRadius: 5,
+                padding: '1px 7px',
+              }}
+            >
+              {confidencePct >= 60 ? 'Looks genuine' : confidencePct >= 40 ? 'Some gaps' : 'Flagged for review'}
+            </span>
+          )}
           <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink2, flex: 1, minWidth: 180 }}>{passport.provenanceSummary}</span>
           {evidenceShort && <span style={{ fontFamily: FONT.mono, fontSize: 12, color: p.ink3 }}>SHA-256: {evidenceShort}</span>}
         </div>
@@ -1051,11 +1066,11 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
             {decision.maxAmount > 0 ? (
               <>
                 <div style={{ marginBottom: 10, position: 'relative' }}>
-                  <span style={{ fontFamily: FONT.num, fontSize: 42, fontWeight: 700, color: 'white', lineHeight: 1, letterSpacing: '-1.5px' }}>RM {Math.round(decision.maxAmount).toLocaleString('en-MY')}</span>
+                  <span style={{ fontFamily: FONT.num, fontSize: 42, fontWeight: 700, color: 'white', lineHeight: 1, letterSpacing: '-1.5px' }}>RM{Math.round(decision.maxAmount).toLocaleString('en-MY')}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', position: 'relative' }}>
                   <div style={{ padding: '4px 11px', borderRadius: 6, background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.22)' }}>
-                    <span style={{ fontFamily: FONT.num, fontSize: 13, fontWeight: 600, color: 'white' }}>RM {Math.round(decision.installment).toLocaleString('en-MY')} / mo</span>
+                    <span style={{ fontFamily: FONT.num, fontSize: 13, fontWeight: 600, color: 'white' }}>RM{Math.round(decision.installment).toLocaleString('en-MY')}/mo</span>
                   </div>
                   <span style={{ fontFamily: FONT.ui, fontSize: 12, color: 'rgba(255,255,255,0.72)' }}>{decision.decision === 'refer' ? 'pending manual review' : 'estimated installment'}</span>
                 </div>
@@ -1080,8 +1095,8 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
                   <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.accentInk, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Counter-offer available</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                  <span style={{ fontFamily: FONT.num, fontSize: 22, fontWeight: 700, color: p.ink1, letterSpacing: '-0.5px' }}>RM {Math.round(co.amount).toLocaleString('en-MY')}</span>
-                  <span style={{ fontFamily: FONT.num, fontSize: 12, fontWeight: 600, color: p.ink2 }}>RM {Math.round(co.installment).toLocaleString('en-MY')}/mo</span>
+                  <span style={{ fontFamily: FONT.num, fontSize: 22, fontWeight: 700, color: p.ink1, letterSpacing: '-0.5px' }}>RM{Math.round(co.amount).toLocaleString('en-MY')}</span>
+                  <span style={{ fontFamily: FONT.num, fontSize: 12, fontWeight: 600, color: p.ink2 }}>RM{Math.round(co.installment).toLocaleString('en-MY')}/mo</span>
                 </div>
                 <p style={{ fontFamily: FONT.mono, fontSize: 12, color: p.ink2, lineHeight: 1.5, margin: 0 }}>{co.constraint.length > 120 ? co.constraint.slice(0, 117) + '…' : co.constraint}</p>
                 <button

@@ -83,7 +83,7 @@ export function AttachScreen({
         contentContainerStyle={{ paddingTop: insets.top + 4, paddingBottom: insets.bottom + 30 }}
         showsVerticalScrollIndicator={false}
       >
-        <TopBar title="Add a receipt" onClose={onClose} />
+        <TopBar title="Add a receipt" onBack={onClose} />
 
         <View style={{ paddingHorizontal: 18, paddingTop: 8 }}>
           <PipSays expr="curious">

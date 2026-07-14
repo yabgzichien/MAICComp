@@ -99,31 +99,37 @@ export function SettingsScreen({ onBack, onMigrate, onOpenLender = () => {}, onO
           <Text style={styles.demoChipText}>DEMO MODE</Text>
         </Pressable>
 
-        <Eyebrow style={{ marginBottom: 10 }}>AI providers</Eyebrow>
+        {/* Provider/API-key rows are a dev-ops concern, not a judge-facing one (UI/UX
+            P3.18): visible locally (__DEV__), stripped from the shipped judge build. */}
+        {__DEV__ && (
+          <>
+            <Eyebrow style={{ marginBottom: 10 }}>AI providers</Eyebrow>
 
-        <ProviderCard
-          settings={settings}
-          role="general"
-          icon="sparkles"
-          name="Groq · general"
-          sub="Reads screenshots and writes budget tips."
-          model={settings.groqModel}
-          apiKey={settings.groqKey}
-        />
+            <ProviderCard
+              settings={settings}
+              role="general"
+              icon="sparkles"
+              name="Groq · general"
+              sub="Reads screenshots and writes budget tips."
+              model={settings.groqModel}
+              apiKey={settings.groqKey}
+            />
 
-        <View style={{ height: 14 }} />
+            <View style={{ height: 14 }} />
 
-        <ProviderCard
-          settings={settings}
-          role="docs"
-          icon="receipt"
-          name="Gemini · documents"
-          sub="Extracts transactions from imported PDFs, images, and files."
-          model={settings.geminiModel}
-          apiKey={settings.geminiKey}
-        />
+            <ProviderCard
+              settings={settings}
+              role="docs"
+              icon="receipt"
+              name="Gemini · documents"
+              sub="Extracts transactions from imported PDFs, images, and files."
+              model={settings.geminiModel}
+              apiKey={settings.geminiKey}
+            />
 
-        <Text style={styles.help}>The provider keys and models are fixed by the app configuration.</Text>
+            <Text style={styles.help}>The provider keys and models are fixed by the app configuration.</Text>
+          </>
+        )}
 
         <Eyebrow style={{ marginTop: 26, marginBottom: 10 }}>Learning</Eyebrow>
         <Card style={{ padding: 16 }}>

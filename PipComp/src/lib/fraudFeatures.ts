@@ -2,7 +2,7 @@
 // Pure feature extraction for the fraud/authenticity detection model.
 // Produces the 9-element vector defined in tools/fraudData/FEATURES.md.
 // No DB, UI, or external imports  unit-tested.
-import { provenanceTrust, benfordConformity, type ConfidenceTxn } from './dataConfidence';
+import { provenanceTrust, benfordConformity, type ConfidenceTxn } from './transactionSignals';
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 

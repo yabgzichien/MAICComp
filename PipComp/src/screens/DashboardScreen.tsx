@@ -43,6 +43,7 @@ export function DashboardScreen({
   onOpenNetWorth = () => {},
   onOpenCredit = () => {},
   onOpenPassport = () => {},
+  onOpenCoach = () => {},
 }: {
   onScan: () => void;
   onOpenSettings: () => void;
@@ -54,6 +55,7 @@ export function DashboardScreen({
   onOpenNetWorth?: () => void;
   onOpenCredit?: () => void;
   onOpenPassport?: () => void;
+  onOpenCoach?: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const now = useNow();
@@ -137,7 +139,7 @@ export function DashboardScreen({
           <>
             {/* 1  Streak */}
             <TourAnchor id="coverage-chip" activeId={activeTourAnchor}>
-              <StreakCard streak={streak} dots={dots} coverage={coverage.daysCovered} />
+              <StreakCard streak={streak} dots={dots} coverage={coverage.daysCovered} onPress={onOpenCoach} />
             </TourAnchor>
 
             {/* 2  Cash flow + where it goes */}
@@ -224,7 +226,7 @@ function HeaderIcon({ name, onPress }: { name: IconName; onPress: () => void }) 
 }
 
 /* ── Streak card ── */
-function StreakCard({ streak, dots, coverage }: { streak: number; dots: boolean[]; coverage: number }) {
+function StreakCard({ streak, dots, coverage, onPress }: { streak: number; dots: boolean[]; coverage: number; onPress?: () => void }) {
   // Subtle flame flicker  driven entirely on the native thread (no per-frame JS).
   const flicker = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -245,7 +247,7 @@ function StreakCard({ streak, dots, coverage }: { streak: number; dots: boolean[
       { scaleY: flicker.interpolate({ inputRange: [0, 1], outputRange: [1, 1.09] }) },
     ],
   };
-  return (
+  const card = (
     <Card style={styles.streakCard}>
       <View style={styles.streakLeft}>
         <View style={styles.flameTile}>
@@ -280,6 +282,12 @@ function StreakCard({ streak, dots, coverage }: { streak: number; dots: boolean[
         </Text>
       </View>
     </Card>
+  );
+  if (!onPress) return card;
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel="Open the coach's coverage lever">
+      {card}
+    </Pressable>
   );
 }
 

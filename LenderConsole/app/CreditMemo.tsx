@@ -158,11 +158,11 @@ export default function CreditMemoModal({
           {/* Decision */}
           <Section p={p} title="Decision">
             <p style={{ fontFamily: FONT.ui, fontSize: 13, fontWeight: 700, color: p.ink1 }}>
-              {memo.decision.label}  RM {Math.round(memo.decision.maxAmount).toLocaleString('en-MY')}
-              <span style={{ fontWeight: 500, color: p.ink3 }}> · RM {Math.round(memo.decision.installment).toLocaleString('en-MY')}/mo</span>
+              {memo.decision.label}  RM{Math.round(memo.decision.maxAmount).toLocaleString('en-MY')}
+              <span style={{ fontWeight: 500, color: p.ink3 }}> · RM{Math.round(memo.decision.installment).toLocaleString('en-MY')}/mo</span>
             </p>
             <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, marginTop: 3 }}>
-              Requested RM {Math.round(memo.header.requestedAmount).toLocaleString('en-MY')} · Offered RM {Math.round(memo.header.offeredAmount).toLocaleString('en-MY')}
+              Requested RM{Math.round(memo.header.requestedAmount).toLocaleString('en-MY')} · Offered RM{Math.round(memo.header.offeredAmount).toLocaleString('en-MY')}
             </p>
             {memo.pricing && (
               <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink2, marginTop: 5 }}>

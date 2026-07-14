@@ -5,8 +5,11 @@
 // unit-testable ("step registries are valid: unique ids, screens exist, order stable").
 
 /** The screens the tour can land on  a subset of App.tsx's `Screen` union, kept separate so
- *  this module has zero dependency on the app shell. */
+ *  this module has zero dependency on the app shell. Includes 'attacks' only as an optional
+ *  step ACTION target (see `actionScreen` below), never a step's own `screen`  the tour
+ *  itself stays linear and doesn't walk the Attack Gallery. */
 export type TourScreen = 'home' | 'credit' | 'coach' | 'loans' | 'passport';
+export type TourActionScreen = TourScreen | 'attacks';
 
 export interface TourStep {
   id: string;
@@ -17,6 +20,10 @@ export interface TourStep {
   /** Optional TourAnchor id to spotlight on this step. Anchors are enhancement, never a
    *  dependency  a step with none (or a mismatched one) still renders card-only. */
   anchorId?: string;
+  /** Optional secondary deep-link button (UI/UX P3.18: surface the Attack Gallery from the
+   *  tour, not only Settings). Ends the tour and opens `actionScreen` directly. */
+  actionLabel?: string;
+  actionScreen?: TourActionScreen;
 }
 
 export const BORROWER_TOUR_STEPS: TourStep[] = [
@@ -63,6 +70,8 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     screen: 'passport',
     title: "That's the borrower side",
     body: 'See the Lender Console next to verify this passport, and the Attack Gallery to see fraud caught live.',
+    actionLabel: 'Try the Attack Gallery',
+    actionScreen: 'attacks',
   },
 ];
 
@@ -78,6 +87,10 @@ export function validateTourSteps(steps: TourStep[], validScreens: readonly stri
     if (seen.has(step.id)) problems.push(`duplicate step id: ${step.id}`);
     seen.add(step.id);
     if (!validScreens.includes(step.screen)) problems.push(`step ${step.id} targets unknown screen: ${step.screen}`);
+    if (step.actionScreen && !validScreens.includes(step.actionScreen)) problems.push(`step ${step.id} has an action targeting unknown screen: ${step.actionScreen}`);
+    if ((step.actionLabel && !step.actionScreen) || (!step.actionLabel && step.actionScreen)) {
+      problems.push(`step ${step.id}: actionLabel and actionScreen must be set together`);
+    }
   }
   return problems;
 }
