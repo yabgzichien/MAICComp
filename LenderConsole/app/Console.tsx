@@ -48,6 +48,7 @@ import {
   type PurposeCategory,
 } from '../lib/applications';
 import { diffCheckIn, monitoringStatus, type EarlyWarningFlag, type MonitoringStatus } from '../lib/earlyWarning';
+import { seedApplications } from '../lib/demoSeed';
 import { DEMO_APPLICANTS } from './demoApplicants';
 import QueueRail from './QueueRail';
 import { InfoButton, InfoModal, MiniBar, SectionLabel } from './shared';
@@ -1863,26 +1864,14 @@ export default function Console() {
     syncApps(recordLetterGenerated(apps, selectedAppId, letter.kind));
   };
 
-  /** Seed a working pipeline from the pre-signed demo applicants + the sample (Brief O).
-   *  Staggered filing times so the Referred queue demonstrates its oldest-first order. */
+  /** Seed a working pipeline from the pre-signed 13-persona demo mix + the sample (Brief O,
+   *  Demo Data plan Task 6). Pure mix/pairing logic lives in `lib/demoSeed.ts` (unit-tested);
+   *  this just persists the result  the applications array plus the stacking case's two
+   *  presentment-log entries. */
   const onSeed = () => {
-    const seeds: { code: string; amount: number; purpose?: DeclaredPurpose }[] = [
-      ...DEMO_APPLICANTS.map((d, i) => ({
-        code: d.code,
-        amount: d.requestedAmount,
-        purpose: (['stock', 'working-capital', 'emergency'] as PurposeCategory[])[i] ? { category: (['stock', 'working-capital', 'emergency'] as PurposeCategory[])[i] } : undefined,
-      })),
-      { code: SAMPLE_CODE, amount: 10000, purpose: { category: 'stock', note: 'Stock for the raya season' } },
-    ];
-    let next = readApplications(undefined, activeLenderId);
-    seeds.forEach((seed, i) => {
-      const s = evaluate(seed.code, String(seed.amount), storedPolicy);
-      if (s.status === 'valid' && s.decision) {
-        const at = new Date(Date.now() - (seeds.length - i) * 5_400_000); // 1.5h apart, oldest first
-        next = fileApplication(next, filingInput(seed.code, s.passport, s.decision, seed.amount, seed.purpose), at).apps;
-      }
-    });
+    const { apps: next, presentments } = seedApplications(readApplications(undefined, activeLenderId), storedPolicy.products, storedPolicy.policy, activeLender.name);
     syncApps(next);
+    presentments.forEach((p) => recordPresentment(p, undefined, activeLenderId));
   };
 
   const selectedApp = apps.find((a) => a.id === selectedAppId) ?? null;
