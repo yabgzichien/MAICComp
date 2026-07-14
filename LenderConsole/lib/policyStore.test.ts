@@ -191,37 +191,37 @@ describe('read/write round-trip (policyFile.ts)', () => {
     if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
   });
 
-  it('PUT-then-GET round-trips a custom policy and stamps updatedAt server-side', () => {
+  it('PUT-then-GET round-trips a custom policy and stamps updatedAt server-side', async () => {
     const custom = { ...good(), policy: { ...DEFAULT_POLICY, maxDsr: 0.3 } };
-    const w = writeStoredPolicy(tmp, custom);
+    const w = await writeStoredPolicy(tmp, custom);
     expect(w.ok).toBe(true);
-    const r = readStoredPolicy(tmp);
+    const r = await readStoredPolicy(tmp);
     expect(r.policy.maxDsr).toBe(0.3);
     expect(typeof r.updatedAt).toBe('string');
     expect(Number.isNaN(Date.parse(r.updatedAt!))).toBe(false);
   });
 
-  it('rejects a malformed body without touching the file', () => {
-    const w = writeStoredPolicy(tmp, { policy: { ...DEFAULT_POLICY, maxDsr: 9 }, products: DEFAULT_PRODUCTS });
+  it('rejects a malformed body without touching the file', async () => {
+    const w = await writeStoredPolicy(tmp, { policy: { ...DEFAULT_POLICY, maxDsr: 9 }, products: DEFAULT_PRODUCTS });
     expect(w.ok).toBe(false);
     expect(fs.existsSync(tmp)).toBe(false);
   });
 
-  it('a missing file falls back to the defaults (no updatedAt = never edited)', () => {
-    const r = readStoredPolicy(tmp);
+  it('a missing file falls back to the defaults (no updatedAt = never edited)', async () => {
+    const r = await readStoredPolicy(tmp);
     expect(r.policy).toEqual(DEFAULT_STORED_POLICY.policy);
     expect(r.products).toEqual(DEFAULT_STORED_POLICY.products);
     expect(r.updatedAt).toBeUndefined();
   });
 
-  it('a corrupt file falls back to the defaults instead of throwing', () => {
+  it('a corrupt file falls back to the defaults instead of throwing', async () => {
     fs.writeFileSync(tmp, '{not json');
-    expect(readStoredPolicy(tmp).policy).toEqual(DEFAULT_POLICY);
+    expect((await readStoredPolicy(tmp)).policy).toEqual(DEFAULT_POLICY);
   });
 
-  it('tolerates a UTF-8 BOM at the start of the file (Windows editors prepend one)', () => {
+  it('tolerates a UTF-8 BOM at the start of the file (Windows editors prepend one)', async () => {
     fs.writeFileSync(tmp, '﻿' + JSON.stringify({ ...good(), updatedAt: '2026-07-01T00:00:00.000Z' }));
-    const r = readStoredPolicy(tmp);
+    const r = await readStoredPolicy(tmp);
     expect(r.policy).toEqual(DEFAULT_POLICY);
     expect(r.updatedAt).toBe('2026-07-01T00:00:00.000Z');
   });

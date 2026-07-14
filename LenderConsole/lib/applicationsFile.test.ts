@@ -31,41 +31,41 @@ describe('applicationsFile — server-side direct-apply store', () => {
     if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
   });
 
-  it('missing file reads back as an empty list', () => {
-    expect(readServerApplications(tmp)).toEqual([]);
+  it('missing file reads back as an empty list', async () => {
+    expect(await readServerApplications(tmp)).toEqual([]);
   });
 
-  it('corrupt file falls back to an empty list instead of throwing', () => {
+  it('corrupt file falls back to an empty list instead of throwing', async () => {
     fs.writeFileSync(tmp, '{not json');
-    expect(readServerApplications(tmp)).toEqual([]);
+    expect(await readServerApplications(tmp)).toEqual([]);
   });
 
-  it('appends a submission and reads it back identically', () => {
-    const result = appendServerApplication(tmp, input(), NOW);
+  it('appends a submission and reads it back identically', async () => {
+    const result = await appendServerApplication(tmp, input(), NOW);
     expect(result.filed).toBe(true);
-    const stored = readServerApplications(tmp);
+    const stored = await readServerApplications(tmp);
     expect(stored).toHaveLength(1);
     expect(stored[0].source).toBe('direct');
     expect(stored[0].subject).toBe('a'.repeat(64));
   });
 
-  it('accumulates multiple submissions across separate calls (each call re-reads the file)', () => {
-    appendServerApplication(tmp, input({ subject: 'b'.repeat(64) }), NOW);
-    appendServerApplication(tmp, input({ subject: 'c'.repeat(64) }), NOW);
-    expect(readServerApplications(tmp).map((a: ApplicationRecord) => a.subject)).toEqual(['b'.repeat(64), 'c'.repeat(64)]);
+  it('accumulates multiple submissions across separate calls (each call re-reads the file)', async () => {
+    await appendServerApplication(tmp, input({ subject: 'b'.repeat(64) }), NOW);
+    await appendServerApplication(tmp, input({ subject: 'c'.repeat(64) }), NOW);
+    expect((await readServerApplications(tmp)).map((a: ApplicationRecord) => a.subject)).toEqual(['b'.repeat(64), 'c'.repeat(64)]);
   });
 
-  it('dedupes on subject + requested amount, same as fileApplication', () => {
-    const first = appendServerApplication(tmp, input({ subject: 'd'.repeat(64) }), NOW);
-    const second = appendServerApplication(tmp, input({ subject: 'd'.repeat(64) }), NOW);
+  it('dedupes on subject + requested amount, same as fileApplication', async () => {
+    const first = await appendServerApplication(tmp, input({ subject: 'd'.repeat(64) }), NOW);
+    const second = await appendServerApplication(tmp, input({ subject: 'd'.repeat(64) }), NOW);
     expect(first.filed).toBe(true);
     expect(second.filed).toBe(false);
-    expect(readServerApplications(tmp)).toHaveLength(1);
+    expect(await readServerApplications(tmp)).toHaveLength(1);
   });
 
-  it('uses the same fileApplication logic under the hood — matching audit provenance', () => {
-    appendServerApplication(tmp, input({ subject: 'e'.repeat(64) }), NOW);
-    const stored = readServerApplications(tmp);
+  it('uses the same fileApplication logic under the hood — matching audit provenance', async () => {
+    await appendServerApplication(tmp, input({ subject: 'e'.repeat(64) }), NOW);
+    const stored = await readServerApplications(tmp);
     const viaLib = fileApplication([], input({ subject: 'e'.repeat(64) }), NOW).apps;
     expect(stored[0].audit).toEqual(viaLib[0].audit);
   });

@@ -16,7 +16,7 @@ const CORS_HEADERS = {
 export async function GET() {
   // TEKUN's entry is composed from the stored policy (Brief N): the ladder the
   // Policy tab edits is the ladder borrowers are coached toward  the flywheel.
-  return NextResponse.json(composeRegistry(readStoredPolicy()), { headers: CORS_HEADERS });
+  return NextResponse.json(composeRegistry(await readStoredPolicy()), { headers: CORS_HEADERS });
 }
 
 export async function OPTIONS() {

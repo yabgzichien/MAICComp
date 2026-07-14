@@ -92,7 +92,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ filed: false, errors: ['Passport carries no affordability assessment to decide against.'] }, { status: 400, headers: CORS_HEADERS });
   }
 
-  const stored = readStoredPolicy();
+  const stored = await readStoredPolicy();
   const decision = decideLoan({
     score: parsed.passport.score,
     confidence: assessment.confidence,
@@ -107,7 +107,7 @@ export async function POST(req: Request) {
   });
 
   const purpose = parsePurpose(b.purpose);
-  const result = appendServerApplication(undefined, {
+  const result = await appendServerApplication(undefined, {
     passportCode: b.passportCode,
     subject: parsed.passport.subject,
     applicantLabel: parsed.passport.holder?.name ?? 'Applicant',
@@ -136,7 +136,7 @@ export async function POST(req: Request) {
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  return NextResponse.json(readServerApplications());
+  return NextResponse.json(await readServerApplications());
 }
 
 export async function OPTIONS() {

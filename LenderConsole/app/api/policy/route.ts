@@ -10,7 +10,7 @@ import { readStoredPolicy, writeStoredPolicy } from '../../../lib/policyFile';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  return NextResponse.json(readStoredPolicy());
+  return NextResponse.json(await readStoredPolicy());
 }
 
 export async function PUT(req: Request) {
@@ -20,7 +20,7 @@ export async function PUT(req: Request) {
   } catch {
     return NextResponse.json({ errors: ['Body must be JSON.'] }, { status: 400 });
   }
-  const result = writeStoredPolicy(undefined, body);
+  const result = await writeStoredPolicy(undefined, body);
   if (!result.ok) return NextResponse.json({ errors: result.errors }, { status: 400 });
   return NextResponse.json(result.value);
 }
