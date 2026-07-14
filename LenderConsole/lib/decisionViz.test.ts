@@ -1,6 +1,6 @@
 // Pure layout helpers for the decision visuals (Brief K) — tested before the SVG exists.
 import { describe, expect, it } from 'vitest';
-import { benfordChart, headroomLayout, waterfallSteps } from './decisionViz';
+import { benfordChart, confidenceCeilingNotch, coverageStrip, headroomLayout, waterfallSteps } from './decisionViz';
 import type { DecisionBreakdown } from './loans';
 
 describe('headroomLayout', () => {
@@ -130,5 +130,53 @@ describe('policy-aware cap labels', () => {
     const w = waterfallSteps(b, custom);
     expect(w.steps.find((s) => s.key === 'surplus')!.label).toContain('25%');
     expect(w.steps.find((s) => s.key === 'dsr')!.label).toContain('30%');
+  });
+});
+
+describe('coverageStrip', () => {
+  it('produces 90 segments by default, filled left-to-right up to daysCovered', () => {
+    const s = coverageStrip(30);
+    expect(s).toHaveLength(90);
+    expect(s.slice(0, 30).every((seg) => seg.filled)).toBe(true);
+    expect(s.slice(30).every((seg) => !seg.filled)).toBe(true);
+  });
+
+  it('respects a custom window', () => {
+    expect(coverageStrip(5, 10)).toHaveLength(10);
+  });
+
+  it('clamps a negative or over-full input rather than throwing', () => {
+    expect(coverageStrip(-5).every((s) => !s.filled)).toBe(true);
+    expect(coverageStrip(999).every((s) => s.filled)).toBe(true);
+  });
+
+  it('rounds a fractional day count', () => {
+    expect(coverageStrip(30.6).filter((s) => s.filled)).toHaveLength(31);
+  });
+});
+
+describe('confidenceCeilingNotch', () => {
+  it('caps at the Building ceiling below 30% confidence', () => {
+    const n = confidenceCeilingNotch(0.2);
+    expect(n.ceiling).toBe(499);
+    expect(n.frac).toBeCloseTo((499 - 300) / 600, 9);
+  });
+
+  it('caps at the Fair ceiling between 30% and 40%', () => {
+    expect(confidenceCeilingNotch(0.35).ceiling).toBe(619);
+  });
+
+  it('caps at the Strong ceiling between 40% and 60%', () => {
+    expect(confidenceCeilingNotch(0.55).ceiling).toBe(819);
+  });
+
+  it('is uncapped (null frac) at or above 60% confidence', () => {
+    const n = confidenceCeilingNotch(0.6);
+    expect(n.ceiling).toBe(900);
+    expect(n.frac).toBeNull();
+  });
+
+  it('is uncapped at full confidence', () => {
+    expect(confidenceCeilingNotch(1).frac).toBeNull();
   });
 });

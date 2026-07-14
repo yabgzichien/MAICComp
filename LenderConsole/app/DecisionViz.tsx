@@ -23,7 +23,7 @@ import {
   YAxis,
 } from 'recharts';
 import { FONT, type Palette } from './tokens';
-import { benfordChart, headroomLayout, waterfallSteps } from '../lib/decisionViz';
+import { benfordChart, confidenceCeilingNotch, coverageStrip, headroomLayout, waterfallSteps } from '../lib/decisionViz';
 import type { DecisionBreakdown, LenderPolicy } from '../lib/loans';
 import type { PassportAssessment, PassportMomentum } from '../lib/passport';
 import { InfoButton } from './shared';
@@ -198,6 +198,46 @@ export function MomentumSpark({ p, momentum }: { p: Palette; momentum: PassportM
           <div style={{ height: '100%', width: `${covTo * 100}%`, background: color, borderRadius: 2 }} />
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── 5. Coverage strip (Brief K stretch) ────────────────────────────────────────
+
+export function CoverageStrip({ p, daysCovered, windowDays = 90 }: { p: Palette; daysCovered: number; windowDays?: number }) {
+  const segments = coverageStrip(daysCovered, windowDays);
+  const filled = Math.min(Math.round(daysCovered), windowDays);
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink3, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Data coverage</span>
+        <span style={{ fontFamily: FONT.num, fontSize: 12, fontWeight: 700, color: p.ink1 }}>{filled}/{windowDays} days</span>
+      </div>
+      <div style={{ display: 'flex', gap: 1, height: 12, borderRadius: 3, overflow: 'hidden' }}>
+        {segments.map((s, i) => (
+          <div key={i} style={{ flex: 1, background: s.filled ? p.primary : 'rgba(20,40,30,0.08)' }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── 6. Confidence-ceiling notch (Brief K stretch) ──────────────────────────────
+// Overlays a marker on the score-band bar showing where the CURRENT data confidence
+// caps the displayed score  hides entirely once confidence is high enough (≥60%)
+// that nothing is capped. Positioned by the caller inside a `position: relative`
+// wrapper around the band bar, matching its exact width.
+
+export function ConfidenceCeilingTick({ p, confidence }: { p: Palette; confidence: number }) {
+  const notch = confidenceCeilingNotch(confidence);
+  if (notch.frac === null) return null;
+  return (
+    <div
+      title={`Data confidence caps the displayed score at ${notch.ceiling}`}
+      style={{ position: 'absolute', top: -12, left: `${notch.frac * 100}%`, transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', pointerEvents: 'none' }}
+    >
+      <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.amber, whiteSpace: 'nowrap' }}>capped {notch.ceiling}</span>
+      <span style={{ fontSize: 10, color: p.amber, lineHeight: 1 }}>▼</span>
     </div>
   );
 }

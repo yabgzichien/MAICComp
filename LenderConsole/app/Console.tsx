@@ -55,7 +55,7 @@ import AgentPanel from './AgentPanel';
 import CreditMemoModal from './CreditMemo';
 import AdverseActionLetterModal from './AdverseActionLetter';
 import { buildAdverseActionLetter } from '../lib/adverseAction';
-import { BenfordChart, DecisionWaterfall, HeadroomBar, MomentumSpark } from './DecisionViz';
+import { BenfordChart, ConfidenceCeilingTick, CoverageStrip, DecisionWaterfall, HeadroomBar, MomentumSpark } from './DecisionViz';
 
 type Tab = 'verify' | 'portfolio' | 'capital' | 'policy';
 /** Which pool the Capital Markets tab structures (Brief Q): the synthetic sample or the live approved book. */
@@ -431,18 +431,26 @@ function VerifiedCenter({ p, passport, decision, priors, issuerVerified, stackin
                 </div>
               )}
             </div>
-            <div style={{ height: 7, borderRadius: 4, overflow: 'hidden', display: 'flex', gap: 2, marginBottom: 4 }}>
-              {BAND_SEGMENTS.map((c, i) => (
-                <div key={i} style={{ flex: 1, background: c, opacity: i <= activeBand ? 1 : 0.17, borderRadius: 2 }} />
-              ))}
-            </div>
-            <div style={{ display: 'flex' }}>
-              {BAND_ORDER.map((b, i) => (
-                <span key={b} style={{ flex: 1, fontFamily: FONT.ui, fontSize: 12, color: i === activeBand ? p.accentInk : p.ink2, fontWeight: i === activeBand ? 700 : 400, textAlign: 'center' }}>{b}</span>
-              ))}
+            <div style={{ position: 'relative', marginTop: passport.assessment ? 14 : 0 }}>
+              {passport.assessment && <ConfidenceCeilingTick p={p} confidence={passport.assessment.confidence} />}
+              <div style={{ height: 7, borderRadius: 4, overflow: 'hidden', display: 'flex', gap: 2, marginBottom: 4 }}>
+                {BAND_SEGMENTS.map((c, i) => (
+                  <div key={i} style={{ flex: 1, background: c, opacity: i <= activeBand ? 1 : 0.17, borderRadius: 2 }} />
+                ))}
+              </div>
+              <div style={{ display: 'flex' }}>
+                {BAND_ORDER.map((b, i) => (
+                  <span key={b} style={{ flex: 1, fontFamily: FONT.ui, fontSize: 12, color: i === activeBand ? p.accentInk : p.ink2, fontWeight: i === activeBand ? 700 : 400, textAlign: 'center' }}>{b}</span>
+                ))}
+              </div>
             </div>
           </div>
         </div>
+        {passport.assessment && (
+          <div style={{ marginTop: 12 }}>
+            <CoverageStrip p={p} daysCovered={passport.assessment.coverageDays} />
+          </div>
+        )}
       </div>
 
       {passport.momentum && passport.momentum.direction !== 'flat' && (() => {

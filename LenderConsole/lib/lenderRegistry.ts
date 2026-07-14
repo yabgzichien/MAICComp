@@ -82,3 +82,10 @@ export function composeRegistry(storedByLenderId: Record<string, StoredPolicy>):
     return stored ? { ...l, products: stored.products, policy: stored.policy } : l;
   });
 }
+
+/** Find one lender's published entry by id in a composed directory (Brief H stretch, the
+ *  Published Criteria panel). Undefined when the id isn't in the given directory  the
+ *  panel treats that as "not yet loaded" rather than an error. */
+export function findLender(profiles: LenderProfile[], id: string): LenderProfile | undefined {
+  return profiles.find((l) => l.id === id);
+}

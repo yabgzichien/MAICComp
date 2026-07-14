@@ -2,7 +2,7 @@
 // Static lender registry (GET /api/lenders payload) — the Lender Match flywheel's
 // publish side.
 import { describe, expect, it } from 'vitest';
-import { composeRegistry, LENDER_REGISTRY } from './lenderRegistry';
+import { composeRegistry, findLender, LENDER_REGISTRY } from './lenderRegistry';
 import { DEFAULT_POLICY, DEFAULT_PRODUCTS } from './loans';
 import type { StoredPolicy } from './policyStore';
 
@@ -107,5 +107,15 @@ describe('composeRegistry', () => {
 
   it('publishes exactly three lenders, same as the static registry, regardless of stored policy', () => {
     expect(composeRegistry({ tekun: custom })).toHaveLength(3);
+  });
+});
+
+describe('findLender', () => {
+  it('finds a lender by id', () => {
+    expect(findLender(LENDER_REGISTRY, 'koperasi-sejahtera')?.name).toBe('Koperasi Usahawan Sejahtera');
+  });
+
+  it('returns undefined for an unknown id rather than throwing', () => {
+    expect(findLender(LENDER_REGISTRY, 'nonexistent')).toBeUndefined();
   });
 });

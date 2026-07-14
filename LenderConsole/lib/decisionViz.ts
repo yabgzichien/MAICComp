@@ -162,3 +162,44 @@ export function benfordChart(histogram: number[] | undefined): BenfordChartData 
     expected: Array.from({ length: 9 }, (_, i) => Math.log10(1 + 1 / (i + 1))),
   };
 }
+
+// ── 4. Coverage strip (Brief K stretch) ────────────────────────────────────────
+
+/** One segment of the 90-day coverage strip: filled = a distinct recorded day. */
+export interface CoverageSegment {
+  filled: boolean;
+}
+
+/** `daysCovered` out of `windowDays` (default 90, matching the borrower app's fixed
+ *  coverage window), left-to-right oldest-first. Clamped so a malformed input never
+ *  produces a negative or over-full strip. */
+export function coverageStrip(daysCovered: number, windowDays: number = 90): CoverageSegment[] {
+  const filled = clamp(Math.round(daysCovered), 0, windowDays);
+  return Array.from({ length: windowDays }, (_, i) => ({ filled: i < filled }));
+}
+
+// ── 5. Confidence-ceiling notch (Brief K stretch) ──────────────────────────────
+
+/** Mirrors PipComp's src/lib/creditScore.ts `confidenceScoreCeiling`  same four
+ *  thresholds/ceilings, kept in sync by hand since the two apps don't share code.
+ *  Below 0.30 confidence caps display at the top of Building; 0.40 at Fair; 0.60 at
+ *  Strong; at or above 0.60 the score is uncapped (Excellent reachable). */
+function confidenceScoreCeiling(confidence: number): number {
+  if (confidence < 0.3) return 499;
+  if (confidence < 0.4) return 619;
+  if (confidence < 0.6) return 819;
+  return 900;
+}
+
+export interface ConfidenceCeilingNotch {
+  /** Position on the 300900 band bar as a 01 fraction. Null when confidence is high
+   *  enough that nothing is capped (ceiling === 900)  the notch hides entirely. */
+  frac: number | null;
+  ceiling: number;
+}
+
+export function confidenceCeilingNotch(confidence: number): ConfidenceCeilingNotch {
+  const ceiling = confidenceScoreCeiling(confidence);
+  if (ceiling >= 900) return { frac: null, ceiling };
+  return { frac: (ceiling - 300) / (900 - 300), ceiling };
+}

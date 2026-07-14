@@ -6,11 +6,12 @@
 // the lender configures here is exactly what borrowers are coached toward (the flywheel).
 // Validation is the shared pure lib (policyStore.ts); the server re-validates on PUT.
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { FONT, type Palette } from './tokens';
 import { SectionLabel } from './shared';
 import { DEFAULT_POLICY, DEFAULT_PRODUCTS, type LenderPolicy, type LoanProduct } from '../lib/loans';
 import { aprWarnings, CANONICAL_TIER_IDS, validateStoredPolicy, type StoredPolicy } from '../lib/policyStore';
+import { findLender, type LenderProfile } from '../lib/lenderRegistry';
 
 /** Form state keeps every field as a string so partial typing never crashes;
  *  numbers are parsed at validation time. Ratios are edited as percentages. */
@@ -127,6 +128,25 @@ export default function PolicyTab({
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
 
+  // Published Criteria panel (Brief H stretch): proves the editor and the borrower-facing
+  // directory genuinely agree, by fetching the SAME GET /api/lenders payload the borrower
+  // app's coach reads  never local form state.
+  const [published, setPublished] = useState<LenderProfile | null>(null);
+  const [publishedError, setPublishedError] = useState(false);
+  const [publishedLoading, setPublishedLoading] = useState(false);
+  const fetchPublished = React.useCallback(() => {
+    setPublishedLoading(true);
+    setPublishedError(false);
+    fetch('/api/lenders')
+      .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+      .then((all: LenderProfile[]) => setPublished(findLender(all, lenderId) ?? null))
+      .catch(() => setPublishedError(true))
+      .finally(() => setPublishedLoading(false));
+  }, [lenderId]);
+  useEffect(() => {
+    fetchPublished();
+  }, [fetchPublished]);
+
   const candidate = formToCandidate(thresholds, rows);
   const validation = validateStoredPolicy(candidate);
   const warnings = validation.ok ? aprWarnings(validation.value.products) : [];
@@ -160,6 +180,7 @@ export default function PolicyTab({
       onSaved(body as StoredPolicy);
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2500);
+      fetchPublished();
     } catch {
       setErrors(['Could not reach the policy store. Is the console server running?']);
     } finally {
@@ -297,6 +318,45 @@ export default function PolicyTab({
               <p style={{ fontFamily: FONT.ui, fontSize: 12, color: '#7a5c00', lineHeight: 1.5 }}>{w}</p>
             </div>
           ))}
+        </div>
+
+        {/* ── Published Criteria panel (Brief H stretch) ── */}
+        <div style={{ background: p.surface, borderRadius: 12, padding: '14px 18px', boxShadow: p.shadow }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+            <SectionLabel color={p.ink2}>Published criteria · GET /api/lenders</SectionLabel>
+            <button
+              onClick={fetchPublished}
+              disabled={publishedLoading}
+              style={{ padding: '4px 12px', borderRadius: 7, border: `1.5px solid ${p.hairline}`, background: 'transparent', color: p.ink2, cursor: publishedLoading ? 'default' : 'pointer', fontFamily: FONT.ui, fontSize: 12, fontWeight: 600 }}
+            >
+              {publishedLoading ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </div>
+          <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5, marginTop: 6, marginBottom: 10 }}>
+            What the borrower app&apos;s Coach actually reads right now  fetched fresh from the published directory, not from this form.
+          </p>
+          {publishedError && <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.red }}>Could not reach the published directory.</p>}
+          {published && (
+            <>
+              <p style={{ fontFamily: FONT.ui, fontSize: 13, fontWeight: 700, color: p.ink1 }}>{published.name}</p>
+              <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5, marginTop: 2, marginBottom: 10 }}>{published.blurb}</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 1fr 1fr 0.9fr 0.8fr', gap: '4px 10px' }}>
+                {['Tier', 'Min score', 'Min RM', 'Max RM', 'Tenor (mo)', 'APR %'].map((h) => (
+                  <span key={h} style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{h}</span>
+                ))}
+                {published.products.map((prod) => (
+                  <React.Fragment key={prod.id}>
+                    <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink1 }}>{prod.label}</span>
+                    <span style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink2 }}>{prod.minScore}</span>
+                    <span style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink2 }}>{prod.minAmount.toLocaleString('en-MY')}</span>
+                    <span style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink2 }}>{prod.maxAmount.toLocaleString('en-MY')}</span>
+                    <span style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink2 }}>{prod.tenorMonths}</span>
+                    <span style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink2 }}>{Math.round(prod.apr * 100)}</span>
+                  </React.Fragment>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         {/* ── Validation + actions ── */}
