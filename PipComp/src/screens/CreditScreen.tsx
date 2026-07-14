@@ -96,7 +96,7 @@ export function CreditScreen({
               </View>
             )}
             {capped && (
-              <Text style={styles.cappedNote}>ⓘ Your band is limited by data confidence  verify more to unlock your full score.</Text>
+              <Text style={styles.cappedNote}>ⓘ Your band is limited by data confidence. Verify more to unlock your full score.</Text>
             )}
             <View style={{ marginTop: 10, gap: 6 }}>
               {dataConfidence.reasons.map((r) => (
@@ -135,7 +135,7 @@ export function CreditScreen({
             <View style={styles.ctaIcon}><Icon name="trending" size={22} color={colors.accent} /></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.ctaTitle}>Build my score</Text>
-              <Text style={styles.ctaSub}>See what unlocks a bigger loan  with live simulations</Text>
+              <Text style={styles.ctaSub}>See what unlocks a bigger loan, with live simulations</Text>
             </View>
             <Icon name="chevronRight" size={18} color={colors.ink3} />
           </Card>

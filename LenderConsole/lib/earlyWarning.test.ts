@@ -135,7 +135,7 @@ describe('diffCheckIn — coverage-stagnation', () => {
     const b = passport({ assessment: assessment({ coverageDays: 60 }) });
     const f = diffCheckIn(a, b).flags.find((x) => x.key === 'coverage-stagnation');
     expect(f?.severity).toBe('critical');
-    expect(f?.evidence).toMatch(/tracking may have stopped/);
+    expect(f?.evidence).toMatch(/tracking may have stopped/i);
   });
 
   it('coverage improving is never flagged', () => {

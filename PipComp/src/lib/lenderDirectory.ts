@@ -34,7 +34,7 @@ export interface LenderDirectory {
 export const OFFLINE_LENDER: LenderProfile = {
   id: 'offline',
   name: 'Generic ladder (offline)',
-  blurb: 'Standard Pip product ladder  shown when no lender directory is reachable.',
+  blurb: 'Standard Pip product ladder. Shown when no lender directory is reachable.',
   brandColor: '#5b6770',
   products: DEFAULT_PRODUCTS,
 };

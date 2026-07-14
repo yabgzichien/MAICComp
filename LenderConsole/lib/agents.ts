@@ -44,7 +44,7 @@ const FALLBACK_RATIONALE: Record<AgentId, Record<VerdictTone, string>> = {
   },
   risk: {
     positive: 'Data coverage and repayment history are consistent and recent ({cite}).',
-    caution: 'Coverage or repayment history is partial  treat the picture as incomplete ({cite}).',
+    caution: 'Coverage or repayment history is partial. Treat the picture as incomplete ({cite}).',
     negative: "Thin data coverage makes this applicant's pattern hard to verify ({cite}).",
   },
   decision: {
@@ -236,7 +236,7 @@ export function assessOrchestrator(specialists: AgentAssessment[], decision: Loa
   } else if (worst.tone === 'negative') {
     // Approve, but a specialist disagrees: escalate toward caution, never override the loan itself.
     tone = 'caution';
-    verdict = 'Dissents  recommends manual review';
+    verdict = 'Dissents. Recommends manual review';
     concurs = false;
   } else if (worst.tone === 'caution') {
     tone = 'caution';
@@ -244,7 +244,7 @@ export function assessOrchestrator(specialists: AgentAssessment[], decision: Loa
     concurs = true;
   } else {
     tone = 'positive';
-    verdict = 'Concurs  approve';
+    verdict = 'Concurs. Approve';
     concurs = true;
   }
 

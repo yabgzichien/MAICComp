@@ -176,7 +176,7 @@ describe('stacking row', () => {
     const priors: Presentment[] = [{ id: 'x', at: '2026-06-14T23:00:00.000Z' }];
     const row = rowByKey(rowsOf({ priorPresentments: priors, windowHours: 48 }), 'stacking');
     expect(row.detail).toContain('48h');
-    expect(row.detail).toMatch(/last \d+ h ago/);
+    expect(row.detail).toMatch(/last \d+ h ago/i);
   });
 
   it('defaults to a 24h window when not specified', () => {

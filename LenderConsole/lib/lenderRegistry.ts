@@ -28,7 +28,7 @@ export const LENDER_REGISTRY: LenderProfile[] = [
   {
     id: 'tekun',
     name: 'TEKUN Nasional',
-    blurb: 'Government micro-financing agency  the full four-tier ladder, built for first-time micro-entrepreneurs.',
+    blurb: 'Government micro-financing agency. The full four-tier ladder, built for first-time micro-entrepreneurs.',
     brandColor: '#0f2d5c',
     // Reuses the engine's ladder unchanged, so today's console behaviour is identical.
     products: DEFAULT_PRODUCTS,
@@ -37,7 +37,7 @@ export const LENDER_REGISTRY: LenderProfile[] = [
   {
     id: 'koperasi-sejahtera',
     name: 'Koperasi Usahawan Sejahtera',
-    blurb: 'Member-owned credit cooperative  the cheapest rates in the directory, but a stricter score bar and no emergency tier.',
+    blurb: 'Member-owned credit cooperative. The cheapest rates in the directory, but a stricter score bar and no emergency tier.',
     brandColor: '#1f8a5b',
     products: [
       { id: 'starter', label: 'Anggota Starter', minScore: 560, minAmount: 1000, maxAmount: 4000, tenorMonths: 12, apr: 0.14 },
@@ -48,7 +48,7 @@ export const LENDER_REGISTRY: LenderProfile[] = [
   {
     id: 'dana-niaga',
     name: 'Dana Niaga Capital',
-    blurb: 'Digital micro-lender  accessible entry tiers with fast decisions, priced higher but capped below 30% APR.',
+    blurb: 'Digital micro-lender. Accessible entry tiers with fast decisions, priced higher but capped below 30% APR.',
     brandColor: '#b45309',
     products: [
       { id: 'emergency', label: 'Micro Boost', minScore: 400, minAmount: 300, maxAmount: 1500, tenorMonths: 6, apr: 0.28 },

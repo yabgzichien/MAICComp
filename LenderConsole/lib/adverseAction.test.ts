@@ -96,27 +96,27 @@ describe('buildAdverseActionLetter — reason rewrites to second person', () => 
   it.each<[string, string, string]>([
     [
       'hard adverse record',
-      'Serious adverse record on file  application declined.',
+      'Serious adverse record on file. Application declined.',
       'You have a serious adverse record on file, and this application has been declined as a result.',
     ],
     [
       'soft adverse record',
-      'Minor adverse record on file  routed to manual review instead of auto-approval.',
+      'Minor adverse record on file. Routed to manual review instead of auto-approval.',
       'You have a minor adverse record on file, so this application has been routed to manual review instead of being approved automatically.',
     ],
     [
       'integrity floor breach',
-      'Data-integrity check: the income pattern could not be validated automatically  declined pending manual verification with the lender.',
+      'Data-integrity check: the income pattern could not be validated automatically. Declined pending manual verification with the lender.',
       'The income pattern on your application could not be validated automatically, so it has been declined pending manual verification with us.',
     ],
     [
       'below the lowest tier',
-      'Score 350 is below the minimum tier threshold (500)  application declined.',
+      'Score 350 is below the minimum tier threshold (500). Application declined.',
       'Your score of 350 is below our minimum threshold of 500 for any of our loan products, so this application has been declined.',
     ],
     [
       'low confidence',
-      'We could not verify enough of the recorded data (confidence 28%, below the 50% auto-approval floor)  routed to manual review. More verified history would strengthen this application.',
+      'We could not verify enough of the recorded data (confidence 28%, below the 50% auto-approval floor). Routed to manual review. More verified history would strengthen this application.',
       'We could not verify enough of your recorded financial data (confidence 28%, below our 50% auto-approval threshold), so this application has been routed to manual review.',
     ],
     [

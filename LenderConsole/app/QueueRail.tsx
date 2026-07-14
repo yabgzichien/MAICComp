@@ -141,7 +141,7 @@ export default function QueueRail({
                     <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{a.applicantLabel}</span>
                     {a.source === 'direct' && (
                       <span
-                        title="Submitted by the borrower via direct apply  no officer transcribed this"
+                        title="Submitted by the borrower via direct apply. No officer transcribed this"
                         style={{
                           fontFamily: FONT.ui,
                           fontSize: 12,
@@ -172,7 +172,7 @@ export default function QueueRail({
 
       <div style={{ marginTop: 'auto', padding: '10px 12px' }}>
         <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink2, lineHeight: 1.5 }}>
-          Applications persist in this console&apos;s local store (demo) · one officer persona · age badges are timers, not SLAs.
+          Applications persist in this console&apos;s local store (demo) · one officer persona · age badges show time since filing.
         </p>
       </div>
     </div>

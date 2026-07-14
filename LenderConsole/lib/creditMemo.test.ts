@@ -72,7 +72,7 @@ describe('buildCreditMemo header', () => {
 describe('buildCreditMemo decision', () => {
   it('labels each verdict', () => {
     expect(build({}, { decision: 'approve' }).decision.label).toBe('Approved');
-    expect(build({}, { decision: 'refer' }).decision.label).toBe('Refer  manual review');
+    expect(build({}, { decision: 'refer' }).decision.label).toBe('Refer: manual review');
     expect(build({}, { decision: 'decline', maxAmount: 0, installment: 0 }).decision.label).toBe('Declined');
   });
 });

@@ -122,7 +122,7 @@ export function buildDemoSeed(now: Date = new Date()): DemoSeed {
     const monthTarget = 2595 * (0.94 + rng() * 0.12);
     CLUSTER_DAYS.slice(0, nPay).forEach((day, i) => {
       const d = monthDate(now, m, day);
-      if (d > now) return; // never future-date  keeps the coverage signal honest
+      if (d > now) return; // never future-date. Keeps the coverage signal honest
       const amount = Math.round(((weights[i] / weightSum) * monthTarget + 0.3 + i * 0.07) * 100) / 100;
       txns.push({
         merchantRaw: 'GrabFood Payout',

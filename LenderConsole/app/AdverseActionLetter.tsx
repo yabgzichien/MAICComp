@@ -190,7 +190,7 @@ export default function AdverseActionLetterModal({
           </Section>
 
           <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.55 }}>
-            This letter restates a decision made by the deterministic policy engine  it does not itself decide anything, and every figure and reason
+            This letter restates a decision made by the deterministic policy engine. It does not itself decide anything, and every figure and reason
             traces back to that decision.
           </p>
         </div>

@@ -115,7 +115,7 @@ export default function AgentPanel({ p, passport, decision, stacking }: { p: Pal
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
         <SectionLabel color={p.ink2}>AI Assessment Panel · advisory only</SectionLabel>
         <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: toneColor(p, panel.orchestrator.tone) }}>
-          {panel.orchestrator.concurs ? '✓ Panel concurs with policy engine' : '⚠ Panel dissents  recommends manual review'}
+          {panel.orchestrator.concurs ? '✓ Panel concurs with policy engine' : '⚠ Panel dissents. Recommends manual review'}
         </span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
@@ -124,7 +124,7 @@ export default function AgentPanel({ p, passport, decision, stacking }: { p: Pal
         ))}
       </div>
       <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5, marginTop: 10 }}>
-        Advisory only  verdicts and confidence are computed deterministically from the same passport aggregates as the policy engine. The panel can flag
+        Advisory only. Verdicts and confidence are computed deterministically from the same passport aggregates as the policy engine. The panel can flag
         additional caution; it cannot approve, decline, or change the amount.
       </p>
     </div>

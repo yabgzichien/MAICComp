@@ -55,7 +55,7 @@ export interface AdverseActionLetter {
   caveat: string;
 }
 
-export const LETTER_CAVEAT = 'Template  review before sending. Not legal advice.';
+export const LETTER_CAVEAT = 'Template. Review before sending. Not legal advice.';
 
 const rm = (n: number): string => `RM${Math.round(n).toLocaleString('en-MY')}`;
 
@@ -94,27 +94,27 @@ function dataReliedFrom(passport: CreditPassport): DataRelied {
  */
 const REASON_REWRITES: Array<[RegExp, string]> = [
   [
-    /^Serious adverse record on file  application declined\.$/,
+    /^Serious adverse record on file. Application declined\.$/,
     'You have a serious adverse record on file, and this application has been declined as a result.',
   ],
   [
-    /^Minor adverse record on file  routed to manual review instead of auto-approval\.$/,
+    /^Minor adverse record on file. Routed to manual review instead of auto-approval\.$/,
     'You have a minor adverse record on file, so this application has been routed to manual review instead of being approved automatically.',
   ],
   [
-    /^Data-integrity check: the income pattern could not be validated automatically  declined pending manual verification with the lender\.$/,
+    /^Data-integrity check: the income pattern could not be validated automatically. Declined pending manual verification with the lender\.$/,
     'The income pattern on your application could not be validated automatically, so it has been declined pending manual verification with us.',
   ],
   [
-    /^Score (\d+) is below the minimum tier threshold \((\d+)\)  application declined\.$/,
+    /^Score (\d+) is below the minimum tier threshold \((\d+)\). Application declined\.$/,
     'Your score of $1 is below our minimum threshold of $2 for any of our loan products, so this application has been declined.',
   ],
   [
-    /^We could not verify enough of the recorded data \(confidence (\d+)%, below the (\d+)% auto-approval floor\)  routed to manual review\. More verified history would strengthen this application\.$/,
+    /^We could not verify enough of the recorded data \(confidence (\d+)%, below the (\d+)% auto-approval floor\). Routed to manual review\. More verified history would strengthen this application\.$/,
     'We could not verify enough of your recorded financial data (confidence $1%, below our $2% auto-approval threshold), so this application has been routed to manual review.',
   ],
   [
-    /^Auto-approval blocked by coverage policy  routed to manual review\.$/,
+    /^Auto-approval blocked by coverage policy. Routed to manual review\.$/,
     'Automatic approval was blocked by our data-coverage policy, so this application has been routed to manual review.',
   ],
   [
@@ -157,14 +157,14 @@ function toSecondPerson(text: string): string {
 
 const IMPROVEMENT_TEXT: Record<ImprovementConstraint, string> = {
   coverage:
-    'Building a longer verified transaction history  more tracked days of income and spending  is the single change most likely to improve a future application.',
+    'Building a longer verified transaction history (more tracked days of income and spending) is the single change most likely to improve a future application.',
   confidence:
     'Providing more consistently verifiable transaction history would raise our confidence in your data and most improve a future application.',
   affordability:
-    'Increasing your monthly surplus  for example through higher income, lower recurring expenses, or less existing debt service  is the change most likely to improve a future application.',
+    'Increasing your monthly surplus, for example through higher income, lower recurring expenses, or less existing debt service, is the change most likely to improve a future application.',
   record:
     'This outcome reflects a record on file rather than your recent financial data; please contact us directly to discuss it.',
-  none: 'No single gap stands out  your current application already reflects strong, verified data.',
+  none: 'No single gap stands out. Your current application already reflects strong, verified data.',
 };
 
 /**

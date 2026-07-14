@@ -287,14 +287,14 @@ export function verifyPassport(
     const msgBytes = new TextEncoder().encode(canonicalize(passport));
     const holderValid = ed.verify(hexToBytes(signature), msgBytes, hexToBytes(passport.subject));
     if (!holderValid) {
-      return { valid: false, tampered: true, reasons: ['Holder signature verification failed  passport was altered.'] };
+      return { valid: false, tampered: true, reasons: ['Holder signature verification failed. Passport was altered.'] };
     }
 
     if (!issuerSignature || issuerSignature.length !== 128 || !HEX_RE.test(issuerSignature)) {
       return {
         valid: false,
         tampered: false,
-        reasons: ['Missing or malformed issuer signature  not a Pip-issued passport (possible self-minted).'],
+        reasons: ['Missing or malformed issuer signature, not a Pip-issued passport (possible self-minted).'],
       };
     }
     const issuerValid = ed.verify(hexToBytes(issuerSignature), msgBytes, hexToBytes(ISSUER_PUBLIC_KEY_HEX));
@@ -302,7 +302,7 @@ export function verifyPassport(
       return {
         valid: false,
         tampered: false,
-        reasons: ['Issuer signature invalid  not issued by Pip (possible self-minted passport).'],
+        reasons: ['Issuer signature invalid, not issued by Pip (possible self-minted passport).'],
       };
     }
 
@@ -347,7 +347,7 @@ export function parsePassportCode(raw: string): ParsedCode {
   try {
     obj = JSON.parse(raw.trim());
   } catch {
-    throw new Error("Couldn't read the code  it doesn't look like a valid passport. Paste the full code from the Pip app.");
+    throw new Error("Couldn't read the code. It doesn't look like a valid passport. Paste the full code from the Pip app.");
   }
   const o = obj as Partial<ParsedCode>;
   if (!o || typeof o !== 'object' || !o.passport || typeof o.signature !== 'string') {

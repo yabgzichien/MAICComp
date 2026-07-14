@@ -511,7 +511,7 @@ export function computeDataConfidence(
       ok,
       detail: ok
         ? `expenses ${Math.round(expRatio * 100)}% of income`
-        : `expenses only ${Math.round(expRatio * 100)}% of income  picture may be incomplete`,
+        : `expenses only ${Math.round(expRatio * 100)}% of income. Picture may be incomplete`,
     });
   }
 

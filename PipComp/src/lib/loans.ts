@@ -20,9 +20,9 @@ export interface DecisionReason {
 
 /** Display headings for grouped reason rendering  one source of truth for both apps' UIs. */
 export const REASON_CATEGORY_LABELS: Record<ReasonCategory, string> = {
-  affordability: 'Affordability  capacity to repay',
-  'data-quality': 'Data quality  what we could not verify',
-  integrity: 'Integrity  automated validation',
+  affordability: 'Affordability: capacity to repay',
+  'data-quality': 'Data quality: what we could not verify',
+  integrity: 'Integrity: automated validation',
   policy: 'Policy & tier',
   record: 'Credit record',
 };
@@ -356,7 +356,7 @@ export function decideLoan(input: LoanDecisionInput): LoanDecision {
 
   // Hard-adverse record overrides everything: decline outright.
   if (adverseRecord === 'hard') {
-    reasons.push({ category: 'record', text: 'Serious adverse record on file  application declined.' });
+    reasons.push({ category: 'record', text: 'Serious adverse record on file. Application declined.' });
     return finish('decline', 0, 0);
   }
 
@@ -365,7 +365,7 @@ export function decideLoan(input: LoanDecisionInput): LoanDecision {
   if (integrityFloorBreached) {
     reasons.push({
       category: 'integrity',
-      text: 'Data-integrity check: the income pattern could not be validated automatically  declined pending manual verification with the lender.',
+      text: 'Data-integrity check: the income pattern could not be validated automatically. Declined pending manual verification with the lender.',
     });
     return finish('decline', 0, 0);
   }
@@ -383,7 +383,7 @@ export function decideLoan(input: LoanDecisionInput): LoanDecision {
       return finish(coverage.forceRefer ? 'refer' : 'decline', 0, 0);
     }
     const lowest = coverage.products.reduce((m, p) => Math.min(m, p.minScore), Infinity);
-    reasons.push({ category: 'policy', text: `Score ${score} is below the minimum tier threshold (${lowest})  application declined.` });
+    reasons.push({ category: 'policy', text: `Score ${score} is below the minimum tier threshold (${lowest}). Application declined.` });
     return finish('decline', 0, 0);
   }
   reasons.push({ category: 'policy', text: `Qualifies for the "${tier.label}" tier (requires score ≥ ${tier.minScore}, scored ${score}).` });
@@ -426,7 +426,7 @@ export function decideLoan(input: LoanDecisionInput): LoanDecision {
 
   // Soft-adverse and low-confidence both flip an otherwise-clean approval to a human-reviewed referral.
   if (adverseRecord === 'soft') {
-    reasons.push({ category: 'record', text: 'Minor adverse record on file  routed to manual review instead of auto-approval.' });
+    reasons.push({ category: 'record', text: 'Minor adverse record on file. Routed to manual review instead of auto-approval.' });
     return finish('refer', principal, installment);
   }
   if (confidence < policy.minConfidenceToApprove) {
@@ -434,13 +434,13 @@ export function decideLoan(input: LoanDecisionInput): LoanDecision {
       category: 'data-quality',
       text:
         `We could not verify enough of the recorded data (confidence ${Math.round(confidence * 100)}%, below the ` +
-        `${Math.round(policy.minConfidenceToApprove * 100)}% auto-approval floor)  routed to manual review. More verified history would strengthen this application.`,
+        `${Math.round(policy.minConfidenceToApprove * 100)}% auto-approval floor). Routed to manual review. More verified history would strengthen this application.`,
     });
     return finish('refer', principal, installment);
   }
 
   if (coverage.forceRefer) {
-    reasons.push({ category: 'data-quality', text: 'Auto-approval blocked by coverage policy  routed to manual review.' });
+    reasons.push({ category: 'data-quality', text: 'Auto-approval blocked by coverage policy. Routed to manual review.' });
     return finish('refer', principal, installment);
   }
 

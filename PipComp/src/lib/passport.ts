@@ -110,7 +110,7 @@ export interface ConsentReceipt {
   tier: ConsentTier;
   scope: string[];   // field names shared under this tier
   grantedAt: string; // ISO
-  expiresAt: string; // ISO  may be shorter than the passport's own validUntil
+  expiresAt: string; // ISO. May be shorter than the passport's own validUntil
 }
 
 /** The portable, signable credential  no raw transactions. */
@@ -508,7 +508,7 @@ export function verifyPassport(
         return {
           valid: false,
           tampered: false,
-          reasons: ['Missing or malformed issuer signature  not a Pip-issued passport'],
+          reasons: ['Missing or malformed issuer signature, not a Pip-issued passport'],
         };
       }
       const issuerValid = ed.verify(
@@ -520,7 +520,7 @@ export function verifyPassport(
         return {
           valid: false,
           tampered: false,
-          reasons: ['Issuer signature invalid  not issued by Pip (possible self-minted passport)'],
+          reasons: ['Issuer signature invalid, not issued by Pip (possible self-minted passport)'],
         };
       }
     }

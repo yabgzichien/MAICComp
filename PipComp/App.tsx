@@ -148,6 +148,13 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
   const [txnFilter, setTxnFilter] = useState<string | null>(null);
   const [addInitial, setAddInitial] = useState<'attach' | 'import'>('attach');
   const [calendarMonth, setCalendarMonth] = useState<string | undefined>(undefined);
+  // Where to land after eKYC (Brief-level UI/UX P2.8): verifying from the Loans gate must
+  // return to Loans, not always to the Passport ceremony  whichever screen opened KYC wins.
+  const [kycReturnTo, setKycReturnTo] = useState<Screen>('passport');
+  const openKyc = (from: Screen) => {
+    setKycReturnTo(from);
+    setScreen('kyc');
+  };
 
   // Persistent bottom nav appears only on the four primary destinations.
   const navTab: NavTab | null =
@@ -263,12 +270,12 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
       {screen === 'loans' && (
         <LoansScreen
           onBack={() => setScreen('credit')}
-          onOpenKyc={() => setScreen('kyc')}
+          onOpenKyc={() => openKyc('loans')}
           onOpenPassport={() => setScreen('passport')}
         />
       )}
       {screen === 'passport' && (
-        <PassportScreen onBack={() => setScreen('credit')} onOpenKyc={() => setScreen('kyc')} />
+        <PassportScreen onBack={() => setScreen('credit')} onOpenKyc={() => openKyc('passport')} />
       )}
       {screen === 'coach' && (
         <PassportCoachScreen
@@ -278,7 +285,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
           }
         />
       )}
-      {screen === 'kyc' && <KycScreen onBack={() => setScreen('passport')} />}
+      {screen === 'kyc' && <KycScreen onBack={() => setScreen(kycReturnTo)} />}
       {screen === 'lender' && <LenderScreen onBack={() => setScreen('home')} />}
       {screen === 'breakdown' && (
         <BreakdownScreen

@@ -248,7 +248,7 @@ const CONSTRAINT_LABEL: Record<Constraint, string> = {
   coverage: 'Thin data coverage',
   confidence: 'Low data confidence',
   affordability: 'A tight monthly surplus',
-  none: 'Nothing  you already reach the top offer',
+  none: 'Nothing. You already reach the top offer',
 };
 
 /**
@@ -443,11 +443,11 @@ export function buildCoachPlan(input: CoachPlanInput): CoachPlan {
     let note: string | undefined;
     if (!changed) {
       if (coverageBlocks) {
-        note = `Reach ${gateDays} days of recorded history first  trimming spending can't lift an Emergency-tier offer.`;
+        note = `Reach ${gateDays} days of recorded history first. Trimming spending can't lift an Emergency-tier offer.`;
       } else if (anyStepHelps) {
         note = 'Free up a little more to move your offer.';
       } else {
-        note = 'You can already afford your tier maximum  history and score are your levers now.';
+        note = 'You can already afford your tier maximum. History and score are your levers now.';
       }
     }
     return {

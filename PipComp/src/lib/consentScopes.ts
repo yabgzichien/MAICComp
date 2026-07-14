@@ -236,7 +236,7 @@ const TIER0_DISCLOSURE: { [K in keyof Omit<PassportDraft, 'consent' | 'occupatio
           {
             key: 'digitHistogram',
             label: 'Leading-digit histogram',
-            detail: `9 digit counts across ${d.digitHistogram.reduce((s, n) => s + n, 0)} amounts  no individual amounts`,
+            detail: `9 digit counts across ${d.digitHistogram.reduce((s, n) => s + n, 0)} amounts. No individual amounts`,
           },
         ]
       : [],
@@ -245,7 +245,7 @@ const TIER0_DISCLOSURE: { [K in keyof Omit<PassportDraft, 'consent' | 'occupatio
     {
       key: 'evidence',
       label: 'Evidence fingerprint',
-      detail: `SHA-256 fingerprint of ${Object.keys(d.aggregates).length} aggregate figures  a hash, not the figures`,
+      detail: `SHA-256 fingerprint proving the ${Object.keys(d.aggregates).length} aggregate figures weren't altered, without exposing them`,
     },
   ],
   provenanceMeta: (d) =>

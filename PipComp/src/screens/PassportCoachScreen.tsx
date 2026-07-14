@@ -40,9 +40,9 @@ const VERDICT_SHORT: Record<CoachSim['decisionTo'], string> = {
 
 /** Plain-English resilience line for an approved offer under income shocks (feature B). */
 function stressLabel(dipPct: number): string {
-  if (dipPct >= 20) return `Resilient  this offer holds even a ${dipPct}% income dip`;
+  if (dipPct >= 20) return `Resilient. This offer holds even a ${dipPct}% income dip`;
   if (dipPct >= 10) return `Holds a ${dipPct}% income dip`;
-  return 'Tight  even a 10% income dip would strain it';
+  return 'Tight. Even a 10% income dip would strain it';
 }
 
 /** Where "Start now" deep-links for each lever (feature G). */
@@ -276,7 +276,7 @@ export function PassportCoachScreen({
               })}
             </ScrollView>
             {dir.offline ? (
-              <Text style={styles.offlineNote}>Lender directory unreachable  coaching against the generic Pip ladder.</Text>
+              <Text style={styles.offlineNote}>Lender directory unreachable. Coaching against the generic Pip ladder.</Text>
             ) : (
               <Text style={styles.lenderBlurb}>{selectedLender.blurb}</Text>
             )}

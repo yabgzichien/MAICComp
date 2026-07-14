@@ -170,7 +170,7 @@ export function ImportScreen({ onClose, onOpenSettings }: { onClose: () => void;
           <>
             <PipSays expr="curious">
               <BubbleText>
-                I read <B>{fileName}</B>, but it has <B>no transactions</B> to import  this statement shows no account activity for its period. Try one that covers a month with transactions.
+                I read <B>{fileName}</B>, but it has <B>no transactions</B> to import. This statement shows no account activity for its period. Try one that covers a month with transactions.
               </BubbleText>
             </PipSays>
             <View style={{ marginTop: 22 }}>

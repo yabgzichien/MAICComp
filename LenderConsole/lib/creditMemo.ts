@@ -17,7 +17,7 @@ const pct = (x: number): number => Math.round(x * 100);
 
 const DECISION_LABEL: Record<Decision, string> = {
   approve: 'Approved',
-  refer: 'Refer  manual review',
+  refer: 'Refer: manual review',
   decline: 'Declined',
 };
 

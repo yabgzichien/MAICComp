@@ -51,7 +51,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
         <Pip size={72} expr="curious" />
         <Text style={styles.title}>{this.props.title ?? 'Something went wrong'}</Text>
         <Text style={styles.message}>
-          {this.props.message ?? "This screen hit a snag. Your data is safe  try again, and if it keeps happening, restart the app."}
+          {this.props.message ?? "This screen hit a snag. Your data is safe. Try again, and if it keeps happening, restart the app."}
         </Text>
         <PrimaryButton onPress={this.reset} height={48}>
           <BtnLabel>Try again</BtnLabel>

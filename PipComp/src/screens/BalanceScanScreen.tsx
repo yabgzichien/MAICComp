@@ -221,7 +221,7 @@ export function BalanceScanScreen({ onClose, onOpenSettings }: { onClose: () => 
                 <InstitutionBadge inst={institution} fallbackText={rawProvider} size={44} />
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={styles.detectedName} numberOfLines={1}>{institution?.name ?? rawProvider ?? 'Unrecognized provider'}</Text>
-                  <Text style={styles.detectedSub}>{institution ? (institution.kind === 'bank' ? 'Bank' : 'E-Wallet') : 'Not in our bank list  type a name below'}</Text>
+                  <Text style={styles.detectedSub}>{institution ? (institution.kind === 'bank' ? 'Bank' : 'E-Wallet') : 'Not in our bank list. Type a name below'}</Text>
                 </View>
               </View>
 
@@ -230,7 +230,7 @@ export function BalanceScanScreen({ onClose, onOpenSettings }: { onClose: () => 
                 <Text style={styles.rm}>RM</Text>
                 <TextInput value={amountText} onChangeText={setAmountText} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colors.ink3} style={styles.amountInput} autoFocus={amount === 0} />
               </View>
-              {amount === 0 && <Text style={styles.hint}>I couldn't read a clear amount  enter it to continue.</Text>}
+              {amount === 0 && <Text style={styles.hint}>I couldn't read a clear amount. Enter it to continue.</Text>}
             </Card>
 
             {!forceCreate && matches.length > 1 && !selectedMatchId && (

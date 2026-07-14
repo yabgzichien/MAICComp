@@ -62,7 +62,7 @@ export function KycScreen({ onBack, onDone }: { onBack: () => void; onDone?: () 
     setScanning(false);
     if (r.fullName) setName(r.fullName);
     if (r.idNumber) setNric(r.idNumber);
-    setError(r.fullName || r.idNumber ? '' : "Couldn't read the document  please enter your details manually.");
+    setError(r.fullName || r.idNumber ? '' : "Couldn't read the document. Please enter your details manually.");
   }
 
   async function pickFromGallery() {
@@ -115,7 +115,7 @@ export function KycScreen({ onBack, onDone }: { onBack: () => void; onDone?: () 
       <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: insets.bottom + 30 }} keyboardShouldPersistTaps="handled">
         <Card style={styles.noteCard}>
           <Text style={styles.noteText}>
-            Demo verification (mock)  we validate your MyKad structure and read its details.
+            Demo verification (mock). We validate your MyKad structure and read its details.
             A production build verifies against MyDigital ID / CTOS with document + liveness checks.
           </Text>
         </Card>
@@ -141,14 +141,14 @@ export function KycScreen({ onBack, onDone }: { onBack: () => void; onDone?: () 
 
             <TextInput
               style={[styles.input, { marginTop: 12 }]}
-              placeholder="Occupation  e.g. Ride-hailing driver"
+              placeholder="Occupation: e.g. Ride-hailing driver"
               placeholderTextColor={colors.ink3}
               value={occ}
               onChangeText={setOcc}
             />
             <TextInput
               style={[styles.input, { marginTop: 10 }]}
-              placeholder="Sector  e.g. Transport"
+              placeholder="Sector: e.g. Transport"
               placeholderTextColor={colors.ink3}
               value={sector}
               onChangeText={setSector}
@@ -174,7 +174,7 @@ export function KycScreen({ onBack, onDone }: { onBack: () => void; onDone?: () 
 
             <TextInput
               style={[styles.input, { marginTop: 14 }]}
-              placeholder="Months in this work  e.g. 18"
+              placeholder="Months in this work: e.g. 18"
               placeholderTextColor={colors.ink3}
               keyboardType="number-pad"
               value={tenure}

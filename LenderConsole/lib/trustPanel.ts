@@ -45,14 +45,14 @@ function freshnessRow(passport: CreditPassport, now: Date): TrustRow {
   }
   const t = now.getTime();
   if (t > until) {
-    return { key: 'freshness', label, state: 'fail', detail: `Expired  was valid until ${passport.validUntil.slice(0, 10)}` };
+    return { key: 'freshness', label, state: 'fail', detail: `Expired: was valid until ${passport.validUntil.slice(0, 10)}` };
   }
   if (t < issued) {
-    return { key: 'freshness', label, state: 'fail', detail: `Not yet valid  issued ${passport.issuedAt.slice(0, 10)}` };
+    return { key: 'freshness', label, state: 'fail', detail: `Not yet valid. Issued ${passport.issuedAt.slice(0, 10)}` };
   }
   const daysLeft = Math.floor((until - t) / DAY_MS);
   if (daysLeft <= FRESHNESS_WARN_DAYS) {
-    return { key: 'freshness', label, state: 'warn', detail: `Inside the signed window but expires in ${daysLeft} day(s)  ask for a re-issued passport soon` };
+    return { key: 'freshness', label, state: 'warn', detail: `Inside the signed window but expires in ${daysLeft} day(s). Ask for a re-issued passport soon` };
   }
   return { key: 'freshness', label, state: 'pass', detail: `Inside the signed validity window  ${daysLeft} days left (until ${passport.validUntil.slice(0, 10)})` };
 }
@@ -63,7 +63,7 @@ function stackingRow(priors: Presentment[], windowHours: number, now: Date): Tru
     return { key: 'stacking', label, state: 'pass', detail: `First presentment at this console in the last ${windowHours}h` };
   }
   const lastAgo = formatAgo(priors[0].at, now);
-  const detail = `Presented ${priors.length} time(s) before in the last ${windowHours}h  last ${lastAgo} · review before disbursing`;
+  const detail = `Presented ${priors.length} time(s) before in the last ${windowHours}h. Last ${lastAgo} · review before disbursing`;
   return { key: 'stacking', label, state: priors.length >= STACKING_FAIL_COUNT ? 'fail' : 'warn', detail };
 }
 
@@ -78,12 +78,12 @@ function consentRow(passport: CreditPassport, lapsedTiers: ConsentTier[] | undef
   const label = 'Consent';
   const receipts = passport.consent;
   if (!receipts || receipts.length === 0) {
-    return { key: 'consent', label, state: 'warn', detail: 'Not shared  this passport carries no consent receipts; presenting the code is itself the borrower’s consent act' };
+    return { key: 'consent', label, state: 'warn', detail: 'Not shared. This passport carries no consent receipts; presenting the code is itself the borrower’s consent act' };
   }
   const lapsed = lapsedTiers ?? receipts.filter((r) => Date.parse(r.expiresAt) < now.getTime()).map((r) => r.tier);
   if (lapsed.length > 0) {
     const names = Array.from(new Set(lapsed)).map((t) => TIER_NAME[t]).join(', ');
-    return { key: 'consent', label, state: 'warn', detail: `${names} consent lapsed  ask the applicant to re-share the passport` };
+    return { key: 'consent', label, state: 'warn', detail: `${names} consent lapsed. Ask the applicant to re-share the passport` };
   }
   const tiers = receipts.map((r) => r.tier).sort((a, b) => a - b).map((t) => TIER_NAME[t]);
   return { key: 'consent', label, state: 'pass', detail: `Signed consent receipts: ${tiers.join(' + ')}  granted ${receipts[0].grantedAt.slice(0, 10)}, provable field-by-field` };
@@ -96,12 +96,12 @@ export function deriveTrustRows(input: TrustPanelInput): TrustRow[] {
   const windowHours = input.windowHours ?? 24;
 
   const holder: TrustRow = holderVerified
-    ? { key: 'holder', label: 'Holder signature', state: 'pass', detail: 'Ed25519 signature verifies against the subject key  contents unaltered since signing' }
-    : { key: 'holder', label: 'Holder signature', state: 'fail', detail: 'Holder signature does not verify  the passport was altered' };
+    ? { key: 'holder', label: 'Holder signature', state: 'pass', detail: 'Ed25519 signature verifies against the subject key, contents unaltered since signing' }
+    : { key: 'holder', label: 'Holder signature', state: 'fail', detail: 'Holder signature does not verify. The passport was altered' };
 
   const issuer: TrustRow = issuerVerified
-    ? { key: 'issuer', label: 'Issuer attestation', state: 'pass', detail: 'Signed by Pip’s pinned issuer key  issued by Pip, not self-minted' }
-    : { key: 'issuer', label: 'Issuer attestation', state: 'fail', detail: 'No valid issuer signature  possible self-minted passport' };
+    ? { key: 'issuer', label: 'Issuer attestation', state: 'pass', detail: 'Signed by Pip’s pinned issuer key, issued by Pip, not self-minted' }
+    : { key: 'issuer', label: 'Issuer attestation', state: 'fail', detail: 'No valid issuer signature, possible self-minted passport' };
 
   return [holder, issuer, freshnessRow(passport, now), consentRow(passport, input.lapsedTiers, now), stackingRow(priorPresentments, windowHours, now)];
 }

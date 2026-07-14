@@ -47,7 +47,7 @@ export interface PricingSuggestion {
 
 export function priceLoan(inputs: PricingInputs): PricingSuggestion {
   const lgd = inputs.lgd ?? DEFAULT_ASSUMPTIONS.lgd;
-  const pd = loanPD(inputs.band, 0); // approved loans cleared the fraud gate  band-driven PD
+  const pd = loanPD(inputs.band, 0); // approved loans cleared the fraud gate. Band-driven PD
   const expectedLossRate = pd * lgd;
   const breakEvenRate = inputs.costOfFunds + expectedLossRate;
   const suggestedRate = clamp(breakEvenRate + inputs.targetReturn, inputs.costOfFunds, inputs.ladderApr);
@@ -64,7 +64,7 @@ export function priceLoan(inputs: PricingInputs): PricingSuggestion {
     `Default probability ${pct(pd)} for the ${inputs.band} band → expected loss ${pct(expectedLossRate)} (LGD ${pct(lgd)}).`,
     `Break-even ${pct(breakEvenRate)} = cost of funds ${pct(inputs.costOfFunds)} + expected loss ${pct(expectedLossRate)}.`,
     discountBps > 0
-      ? `Suggested ${pct(suggestedRate)} meets the ${pct(inputs.targetReturn)} target return  a ${discountBps} bps discount on the ${pct(inputs.ladderApr)} ladder rate for a lower-risk file.`
+      ? `Suggested ${pct(suggestedRate)} meets the ${pct(inputs.targetReturn)} target return. A ${discountBps} bps discount on the ${pct(inputs.ladderApr)} ladder rate for a lower-risk file.`
       : `Ladder rate ${pct(inputs.ladderApr)} stands: break-even + target sits at or above it, and the assistant never prices above the published ladder.`,
   ];
 

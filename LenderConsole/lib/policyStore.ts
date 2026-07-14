@@ -79,7 +79,7 @@ export function validateStoredPolicy(raw: unknown): PolicyValidation {
       fullLadderFromDays !== undefined &&
       emergencyOnlyBelowDays > fullLadderFromDays
     ) {
-      errors.push('policy.emergencyOnlyBelowDays: cannot exceed policy.fullLadderFromDays  the gates would invert.');
+      errors.push('policy.emergencyOnlyBelowDays: cannot exceed policy.fullLadderFromDays. The gates would invert.');
     }
     if (errors.length === 0) {
       const products = validateProducts(o.products, errors);
@@ -164,5 +164,5 @@ export const APR_WARN_THRESHOLD = 0.3;
 export function aprWarnings(products: LoanProduct[]): string[] {
   return products
     .filter((p) => p.apr > APR_WARN_THRESHOLD)
-    .map((p) => `${p.label}: ${Math.round(p.apr * 100)}% APR is above the ${Math.round(APR_WARN_THRESHOLD * 100)}% advisory ceiling  high-cost credit draws scrutiny under the CCA 2025.`);
+    .map((p) => `${p.label}: ${Math.round(p.apr * 100)}% APR is above the ${Math.round(APR_WARN_THRESHOLD * 100)}% advisory ceiling. High-cost credit draws scrutiny under the CCA 2025.`);
 }

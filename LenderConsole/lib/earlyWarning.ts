@@ -77,7 +77,7 @@ export function diffCheckIn(baseline: CreditPassport, checkIn: CreditPassport): 
 
     const coverageDrop = a0.coverageDays - a1.coverageDays;
     if (coverageDrop >= COVERAGE_STAGNATION_CRITICAL_DAYS) {
-      flags.push({ key: 'coverage-stagnation', severity: 'critical', evidence: `Data coverage dropped ${coverageDrop} days (${a0.coverageDays}d → ${a1.coverageDays}d)  tracking may have stopped` });
+      flags.push({ key: 'coverage-stagnation', severity: 'critical', evidence: `Data coverage dropped ${coverageDrop} days (${a0.coverageDays}d → ${a1.coverageDays}d). Tracking may have stopped` });
     } else if (coverageDrop >= COVERAGE_STAGNATION_WATCH_DAYS) {
       flags.push({ key: 'coverage-stagnation', severity: 'watch', evidence: `Data coverage dropped ${coverageDrop} days (${a0.coverageDays}d → ${a1.coverageDays}d)` });
     }

@@ -67,7 +67,7 @@ export function LenderScreen({ onBack }: { onBack: () => void }) {
       signature = parsed.signature;
       issuerSignature = parsed.issuerSignature;
     } catch {
-      setVerifyError('Invalid code format  paste the full passport code from the borrower app');
+      setVerifyError('Invalid code format. Paste the full passport code from the borrower app');
       setVerifying(false);
       return;
     }
@@ -252,7 +252,7 @@ export function LenderScreen({ onBack }: { onBack: () => void }) {
             <Text style={styles.stackingBody}>
               This passport was already presented {stacking.length} time
               {stacking.length > 1 ? 's' : ''} recently (most recent {formatAgo(stacking[0].at)}).
-              The borrower may be applying to multiple lenders at once  review before disbursing.
+              The borrower may be applying to multiple lenders at once. Review before disbursing.
             </Text>
           </Card>
         )}
@@ -417,7 +417,7 @@ function CapitalMarketsSection() {
       ))}
 
       <Text style={styles.noteText}>
-        Ratings are computed deterministically from the pool's expected loss  a weaker pool is
+        Ratings are computed deterministically from the pool's expected loss. A weaker pool is
         downgraded, not rubber-stamped. The AI supplies the upstream risk; the structuring is
         transparent and auditable.
       </Text>
@@ -518,7 +518,7 @@ function SuccessCard({ result }: { result: VerifyResult }) {
 function FailureCard({ result }: { result: VerifyResult }) {
   const { tampered, reasons } = result;
   const headline = tampered
-    ? 'Signature mismatch  passport may have been altered'
+    ? 'Signature mismatch. Passport may have been altered'
     : 'Verification failed';
 
   return (
@@ -603,7 +603,7 @@ function LoanDecisionCard({ decision, confidence }: { decision: LoanDecision; co
       <View style={styles.confidenceBadge}>
         <Icon name="check" size={13} color={colors.accentInk} stroke={2.5} />
         <Text style={styles.confidenceText}>
-          Passport verified  data confidence:{' '}
+          Passport verified. Data confidence:{' '}
           {typeof confidence === 'number' ? `${Math.round(confidence * 100)}%` : 'n/a'}
         </Text>
       </View>

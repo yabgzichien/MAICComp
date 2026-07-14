@@ -51,7 +51,7 @@ function parsePurpose(raw: unknown): DeclaredPurpose | undefined {
 export async function POST(req: Request) {
   const ip = req.headers.get('x-forwarded-for') ?? 'unknown';
   if (rateLimited(ip)) {
-    return NextResponse.json({ filed: false, errors: ['Too many requests  try again shortly.'] }, { status: 429, headers: CORS_HEADERS });
+    return NextResponse.json({ filed: false, errors: ['Too many requests. Try again shortly.'] }, { status: 429, headers: CORS_HEADERS });
   }
 
   const raw = await req.text();

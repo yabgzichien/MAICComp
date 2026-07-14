@@ -8,6 +8,7 @@ import { computeDataConfidence, type ConfidenceTxn, type DataConfidence } from '
 import { availableMonths, monthlyIncomeStatement, spentByCategory, computeAdherence } from './recap';
 import { netWorth, netWorthSeries } from './networth';
 import { currentMonthKey, type Allocations } from './budget';
+import { detectObligations } from './obligations';
 import type { Account, BalanceEntry, Transaction } from './types';
 
 /** The store slice the credit assembly reads. Passing it explicitly makes the assembly pure and
@@ -60,8 +61,15 @@ export function assembleCredit(input: CreditInputs, now: Date = new Date()): Ass
   const savingsRate = avgIncome > 0 ? avgSurplus / avgIncome : 0;
 
   const { liabilities } = netWorth(input.accounts, input.accountValues);
-  // Phase-0 heuristic: ~3%/mo minimum-payment proxy until real loans exist (Phase 2).
-  const monthlyDebtService = liabilities * 0.03;
+  // Single source of truth for "monthly debt service" (UI/UX P2.9): prefer the evidenced sum
+  // of recurring outflows detectObligations actually finds in the ledger  the same figure
+  // consentScopes.ts signs into the passport  falling back to the Phase-0 liabilities*3%/mo
+  // heuristic only when nothing is detected yet. Previously this used the heuristic
+  // unconditionally, so the DSR factor and the passport ceremony could show two different
+  // numbers for the same claim.
+  const obligations = detectObligations(transactions);
+  const monthlyDebtService =
+    obligations.obligations.length > 0 ? obligations.evidencedMonthlyDebtService : liabilities * 0.03;
 
   const adherence = computeAdherence(
     input.allocations,

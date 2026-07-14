@@ -59,7 +59,7 @@ export function SettingsScreen({ onBack, onMigrate, onOpenLender = () => {}, onO
   const resetDemoConfirm = () => {
     confirmAction(
       'Reset demo?',
-      'This clears everything and reloads the seeded demo persona  any scans or applications you made are discarded.',
+      'This clears everything and reloads the seeded demo persona. Any scans or applications you made are discarded.',
       'Reset demo',
       async () => {
         setResettingDemo(true);
@@ -197,7 +197,7 @@ export function SettingsScreen({ onBack, onMigrate, onOpenLender = () => {}, onO
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.providerName}>Attack Gallery</Text>
-            <Text style={styles.providerSub}>Run known fraud techniques against our own integrity rings  a live self-test.</Text>
+            <Text style={styles.providerSub}>Run known fraud techniques against our own integrity rings. A live self-test.</Text>
           </View>
           <Icon name="chevronRight" size={18} color={colors.ink3} />
         </Pressable>
@@ -221,11 +221,16 @@ export function SettingsScreen({ onBack, onMigrate, onOpenLender = () => {}, onO
           </View>
         </Card>
 
-        <Card style={{ padding: 16, marginTop: 14 }}>
+        {/* Distinct "danger zone" treatment  this is the one irreversible action on this
+            screen, so it shouldn't look like every other settings row. */}
+        <Card style={[{ padding: 16, marginTop: 14 }, styles.dangerCard]}>
           <View style={styles.providerRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.providerName}>Reset all data</Text>
-              <Text style={styles.providerSub}>Delete every transaction, learned merchant, and your budget, then restore the default categories.</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Icon name="alert" size={13} color="#b3261e" />
+                <Text style={[styles.providerName, { color: '#b3261e' }]}>Reset all data</Text>
+              </View>
+              <Text style={styles.providerSub}>Delete every transaction, learned merchant, and your budget, then restore the default categories. This can't be undone.</Text>
             </View>
             <Pressable onPress={resetAllConfirm} style={styles.resetBtn}>
               <Icon name="trash" size={16} color="#b3261e" />
@@ -331,6 +336,7 @@ function ReadonlyField({ label, children }: { label: string; children: React.Rea
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
+  dangerCard: { borderColor: 'rgba(179,38,30,0.28)', backgroundColor: 'rgba(179,38,30,0.03)' },
   providerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   providerBadge: {
     width: 38,

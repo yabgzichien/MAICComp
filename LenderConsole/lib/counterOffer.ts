@@ -54,5 +54,5 @@ export function drivingConstraintFrom(decision: LoanDecision): string {
   if (flatCap) return flatCap;
   const flatAfford = decision.reasons.find((r) => /affordab|surplus|DSR|installment|exceeds what affordability/i.test(r));
   if (flatAfford) return flatAfford;
-  return 'Affordability  the requested amount exceeds what the surplus-share and DSR caps support.';
+  return 'Affordability. The requested amount exceeds what the surplus-share and DSR caps support.';
 }

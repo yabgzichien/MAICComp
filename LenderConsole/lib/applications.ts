@@ -99,7 +99,7 @@ export function fileApplication(
   
   const auditDetail = input.source === 'direct'
     ? 'submitted by borrower via direct apply'
-    : (resolved ? `engine ${input.engineDecision}  resolved as filed` : 'engine refer  awaiting officer decision');
+    : (resolved ? `engine ${input.engineDecision}  resolved as filed` : 'engine refer. Awaiting officer decision');
 
   const record: ApplicationRecord = {
     id: `${input.subject.slice(0, 8)}-${now.getTime().toString(36)}-${input.requestedAmount}`,
@@ -150,7 +150,7 @@ export function resolveApplication(
   if (!app) throw new Error(`No application with id ${id}.`);
   if (!rationale.trim()) throw new Error('A one-line rationale is required to resolve an application.');
   if (app.status === 'declined' && outcome === 'approved') {
-    throw new Error('An engine or officer decline can never be overturned to an approval  escalation only.');
+    throw new Error('An engine or officer decline can never be overturned to an approval. Escalation only.');
   }
   if (app.status === 'approved' && outcome === 'approved') {
     throw new Error('Already approved.');
@@ -191,7 +191,7 @@ export function recordCheckIn(
   const checkIn: CheckIn = { at, passportCode, flags };
   const detail =
     flags.length === 0
-      ? 'clean  no flags'
+      ? 'clean. No flags'
       : `${flags.length} flag(s): ${flags.map((f) => `${f.key} (${f.severity})`).join(', ')}`;
   return apps.map((a) =>
     a.id === id
