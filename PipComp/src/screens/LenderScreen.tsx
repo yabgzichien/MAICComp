@@ -417,9 +417,8 @@ function CapitalMarketsSection() {
       ))}
 
       <Text style={styles.noteText}>
-        Ratings are computed deterministically from the pool's expected loss. A weaker pool is
-        downgraded, not rubber-stamped. The AI supplies the upstream risk; the structuring is
-        transparent and auditable.
+        Ratings are computed deterministically from the pool's expected loss. A weaker pool gets a
+        lower rating. The AI supplies the upstream risk; the structuring is transparent and auditable.
       </Text>
     </>
   );

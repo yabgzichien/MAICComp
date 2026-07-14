@@ -2,7 +2,7 @@
 // One-time setup. The user can verify identity (eKYC) now to unlock credit & financing, or
 // skip and use Pip as a plain money tracker  eKYC is required later only to borrow.
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../components/Icon';
 import { Pip } from '../components/Pip';
@@ -13,8 +13,16 @@ import { KycScreen } from './KycScreen';
 
 export function OnboardingScreen() {
   const insets = useSafeAreaInsets();
-  const { completeOnboarding } = useAppData();
+  const { completeOnboarding, loadDemoData, startTour } = useAppData();
   const [mode, setMode] = useState<'intro' | 'kyc'>('intro');
+  const [startingTour, setStartingTour] = useState(false);
+
+  async function takeTour() {
+    setStartingTour(true);
+    await loadDemoData();
+    await completeOnboarding();
+    await startTour({ fresh: true });
+  }
 
   if (mode === 'kyc') {
     // Verify identity inline; finishing (Done) completes onboarding straight to home.
@@ -47,6 +55,18 @@ export function OnboardingScreen() {
           </Pressable>
         </Card>
 
+        <Pressable style={styles.tourBtn} onPress={() => void takeTour()} disabled={startingTour}>
+          {startingTour ? (
+            <ActivityIndicator size="small" color={colors.accentInk} />
+          ) : (
+            <>
+              <Icon name="sparkles" size={16} color={colors.accentInk} />
+              <Text style={styles.tourText}>Take the 2-minute tour</Text>
+            </>
+          )}
+        </Pressable>
+        <Text style={styles.skipHint}>Loads a sample profile  reset it any time in Settings.</Text>
+
         <Pressable style={styles.skipBtn} onPress={() => void completeOnboarding()}>
           <Text style={styles.skipText}>Skip for now, just track my money</Text>
         </Pressable>
@@ -70,4 +90,6 @@ const styles = StyleSheet.create({
   skipBtn: { alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 999, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, marginTop: 16 },
   skipText: { fontFamily: uiFont(600), fontSize: 14, color: colors.ink2 },
   skipHint: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, textAlign: 'center', marginTop: 10 },
+  tourBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: 999, backgroundColor: colors.accentTint, borderWidth: 1, borderColor: colors.accentSoft, marginTop: 16 },
+  tourText: { fontFamily: uiFont(700), fontSize: 14, color: colors.accentInk },
 });

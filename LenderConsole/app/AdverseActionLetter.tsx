@@ -8,7 +8,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { FONT, type Palette } from './tokens';
 import { SectionLabel } from './shared';
-import { buildAdverseActionLetter, letterToText, type AdverseActionLetter } from '../lib/adverseAction';
+import { buildAdverseActionLetter, letterToPdfDoc, letterToText, type AdverseActionLetter } from '../lib/adverseAction';
+import { downloadPdf } from '../lib/pdfExport';
 import type { CreditPassport } from '../lib/passport';
 import type { LoanDecision } from '../lib/loans';
 
@@ -91,6 +92,12 @@ export default function AdverseActionLetterModal({
       });
   }
 
+  /** Primary export (P2.11): officers file PDFs, not markdown. */
+  function downloadPdfFile() {
+    if (!letter) return;
+    downloadPdf(letterToPdfDoc(letter), `adverse-action-${letter.kind}-${letter.date}.pdf`);
+  }
+
   const chip = provenance === 'pending' ? 'Narrating…' : provenance === 'live' ? 'Live AI narration' : 'Template prose';
   const chipColor = provenance === 'live' ? p.accentInk : p.ink3;
 
@@ -135,7 +142,8 @@ export default function AdverseActionLetterModal({
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: chipColor }}>{chip}</span>
-            <button onClick={copyToClipboard} style={btn(p, true)}>{copied ? '✓ Copied' : 'Copy text'}</button>
+            <button onClick={downloadPdfFile} style={btn(p, true)}>Download PDF</button>
+            <button onClick={copyToClipboard} style={btn(p, false)}>{copied ? '✓ Copied' : 'Copy text'}</button>
             <button onClick={() => window.print()} style={btn(p, false)}>Print</button>
             <button onClick={onClose} aria-label="Close" style={{ ...btn(p, false), padding: '6px 10px' }}>✕</button>
           </div>
@@ -163,7 +171,8 @@ export default function AdverseActionLetterModal({
             </p>
             {letter.counterOffer && (
               <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, marginTop: 6 }}>
-                Original request {rm(letter.counterOffer.originalRequest)} · Countered {rm(letter.counterOffer.counteredAmount)} at {rm(letter.counterOffer.installment)}/mo
+                Original request {rm(letter.counterOffer.originalRequest)} · {letter.counterOffer.indicative ? 'Indicative if approved' : 'Countered'} {rm(letter.counterOffer.counteredAmount)} at {rm(letter.counterOffer.installment)}/mo
+                {letter.counterOffer.indicative ? ' (not a firm offer)' : ''}
               </p>
             )}
           </Section>

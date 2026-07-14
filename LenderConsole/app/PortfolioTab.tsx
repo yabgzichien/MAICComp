@@ -120,7 +120,7 @@ export default function PortfolioTab({ p, apps, onStructure }: { p: Palette; app
           <div style={{ padding: '4px 40px 24px', marginTop: 'auto' }}>
             <div style={{ padding: '11px 18px', borderRadius: 10, background: p.surface, border: `1px solid ${p.hairline}`, boxShadow: p.shadow }}>
               <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.6 }}>
-                Pool PD is driven by verified credit band (approved loans already cleared the fraud and confidence gates); data confidence is reported alongside, not re-priced into PD. Declared purpose stands in for sector until verified occupation ships.
+                Pool risk comes from verified credit bands (approved loans already cleared the fraud and confidence gates). Confidence is shown for context. Declared purpose stands in for sector until verified occupation ships.
               </p>
             </div>
           </div>

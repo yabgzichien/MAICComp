@@ -8,12 +8,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CoinMascot } from '../components/CoinMascot';
 import { FadeIn } from '../components/Motion';
 import { Icon } from '../components/Icon';
+import { TourAnchor } from '../components/TourAnchor';
 import { Card, TopBar } from '../components/ui';
 import { getProvider } from '../llm';
 import { buildCoachPrompt, COACH_SYSTEM_PROMPT, coachPlanFallback } from '../llm/coachPrompt';
 import { baseline, buildCoachPlan, type CoachAction, type CoachLever, type CoachSim } from '../lib/coachPlan';
 import { fetchLenderDirectory, type LenderDirectory } from '../lib/lenderDirectory';
+import { BORROWER_TOUR_STEPS, clampTourStep } from '../lib/tourSteps';
 import { configFor, loadSettings } from '../settings/settingsStore';
+import { useAppData } from '../state/store';
 import { useCreditProfile } from '../state/useCreditProfile';
 import { colors, numFont, uiFont } from '../theme';
 
@@ -124,6 +127,8 @@ export function PassportCoachScreen({
 }) {
   const insets = useSafeAreaInsets();
   const { coachInput } = useCreditProfile();
+  const { tourActive, tourStepIndex } = useAppData();
+  const activeTourAnchor = tourActive ? BORROWER_TOUR_STEPS[clampTourStep(tourStepIndex, BORROWER_TOUR_STEPS.length)].anchorId ?? null : null;
 
   // Lender Match flywheel: the console's published ladders, fetched once. Only public
   // criteria travel (lender → borrower); the simulation below never leaves the device.
@@ -305,9 +310,15 @@ export function PassportCoachScreen({
         {plan.actions.length > 0 ? (
           <>
             <Text style={styles.sectionLabel}>YOUR NEXT STEPS</Text>
-            {plan.actions.map((a) => (
-              <SimCard key={a.lever} action={a} tone="plan" onStart={onStart} />
-            ))}
+            {plan.actions.map((a, i) =>
+              i === 0 ? (
+                <TourAnchor key={a.lever} id="coach-hero-card" activeId={activeTourAnchor}>
+                  <SimCard action={a} tone="plan" onStart={onStart} />
+                </TourAnchor>
+              ) : (
+                <SimCard key={a.lever} action={a} tone="plan" onStart={onStart} />
+              )
+            )}
           </>
         ) : (
           <Card style={styles.doneCard}>

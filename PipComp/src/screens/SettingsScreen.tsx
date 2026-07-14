@@ -5,7 +5,7 @@ import { Icon, type IconName } from '../components/Icon';
 import { Card, Eyebrow, TopBar } from '../components/ui';
 import { clearMemory } from '../db/memoryRepo';
 import { getProvider, llmErrorMessage } from '../llm';
-import { confirmAction } from '../lib/platformAlert';
+import { confirmAction, notify } from '../lib/platformAlert';
 import { configFor, loadSettings, type LLMSettings, type ProviderRole } from '../settings/settingsStore';
 import { useAppData } from '../state/store';
 import { colors, radius, uiFont } from '../theme';
@@ -21,7 +21,7 @@ function maskKey(key: string): string {
 
 export function SettingsScreen({ onBack, onMigrate, onOpenLender = () => {}, onOpenAttacks = () => {} }: { onBack: () => void; onMigrate?: () => void; onOpenLender?: () => void; onOpenAttacks?: () => void }) {
   const insets = useSafeAreaInsets();
-  const { memory, refreshAll, expectedIncome, allocations, hasBudget, resetBudget, resetAllData, loadDemoData } = useAppData();
+  const { memory, refreshAll, expectedIncome, allocations, hasBudget, resetBudget, resetAllData, loadDemoData, startTour } = useAppData();
   const [settings, setSettings] = useState<LLMSettings | null>(null);
   const [resettingDemo, setResettingDemo] = useState(false);
 
@@ -87,6 +87,18 @@ export function SettingsScreen({ onBack, onMigrate, onOpenLender = () => {}, onO
         <TopBar title="Settings" onBack={onBack} />
       </View>
       <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: insets.bottom + 40 }}>
+        <Pressable
+          onPress={() =>
+            notify(
+              'Demo mode',
+              'Bureau/registry checks (CTOS, EPF, SOCSO), issuer signing, and eKYC identity verification are mocked for this demo. Score, confidence, and loan decisions are computed live by the real deterministic engines.'
+            )
+          }
+          style={({ pressed }) => [styles.demoChip, { opacity: pressed ? 0.85 : 1 }]}
+        >
+          <Text style={styles.demoChipText}>DEMO MODE</Text>
+        </Pressable>
+
         <Eyebrow style={{ marginBottom: 10 }}>AI providers</Eyebrow>
 
         <ProviderCard
@@ -198,6 +210,20 @@ export function SettingsScreen({ onBack, onMigrate, onOpenLender = () => {}, onO
           <View style={{ flex: 1 }}>
             <Text style={styles.providerName}>Attack Gallery</Text>
             <Text style={styles.providerSub}>Run known fraud techniques against our own integrity rings. A live self-test.</Text>
+          </View>
+          <Icon name="chevronRight" size={18} color={colors.ink3} />
+        </Pressable>
+
+        <Pressable
+          onPress={() => void startTour({ fresh: true })}
+          style={({ pressed }) => [styles.providerRow, styles.migrateRow, { marginTop: 12, opacity: pressed ? 0.9 : 1 }]}
+        >
+          <View style={styles.providerBadge}>
+            <Icon name="sparkles" size={16} color={colors.accent} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.providerName}>Restart judge tour</Text>
+            <Text style={styles.providerSub}>Replay the guided walkthrough from the start.</Text>
           </View>
           <Icon name="chevronRight" size={18} color={colors.ink3} />
         </Pressable>
@@ -336,6 +362,17 @@ function ReadonlyField({ label, children }: { label: string; children: React.Rea
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
+  demoChip: {
+    alignSelf: 'flex-start',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.surface2,
+    paddingVertical: 4,
+    paddingHorizontal: 9,
+    marginBottom: 14,
+  },
+  demoChipText: { fontFamily: uiFont(700), fontSize: 11, letterSpacing: 0.5, color: colors.ink2 },
   dangerCard: { borderColor: 'rgba(179,38,30,0.28)', backgroundColor: 'rgba(179,38,30,0.03)' },
   providerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   providerBadge: {

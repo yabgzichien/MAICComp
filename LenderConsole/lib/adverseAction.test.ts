@@ -59,10 +59,16 @@ describe('buildAdverseActionLetter — kind selection', () => {
     expect(letter.kind).toBe('refer');
   });
 
-  it('is "counter-offer" when the offer is positive but strictly below the request, regardless of the raw decision label', () => {
+  it('is "counter-offer" when an approve is positive but strictly below the request', () => {
     const letter = buildAdverseActionLetter(passport(), decision({ decision: 'approve', maxAmount: 2769, installment: 180 }), 10000)!;
     expect(letter.kind).toBe('counter-offer');
-    expect(letter.counterOffer).toMatchObject({ originalRequest: 10000, counteredAmount: 2769, installment: 180 });
+    expect(letter.counterOffer).toMatchObject({ originalRequest: 10000, counteredAmount: 2769, installment: 180, indicative: false });
+  });
+
+  it('stays "refer"  never "counter-offer"  when a refer decision also carries a positive supportable amount below the request (P2.11)', () => {
+    const letter = buildAdverseActionLetter(passport(), decision({ decision: 'refer', maxAmount: 2769, installment: 180 }), 10000)!;
+    expect(letter.kind).toBe('refer');
+    expect(letter.counterOffer).toMatchObject({ originalRequest: 10000, counteredAmount: 2769, installment: 180, indicative: true });
   });
 });
 
@@ -83,6 +89,13 @@ describe('buildAdverseActionLetter — decisionStatement', () => {
     const letter = buildAdverseActionLetter(passport(), decision({ decision: 'approve', maxAmount: 3445, installment: 332 }), 4000)!;
     expect(letter.decisionStatement).toContain('RM4,000');
     expect(letter.decisionStatement).toContain('RM3,445');
+  });
+
+  it('states a refer-with-shortfall as still requiring review, with the indicative amount hedged as not firm (P2.11)', () => {
+    const letter = buildAdverseActionLetter(passport(), decision({ decision: 'refer', maxAmount: 2769, installment: 180 }), 10000)!;
+    expect(letter.decisionStatement).toMatch(/requires further review/);
+    expect(letter.decisionStatement).toContain('RM2,769');
+    expect(letter.decisionStatement).toMatch(/not a firm offer/);
   });
 });
 

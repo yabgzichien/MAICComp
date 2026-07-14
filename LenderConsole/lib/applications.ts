@@ -43,6 +43,10 @@ export interface ApplicationRecord {
   purpose?: DeclaredPurpose;
   /** The engine's verdict at filing. Never rewritten  resolutions live in `resolution`. */
   engineDecision: Decision;
+  /** Credit band / confidence at filing (wayfinding: P2.10 queue-card signal). Optional so
+   *  older stored records without them stay valid. */
+  band?: string;
+  confidencePct?: number;
   /** Offer terms at filing  the portfolio/early-warning specs read these off approved rows. */
   offeredAmount: number;
   installment: number;
@@ -71,6 +75,8 @@ export interface FileApplicationInput {
   tierLabel?: string;
   purpose?: DeclaredPurpose;
   source?: 'direct' | 'officer';
+  band?: string;
+  confidencePct?: number;
 }
 
 const OFFICER = 'Hamdan Z.';
@@ -112,6 +118,8 @@ export function fileApplication(
     offeredAmount: decisionOutcome(input.engineDecision, input.offeredAmount),
     installment: decisionOutcome(input.engineDecision, input.installment),
     ...(input.tierLabel ? { tierLabel: input.tierLabel } : {}),
+    ...(input.band ? { band: input.band } : {}),
+    ...(input.confidencePct !== undefined ? { confidencePct: input.confidencePct } : {}),
     status,
     filedAt: at,
     ...(resolved ? { resolvedAt: at } : {}),

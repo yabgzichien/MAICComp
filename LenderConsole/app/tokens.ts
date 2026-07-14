@@ -198,4 +198,14 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     short: 'The fixed priority order in which losses flow through the tranches.',
     body: 'Losses cascade bottom-up (subordinated first, then mezzanine, then senior last) while cash flows fill top-down in the reverse order. This strict priority is what lets one pool serve very different investors from the same underlying micro-loans: safety-seekers buy the senior, yield-seekers buy the first-loss equity.',
   },
+  headroom: {
+    term: 'Affordability Headroom',
+    short: 'One month of income, split into debt service, the proposed installment, and what is left over.',
+    body: "The bar is the borrower's monthly income. Two dashed caps mark the policy limits: total debt service can't cross one line, and surplus after all obligations can't cross the other. The installment segment must land inside both, or the engine won't offer it.",
+  },
+  benford: {
+    term: "Benford's Law Check",
+    short: 'Compares the leading digits of reported amounts to the distribution real transaction data naturally follows.',
+    body: "Genuine transaction amounts follow a predictable curve of leading digits (about 30% start with 1, only ~5% with 9). Fabricated figures, typed or rounded by a person, don't  they cluster unnaturally. The chart runs on the passport's signed aggregate digit counts, never raw transactions.",
+  },
 };

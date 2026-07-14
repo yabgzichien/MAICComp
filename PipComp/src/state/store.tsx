@@ -60,8 +60,11 @@ import { getOccupation, setOccupation as dbSetOccupation, type Occupation } from
 import { getMeta, setMeta } from '../db/metaRepo';
 import { MockEkycProvider } from '../ekyc/mock';
 import type { EkycResult } from '../ekyc/types';
+import { BORROWER_TOUR_STEPS, clampTourStep } from '../lib/tourSteps';
 
 const ONBOARDING_KEY = 'onboarding_complete';
+const TOUR_ACTIVE_KEY = 'tour_active';
+const TOUR_STEP_KEY = 'tour_step_index';
 import { applyEffect, currentValue, type LinkEffect } from '../lib/networth';
 import { holdingValue, isHolding, mergeAccountValues } from '../lib/prices';
 import { merchantKey } from '../lib/normalize';
@@ -122,6 +125,19 @@ interface AppData {
   onboardingComplete: boolean;
   /** Mark the one-time setup complete. */
   completeOnboarding: () => Promise<void>;
+  /** Judge guided tour (2026-07-12 spec): active + current step, persisted so a mid-tour
+   *  refresh resumes where it left off. */
+  tourActive: boolean;
+  tourStepIndex: number;
+  /** Start the tour. `fresh: true` restarts from step 0 (Settings "Restart judge tour");
+   *  omitted, it resumes from whatever step was last persisted. */
+  startTour: (opts?: { fresh?: boolean }) => Promise<void>;
+  /** Move to an explicit step index (Back/Next). */
+  setTourStep: (index: number) => Promise<void>;
+  /** Ends the tour without clearing the step, so a paused tour can resume where it left off. */
+  pauseTour: () => Promise<void>;
+  /** Ends the tour and marks it seen  never auto-re-prompted (Exit). */
+  exitTour: () => Promise<void>;
   refreshAll: () => Promise<void>;
   addCategory: (label: string, icon: string, hue: number, kind: Category['kind']) => Promise<string>;
   deleteCategory: (id: string) => Promise<void>;
@@ -191,9 +207,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [kyc, setKycState] = useState<KycIdentity | null>(null);
   const [occupation, setOccupationState] = useState<Occupation | null>(null);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
+  const [tourActive, setTourActive] = useState(false);
+  const [tourStepIndex, setTourStepIndexState] = useState(0);
 
   const refreshAll = useCallback(async () => {
-    const [cats, txns, mem, income, alloc, snaps, accts, entries, cache, products, applications, allRepayments, repSummary, kycRow, onboardingFlag] =
+    const [cats, txns, mem, income, alloc, snaps, accts, entries, cache, products, applications, allRepayments, repSummary, kycRow, onboardingFlag, tourActiveFlag, tourStepRaw] =
       await Promise.all([
         listCategories(),
         listTransactions(),
@@ -210,10 +228,14 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         dbRepaymentSummary(),
         getKyc(),
         getMeta(ONBOARDING_KEY),
+        getMeta(TOUR_ACTIVE_KEY),
+        getMeta(TOUR_STEP_KEY),
       ]);
     setOccupationState(await getOccupation());
     setKycState(kycRow);
     setOnboardingComplete(onboardingFlag === 'true');
+    setTourActive(tourActiveFlag === 'true');
+    setTourStepIndexState(clampTourStep(tourStepRaw ? Number(tourStepRaw) || 0 : 0, BORROWER_TOUR_STEPS.length));
     setCategories(cats);
     setTransactions(txns);
     setMemory(mem);
@@ -533,6 +555,33 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setOnboardingComplete(true);
   }, []);
 
+  const setTourStep = useCallback(async (index: number) => {
+    const clamped = clampTourStep(index, BORROWER_TOUR_STEPS.length);
+    await setMeta(TOUR_STEP_KEY, String(clamped));
+    setTourStepIndexState(clamped);
+  }, []);
+
+  const startTour = useCallback(async (opts?: { fresh?: boolean }) => {
+    if (opts?.fresh) {
+      await setMeta(TOUR_STEP_KEY, '0');
+      setTourStepIndexState(0);
+    }
+    await setMeta(TOUR_ACTIVE_KEY, 'true');
+    setTourActive(true);
+  }, []);
+
+  const pauseTour = useCallback(async () => {
+    await setMeta(TOUR_ACTIVE_KEY, 'false');
+    setTourActive(false);
+  }, []);
+
+  const exitTour = useCallback(async () => {
+    await setMeta(TOUR_ACTIVE_KEY, 'false');
+    await setMeta(TOUR_STEP_KEY, '0');
+    setTourActive(false);
+    setTourStepIndexState(0);
+  }, []);
+
   const verifyIdentity = useCallback(async (fullName: string, nric: string): Promise<EkycResult> => {
     const result = await MockEkycProvider.verify({ fullName, nric });
     if (result.verified && result.fullName && result.nricMasked) {
@@ -579,6 +628,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     saveOccupation,
     onboardingComplete,
     completeOnboarding,
+    tourActive,
+    tourStepIndex,
+    startTour,
+    setTourStep,
+    pauseTour,
+    exitTour,
     ready,
     categories,
     catById,

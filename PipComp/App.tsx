@@ -12,13 +12,15 @@ import {
   SpaceGrotesk_700Bold,
 } from '@expo-google-fonts/space-grotesk';
 import { StatusBar } from 'expo-status-bar';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomNav, type NavTab } from './src/components/BottomNav';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { Pip } from './src/components/Pip';
+import { TourCard, TourResumeChip } from './src/components/TourCard';
+import { BORROWER_TOUR_STEPS, clampTourStep } from './src/lib/tourSteps';
 import { AddFlow } from './src/screens/AddFlow';
 import { AllTransactionsScreen } from './src/screens/AllTransactionsScreen';
 import { BreakdownScreen } from './src/screens/BreakdownScreen';
@@ -143,7 +145,8 @@ function StatusClock() {
 }
 
 function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
-  const { ready, onboardingComplete } = useAppData();
+  const { ready, onboardingComplete, tourActive, tourStepIndex, setTourStep, pauseTour, exitTour, startTour } = useAppData();
+  const insets = useSafeAreaInsets();
   const [screen, setScreen] = useState<Screen>('home');
   const [txnFilter, setTxnFilter] = useState<string | null>(null);
   const [addInitial, setAddInitial] = useState<'attach' | 'import'>('attach');
@@ -154,6 +157,52 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
   const openKyc = (from: Screen) => {
     setKycReturnTo(from);
     setScreen('kyc');
+  };
+
+  // Judge guided tour (2026-07-12 spec). `tourDrivenRef` distinguishes a screen change the
+  // tour itself made (advancing to the next step) from one the judge made by tapping the
+  // real app  the latter pauses the tour rather than snapping the screen back, so the tour
+  // never fights the user for control.
+  const [tourPaused, setTourPaused] = useState(false);
+  const tourDrivenRef = useRef(false);
+  const currentTourStep = tourActive ? BORROWER_TOUR_STEPS[clampTourStep(tourStepIndex, BORROWER_TOUR_STEPS.length)] : null;
+
+  useEffect(() => {
+    if (!tourActive || !currentTourStep) return;
+    tourDrivenRef.current = true;
+    setScreen(currentTourStep.screen);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tourActive, tourStepIndex]);
+
+  useEffect(() => {
+    if (!tourActive) return;
+    if (tourDrivenRef.current) {
+      tourDrivenRef.current = false;
+      return;
+    }
+    setTourPaused(true);
+    void pauseTour();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen]);
+
+  const tourNext = () => {
+    if (!currentTourStep) return;
+    const next = tourStepIndex + 1;
+    if (next >= BORROWER_TOUR_STEPS.length) {
+      void exitTour();
+      setTourPaused(false);
+      return;
+    }
+    void setTourStep(next);
+  };
+  const tourBack = () => void setTourStep(Math.max(0, tourStepIndex - 1));
+  const tourExit = () => {
+    void exitTour();
+    setTourPaused(false);
+  };
+  const tourResume = () => {
+    setTourPaused(false);
+    void startTour();
   };
 
   // Persistent bottom nav appears only on the four primary destinations.
@@ -298,6 +347,18 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
       )}
       </View>
       {navTab && <BottomNav active={navTab} onNavigate={goTab} />}
+      {tourActive && currentTourStep && (
+        <TourCard
+          step={currentTourStep}
+          index={tourStepIndex}
+          total={BORROWER_TOUR_STEPS.length}
+          bottomInset={navTab ? 0 : insets.bottom}
+          onNext={tourNext}
+          onBack={tourBack}
+          onExit={tourExit}
+        />
+      )}
+      {tourPaused && !tourActive && <TourResumeChip bottomInset={navTab ? 0 : insets.bottom} onResume={tourResume} />}
     </View>
   );
 }

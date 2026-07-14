@@ -112,7 +112,7 @@ export function InfoModal({ entry, onClose, p }: { entry: string | null; onClose
         <div style={{ padding: '20px 24px 16px', borderBottom: `1px solid ${p.hairline}`, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
           <div>
             <p style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', color: p.ink3, marginBottom: 6 }}>
-              Capital Markets · Glossary
+              Glossary
             </p>
             <h3 style={{ fontFamily: FONT.ui, fontSize: 19, fontWeight: 800, color: p.ink1, letterSpacing: '-0.3px' }}>{e.term}</h3>
           </div>

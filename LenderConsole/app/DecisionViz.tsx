@@ -26,13 +26,14 @@ import { FONT, type Palette } from './tokens';
 import { benfordChart, headroomLayout, waterfallSteps } from '../lib/decisionViz';
 import type { DecisionBreakdown, LenderPolicy } from '../lib/loans';
 import type { PassportAssessment, PassportMomentum } from '../lib/passport';
+import { InfoButton } from './shared';
 
 const rm = (n: number): string => `RM${Math.round(n).toLocaleString('en-MY')}`;
 const pctLabel = (v: number): string => `${Math.round(v * 100)}%`;
 
 // ── 1. Affordability headroom bar ─────────────────────────────────────────────
 
-export function HeadroomBar({ p, assessment, installment, policy }: { p: Palette; assessment: PassportAssessment; installment: number; policy?: LenderPolicy }) {
+export function HeadroomBar({ p, assessment, installment, policy, onInfo }: { p: Palette; assessment: PassportAssessment; installment: number; policy?: LenderPolicy; onInfo?: (entry: string) => void }) {
   const layout = headroomLayout(assessment, installment, policy);
   if (!layout) return null;
   const colors: Record<string, string> = {
@@ -46,9 +47,12 @@ export function HeadroomBar({ p, assessment, installment, policy }: { p: Palette
   return (
     <div style={{ padding: '12px 20px 0' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-        <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink3, letterSpacing: '0.10em', textTransform: 'uppercase' }}>Affordability headroom</span>
+        <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink3, letterSpacing: '0.10em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 5 }}>
+          Affordability headroom
+          {onInfo && <InfoButton entry="headroom" onOpen={onInfo} />}
+        </span>
         <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: installment > 0 ? (layout.safe ? p.accentInk : p.red) : p.ink3, background: installment > 0 ? (layout.safe ? p.accentSoft : '#fde8e8') : 'rgba(20,40,30,0.06)', borderRadius: 5, padding: '2px 8px' }}>
-          {installment > 0 ? (layout.safe ? 'inside both caps' : 'breaches a cap') : 'no installment proposed'}
+          {installment > 0 ? (layout.safe ? 'Fits inside both caps' : 'Exceeds a cap') : 'no installment proposed'}
         </span>
       </div>
       <ResponsiveContainer width="100%" height={54}>
@@ -84,7 +88,7 @@ export function HeadroomBar({ p, assessment, installment, policy }: { p: Palette
         ))}
       </div>
       <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, marginTop: 5, lineHeight: 1.5 }}>
-        One month of income ({rm(assessment.avgIncome)}). The installment block must end left of both dashed caps.
+        One month of income: {rm(assessment.avgIncome)}.
       </p>
     </div>
   );
@@ -132,9 +136,10 @@ export function DecisionWaterfall({ p, breakdown, policy }: { p: Palette; breakd
 
 // ── 3. Benford forensic chart ─────────────────────────────────────────────────
 
-export function BenfordChart({ p, histogram, tone = 'ok' }: { p: Palette; histogram: number[] | undefined; tone?: 'ok' | 'alert' }) {
+export function BenfordChart({ p, histogram, tone = 'ok', onInfo }: { p: Palette; histogram: number[] | undefined; tone?: 'ok' | 'alert'; onInfo?: (entry: string) => void }) {
   const chart = benfordChart(histogram);
   if (!chart) return null;
+  const conforms = chart.bars.reduce((s, b, i) => s + Math.min(b, chart.expected[i]), 0);
   const barColor = tone === 'alert' ? p.red : p.primary;
   const lineColor = tone === 'alert' ? '#57241e' : '#1b4030';
   const data = chart.bars.map((b, i) => ({ digit: String(i + 1), observed: b, expected: chart.expected[i] }));
@@ -153,10 +158,12 @@ export function BenfordChart({ p, histogram, tone = 'ok' }: { p: Palette; histog
           <Line dataKey="expected" stroke={lineColor} strokeWidth={1.4} strokeDasharray="3 2" dot={{ r: 1.8, fill: lineColor, strokeWidth: 0 }} isAnimationActive={false} />
         </ComposedChart>
       </ResponsiveContainer>
-      <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5, marginTop: 2 }}>
-        Bars: observed share of leading digits 1–9 (signed aggregate counts). Dashed curve: Benford&apos;s expected distribution.
-        {tone === 'alert' ? ' The clustering away from the curve is the fabrication fingerprint.' : ' Genuine spending hugs the curve.'}
-      </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+        <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: tone === 'alert' ? p.red : p.accentInk, background: tone === 'alert' ? '#fde8e8' : p.accentSoft, borderRadius: 5, padding: '2px 8px' }}>
+          {tone === 'alert' ? 'Clusters away from Benford’s curve' : `Conforms · ${Math.round(conforms * 100)}%`}
+        </span>
+        {onInfo && <InfoButton entry="benford" onOpen={onInfo} />}
+      </div>
     </div>
   );
 }

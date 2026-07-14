@@ -9,6 +9,7 @@
 import type { CreditPassport, ConsentTier } from './passport';
 import type { DecisionReason, LoanDecision, ReasonCategory } from './loans';
 import { counterOfferFor } from './counterOffer';
+import type { PdfDoc } from './pdfExport';
 
 export type LetterKind = 'decline' | 'refer' | 'counter-offer';
 
@@ -39,6 +40,8 @@ export interface LetterCounterOffer {
   counteredAmount: number;
   installment: number;
   constraint: string;
+  /** True on a "refer" letter: the amount is a range if approved, not a firm offer. */
+  indicative: boolean;
 }
 
 export interface AdverseActionLetter {
@@ -196,12 +199,21 @@ function decisionStatementFor(kind: LetterKind, requestedAmount: number, co: Ret
   if (kind === 'decline') {
     return `Your application for ${rm(requestedAmount)} has been declined.`;
   }
+  if (kind === 'refer' && co) {
+    return `Your application for ${rm(requestedAmount)} requires further review before a decision can be made. If approved, we would be able to offer at most ${rm(co.amount)} at ${rm(co.installment)}/mo  this is not a firm offer.`;
+  }
   return `Your application for ${rm(requestedAmount)} requires further review before a decision can be made.`;
 }
 
 /**
  * Build the letter for a resolved decline, refer, or counter-offer. Returns null for a
  * clean approve with no counter-offer  there is nothing adverse to explain.
+ *
+ * REFER always stays "refer" even when the engine's supportable amount is positive and
+ * below the request (P2.11): nothing has actually been offered while a human review is
+ * pending, so that figure is carried as an indicative range on the same letter, never
+ * promoted to a firm "counter-offer" kind. Only an APPROVE with a shortfall genuinely
+ * becomes a counter-offer letter.
  */
 export function buildAdverseActionLetter(
   passport: CreditPassport,
@@ -209,7 +221,8 @@ export function buildAdverseActionLetter(
   requestedAmount: number,
 ): AdverseActionLetter | null {
   const co = counterOfferFor(decision, requestedAmount);
-  const kind: LetterKind | null = co ? 'counter-offer' : decision.decision === 'decline' ? 'decline' : decision.decision === 'refer' ? 'refer' : null;
+  const kind: LetterKind | null =
+    decision.decision === 'decline' ? 'decline' : decision.decision === 'refer' ? 'refer' : co ? 'counter-offer' : null;
   if (!kind) return null;
 
   const categorized = decision.categorizedReasons ?? decision.reasons.map((text) => ({ category: 'policy' as ReasonCategory, text }));
@@ -225,7 +238,9 @@ export function buildAdverseActionLetter(
     principalReasons,
     dataRelied: dataReliedFrom(passport),
     improvement: improvementFrom(categorized),
-    counterOffer: co ? { originalRequest: requestedAmount, counteredAmount: co.amount, installment: co.installment, constraint: co.constraint } : null,
+    counterOffer: co
+      ? { originalRequest: requestedAmount, counteredAmount: co.amount, installment: co.installment, constraint: co.constraint, indicative: kind === 'refer' }
+      : null,
     caveat: LETTER_CAVEAT,
   };
 }
@@ -249,11 +264,12 @@ export function letterToText(letter: AdverseActionLetter): string {
   for (const r of letter.principalReasons) lines.push(`- ${r.text}`);
   lines.push('');
   if (letter.counterOffer) {
-    lines.push('COUNTER-OFFER');
+    lines.push(letter.counterOffer.indicative ? 'INDICATIVE AMOUNT IF APPROVED' : 'COUNTER-OFFER');
     lines.push(
-      `Original request: ${rm(letter.counterOffer.originalRequest)} · Countered amount: ${rm(letter.counterOffer.counteredAmount)} at ${rm(letter.counterOffer.installment)}/mo`,
+      `Original request: ${rm(letter.counterOffer.originalRequest)} · ${letter.counterOffer.indicative ? 'Indicative' : 'Countered'} amount: ${rm(letter.counterOffer.counteredAmount)} at ${rm(letter.counterOffer.installment)}/mo`,
     );
     lines.push(`Driving constraint: ${letter.counterOffer.constraint}`);
+    if (letter.counterOffer.indicative) lines.push('This is not a firm offer  a final amount depends on manual review.');
     lines.push('');
   }
   lines.push('DATA RELIED UPON');
@@ -267,4 +283,39 @@ export function letterToText(letter: AdverseActionLetter): string {
   lines.push('---');
   lines.push(letter.caveat);
   return lines.join('\n');
+}
+
+/** Same content as letterToText, structured for one-click PDF export (P2.11)  officers
+ *  file PDFs, not markdown, so PDF is the primary export action in the letter modal. */
+export function letterToPdfDoc(letter: AdverseActionLetter): PdfDoc {
+  const sections: PdfDoc['sections'] = [
+    { heading: 'Decision', lines: [letter.decisionStatement] },
+    { heading: 'Principal reasons', lines: letter.principalReasons.map((r) => `- ${r.text}`) },
+  ];
+  if (letter.counterOffer) {
+    const co = letter.counterOffer;
+    sections.push({
+      heading: co.indicative ? 'Indicative amount if approved' : 'Counter-offer',
+      lines: [
+        `Original request: ${rm(co.originalRequest)} · ${co.indicative ? 'Indicative' : 'Countered'} amount: ${rm(co.counteredAmount)} at ${rm(co.installment)}/mo`,
+        `Driving constraint: ${co.constraint}`,
+        ...(co.indicative ? ['This is not a firm offer  a final amount depends on manual review.'] : []),
+      ],
+    });
+  }
+  sections.push({
+    heading: 'Data relied upon',
+    lines: [
+      `Evidence fingerprint: ${letter.dataRelied.evidenceShort}`,
+      `Consent: ${letter.dataRelied.consentSummary}`,
+      `Passport issued ${letter.dataRelied.issuedAt}, valid until ${letter.dataRelied.validUntil}`,
+    ],
+  });
+  sections.push({ heading: 'How to strengthen a future application', lines: [letter.improvement.text] });
+  return {
+    title: `Adverse-action letter · ${KIND_LABEL[letter.kind]}`,
+    subtitle: `${letter.applicant} · ${letter.date}`,
+    notice: letter.caveat,
+    sections,
+  };
 }

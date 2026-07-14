@@ -11,6 +11,7 @@ import type { LenderPolicy, LoanDecision, Decision, ReasonCategory } from './loa
 import { DEFAULT_POLICY, REASON_CATEGORY_LABELS } from './loans';
 import type { AgentPanelResult, AgentAssessment } from './agents';
 import { drivingConstraintFrom } from './counterOffer';
+import type { PdfDoc } from './pdfExport';
 
 const rm = (n: number): string => `RM${Math.round(n).toLocaleString('en-MY')}`;
 const pct = (x: number): number => Math.round(x * 100);
@@ -285,6 +286,56 @@ export function memoToMarkdown(memo: CreditMemo): string {
   lines.push('---');
   lines.push('_Advisory drafting over a deterministic decision. Every figure and verdict is computed by the policy engine; this memo restates them and does not change them._');
   return lines.join('\n');
+}
+
+/** Same content as memoToMarkdown, structured for one-click PDF export (P2.11)  officers
+ *  file PDFs, not markdown, so PDF is the primary export action in the memo modal. */
+export function memoToPdfDoc(memo: CreditMemo): PdfDoc {
+  const h = memo.header;
+  const sections: PdfDoc['sections'] = [
+    {
+      heading: 'Decision',
+      lines: [`${memo.decision.label}  up to ${rm(memo.decision.maxAmount)} at ${rm(memo.decision.installment)}/mo.`],
+    },
+  ];
+  if (memo.pricing) {
+    const pr = memo.pricing;
+    const asPct = (x: number) => `${(x * 100).toFixed(1)}%`;
+    sections.push({
+      heading: 'Pricing',
+      lines: [
+        `Ladder rate ${asPct(pr.ladderApr)}, rate applied ${asPct(pr.adoptedApr)}${pr.adoptedApr < pr.ladderApr ? ' (risk-based discount)' : ''}.`,
+        ...pr.reasons.map((r) => `- ${r}`),
+      ],
+    });
+  }
+  sections.push({
+    heading: 'Panel findings',
+    lines: memo.findings.map((f) => `- ${f.label}: ${f.verdict} (${f.confidence}%)  ${f.signals.join('; ')}`),
+  });
+  if (memo.groupedRationale.length > 0) {
+    for (const g of memo.groupedRationale) sections.push({ heading: g.label, lines: g.reasons.map((r) => `- ${r}`) });
+  } else {
+    sections.push({ heading: 'Rationale', lines: memo.rationale.map((r) => `- ${r}`) });
+  }
+  sections.push({
+    heading: 'Consumer Credit Act 2025  affordability assessment',
+    lines: memo.compliance.map((c) => `${c.met ? '✓ Met' : '✗ Not met'}  ${c.requirement}. ${c.evidence}.`),
+  });
+  if (memo.counterOffer) {
+    const co = memo.counterOffer;
+    sections.push({
+      heading: 'Counter-offer',
+      lines: [`Original request: ${rm(co.originalRequest)}  ·  Countered amount: ${rm(co.counteredAmount)}`, `Driving constraint: ${co.constraint}`],
+    });
+  }
+  sections.push({ heading: 'Conditions & next steps', lines: memo.conditions.map((c) => `- ${c}`) });
+  return {
+    title: 'Credit Memo',
+    subtitle: `${h.applicant}${h.nricMasked ? ` (${h.nricMasked})` : ''} · ${h.date} · Requested ${rm(h.requestedAmount)} · Offered ${rm(h.offeredAmount)}`,
+    notice: 'Advisory drafting over a deterministic decision. Every figure and verdict is computed by the policy engine; this memo restates them and does not change them.',
+    sections,
+  };
 }
 
 // ── Deterministic fallback narration (used when the LLM is unavailable) ──────────

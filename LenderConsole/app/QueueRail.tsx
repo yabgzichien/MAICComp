@@ -4,9 +4,35 @@
 // queues with counts and age badges; Referred shows oldest first (the pure
 // orderQueue rule), because the longest-waiting file is the officer's next job.
 
+import { useState } from 'react';
 import { FONT, type Palette } from './tokens';
 import { orderQueue, watchlistApplications, type ApplicationRecord, type ApplicationStatus } from '../lib/applications';
 import { formatAgo } from '../lib/presentment';
+
+const BAND_COLOR: Record<string, string> = {
+  Building: '#c0392b',
+  Fair: '#d98a00',
+  Good: '#3b5bdb',
+  Strong: '#1f8a5b',
+  Excellent: '#1f8a5b',
+};
+
+/** Verdict-driving signal (P2.10): band + confidence, so an officer can triage a queue
+ *  without opening every card. */
+function VerdictChip({ p, app }: { p: Palette; app: ApplicationRecord }) {
+  if (!app.band && app.confidencePct === undefined) return null;
+  const color = app.band ? BAND_COLOR[app.band] ?? p.ink2 : p.ink2;
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+      {app.band && (
+        <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color }}>{app.band}</span>
+      )}
+      {app.confidencePct !== undefined && (
+        <span style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink3 }}>· {app.confidencePct}% confidence</span>
+      )}
+    </span>
+  );
+}
 
 const QUEUES: { status: ApplicationStatus; label: string }[] = [
   { status: 'new', label: 'New' },
@@ -39,10 +65,23 @@ export default function QueueRail({
   onSeed: () => void;
   onPasteNew: () => void;
 }) {
+  const [search, setSearch] = useState('');
+  const q = search.trim().toLowerCase();
+  const matches = (a: ApplicationRecord) => !q || a.applicantLabel.toLowerCase().includes(q) || a.id.toLowerCase().includes(q);
+
   return (
     <div style={{ width: 212, background: p.surface2, borderRight: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto' }}>
       <div style={{ padding: '14px 12px 10px', borderBottom: `1px solid ${p.hairline}` }}>
         <p style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink2, letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: 8 }}>Pipeline</p>
+        {apps.length > 0 && (
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search applicant…"
+            style={{ width: '100%', padding: '6px 9px', borderRadius: 7, border: `1px solid ${p.hairline}`, fontFamily: FONT.ui, fontSize: 12, color: p.ink1, background: p.surface, outline: 'none', marginBottom: 8 }}
+          />
+        )}
         <button
           onClick={onPasteNew}
           style={{ width: '100%', padding: '7px 0', borderRadius: 8, border: `1.5px dashed ${p.hairline}`, cursor: 'pointer', background: 'transparent', fontFamily: FONT.ui, fontSize: 12, fontWeight: 600, color: p.ink2 }}
@@ -66,7 +105,7 @@ export default function QueueRail({
       )}
 
       {(() => {
-        const watchlist = watchlistApplications(apps);
+        const watchlist = watchlistApplications(apps).filter(matches);
         if (watchlist.length === 0) return null;
         return (
           <div style={{ padding: '10px 8px 4px' }}>
@@ -108,8 +147,13 @@ export default function QueueRail({
         );
       })()}
 
+      {q && watchlistApplications(apps).filter(matches).length === 0 && QUEUES.every(({ status }) => orderQueue(apps, status).filter(matches).length === 0) && (
+        <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, padding: '10px 12px' }}>No applicants match &quot;{search}&quot;.</p>
+      )}
+
       {QUEUES.map(({ status, label }) => {
-        const queue = orderQueue(apps, status);
+        const queue = orderQueue(apps, status).filter(matches);
+        if (q && queue.length === 0) return null;
         return (
           <div key={status} style={{ padding: '10px 8px 4px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px', marginBottom: 5 }}>
@@ -163,6 +207,7 @@ export default function QueueRail({
                   <p style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink2, marginTop: 2 }}>
                     {rm(a.requestedAmount)} · filed {formatAgo(a.filedAt)}
                   </p>
+                  <VerdictChip p={p} app={a} />
                 </button>
               );
             })}
@@ -172,7 +217,7 @@ export default function QueueRail({
 
       <div style={{ marginTop: 'auto', padding: '10px 12px' }}>
         <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink2, lineHeight: 1.5 }}>
-          Applications persist in this console&apos;s local store (demo) · one officer persona · age badges show time since filing.
+          Age badges show time since filing.
         </p>
       </div>
     </div>

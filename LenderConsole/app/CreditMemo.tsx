@@ -4,7 +4,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { FONT, type Palette } from './tokens';
 import { SectionLabel } from './shared';
 import { runAgentPanel, type StackingSignal } from '../lib/agents';
-import { buildCreditMemo, memoToMarkdown, fallbackNarrative, type CreditMemo, type MemoPricing, type MemoResolution } from '../lib/creditMemo';
+import { buildCreditMemo, memoToMarkdown, memoToPdfDoc, fallbackNarrative, type CreditMemo, type MemoPricing, type MemoResolution } from '../lib/creditMemo';
+import { downloadPdf } from '../lib/pdfExport';
 import type { CreditPassport } from '../lib/passport';
 import type { LenderPolicy, LoanDecision } from '../lib/loans';
 
@@ -88,6 +89,11 @@ export default function CreditMemoModal({
     URL.revokeObjectURL(url);
   }
 
+  /** Primary export (P2.11): officers file PDFs, not markdown. */
+  function downloadPdfFile() {
+    downloadPdf(memoToPdfDoc(memo), `credit-memo-${memo.header.date}.pdf`);
+  }
+
   const chip =
     provenance === 'pending' ? 'Narrating…' : provenance === 'live' ? 'Live AI narration' : 'Policy summary';
   const chipColor = provenance === 'live' ? p.accentInk : p.ink3;
@@ -136,7 +142,8 @@ export default function CreditMemoModal({
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: chipColor }}>{chip}</span>
-            <button onClick={download} style={btn(p, true)}>Download .md</button>
+            <button onClick={downloadPdfFile} style={btn(p, true)}>Download PDF</button>
+            <button onClick={download} style={btn(p, false)}>Download .md</button>
             <button onClick={() => window.print()} style={btn(p, false)}>Print</button>
             <button onClick={onClose} aria-label="Close" style={{ ...btn(p, false), padding: '6px 10px' }}>✕</button>
           </div>

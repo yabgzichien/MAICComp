@@ -9,11 +9,13 @@ import { Icon, type IconName } from '../components/Icon';
 import { Pip } from '../components/Pip';
 import { ScoreBandBar } from '../components/ScoreBandBar';
 import { Amount, BtnLabel, Card, Eyebrow, PrimaryButton } from '../components/ui';
+import { TourAnchor } from '../components/TourAnchor';
 import { catColorsForHue } from '../lib/catColors';
 import { currentMonthKey, txnMonthKey } from '../lib/budget';
 import { greeting, longDate, monthName } from '../lib/dates';
 import { fmt } from '../lib/format';
 import { computeStreak } from '../lib/streak';
+import { BORROWER_TOUR_STEPS, clampTourStep } from '../lib/tourSteps';
 import type { Category } from '../lib/types';
 import { useAppData } from '../state/store';
 import { useCreditProfile } from '../state/useCreditProfile';
@@ -55,8 +57,9 @@ export function DashboardScreen({
 }) {
   const insets = useSafeAreaInsets();
   const now = useNow();
-  const { transactions, catById, allocations, hasBudget, coverage } = useAppData();
+  const { transactions, catById, allocations, hasBudget, coverage, tourActive, tourStepIndex, startTour } = useAppData();
   const { score, dataConfidence } = useCreditProfile();
+  const activeTourAnchor = tourActive ? BORROWER_TOUR_STEPS[clampTourStep(tourStepIndex, BORROWER_TOUR_STEPS.length)].anchorId ?? null : null;
 
   const monthTxns = useMemo(() => {
     const cur = currentMonthKey();
@@ -116,9 +119,15 @@ export function DashboardScreen({
           <View style={styles.headerActions}>
             <HeaderIcon name="trending" onPress={onOpenRecap} />
             <HeaderIcon name="sliders" onPress={onOpenCategories} />
-            <View style={styles.pipBubble}>
+            <Pressable
+              style={styles.pipBubble}
+              onPress={() => void startTour({ fresh: true })}
+              accessibilityRole="button"
+              accessibilityLabel="Restart the guided tour"
+              hitSlop={8}
+            >
               <CoinMascot size={40} float />
-            </View>
+            </Pressable>
           </View>
         </View>
 
@@ -127,7 +136,9 @@ export function DashboardScreen({
         ) : (
           <>
             {/* 1  Streak */}
-            <StreakCard streak={streak} dots={dots} coverage={coverage.daysCovered} />
+            <TourAnchor id="coverage-chip" activeId={activeTourAnchor}>
+              <StreakCard streak={streak} dots={dots} coverage={coverage.daysCovered} />
+            </TourAnchor>
 
             {/* 2  Cash flow + where it goes */}
             <CashFlowCard

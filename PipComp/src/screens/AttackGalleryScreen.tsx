@@ -125,8 +125,8 @@ export function AttackGalleryScreen({ onBack }: { onBack: () => void }) {
             {caught}<Text style={styles.heroScoreDenom}>/{results.length} caught</Text>
           </Text>
           <Text style={styles.heroSub}>
-            We run known fraud techniques against our own Phase-11 integrity rings. Every result below is
-            computed by the deterministic engine, not claimed.
+            We run known fraud techniques against our own Phase-11 integrity rings. Every result below
+            comes straight from the deterministic engine's own verdict.
           </Text>
         </Card>
 

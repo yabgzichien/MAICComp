@@ -455,8 +455,7 @@ export function LoansScreen({
             <Text style={styles.demoTitle}>Simulate default → reported to CTOS (mock)</Text>
           </View>
           <Text style={styles.demoBody}>
-            Marks an active application as defaulted and (in a future phase) would notify a credit bureau like CTOS.
-            No real bureau is connected. This is a mock for demo purposes only.
+            Marks the loan defaulted (demo — no real bureau is notified).
           </Text>
           {activeApplications.length > 0 ? (
             activeApplications.map((app) => (

@@ -341,8 +341,7 @@ export default function PolicyTab({
         </div>
 
         <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.55, maxWidth: 720 }}>
-          The engine stays deterministic: these numbers parameterize the same auditable rules. Nothing here changes how a decision is computed,
-          only the thresholds it is computed against. Adverse-action reasons quote the active values automatically.
+          The engine only uses these numbers as thresholds. The rules never change. Adverse-action reasons quote the active values automatically.
         </p>
       </div>
     </div>

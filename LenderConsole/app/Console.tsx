@@ -27,6 +27,7 @@ import PortfolioTab from './PortfolioTab';
 import { buildDecisionFile, decisionFileName } from '../lib/decisionFile';
 import { caseIdFor, flagTimeLabel } from '../lib/caseRef';
 import { runAgentPanel, type StackingSignal } from '../lib/agents';
+import { CONSOLE_TOUR_STEPS, clampConsoleTourStep, type ConsoleTourTab } from '../lib/tourSteps';
 import { buildCreditMemo } from '../lib/creditMemo';
 import { counterOfferFor } from '../lib/counterOffer';
 import { findRecentPresentments, formatAgo, presentmentKey, type Presentment } from '../lib/presentment';
@@ -105,15 +106,20 @@ function evaluate(code: string, amountStr: string, stored: StoredPolicy): ViewSt
   }
 }
 
-function BrandMark({ p }: { p: Palette }) {
+function BrandMark({ p, onRestartTour }: { p: Palette; onRestartTour: () => void }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0 }}>
-      <div style={{ width: 28, height: 28, borderRadius: 8, background: p.primary, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <button
+        onClick={onRestartTour}
+        aria-label="Restart the guided tour"
+        title="Restart the guided tour"
+        style={{ width: 28, height: 28, borderRadius: 8, background: p.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer', padding: 0 }}
+      >
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
           <circle cx="7" cy="8.5" r="4" fill="white" opacity="0.92" />
           <path d="M7 4.5V1.5M5.5 3L7 1.5L8.5 3" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-      </div>
+      </button>
       <span style={{ fontFamily: FONT.ui, fontSize: 14, fontWeight: 800, color: p.ink1, whiteSpace: 'nowrap' }}>Pip Credit</span>
       <span style={{ fontSize: 15, color: p.ink3, fontWeight: 300 }}>·</span>
       <span style={{ fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 600, color: p.ink2, whiteSpace: 'nowrap' }}>Lender Console</span>
@@ -127,10 +133,41 @@ function BrandMark({ p }: { p: Palette }) {
   );
 }
 
-function Header({ p, tab, setTab, alert }: { p: Palette; tab: Tab; setTab: (t: Tab) => void; alert: boolean }) {
+/** Single carrier for every "this is mocked" caveat (C4): one chip, one tooltip, instead of a
+ *  disclaimer on every card. Inline caveats stay only where a judge must not miss them mid-flow
+ *  (issuer signing, eKYC provider). */
+const DEMO_MODE_DETAIL =
+  'Applications and the presentment log persist in this console’s local store, per-console rather than cross-lender. ' +
+  'Bureau/registry checks (CTOS, EPF, SOCSO) and eKYC identity verification are mocked. ' +
+  'Loan decisions, fraud checks, and pricing are computed live by the real deterministic engines.';
+
+function DemoModeChip({ p }: { p: Palette }) {
+  return (
+    <span
+      title={DEMO_MODE_DETAIL}
+      style={{
+        fontFamily: FONT.ui,
+        fontSize: 11,
+        fontWeight: 700,
+        letterSpacing: '0.04em',
+        color: p.ink2,
+        background: p.surface2,
+        border: `1px solid ${p.hairline}`,
+        borderRadius: 6,
+        padding: '3px 9px',
+        cursor: 'help',
+        flexShrink: 0,
+      }}
+    >
+      DEMO MODE
+    </span>
+  );
+}
+
+function Header({ p, tab, setTab, alert, onRestartTour }: { p: Palette; tab: Tab; setTab: (t: Tab) => void; alert: boolean; onRestartTour: () => void }) {
   return (
     <div style={{ height: 50, background: p.surface, borderBottom: alert ? `2px solid ${p.primary}` : `1px solid ${p.hairline}`, display: 'flex', alignItems: 'center', padding: '0 22px', flexShrink: 0 }}>
-      <BrandMark p={p} />
+      <BrandMark p={p} onRestartTour={onRestartTour} />
       <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
         <div style={{ display: 'flex', background: p.surface2, borderRadius: 10, padding: 3, gap: 2, border: `1px solid ${p.hairline}` }}>
           {([['verify', 'Verify Passport'], ['portfolio', 'Portfolio'], ['capital', 'Capital Markets'], ['policy', 'Policy']] as [Tab, string][]).map(([key, label]) => {
@@ -144,6 +181,13 @@ function Header({ p, tab, setTab, alert }: { p: Palette; tab: Tab; setTab: (t: T
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexShrink: 0 }}>
+        <button
+          onClick={onRestartTour}
+          style={{ fontFamily: FONT.ui, fontSize: 11, fontWeight: 700, color: p.ink2, background: p.surface2, border: `1px solid ${p.hairline}`, borderRadius: 6, padding: '3px 9px', cursor: 'pointer' }}
+        >
+          Restart tour
+        </button>
+        <DemoModeChip p={p} />
         <div style={{ textAlign: 'right' }}>
           <p style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 600, color: p.ink1, lineHeight: 1 }}>Hamdan Z.</p>
           <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5 }}>Loan Officer · TEKUN</p>
@@ -203,7 +247,7 @@ function LeftPanel({
       <div>
         <SectionLabel color={p.ink2}>Passport Input</SectionLabel>
         <p style={{ fontFamily: FONT.ui, fontSize: 13, fontWeight: 700, color: p.ink1, marginBottom: 3 }}>Paste passport code</p>
-        <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5 }}>Generated by the borrower&apos;s Pip Credit app. Carries score &amp; factors only. No raw transactions.</p>
+        <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5 }}>Generated by the borrower&apos;s Pip Credit app.</p>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -248,18 +292,6 @@ function LeftPanel({
         <button onClick={onLoadFlagged} style={{ flex: 1, padding: '9px 0', borderRadius: 10, cursor: 'pointer', border: `1.5px solid ${p.red}33`, background: '#fff6f5', fontFamily: FONT.ui, fontSize: 12, fontWeight: 600, color: p.red }}>Load flagged</button>
       </div>
 
-      <div style={{ marginTop: 'auto', padding: '10px 12px', borderRadius: 9, background: p.accentTint, border: `1.5px solid ${p.accentSoft}` }}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ marginTop: 1, flexShrink: 0 }}>
-            <circle cx="7" cy="7" r="6" fill={p.accentSoft} stroke={p.primary} strokeWidth="1" />
-            <line x1="7" y1="6" x2="7" y2="10" stroke={p.primary} strokeWidth="1.5" strokeLinecap="round" />
-            <circle cx="7" cy="4.5" r="0.7" fill={p.primary} />
-          </svg>
-          <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink2, lineHeight: 1.5 }}>
-            Passport carries <strong style={{ color: p.accentInk }}>aggregate signals only</strong>. Raw transactions remain on the borrower&apos;s device and are never transmitted.
-          </p>
-        </div>
-      </div>
     </div>
   );
 }
@@ -293,7 +325,6 @@ function StackingBanner({ p, priors }: { p: Palette; priors: Presentment[] }) {
         <p style={{ fontFamily: FONT.ui, fontSize: 12, color: 'rgba(255,255,255,0.88)', marginTop: 1, lineHeight: 1.45 }}>
           This passport was already verified {priors.length} time{priors.length === 1 ? '' : 's'} in the last 24h at this console. Last {formatAgo(priors[0].at)}. Review before disbursing.
         </p>
-        <p style={{ fontFamily: FONT.ui, fontSize: 12, color: 'rgba(255,255,255,0.68)', marginTop: 3 }}>per-console log (demo) · production: cross-lender registry</p>
       </div>
     </div>
   );
@@ -306,8 +337,10 @@ function VerifiedCenter({ p, passport, decision, priors, issuerVerified, stackin
   const activeBand = Math.max(0, BAND_ORDER.indexOf(passport.band));
   const evidenceShort = passport.evidenceHash ? `${passport.evidenceHash.slice(0, 6)}…${passport.evidenceHash.slice(-6)}` : '';
   const trustRows = deriveTrustRows({ passport, holderVerified: true, issuerVerified, priorPresentments: priors, lapsedTiers });
+  const [info, setInfo] = useState<string | null>(null);
   return (
     <div style={{ flex: 1, background: p.bg, overflowY: 'auto', padding: '16px 14px', display: 'flex', flexDirection: 'column', gap: 11, minWidth: 360 }}>
+      <InfoModal entry={info} onClose={() => setInfo(null)} p={p} />
       {priors.length > 0 && <StackingBanner p={p} priors={priors} />}
       <div style={{ background: p.surface, borderRadius: 12, padding: '14px 16px', boxShadow: p.shadow, animation: 'fade-in-up 0.4s ease-out both' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
@@ -335,7 +368,7 @@ function VerifiedCenter({ p, passport, decision, priors, issuerVerified, stackin
             </div>
           ))}
           <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, marginTop: 5, lineHeight: 1.45 }}>
-            The stacking check uses this console&apos;s own presentment log (demo). A production deployment shares it across lenders via a registry.
+            The stacking check uses this console&apos;s own presentment log; a production deployment shares it across lenders via a registry.
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
@@ -379,7 +412,7 @@ function VerifiedCenter({ p, passport, decision, priors, issuerVerified, stackin
                 Verifiable {up ? 'upward' : 'downward'} trajectory
               </p>
               <p style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink2, marginTop: 1 }}>
-                score {m.scoreFrom} → {m.scoreTo} over {m.lookbackDays}d. Signed, not self-asserted
+                score {m.scoreFrom} → {m.scoreTo} over {m.lookbackDays}d, verified against the signed passport
               </p>
             </div>
             <MomentumSpark p={p} momentum={m} />
@@ -419,7 +452,7 @@ function VerifiedCenter({ p, passport, decision, priors, issuerVerified, stackin
             <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink3, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Benford forensic check</span>
             <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 600, color: p.accentInk, background: p.accentTint, border: `1px solid ${p.accentSoft}`, borderRadius: 5, padding: '2px 8px' }}>signed digit counts · no raw transactions</span>
           </div>
-          <BenfordChart p={p} histogram={passport.digitHistogram} />
+          <BenfordChart p={p} histogram={passport.digitHistogram} onInfo={setInfo} />
         </div>
       )}
 
@@ -495,7 +528,7 @@ function RicherBlocks({ p, passport }: { p: Palette; passport: CreditPassport })
             </span>
           </div>
           <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, marginTop: 8, lineHeight: 1.45 }}>
-            Self-declared context, not verified against a registry. Weigh alongside the verified figures, not as evidence.
+            Self-declared context, unverified against any registry — weigh it alongside the verified figures.
           </p>
         </BlockCard>
       )}
@@ -532,7 +565,7 @@ function RicherBlocks({ p, passport }: { p: Palette; passport: CreditPassport })
                 </div>
               ))}
               <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, marginTop: 7, lineHeight: 1.45 }}>
-                The evidenced monthly debt service is the sum of these detected recurring outflows, not a self-reported figure.
+                The evidenced monthly debt service sums these detected recurring outflows.
               </p>
             </div>
           )}
@@ -864,7 +897,17 @@ function PricingStrip({ p, pricing, adopted, onAdopt }: { p: Palette; pricing: P
 function RightDecision({ p, passport, decision, credential, amount, setAmount, onAssess, onCounterOffer, isCounterOffer, stacking, selectedApp, onResolve, onGenerateLetter, purpose, setPurpose, policy, policyUpdatedAt, pricing, adoptedRate, onAdoptRate }: { p: Palette; passport: CreditPassport | null; decision: LoanDecision | null; credential: Credential | null; amount: string; setAmount: (s: string) => void; onAssess: () => void; onCounterOffer?: (counterAmount: number) => void; isCounterOffer?: boolean; stacking?: StackingSignal; selectedApp?: ApplicationRecord | null; onResolve?: (outcome: 'approved' | 'declined', rationale: string) => void; onGenerateLetter?: () => void; purpose?: DeclaredPurpose | null; setPurpose?: (p: DeclaredPurpose | null) => void; policy?: LenderPolicy; policyUpdatedAt?: string; pricing?: PricingSuggestion | null; adoptedRate?: number | null; onAdoptRate?: (rate: number) => void }) {
   const [memoOpen, setMemoOpen] = useState(false);
   const [letterOpen, setLetterOpen] = useState(false);
+  const [info, setInfo] = useState<string | null>(null);
+  const panelRef = React.useRef<HTMLDivElement | null>(null);
   const letterAvailable = passport && decision ? buildAdverseActionLetter(passport, decision, parseAmount(amount)) !== null : false;
+
+  /** Wayfinding (P2.10): after re-Assess, the new verdict always renders right below the
+   *  amount field  scroll back to it in case the officer had scrolled down to read a prior
+   *  audit trail. */
+  function handleAssess() {
+    onAssess();
+    panelRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  }
   // The pricing note for the memo/decision-file: ladder rate + the rate actually in force.
   const memoPricing = pricing ? { ladderApr: pricing.ladderApr, adoptedApr: adoptedRate ?? pricing.ladderApr, reasons: pricing.reasons } : null;
 
@@ -890,7 +933,8 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
     URL.revokeObjectURL(url);
   }
   return (
-    <div style={{ width: 340, background: p.surface, borderLeft: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto' }}>
+    <div ref={panelRef} style={{ width: 340, background: p.surface, borderLeft: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto' }}>
+      <InfoModal entry={info} onClose={() => setInfo(null)} p={p} />
       <div style={{ padding: '14px 20px 11px', borderBottom: `1px solid ${p.hairline}`, flexShrink: 0 }}>
         <SectionLabel color={p.ink2}>Loan Decision Engine</SectionLabel>
         <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>Deterministic · policy-enforced · audit-ready</p>
@@ -906,9 +950,9 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
         <div style={{ display: 'flex', gap: 8 }}>
           <div style={{ flex: 1, position: 'relative' }}>
             <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', fontFamily: FONT.num, fontSize: 12, fontWeight: 600, color: p.ink3, pointerEvents: 'none' }}>RM</span>
-            <input type="text" value={amount} onChange={(e) => setAmount(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && onAssess()} style={{ width: '100%', padding: '9px 12px 9px 33px', borderRadius: 8, border: `1.5px solid ${p.hairline}`, fontSize: 14.5, fontWeight: 700, color: p.ink1, background: p.surface2, outline: 'none', fontFamily: FONT.num }} />
+            <input type="text" value={amount} onChange={(e) => setAmount(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAssess()} style={{ width: '100%', padding: '9px 12px 9px 33px', borderRadius: 8, border: `1.5px solid ${p.hairline}`, fontSize: 14.5, fontWeight: 700, color: p.ink1, background: p.surface2, outline: 'none', fontFamily: FONT.num }} />
           </div>
-          <button onClick={onAssess} style={{ padding: '9px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', background: p.primary, color: 'white', fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, flexShrink: 0 }}>Assess</button>
+          <button onClick={handleAssess} style={{ padding: '9px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', background: p.primary, color: 'white', fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, flexShrink: 0 }}>Assess</button>
         </div>
         {setPurpose && (
           <div style={{ marginTop: 8 }}>
@@ -1010,7 +1054,7 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
 
           {passport?.assessment && (
             <div style={{ flexShrink: 0 }}>
-              <HeadroomBar p={p} assessment={passport.assessment} installment={decision.installment} policy={policy} />
+              <HeadroomBar p={p} assessment={passport.assessment} installment={decision.installment} policy={policy} onInfo={setInfo} />
             </div>
           )}
           {decision.breakdown && (
@@ -1167,9 +1211,6 @@ function RightAlert({ p }: { p: Palette }) {
           <p style={{ fontFamily: FONT.ui, fontSize: 12, color: '#7a5c00', lineHeight: 1.6, fontStyle: 'italic' }}>A hard adverse record would auto-decline; suspected fabrication routes to a human.</p>
         </div>
       </div>
-      <div style={{ padding: '12px 20px 15px', borderTop: `1px solid ${p.hairline}`, marginTop: 'auto' }}>
-        <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.55 }}>Decision is deterministic and auditable under the <strong style={{ color: p.ink2 }}>Consumer Credit Act 2025</strong>.</p>
-      </div>
     </div>
   );
 }
@@ -1312,7 +1353,7 @@ function CapitalMarkets({ p, book, source, setSource }: { p: Palette; book: Pool
 
       <div style={{ padding: '16px 40px 24px', marginTop: 'auto' }}>
         <div style={{ padding: '11px 18px', borderRadius: 10, background: p.surface, border: `1px solid ${p.hairline}`, boxShadow: p.shadow }}>
-          <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.6 }}>Ratings computed deterministically from pool expected loss. A <strong style={{ color: p.ink2 }}>weaker pool is downgraded, not rubber-stamped</strong>.</p>
+          <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.6 }}>Ratings computed deterministically from pool expected loss. <strong style={{ color: p.ink2 }}>A weaker pool gets a lower rating.</strong></p>
         </div>
       </div>
     </div>
@@ -1320,17 +1361,39 @@ function CapitalMarkets({ p, book, source, setSource }: { p: Palette; book: Pool
 }
 
 // ── Judge tour card (Brief M) ───────────────────────────────────────────────
-// A small dismissible 60-second orientation on load. Boot stays pre-verified on the
+// A small dismissible guided orientation on load. Boot stays pre-verified on the
 // sample (the ideal first minute)  this card just narrates what's already on screen.
 const TOUR_DISMISSED_KEY = 'pip-console-tour-dismissed';
-const TOUR_STEPS = [
-  'This passport is already verified. Meet the sample applicant.',
-  '“Load flagged” lets you watch fraud get caught in real time.',
-  'Open the credit memo: the audit-ready decision writeup.',
-  'Capital Markets tab (illustrative). See the pool this book could fund.',
-];
+const TOUR_STEP_KEY = 'pip-console-tour-step';
+/** Console judge tour (Judge Tour spec, 2026-07-12)  the Brief-M static tip list upgraded
+ *  to the same step-card wizard as the borrower app. Non-modal: it never traps focus or
+ *  blocks the console underneath. `onTab` switches the console's real tab state; the wizard
+ *  drives navigation, it never performs the officer's actions (assess, load flagged, open
+ *  memo) on their behalf. */
+function TourCard({
+  p,
+  stepIndex,
+  onTab,
+  onNext,
+  onBack,
+  onExit,
+}: {
+  p: Palette;
+  stepIndex: number;
+  onTab: (tab: ConsoleTourTab) => void;
+  onNext: () => void;
+  onBack: () => void;
+  onExit: () => void;
+}) {
+  const index = clampConsoleTourStep(stepIndex, CONSOLE_TOUR_STEPS.length);
+  const step = CONSOLE_TOUR_STEPS[index];
+  const total = CONSOLE_TOUR_STEPS.length;
 
-function TourCard({ p, onDismiss }: { p: Palette; onDismiss: () => void }) {
+  useEffect(() => {
+    onTab(step.tab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index]);
+
   return (
     <div
       role="dialog"
@@ -1349,49 +1412,36 @@ function TourCard({ p, onDismiss }: { p: Palette; onDismiss: () => void }) {
         animation: 'fade-in-up 0.4s ease-out both',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 800, color: p.ink1, letterSpacing: '0.06em', textTransform: 'uppercase' }}>60-second tour</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 800, color: p.ink1, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Console tour</span>
         <button
-          onClick={onDismiss}
-          aria-label="Dismiss tour"
+          onClick={onExit}
+          aria-label="Exit tour"
           style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: p.ink3, fontSize: 15, lineHeight: 1, padding: 4 }}
         >
           ×
         </button>
       </div>
-      <ol style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {TOUR_STEPS.map((text, i) => (
-          <li key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-            <span
-              style={{
-                flexShrink: 0,
-                width: 17,
-                height: 17,
-                borderRadius: '50%',
-                background: p.accentTint,
-                border: `1px solid ${p.accentSoft}`,
-                color: p.accentInk,
-                fontFamily: FONT.num,
-                fontSize: 12,
-                fontWeight: 700,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginTop: 1,
-              }}
-            >
-              {i + 1}
-            </span>
-            <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink2, lineHeight: 1.5 }}>{text}</span>
-          </li>
+      <div style={{ display: 'flex', gap: 5, marginBottom: 10 }}>
+        {Array.from({ length: total }).map((_, i) => (
+          <span key={i} style={{ height: 6, width: i === index ? 16 : 6, borderRadius: 3, background: i === index ? p.primary : p.hairline }} />
         ))}
-      </ol>
-      <button
-        onClick={onDismiss}
-        style={{ width: '100%', marginTop: 12, padding: '7px 0', borderRadius: 8, border: 'none', cursor: 'pointer', background: p.primary, color: 'white', fontFamily: FONT.ui, fontSize: 12, fontWeight: 700 }}
-      >
-        Got it
-      </button>
+      </div>
+      <p style={{ fontFamily: FONT.ui, fontSize: 13.5, fontWeight: 700, color: p.ink1, marginBottom: 4 }}>{step.title}</p>
+      <p style={{ fontFamily: FONT.ui, fontSize: 12.5, color: p.ink2, lineHeight: 1.5 }}>{step.body}</p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
+        <button onClick={onExit} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: p.ink3, fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 600, padding: 0 }}>Exit</button>
+        <div style={{ flex: 1 }} />
+        {index > 0 && (
+          <button onClick={onBack} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: p.ink2, fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, padding: '7px 4px' }}>Back</button>
+        )}
+        <button
+          onClick={onNext}
+          style={{ padding: '7px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', background: p.primary, color: 'white', fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700 }}
+        >
+          {index === total - 1 ? 'Done' : 'Next'}
+        </button>
+      </div>
     </div>
   );
 }
@@ -1422,22 +1472,51 @@ export default function Console() {
   const [poolSource, setPoolSource] = useState<PoolSource>('live');
   // Adopted risk-based rate (Brief R): null = ladder rate in force; a number = custom-priced.
   const [adoptedRate, setAdoptedRate] = useState<number | null>(null);
-  // Judge tour card (Brief M): defaults hidden (SSR-safe) and only shown once the mount
-  // effect confirms localStorage doesn't already record a dismissal.
+  // Judge tour wizard (Judge Tour spec, 2026-07-12; upgraded from the Brief-M static card):
+  // defaults hidden (SSR-safe) and only shown once the mount effect confirms localStorage
+  // doesn't already record it as seen. Step index persists too, so a reload resumes mid-tour.
   const [showTour, setShowTour] = useState(false);
+  const [tourStepIndex, setTourStepIndexState] = useState(0);
   useEffect(() => {
     try {
       if (window.localStorage.getItem(TOUR_DISMISSED_KEY) !== 'true') setShowTour(true);
+      const savedStep = Number(window.localStorage.getItem(TOUR_STEP_KEY) ?? '0');
+      setTourStepIndexState(clampConsoleTourStep(Number.isFinite(savedStep) ? savedStep : 0, CONSOLE_TOUR_STEPS.length));
     } catch {
       // localStorage unavailable (private mode / disabled)  skip the tour rather than crash.
     }
   }, []);
+  const persistTourStep = (index: number) => {
+    setTourStepIndexState(index);
+    try {
+      window.localStorage.setItem(TOUR_STEP_KEY, String(index));
+    } catch {
+      // Best-effort persistence.
+    }
+  };
+  const tourNext = () => {
+    if (tourStepIndex >= CONSOLE_TOUR_STEPS.length - 1) {
+      dismissTour();
+      return;
+    }
+    persistTourStep(tourStepIndex + 1);
+  };
+  const tourBack = () => persistTourStep(Math.max(0, tourStepIndex - 1));
   const dismissTour = () => {
     setShowTour(false);
     try {
       window.localStorage.setItem(TOUR_DISMISSED_KEY, 'true');
     } catch {
       // Best-effort persistence; a session that can't write localStorage just re-shows next load.
+    }
+  };
+  const restartTour = () => {
+    persistTourStep(0);
+    setShowTour(true);
+    try {
+      window.localStorage.setItem(TOUR_DISMISSED_KEY, 'false');
+    } catch {
+      // Best-effort persistence.
     }
   };
 
@@ -1492,6 +1571,8 @@ export default function Console() {
     installment: decision.installment,
     ...(decision.breakdown?.tierLabel ? { tierLabel: decision.breakdown.tierLabel } : {}),
     ...(declared ? { purpose: declared } : {}),
+    band: passport.band,
+    ...(passport.assessment ? { confidencePct: Math.round(passport.assessment.confidence * 100) } : {}),
   });
 
   /** File a successful verify+assessment as an application (deduped) and select it. Subject-
@@ -1677,9 +1758,11 @@ export default function Console() {
 
   return (
     <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: p.bg }}>
-      <Header p={p} tab={tab} setTab={setTab} alert={showAlert} />
+      <Header p={p} tab={tab} setTab={setTab} alert={showAlert} onRestartTour={restartTour} />
       {showAlert && <AlertBanner caseId={flagCaseId} flagTime={flagTime} />}
-      {showTour && <TourCard p={p} onDismiss={dismissTour} />}
+      {showTour && (
+        <TourCard p={p} stepIndex={tourStepIndex} onTab={setTab} onNext={tourNext} onBack={tourBack} onExit={dismissTour} />
+      )}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
         {tab === 'verify' ? (
           <>
