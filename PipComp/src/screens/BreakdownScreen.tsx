@@ -10,7 +10,7 @@ import { monthName } from '../lib/dates';
 import { fmt } from '../lib/format';
 import type { Category, TxnType } from '../lib/types';
 import { useAppData } from '../state/store';
-import { colors, uiFont } from '../theme';
+import { colors, shadowToggle, uiFont } from '../theme';
 
 const fallback: Category = { id: 'other', label: 'Other', icon: 'dots', hue: 220, kind: 'expense', isDefault: true };
 
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
     borderColor: colors.line2,
   },
   toggleBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 9, borderRadius: 999 },
-  toggleBtnOn: { backgroundColor: colors.surface, shadowColor: '#102018', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  toggleBtnOn: { backgroundColor: colors.surface, ...shadowToggle },
   toggleText: { fontFamily: uiFont(600), fontSize: 14, color: colors.ink2 },
   toggleTextOn: { color: colors.ink },
   pieWrap: { alignItems: 'center', justifyContent: 'center', marginTop: 6 },

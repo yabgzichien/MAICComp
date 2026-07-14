@@ -9,7 +9,7 @@ import Svg, { Path } from 'react-native-svg';
 import { Icon } from '../components/Icon';
 import { Card, TopBar } from '../components/ui';
 import type { ConsentScopeRow } from '../lib/consentScopes';
-import { colors, uiFont } from '../theme';
+import { colors, platformShadow, uiFont } from '../theme';
 
 function GuardLine({ text }: { text: string }) {
   return (
@@ -263,11 +263,7 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 999,
     backgroundColor: '#fff',
-    shadowColor: '#102018',
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 2,
+    ...platformShadow('#102018', 0.15, 3, { width: 0, height: 1 }, 2),
   },
   identityNote: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, lineHeight: 16, marginTop: 10 },
 

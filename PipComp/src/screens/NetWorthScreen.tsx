@@ -27,7 +27,7 @@ import { todayISO } from '../lib/duplicates';
 import { searchInvestments } from '../prices';
 import type { Account, AccountKind, PriceQuote } from '../lib/types';
 import { useAppData } from '../state/store';
-import { colors, numFont, radius, uiFont } from '../theme';
+import { colors, numFont, platformShadow, radius, shadowCard, shadowToggle, uiFont } from '../theme';
 
 const RED2 = '#c5402f';
 function timeOf(iso: string | null): string {
@@ -996,7 +996,7 @@ const styles = StyleSheet.create({
 
   /* nav */
   nav: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingBottom: 10 },
-  navBtn: { width: 36, height: 36, borderRadius: 999, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', ...{ shadowColor: '#102018', shadowOpacity: 0.12, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 3 } },
+  navBtn: { width: 36, height: 36, borderRadius: 999, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', ...shadowCard },
   navTitle: { flex: 1, textAlign: 'center', fontFamily: uiFont(700), fontSize: 16, color: colors.ink },
 
   /* hero */
@@ -1021,7 +1021,7 @@ const styles = StyleSheet.create({
 
   /* scan row */
   scanRow: { flexDirection: 'row', gap: 9, marginHorizontal: 16, marginBottom: 4 },
-  scanBanner: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.accent, borderRadius: 16, padding: 10, paddingRight: 14, shadowColor: colors.accent, shadowOpacity: 0.3, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
+  scanBanner: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.accent, borderRadius: 16, padding: 10, paddingRight: 14, ...platformShadow(colors.accent, 0.3, 14, { width: 0, height: 4 }, 3) },
   scanIcon: { width: 30, height: 30, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
   scanTitle: { fontFamily: uiFont(700), fontSize: 13, color: '#fff' },
   scanSub: { fontFamily: uiFont(500), fontSize: 11, color: 'rgba(255,255,255,0.68)', marginTop: 1 },
@@ -1034,7 +1034,7 @@ const styles = StyleSheet.create({
   classChipRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4 },
   classChipLabel: { fontFamily: uiFont(700), fontSize: 11, color: colors.ink2, letterSpacing: 1, textTransform: 'uppercase' },
   classChipSub: { fontFamily: numFont(600), fontSize: 11, color: colors.ink2 },
-  classCard: { backgroundColor: colors.surface, borderRadius: 18, marginHorizontal: 16, marginTop: 4, overflow: 'hidden', shadowColor: '#102018', shadowOpacity: 0.12, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 3 },
+  classCard: { backgroundColor: colors.surface, borderRadius: 18, marginHorizontal: 16, marginTop: 4, overflow: 'hidden', ...shadowCard },
 
   /* price stamp */
   priceStamp: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 18, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.surface2 },
@@ -1093,7 +1093,7 @@ const styles = StyleSheet.create({
   sheetTitle: { flex: 1, fontFamily: uiFont(700), fontSize: 19, color: colors.ink, marginRight: 12 },
   toggle: { flexDirection: 'row', backgroundColor: colors.surface2, borderRadius: 999, padding: 4, marginBottom: 18, borderWidth: 1, borderColor: colors.line2 },
   toggleBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 9, borderRadius: 999 },
-  toggleBtnOn: { backgroundColor: colors.surface, shadowColor: '#102018', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  toggleBtnOn: { backgroundColor: colors.surface, ...shadowToggle },
   toggleText: { fontFamily: uiFont(600), fontSize: 14, color: colors.ink2 },
   toggleTextOn: { color: colors.ink },
   fieldLabel: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2, marginBottom: 8 },

@@ -6,7 +6,7 @@ import { todayISO } from '../lib/duplicates';
 import { defaultLinkEffect, type LinkEffect } from '../lib/networth';
 import { confirmAction } from '../lib/platformAlert';
 import { useAppData } from '../state/store';
-import { colors, numFont, radius, uiFont } from '../theme';
+import { colors, numFont, radius, shadowToggle, uiFont } from '../theme';
 import { AccountLinkField } from './AccountLinkField';
 import { AddCategoryModal } from './AddCategoryModal';
 import { BtnLabel, CategoryChip, PrimaryButton } from './ui';
@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
     borderColor: colors.line2,
   },
   toggleBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 9, borderRadius: 999 },
-  toggleBtnOn: { backgroundColor: colors.surface, shadowColor: '#102018', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  toggleBtnOn: { backgroundColor: colors.surface, ...shadowToggle },
   toggleText: { fontFamily: uiFont(600), fontSize: 14, color: colors.ink2 },
   toggleTextOn: { color: colors.ink },
   fieldLabel: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2, marginBottom: 8 },

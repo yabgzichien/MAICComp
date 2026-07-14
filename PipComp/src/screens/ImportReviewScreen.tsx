@@ -11,7 +11,7 @@ import { fmt } from '../lib/format';
 import { assignImported } from '../lib/import';
 import { DROP, type Category, type ExtractedTxn, type TxnType } from '../lib/types';
 import { useAppData } from '../state/store';
-import { colors, numFont, radius, uiFont } from '../theme';
+import { colors, numFont, radius, shadowToggle, uiFont } from '../theme';
 
 const fallback: Category = { id: 'other', label: 'Other', icon: 'dots', hue: 220, kind: 'expense', isDefault: true };
 
@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
   sheetTitle: { flex: 1, fontFamily: uiFont(700), fontSize: 19, color: colors.ink, marginRight: 12 },
   toggle: { flexDirection: 'row', backgroundColor: colors.surface2, borderRadius: 999, padding: 4, marginBottom: 18, borderWidth: 1, borderColor: colors.line2 },
   toggleBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 9, borderRadius: 999 },
-  toggleBtnOn: { backgroundColor: colors.surface, shadowColor: '#102018', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  toggleBtnOn: { backgroundColor: colors.surface, ...shadowToggle },
   toggleText: { fontFamily: uiFont(600), fontSize: 14, color: colors.ink2 },
   toggleTextOn: { color: colors.ink },
   fieldLabel: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2, marginBottom: 8 },

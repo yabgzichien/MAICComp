@@ -8,7 +8,7 @@ import { catColorsForHue } from '../lib/catColors';
 import { confirmAction } from '../lib/platformAlert';
 import type { TxnType } from '../lib/types';
 import { useAppData } from '../state/store';
-import { colors, radius, uiFont } from '../theme';
+import { colors, radius, shadowToggle, uiFont } from '../theme';
 
 const EXPENSE_ICONS: IconName[] = ['cart', 'utensils', 'coffee', 'car', 'bag', 'heart', 'receipt', 'play', 'fuel', 'dots'];
 const INCOME_ICONS: IconName[] = ['wallet', 'gift', 'sparkles', 'return', 'trending', 'percent', 'dots'];
@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
     borderColor: colors.line2,
   },
   toggleBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 9, borderRadius: 999 },
-  toggleBtnOn: { backgroundColor: colors.surface, ...{ shadowColor: '#102018', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 } },
+  toggleBtnOn: { backgroundColor: colors.surface, ...shadowToggle },
   toggleText: { fontFamily: uiFont(600), fontSize: 14, color: colors.ink2 },
   toggleTextOn: { color: colors.ink },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 15, paddingVertical: 12 },

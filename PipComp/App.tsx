@@ -42,7 +42,7 @@ import { SettingsScreen } from './src/screens/SettingsScreen';
 import { AccentProvider } from './src/state/accent';
 import { AppDataProvider, useAppData } from './src/state/store';
 import { useNow } from './src/state/useNow';
-import { colors, uiFont } from './src/theme';
+import { colors, platformShadow, uiFont } from './src/theme';
 
 type Screen = 'home' | 'add' | 'settings' | 'categories' | 'transactions' | 'breakdown' | 'budget' | 'recap' | 'networth' | 'credit' | 'loans' | 'passport' | 'coach' | 'lender' | 'attacks' | 'kyc' | 'calendar';
 
@@ -398,10 +398,7 @@ const webStyles = StyleSheet.create({
     backgroundColor: colors.bg,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.08)',
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 40,
-    shadowOffset: { width: 0, height: 18 },
+    ...platformShadow('#000000', 0.18, 40, { width: 0, height: 18 }, 0),
   },
   statusBar: {
     height: 50,

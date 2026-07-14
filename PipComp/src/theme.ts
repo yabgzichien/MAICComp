@@ -83,6 +83,34 @@ export const shadowPop = Platform.select({
   default: { shadowColor: '#102018', shadowOpacity: 0.18, shadowRadius: 28, shadowOffset: { width: 0, height: 16 }, elevation: 8 },
 }) as { boxShadow?: string; shadowColor?: string; shadowOpacity?: number; shadowRadius?: number; shadowOffset?: { width: number; height: number }; elevation?: number };
 
+type ShadowStyle = { boxShadow?: string; shadowColor?: string; shadowOpacity?: number; shadowRadius?: number; shadowOffset?: { width: number; height: number }; elevation?: number };
+
+function hexToRgba(hex: string, alpha: number): string {
+  const h = hex.replace('#', '');
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const n = parseInt(full, 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+}
+
+/** One-off colored/sized shadows (e.g. an accent-tinted glow), same web/native split as
+ *  shadowCard/shadowPop above  keeps every shadow off the deprecated shadow-prefixed and
+ *  elevation props on web (UI/UX P3.19) without hardcoding a boxShadow string at each call site. */
+export function platformShadow(
+  color: string,
+  opacity: number,
+  radius: number,
+  offset: { width: number; height: number },
+  elevation: number,
+): ShadowStyle {
+  return Platform.select({
+    web: { boxShadow: `${offset.width}px ${offset.height}px ${radius}px ${hexToRgba(color, opacity)}` },
+    default: { shadowColor: color, shadowOpacity: opacity, shadowRadius: radius, shadowOffset: offset, elevation },
+  }) as ShadowStyle;
+}
+
+/** The repeated small "toggle button" shadow (7 call sites) that predates this helper. */
+export const shadowToggle = platformShadow('#102018', 0.08, 6, { width: 0, height: 2 }, 2);
+
 /** Map a desired numeric weight to the matching Space Grotesk family. */
 export function numFont(weight: number): string {
   if (weight >= 700) return fonts.numBold;

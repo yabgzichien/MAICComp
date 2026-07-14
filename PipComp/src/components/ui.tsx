@@ -4,7 +4,7 @@ import { catColorsForHue } from '../lib/catColors';
 import { fmt } from '../lib/format';
 import type { Category, CategorySuggestion } from '../lib/types';
 import { useAccent } from '../state/accent';
-import { colors, numFont, radius, shadowCard, uiFont } from '../theme';
+import { colors, numFont, platformShadow, radius, shadowCard, uiFont } from '../theme';
 import { Icon, type IconName } from './Icon';
 import { Pip, type PipExpr } from './Pip';
 
@@ -194,7 +194,7 @@ export function PrimaryButton({
         styles.btnPrimary,
         {
           backgroundColor: theme.accent,
-          shadowColor: theme.accent,
+          ...platformShadow(theme.accent, 0.4, 12, { width: 0, height: 6 }, 4),
           height,
           opacity: disabled ? 0.4 : pressed ? 0.94 : 1,
           transform: [{ scale: pressed && !disabled ? 0.98 : 1 }],
@@ -344,11 +344,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.accent,
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
+    ...platformShadow(colors.accent, 0.4, 12, { width: 0, height: 6 }, 4),
   },
   btnRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9 },
   btnLabel: { fontFamily: uiFont(600), fontSize: 16, color: colors.onAccent },

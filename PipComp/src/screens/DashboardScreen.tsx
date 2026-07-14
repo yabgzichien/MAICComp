@@ -20,7 +20,7 @@ import type { Category } from '../lib/types';
 import { useAppData } from '../state/store';
 import { useCreditProfile } from '../state/useCreditProfile';
 import { useNow } from '../state/useNow';
-import { colors, numFont, shadowCard, uiFont } from '../theme';
+import { colors, numFont, platformShadow, shadowCard, uiFont } from '../theme';
 
 const RED = colors.red;
 const fallback: Category = { id: 'other', label: 'Other', icon: 'dots', hue: 220, kind: 'expense', isDefault: true };
@@ -538,7 +538,7 @@ const styles = StyleSheet.create({
   askStrip: { borderRadius: 22, backgroundColor: colors.accentSoft, padding: 13, flexDirection: 'row', alignItems: 'center', gap: 12 },
   askTitle: { fontFamily: uiFont(700), fontSize: 13, color: colors.accentInk, marginBottom: 2 },
   askSub: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink2 },
-  askBtn: { backgroundColor: colors.accent, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8, ...shadowCard, shadowColor: colors.accent, shadowOpacity: 0.32 },
+  askBtn: { backgroundColor: colors.accent, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8, ...platformShadow(colors.accent, 0.32, 16, { width: 0, height: 8 }, 3) },
   askBtnText: { fontFamily: uiFont(700), fontSize: 12, color: colors.onAccent },
 
   /* generic cta */

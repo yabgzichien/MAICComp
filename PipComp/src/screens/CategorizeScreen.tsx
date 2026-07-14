@@ -10,7 +10,7 @@ import { fmt } from '../lib/format';
 import { DROP, type Category, type CategorySuggestion, type ExtractedTxn, type TxnType } from '../lib/types';
 import { useAccent, useAccentAlert } from '../state/accent';
 import { useAppData } from '../state/store';
-import { colors, numFont, uiFont } from '../theme';
+import { colors, numFont, shadowToggle, uiFont } from '../theme';
 
 export function CategorizeScreen({
   extracted,
@@ -434,7 +434,7 @@ const styles = StyleSheet.create({
   },
   typeToggle: { flexDirection: 'row', backgroundColor: colors.surface2, borderRadius: 999, padding: 4, marginTop: 16, borderWidth: 1, borderColor: colors.line2 },
   typeBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: 999 },
-  typeBtnOn: { backgroundColor: colors.surface, shadowColor: '#102018', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  typeBtnOn: { backgroundColor: colors.surface, ...shadowToggle },
   typeText: { fontFamily: uiFont(600), fontSize: 13.5, color: colors.ink2 },
   typeTextOn: { color: colors.ink },
   grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12, marginHorizontal: -5 },

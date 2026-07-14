@@ -12,7 +12,7 @@ import { availableMonths, computeAdherence, monthlyIncomeStatement, spentByCateg
 import { netWorthSeries } from '../lib/networth';
 import type { Category } from '../lib/types';
 import { useAppData } from '../state/store';
-import { colors, numFont, shadowCard, uiFont } from '../theme';
+import { colors, numFont, platformShadow, shadowCard, uiFont } from '../theme';
 
 /** The 'YYYY-MM' before the given one. */
 function prevMonthKey(mk: string): string {
@@ -425,7 +425,7 @@ const styles = StyleSheet.create({
   monthScroll: { flexGrow: 0, flexShrink: 0 },
   monthStrip: { paddingHorizontal: 16, paddingTop: 2, paddingBottom: 10, gap: 6, alignItems: 'center' },
   monthChip: { paddingHorizontal: 17, paddingVertical: 6, borderRadius: 20, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.line, ...shadowCard },
-  monthChipOn: { backgroundColor: colors.accent, borderColor: colors.accent, shadowColor: colors.accent, shadowOpacity: 0.28, shadowRadius: 10, shadowOffset: { width: 0, height: 3 } },
+  monthChipOn: { backgroundColor: colors.accent, borderColor: colors.accent, ...platformShadow(colors.accent, 0.28, 10, { width: 0, height: 3 }, 0) },
   monthChipText: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2 },
   monthChipTextOn: { fontFamily: uiFont(700), color: '#fff' },
 
@@ -437,8 +437,8 @@ const styles = StyleSheet.create({
   // wrapper/content split is the standard fix.
   heroShadowWrap: { marginHorizontal: 16, borderRadius: 26 },
   hero: { borderRadius: 26, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 16, overflow: 'hidden' },
-  heroShadowPos: { shadowColor: '#0c2214', shadowOpacity: 0.28, shadowRadius: 24, shadowOffset: { width: 0, height: 14 }, elevation: 8 },
-  heroShadowNeg: { shadowColor: '#5a0a14', shadowOpacity: 0.32, shadowRadius: 24, shadowOffset: { width: 0, height: 14 }, elevation: 8 },
+  heroShadowPos: platformShadow('#0c2214', 0.28, 24, { width: 0, height: 14 }, 8),
+  heroShadowNeg: platformShadow('#5a0a14', 0.32, 24, { width: 0, height: 14 }, 8),
   heroBlob: { position: 'absolute', top: -50, right: -40, width: 160, height: 160, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.05)' },
   heroEyebrow: { fontFamily: uiFont(600), fontSize: 11, letterSpacing: 1.1, color: 'rgba(255,255,255,0.50)', textTransform: 'uppercase', marginBottom: 16 },
   heroLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 10 },

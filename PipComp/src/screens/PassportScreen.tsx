@@ -19,7 +19,7 @@ import { useCreditProfile } from '../state/useCreditProfile';
 import { useAppData } from '../state/store';
 import { DEFAULT_PRODUCTS } from '../lib/loans';
 import { PassportCeremonyScreen } from './PassportCeremonyScreen';
-import { colors, numFont, uiFont } from '../theme';
+import { colors, numFont, platformShadow, uiFont } from '../theme';
 
 function formatDate(iso: string): string {
   try {
@@ -345,11 +345,7 @@ const styles = StyleSheet.create({
   passportCard: {
     borderRadius: 24,
     backgroundColor: colors.surface,
-    shadowColor: '#0a1810',
-    shadowOpacity: 0.28,
-    shadowRadius: 30,
-    shadowOffset: { width: 0, height: 18 },
-    elevation: 8,
+    ...platformShadow('#0a1810', 0.28, 30, { width: 0, height: 18 }, 8),
   },
   header: { backgroundColor: colors.passportDark, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 },
   headerTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },

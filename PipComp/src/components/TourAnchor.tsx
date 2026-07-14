@@ -5,7 +5,7 @@
 // and works identically across RN and RN-web.
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { colors, radius } from '../theme';
+import { colors, platformShadow, radius } from '../theme';
 
 export function TourAnchor({ id, activeId, children }: { id: string; activeId: string | null; children: React.ReactNode }) {
   if (id !== activeId) return <>{children}</>;
@@ -17,9 +17,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: 2,
     borderColor: colors.accent,
-    shadowColor: colors.accent,
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 0 },
+    ...platformShadow(colors.accent, 0.35, 8, { width: 0, height: 0 }, 0),
   },
 });
