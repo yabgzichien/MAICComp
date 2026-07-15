@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     height: 52,
     borderRadius: 999,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.accentInk,
     marginTop: 4,
   },
   confirmText: { fontFamily: uiFont(700), fontSize: 15, color: colors.onAccent },

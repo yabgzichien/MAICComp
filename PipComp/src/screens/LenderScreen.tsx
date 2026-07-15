@@ -636,7 +636,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: 999,
   },
-  segmentBtnActive: { backgroundColor: colors.accent },
+  segmentBtnActive: { backgroundColor: colors.accentInk },
   segmentText: { fontFamily: uiFont(600), fontSize: 13.5, color: colors.ink2 },
   segmentTextActive: { color: colors.onAccent },
 
@@ -734,7 +734,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     height: 50,
     borderRadius: 999,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.accentInk,
     marginBottom: 14,
   },
   verifyBtnDisabled: { opacity: 0.45 },
@@ -974,7 +974,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     height: 46,
     borderRadius: 999,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.accentInk,
   },
   assessBtnDisabled: { opacity: 0.45 },
   assessBtnText: {

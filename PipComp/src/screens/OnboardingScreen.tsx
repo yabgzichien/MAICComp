@@ -7,19 +7,27 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../components/Icon';
 import { Pip } from '../components/Pip';
 import { Card } from '../components/ui';
+import { DEMO_PROFILES, type DemoProfileId } from '../data/demoProfile';
 import { useAppData } from '../state/store';
 import { colors, uiFont } from '../theme';
 import { KycScreen } from './KycScreen';
+
+const PROFILE_ACCENT: Record<DemoProfileId, string> = {
+  aina: colors.accent,
+  ravi: '#2e7d32',
+  faizal: '#c0392b',
+};
 
 export function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const { completeOnboarding, loadDemoData, startTour } = useAppData();
   const [mode, setMode] = useState<'intro' | 'kyc'>('intro');
   const [startingTour, setStartingTour] = useState(false);
+  const [selectedProfile, setSelectedProfile] = useState<DemoProfileId>('aina');
 
   async function takeTour() {
     setStartingTour(true);
-    await loadDemoData();
+    await loadDemoData(selectedProfile);
     await completeOnboarding();
     await startTour({ fresh: true });
   }
@@ -28,6 +36,8 @@ export function OnboardingScreen() {
     // Verify identity inline; finishing (Done) completes onboarding straight to home.
     return <KycScreen onBack={() => setMode('intro')} onDone={() => void completeOnboarding()} />;
   }
+
+  const activeMeta = DEMO_PROFILES.find((p) => p.id === selectedProfile);
 
   return (
     <View style={styles.root}>
@@ -55,17 +65,52 @@ export function OnboardingScreen() {
           </Pressable>
         </Card>
 
-        <Pressable style={styles.tourBtn} onPress={() => void takeTour()} disabled={startingTour}>
+        <View style={styles.selectorContainer}>
+          <Text style={styles.selectorLabel}>Tour starting profile:</Text>
+          <View style={styles.segmentedControl}>
+            {DEMO_PROFILES.map((p) => {
+              const isSelected = selectedProfile === p.id;
+              return (
+                <Pressable
+                  key={p.id}
+                  style={[
+                    styles.segmentButton,
+                    isSelected && styles.segmentButtonActive,
+                    isSelected && { borderColor: PROFILE_ACCENT[p.id] },
+                  ]}
+                  onPress={() => setSelectedProfile(p.id)}
+                >
+                  <Text style={[styles.segmentText, isSelected && { color: PROFILE_ACCENT[p.id] }]}>
+                    {p.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {activeMeta && (
+            <Text style={styles.profileStory}>
+              {activeMeta.story}
+            </Text>
+          )}
+        </View>
+
+        <Pressable
+          style={[styles.tourBtn, { borderColor: PROFILE_ACCENT[selectedProfile] }]}
+          onPress={() => void takeTour()}
+          disabled={startingTour}
+        >
           {startingTour ? (
             <ActivityIndicator size="small" color={colors.accentInk} />
           ) : (
             <>
-              <Icon name="sparkles" size={16} color={colors.accentInk} />
-              <Text style={styles.tourText}>Take the 2-minute tour</Text>
+              <Icon name="sparkles" size={16} color={PROFILE_ACCENT[selectedProfile]} />
+              <Text style={[styles.tourText, { color: PROFILE_ACCENT[selectedProfile] }]}>
+                Take the 2-minute tour
+              </Text>
             </>
           )}
         </Pressable>
-        <Text style={styles.skipHint}>Loads a sample profile  reset it any time in Settings.</Text>
+        <Text style={styles.skipHint}>Loads the selected profile. Reset it any time in Settings.</Text>
 
         <Pressable style={styles.skipBtn} onPress={() => void completeOnboarding()}>
           <Text style={styles.skipText}>Skip for now, just track my money</Text>
@@ -85,11 +130,18 @@ const styles = StyleSheet.create({
   choiceHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   choiceTitle: { fontFamily: uiFont(700), fontSize: 15, color: colors.accentInk, flex: 1 },
   choiceBody: { fontFamily: uiFont(500), fontSize: 13.5, color: colors.ink2, lineHeight: 19, marginTop: 10 },
-  primaryBtn: { alignItems: 'center', justifyContent: 'center', height: 50, borderRadius: 999, backgroundColor: colors.accent, marginTop: 16 },
+  primaryBtn: { alignItems: 'center', justifyContent: 'center', height: 50, borderRadius: 999, backgroundColor: colors.accentInk, marginTop: 16 },
   primaryBtnText: { fontFamily: uiFont(700), fontSize: 15, color: colors.onAccent },
   skipBtn: { alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 999, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, marginTop: 16 },
   skipText: { fontFamily: uiFont(600), fontSize: 14, color: colors.ink2 },
   skipHint: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, textAlign: 'center', marginTop: 10 },
-  tourBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: 999, backgroundColor: colors.accentTint, borderWidth: 1, borderColor: colors.accentSoft, marginTop: 16 },
+  tourBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: 999, backgroundColor: colors.accentTint, borderWidth: 1, borderColor: colors.accentSoft, marginTop: 12 },
   tourText: { fontFamily: uiFont(700), fontSize: 14, color: colors.accentInk },
+  selectorContainer: { marginTop: 20, gap: 8 },
+  selectorLabel: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2, alignSelf: 'center' },
+  segmentedControl: { flexDirection: 'row', backgroundColor: colors.surface2, borderRadius: 999, padding: 3, borderWidth: 1, borderColor: colors.line },
+  segmentButton: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 999, borderWidth: 1, borderColor: 'transparent' },
+  segmentButtonActive: { backgroundColor: colors.surface, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 1, elevation: 1 },
+  segmentText: { fontFamily: uiFont(700), fontSize: 13, color: colors.ink2 },
+  profileStory: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, textAlign: 'center', marginTop: 4, paddingHorizontal: 12, lineHeight: 17 },
 });

@@ -10,7 +10,7 @@ export const colors = {
   surface2: '#f6f8f6',
   ink: '#16201b',
   ink2: '#5d6b63',
-  ink3: '#9aa7a0',
+  ink3: '#6a776f', // AA on white (4.69:1) — was #9aa7a0 (2.50:1, sub-AA)
   line: 'rgba(20,40,30,0.08)',
   line2: 'rgba(20,40,30,0.05)',
 
@@ -25,7 +25,7 @@ export const colors = {
   shotInk: '#eaf3ee',
 
   // status / decision accents (from the redesign tokens)
-  amber: '#d98a00',
+  amber: '#9c6300', // AA on white (5.00:1) — was #d98a00 (2.77:1, sub-AA)
   red: '#c0392b',
   deltaUp: '#42e893', // "+8 pts" up-arrow green on dark surfaces
   passportDark: '#11231a',

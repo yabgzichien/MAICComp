@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
   exit: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink3 },
   secondaryBtn: { paddingVertical: 8, paddingHorizontal: 4 },
   secondaryText: { fontFamily: uiFont(600), fontSize: 13.5, color: colors.ink2 },
-  nextBtn: { backgroundColor: colors.accent, borderRadius: 999, paddingVertical: 9, paddingHorizontal: 20 },
+  nextBtn: { backgroundColor: colors.accentInk, borderRadius: 999, paddingVertical: 9, paddingHorizontal: 20 },
   nextText: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.onAccent },
   chipWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center', zIndex: 40 },
   chip: { backgroundColor: colors.ink, borderRadius: 999, paddingVertical: 9, paddingHorizontal: 18, ...shadowCard },

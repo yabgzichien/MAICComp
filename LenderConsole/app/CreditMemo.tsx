@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FONT, type Palette } from './tokens';
-import { SectionLabel } from './shared';
+import { SectionLabel, useModalA11y } from './shared';
 import { runAgentPanel, type StackingSignal } from '../lib/agents';
 import { buildCreditMemo, memoToMarkdown, memoToPdfDoc, fallbackNarrative, type CreditMemo, type MemoPricing, type MemoResolution } from '../lib/creditMemo';
 import { downloadPdf } from '../lib/pdfExport';
@@ -98,15 +98,9 @@ export default function CreditMemoModal({
     provenance === 'pending' ? 'Narrating…' : provenance === 'live' ? 'Live AI narration' : 'Policy summary';
   const chipColor = provenance === 'live' ? p.accentInk : p.ink3;
 
-  // Esc closes the dialog, matching standard modal behavior (the passive tour card already
-  // claims dialog semantics elsewhere in the console; this modal previously had none).
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
+  // Focus trap + Esc-to-close + focus restore on close (2026-07-15 review item 6b).
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useModalA11y(dialogRef, onClose);
 
   return (
     <div
@@ -125,10 +119,12 @@ export default function CreditMemoModal({
       }}
     >
       <div
+        ref={dialogRef}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="credit-memo-title"
+        tabIndex={-1}
         style={{ width: '100%', maxWidth: 680, background: p.surface, borderRadius: 16, boxShadow: '0 24px 70px rgba(0,0,0,0.35)', overflow: 'hidden' }}
       >
         {/* Header */}
@@ -266,7 +262,7 @@ function btn(p: Palette, primary: boolean): React.CSSProperties {
     borderRadius: 7,
     border: primary ? 'none' : `1px solid ${p.hairline}`,
     cursor: 'pointer',
-    background: primary ? p.primary : 'transparent',
+    background: primary ? p.accentInk : 'transparent',
     color: primary ? 'white' : p.ink2,
     fontFamily: FONT.ui,
     fontSize: 12,

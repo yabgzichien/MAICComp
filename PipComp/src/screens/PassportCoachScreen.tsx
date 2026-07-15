@@ -406,7 +406,7 @@ const styles = StyleSheet.create({
   flatNote: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, marginTop: 8, fontStyle: 'italic' },
   stressRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
   stressText: { fontFamily: uiFont(600), fontSize: 11.5, flex: 1, lineHeight: 15 },
-  startBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: colors.accent, borderRadius: 12, paddingVertical: 11, marginTop: 12 },
+  startBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: colors.accentInk, borderRadius: 12, paddingVertical: 11, marginTop: 12 },
   startBtnText: { fontFamily: uiFont(700), fontSize: 13, color: colors.onAccent },
 
   doneCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16, marginTop: 8 },
@@ -414,7 +414,7 @@ const styles = StyleSheet.create({
 
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { backgroundColor: colors.surface, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: colors.line },
-  chipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  chipActive: { backgroundColor: colors.accentInk, borderColor: colors.accentInk },
   chipText: { fontFamily: numFont(600), fontSize: 12.5, color: colors.ink2 },
   chipTextActive: { color: colors.onAccent },
   blockedNote: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, marginTop: 4, lineHeight: 17 },

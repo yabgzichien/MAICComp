@@ -56,13 +56,13 @@ export default function PortfolioTab({ p, apps, onStructure }: { p: Palette; app
             <SectionLabel color={p.ink2}>Portfolio · Approved Book</SectionLabel>
             <h2 style={{ fontFamily: FONT.ui, fontSize: 22, fontWeight: 800, color: p.ink1, letterSpacing: '-0.4px', marginTop: 4, marginBottom: 5 }}>Loan Book Overview</h2>
             <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, maxWidth: 620, lineHeight: 1.5 }}>
-              Every loan you approve in the pipeline books here. Structure it into rated tranches in one click  <strong style={{ color: p.ink2 }}>approve → book → securitize</strong>, one continuous flow.
+              Every loan you approve in the pipeline books here. Structure it into rated tranches in one click: <strong style={{ color: p.ink2 }}>approve → book → securitize</strong>, one continuous flow.
             </p>
           </div>
           <button
             onClick={onStructure}
             disabled={empty}
-            style={{ padding: '10px 20px', borderRadius: 9, border: 'none', cursor: empty ? 'not-allowed' : 'pointer', background: empty ? 'rgba(20,40,30,0.12)' : p.primary, color: 'white', fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, flexShrink: 0 }}
+            style={{ padding: '10px 20px', borderRadius: 9, border: 'none', cursor: empty ? 'not-allowed' : 'pointer', background: empty ? 'rgba(20,40,30,0.12)' : p.accentInk, color: 'white', fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, flexShrink: 0 }}
             title={empty ? 'Approve loans in the pipeline first' : 'Structure the live book in Capital Markets'}
           >
             Structure this pool →

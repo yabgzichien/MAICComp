@@ -4,8 +4,10 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../components/Icon';
 import { Amount, Card, Eyebrow, TopBar } from '../components/ui';
+import { TourAnchor } from '../components/TourAnchor';
 import { shortDate } from '../lib/dates';
 import { decideLoan, DEFAULT_PRODUCTS, type Decision, type LoanDecision, type LoanProduct } from '../lib/loans';
+import { BORROWER_TOUR_STEPS, clampTourStep } from '../lib/tourSteps';
 import type { Repayment, RepaymentStatus } from '../db/loansRepo';
 import { useAppData } from '../state/store';
 import { useCreditProfile } from '../state/useCreditProfile';
@@ -52,8 +54,9 @@ export function LoansScreen({
 }) {
   const insets = useSafeAreaInsets();
   const { profile, score, dataConfidence, coverage } = useCreditProfile();
-  const { kyc, loanProducts, loanApplications, repayments, repaymentSummary, applyForLoan, recordRepayment, reportDefault } =
+  const { kyc, loanProducts, loanApplications, repayments, repaymentSummary, applyForLoan, recordRepayment, reportDefault, tourActive, tourStepIndex } =
     useAppData();
+  const activeTourAnchor = tourActive ? BORROWER_TOUR_STEPS[clampTourStep(tourStepIndex, BORROWER_TOUR_STEPS.length)].anchorId ?? null : null;
 
   const products = loanProducts.length > 0 ? loanProducts : DEFAULT_PRODUCTS;
 
@@ -230,6 +233,7 @@ export function LoansScreen({
           Based on your Pip Score ({score.score} · {score.band}), here's what each tier would likely decide 
           tap one to apply.
         </Text>
+        <TourAnchor id="loans-tier-stack" activeId={activeTourAnchor}>
         {previews.map(({ product, decision }) => {
           const selected = selectedProductId === product.id;
           const isExpanded = expanded.has(product.id);
@@ -285,6 +289,7 @@ export function LoansScreen({
             </Pressable>
           );
         })}
+        </TourAnchor>
 
         {/* 2. Apply flow */}
         {selectedProduct && (
@@ -403,7 +408,7 @@ export function LoansScreen({
                 lender see your updated numbers before a repayment is ever missed. The same signed passport, just
                 current.
               </Text>
-              <Pressable onPress={onOpenPassport} style={[styles.applyBtn, { backgroundColor: colors.accent }]}>
+              <Pressable onPress={onOpenPassport} style={[styles.applyBtn, { backgroundColor: colors.accentInk }]}>
                 <Icon name="trending" size={16} color={colors.onAccent} />
                 <Text style={styles.applyBtnText}>Share a check-in</Text>
               </Pressable>
@@ -429,7 +434,7 @@ export function LoansScreen({
           {nextScheduled && (
             <Pressable
               onPress={() => simulateOnTimeRepayment(nextScheduled)}
-              style={[styles.applyBtn, { backgroundColor: colors.accent }]}
+              style={[styles.applyBtn, { backgroundColor: colors.accentInk }]}
               disabled={repayBusy === nextScheduled.id}
             >
               {repayBusy === nextScheduled.id ? (
@@ -492,7 +497,7 @@ const styles = StyleSheet.create({
   gateCard: { padding: 24, alignItems: 'center', gap: 4 },
   gateTitle: { fontFamily: uiFont(700), fontSize: 17, color: colors.ink, marginTop: 12, textAlign: 'center' },
   gateBody: { fontFamily: uiFont(500), fontSize: 13.5, color: colors.ink2, lineHeight: 20, textAlign: 'center', marginTop: 8 },
-  gateBtn: { alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 999, backgroundColor: colors.accent, marginTop: 18, alignSelf: 'stretch' },
+  gateBtn: { alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 999, backgroundColor: colors.accentInk, marginTop: 18, alignSelf: 'stretch' },
   gateBtnText: { fontFamily: uiFont(700), fontSize: 14.5, color: colors.onAccent },
   intro: { fontFamily: uiFont(500), fontSize: 13, color: colors.ink2, lineHeight: 18, marginBottom: 12 },
   offerCard: { padding: 16, marginBottom: 12 },
@@ -533,7 +538,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingVertical: 13,
     borderRadius: 999,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.accentInk,
   },
   applyBtnText: { fontFamily: uiFont(700), fontSize: 14, color: colors.onAccent },
   resultBox: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.line2 },

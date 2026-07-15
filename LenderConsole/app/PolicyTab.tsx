@@ -333,7 +333,7 @@ export default function PolicyTab({
             </button>
           </div>
           <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5, marginTop: 6, marginBottom: 10 }}>
-            What the borrower app&apos;s Coach actually reads right now  fetched fresh from the published directory, not from this form.
+            What the borrower app&apos;s Coach actually reads right now: fetched fresh from the published directory, not from this form.
           </p>
           {publishedError && <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.red }}>Could not reach the published directory.</p>}
           {published && (
@@ -380,7 +380,7 @@ export default function PolicyTab({
               borderRadius: 9,
               border: 'none',
               cursor: validation.ok && !saving ? 'pointer' : 'not-allowed',
-              background: validation.ok ? p.primary : 'rgba(20,40,30,0.12)',
+              background: validation.ok ? p.accentInk : 'rgba(20,40,30,0.12)',
               color: 'white',
               fontFamily: FONT.ui,
               fontSize: 12.5,
@@ -398,7 +398,7 @@ export default function PolicyTab({
             Reset to defaults
           </button>
           {savedFlash && (
-            <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.primary }}>
+            <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.accentInk }}>
               ✓ Saved. Decisions and the published directory now use this policy
             </span>
           )}

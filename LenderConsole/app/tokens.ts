@@ -36,9 +36,9 @@ const CLEAN: Palette = {
   accentTint: '#eff7f4',
   ink1: '#16201b',
   ink2: '#5d6b63',
-  ink3: '#9aa7a0',
+  ink3: '#6a776f', // AA on white (4.69:1) — was #9aa7a0 (2.50:1, sub-AA)
   hairline: 'rgba(20,40,30,0.08)',
-  amber: '#d98a00',
+  amber: '#9c6300', // AA on white (5.00:1) — was #d98a00 (2.77:1, sub-AA)
   red: '#c0392b',
   green: '#1f8a5b',
   shadow: '0 2px 10px rgba(16,32,24,0.09)',
@@ -54,9 +54,9 @@ const ALERT: Palette = {
   accentTint: '#fff0ef',
   ink1: '#1e1210',
   ink2: '#6b4f4a',
-  ink3: '#a8908d',
+  ink3: '#84706b', // AA on white (4.66:1) — was #a8908d (2.98:1, sub-AA)
   hairline: 'rgba(192,57,43,0.12)',
-  amber: '#d98a00',
+  amber: '#9c6300', // AA on white (5.00:1) — was #d98a00 (2.77:1, sub-AA)
   red: '#c0392b',
   green: '#1f8a5b',
   shadow: '0 2px 10px rgba(120,20,10,0.10)',
@@ -111,7 +111,7 @@ export const AUDIT_REFER = [
 export const FORENSIC_FLAGS = [
   { label: 'ML fraud probability', value: '95%', sev: 'Critical', critical: true },
   { label: 'Round-number ratio', value: '95% of amounts', sev: 'Critical', critical: true },
-  { label: "Benford's Law deviation", value: 'χ² = 48.3 · p < 0.001', sev: 'Critical', critical: true },
+  { label: "Benford's Law deviation", value: "Doesn't match natural patterns (χ² 48.3, p<0.001)", sev: 'Critical', critical: true },
   { label: 'Top ML signal', value: 'amount uniformity', sev: 'Fraud signal', critical: false },
 ];
 
@@ -206,6 +206,6 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   benford: {
     term: "Benford's Law Check",
     short: 'Compares the leading digits of reported amounts to the distribution real transaction data naturally follows.',
-    body: "Genuine transaction amounts follow a predictable curve of leading digits (about 30% start with 1, only ~5% with 9). Fabricated figures, typed or rounded by a person, don't  they cluster unnaturally. The chart runs on the passport's signed aggregate digit counts, never raw transactions.",
+    body: "Genuine transaction amounts follow a predictable curve of leading digits (about 30% start with 1, only ~5% with 9). Fabricated figures, typed or rounded by a person, don't. They cluster unnaturally. The chart runs on the passport's signed aggregate digit counts, never raw transactions.",
   },
 };

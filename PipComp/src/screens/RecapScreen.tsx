@@ -254,7 +254,7 @@ export function RecapScreen({ onBack, onOpenCalendar }: { onBack: () => void; on
         const cat = catById[o.catId] ?? fallback;
         out.push({
           type: 'warn',
-          text: `${cat.label} over by RM ${fmt(o.over)}  RM ${fmt(o.spent)} of ${fmt(o.allocated)}${o.allocated > 0 ? ` (${o.pct}%)` : ''}.`,
+          text: `${cat.label} over by RM ${fmt(o.over)}: RM ${fmt(o.spent)} of ${fmt(o.allocated)}${o.allocated > 0 ? ` (${o.pct}%)` : ''}.`,
         });
       }
     }
@@ -425,7 +425,7 @@ const styles = StyleSheet.create({
   monthScroll: { flexGrow: 0, flexShrink: 0 },
   monthStrip: { paddingHorizontal: 16, paddingTop: 2, paddingBottom: 10, gap: 6, alignItems: 'center' },
   monthChip: { paddingHorizontal: 17, paddingVertical: 6, borderRadius: 20, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.line, ...shadowCard },
-  monthChipOn: { backgroundColor: colors.accent, borderColor: colors.accent, ...platformShadow(colors.accent, 0.28, 10, { width: 0, height: 3 }, 0) },
+  monthChipOn: { backgroundColor: colors.accentInk, borderColor: colors.accentInk, ...platformShadow(colors.accent, 0.28, 10, { width: 0, height: 3 }, 0) },
   monthChipText: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2 },
   monthChipTextOn: { fontFamily: uiFont(700), color: '#fff' },
 

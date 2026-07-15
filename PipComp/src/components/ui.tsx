@@ -193,7 +193,7 @@ export function PrimaryButton({
       style={({ pressed }) => [
         styles.btnPrimary,
         {
-          backgroundColor: theme.accent,
+          backgroundColor: theme.accentInk,
           ...platformShadow(theme.accent, 0.4, 12, { width: 0, height: 6 }, 4),
           height,
           opacity: disabled ? 0.4 : pressed ? 0.94 : 1,
@@ -263,7 +263,7 @@ export function ValueToggle({ mode, onChange }: { mode: ValueMode; onChange: (m:
 const styles = StyleSheet.create({
   vt: { flexDirection: 'row', backgroundColor: colors.surface2, borderRadius: 999, padding: 3, borderWidth: 1, borderColor: colors.line2 },
   vtBtn: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999 },
-  vtBtnOn: { backgroundColor: colors.accent },
+  vtBtnOn: { backgroundColor: colors.accentInk },
   // ink3 is decoration-only (~2.2-2.5:1 contrast); these carry meaning (the unselected
   // toggle option, section labels) so they get ink2.
   vtText: { fontFamily: uiFont(700), fontSize: 12.5, color: colors.ink2 },
@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
   },
   pressed: { transform: [{ scale: 0.92 }] },
   btnPrimary: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.accentInk,
     borderRadius: 999,
     paddingHorizontal: 22,
     alignItems: 'center',

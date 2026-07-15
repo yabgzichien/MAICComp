@@ -5,9 +5,9 @@
 // opening/closing prose without changing any reason or figure, and a copy action 
 // no delivery mechanism, this only assembles text for the officer to send themselves.
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FONT, type Palette } from './tokens';
-import { SectionLabel } from './shared';
+import { SectionLabel, useModalA11y } from './shared';
 import { buildAdverseActionLetter, letterToPdfDoc, letterToText, type AdverseActionLetter } from '../lib/adverseAction';
 import { downloadPdf } from '../lib/pdfExport';
 import type { CreditPassport } from '../lib/passport';
@@ -77,6 +77,13 @@ export default function AdverseActionLetterModal({
     };
   }, [letter]);
 
+  // Focus trap + Esc-to-close + focus restore on close (2026-07-15 review item 6b). Placed
+  // before the early return below so hook call order stays fixed across renders regardless
+  // of whether `letter` is null (a pre-existing Rules-of-Hooks fragility the old per-file
+  // Esc-only effect sat on the wrong side of  fixed as part of this change).
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useModalA11y(dialogRef, onClose);
+
   if (!letter) return null;
 
   function copyToClipboard() {
@@ -101,15 +108,6 @@ export default function AdverseActionLetterModal({
   const chip = provenance === 'pending' ? 'Narrating…' : provenance === 'live' ? 'Live AI narration' : 'Template prose';
   const chipColor = provenance === 'live' ? p.accentInk : p.ink3;
 
-  // Esc closes the dialog, matching standard modal behavior.
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
-
   return (
     <div
       onClick={onClose}
@@ -127,10 +125,12 @@ export default function AdverseActionLetterModal({
       }}
     >
       <div
+        ref={dialogRef}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="adverse-action-title"
+        tabIndex={-1}
         style={{ width: '100%', maxWidth: 640, background: p.surface, borderRadius: 16, boxShadow: '0 24px 70px rgba(0,0,0,0.35)', overflow: 'hidden' }}
       >
         <div style={{ padding: '18px 24px', borderBottom: `1px solid ${p.hairline}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
@@ -225,7 +225,7 @@ function btn(p: Palette, primary: boolean): React.CSSProperties {
     borderRadius: 7,
     border: primary ? 'none' : `1px solid ${p.hairline}`,
     cursor: 'pointer',
-    background: primary ? p.primary : 'transparent',
+    background: primary ? p.accentInk : 'transparent',
     color: primary ? 'white' : p.ink2,
     fontFamily: FONT.ui,
     fontSize: 12,

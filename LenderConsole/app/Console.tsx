@@ -169,20 +169,20 @@ function DemoModeChip({ p }: { p: Palette }) {
 function Header({ p, tab, setTab, alert, onRestartTour, activeLender, onSwitchLender }: { p: Palette; tab: Tab; setTab: (t: Tab) => void; alert: boolean; onRestartTour: () => void; activeLender: LenderProfile; onSwitchLender: (id: string) => void }) {
   const [menuOpen, setMenuOpen] = useState(false);
   return (
-    <div style={{ height: 50, background: p.surface, borderBottom: alert ? `2px solid ${p.primary}` : `1px solid ${p.hairline}`, display: 'flex', alignItems: 'center', padding: '0 22px', flexShrink: 0, position: 'relative' }}>
+    <header style={{ height: 50, background: p.surface, borderBottom: alert ? `2px solid ${p.primary}` : `1px solid ${p.hairline}`, display: 'flex', alignItems: 'center', padding: '0 22px', flexShrink: 0, position: 'relative' }}>
       <BrandMark p={p} onRestartTour={onRestartTour} activeLender={activeLender} />
-      <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+      <nav aria-label="Console sections" style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
         <div style={{ display: 'flex', background: p.surface2, borderRadius: 10, padding: 3, gap: 2, border: `1px solid ${p.hairline}` }}>
           {([['verify', 'Verify Passport'], ['portfolio', 'Portfolio'], ['capital', 'Capital Markets'], ['policy', 'Policy']] as [Tab, string][]).map(([key, label]) => {
             const active = key === tab;
             return (
-              <button key={key} onClick={() => setTab(key)} style={{ padding: '6px 22px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: FONT.ui, fontSize: 12.5, fontWeight: active ? 700 : 500, background: active ? p.primary : 'transparent', color: active ? 'white' : p.ink2, whiteSpace: 'nowrap' }}>
+              <button key={key} onClick={() => setTab(key)} aria-current={active ? 'page' : undefined} style={{ padding: '6px 22px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: FONT.ui, fontSize: 12.5, fontWeight: active ? 700 : 500, background: active ? p.accentInk : 'transparent', color: active ? 'white' : p.ink2, whiteSpace: 'nowrap' }}>
                 {label}
               </button>
             );
           })}
         </div>
-      </div>
+      </nav>
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexShrink: 0 }}>
         <button
           onClick={onRestartTour}
@@ -233,7 +233,7 @@ function Header({ p, tab, setTab, alert, onRestartTour, activeLender, onSwitchLe
                       <p style={{ fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, color: p.ink1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.name}</p>
                       <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>{l.officer}</p>
                     </div>
-                    {l.id === activeLender.id && <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.primary }}>✓</span>}
+                    {l.id === activeLender.id && <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.accentInk }}>✓</span>}
                   </button>
                 ))}
               </div>
@@ -241,7 +241,7 @@ function Header({ p, tab, setTab, alert, onRestartTour, activeLender, onSwitchLe
           )}
         </div>
       </div>
-    </div>
+    </header>
   );
 }
 
@@ -254,7 +254,7 @@ function AlertBanner({ caseId, flagTime }: { caseId: string; flagTime: string })
         <line x1="8" y1="6" x2="8" y2="10" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
         <circle cx="8" cy="12.2" r="0.85" fill="white" />
       </svg>
-      <span style={{ fontFamily: FONT.ui, fontSize: 13, fontWeight: 800, color: 'white', letterSpacing: '0.02em' }}>DATA INTEGRITY ALERT  Fabricated data suspected</span>
+      <span role="heading" aria-level={2} style={{ fontFamily: FONT.ui, fontSize: 13, fontWeight: 800, color: 'white', letterSpacing: '0.02em' }}>DATA INTEGRITY ALERT: Fabricated data suspected</span>
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ padding: '3px 10px', borderRadius: 5, background: 'rgba(0,0,0,0.22)', border: '1px solid rgba(255,255,255,0.22)' }}>
           <span style={{ fontFamily: FONT.mono, fontSize: 12, color: 'rgba(255,255,255,0.85)', fontWeight: 500 }}>Case #{caseId} · Flagged {flagTime}</span>
@@ -318,7 +318,7 @@ function LeftPanel({
         </div>
       </div>
 
-      <button onClick={onVerify} style={{ width: '100%', padding: '11px 0', borderRadius: 10, border: 'none', cursor: 'pointer', background: p.primary, color: 'white', fontFamily: FONT.ui, fontSize: 13.5, fontWeight: 700, boxShadow: `0 4px 14px ${red ? 'rgba(192,57,43,0.35)' : 'rgba(31,138,91,0.28)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
+      <button onClick={onVerify} style={{ width: '100%', padding: '11px 0', borderRadius: 10, border: 'none', cursor: 'pointer', background: p.accentInk, color: 'white', fontFamily: FONT.ui, fontSize: 13.5, fontWeight: 700, boxShadow: `0 4px 14px ${red ? 'rgba(192,57,43,0.35)' : 'rgba(31,138,91,0.28)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
         <svg width="13" height="14" viewBox="0 0 13 14" fill="none">
           <path d="M6.5 1L1.5 3.8V8c0 2.5 2.2 4.2 5 5 2.8-.8 5-2.5 5-5V3.8L6.5 1z" fill="rgba(255,255,255,0.18)" stroke="white" strokeWidth="1.1" />
           <path d="M4.5 7.5l1.5 1.5L9 5.5" stroke="white" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
@@ -391,7 +391,7 @@ function VerifiedCenter({ p, passport, decision, priors, issuerVerified, stackin
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: p.primary, boxShadow: `0 0 0 3px ${p.accentSoft}` }} />
-            <span style={{ fontFamily: FONT.ui, fontSize: 13, fontWeight: 700, color: p.primary }}>Verified ✓</span>
+            <span style={{ fontFamily: FONT.ui, fontSize: 13, fontWeight: 700, color: p.accentInk }}>Verified ✓</span>
             <span style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink3 }}>· {passport.holder?.name ?? 'Applicant'}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: 8, background: p.accentTint, border: `1.5px solid ${p.accentSoft}` }}>
@@ -501,7 +501,7 @@ function VerifiedCenter({ p, passport, decision, priors, issuerVerified, stackin
                 fontFamily: FONT.ui,
                 fontSize: 12,
                 fontWeight: 700,
-                color: confidencePct >= 60 ? p.primary : confidencePct >= 40 ? '#8a6100' : p.red,
+                color: confidencePct >= 60 ? p.accentInk : confidencePct >= 40 ? '#8a6100' : p.red,
                 background: confidencePct >= 60 ? p.accentSoft : confidencePct >= 40 ? '#fdf3dc' : '#fde8e8',
                 borderRadius: 5,
                 padding: '1px 7px',
@@ -673,7 +673,7 @@ function CenterAlert({ p, flagTime }: { p: Palette; flagTime: string }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 13, gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: p.primary, animation: 'blink-dot 1.4s ease-in-out infinite' }} />
-            <span style={{ fontFamily: FONT.ui, fontSize: 13, fontWeight: 700, color: p.primary }}>Flagged ✕</span>
+            <span style={{ fontFamily: FONT.ui, fontSize: 13, fontWeight: 700, color: p.accentInk }}>Flagged ✕</span>
             <span style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink3 }}>· {flagTime} · Unknown applicant</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: 8, background: p.accentTint, border: `1.5px solid ${p.accentSoft}` }}>
@@ -691,11 +691,11 @@ function CenterAlert({ p, flagTime }: { p: Palette; flagTime: string }) {
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <div style={{ padding: '5px 14px', borderRadius: 7, background: p.primary }}>
+              <div style={{ padding: '5px 14px', borderRadius: 7, background: p.accentInk }}>
                 <span style={{ fontFamily: FONT.num, fontSize: 18, fontWeight: 700, color: 'white' }}>28%</span>
               </div>
               <div>
-                <p style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.primary, lineHeight: 1.2 }}>Data Confidence</p>
+                <p style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.accentInk, lineHeight: 1.2 }}>Data Confidence</p>
                 <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.3 }}>Below 50% threshold. Auto-approval blocked</p>
               </div>
             </div>
@@ -703,7 +703,7 @@ function CenterAlert({ p, flagTime }: { p: Palette; flagTime: string }) {
               <div style={{ height: '100%', width: '28%', background: `linear-gradient(90deg, ${p.primary}, #e74c3c)`, borderRadius: 4 }} />
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.primary, fontWeight: 700 }}>28% ← here</span>
+              <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.accentInk, fontWeight: 700 }}>28% ← here</span>
               <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>50% threshold</span>
               <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.green }}>100%</span>
             </div>
@@ -718,7 +718,7 @@ function CenterAlert({ p, flagTime }: { p: Palette; flagTime: string }) {
               <circle cx="6" cy="6" r="5" fill="rgba(255,255,255,0.15)" stroke="white" strokeWidth="1.1" />
               <line x1="9.5" y1="9.5" x2="12" y2="12" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
-            <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 800, color: 'white', letterSpacing: '0.04em' }}>DATA FORENSICS</span>
+            <span role="heading" aria-level={2} style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 800, color: 'white', letterSpacing: '0.04em' }}>DATA FORENSICS</span>
           </div>
           <span style={{ fontFamily: FONT.mono, fontSize: 12, color: 'rgba(255,255,255,0.65)' }}>Benford · provenance · integrity checks</span>
         </div>
@@ -748,7 +748,7 @@ function CenterAlert({ p, flagTime }: { p: Palette; flagTime: string }) {
           <BenfordChart p={p} histogram={SUSPECT_HISTOGRAM} tone="alert" />
         </div>
         <div style={{ padding: '7px 16px', background: '#fff0ef', borderTop: `1px solid ${p.hairline}` }}>
-          <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5 }}>Analysis ran on submitted aggregates  <strong style={{ color: p.accentInk }}>not raw transactions</strong>. Statistical patterns suggest manual fabrication of income figures.</p>
+          <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5 }}>Analysis ran on submitted aggregates, <strong style={{ color: p.accentInk }}>not raw transactions</strong>. Statistical patterns suggest manual fabrication of income figures.</p>
         </div>
       </div>
 
@@ -765,7 +765,7 @@ function CenterAlert({ p, flagTime }: { p: Palette; flagTime: string }) {
             <div style={{ paddingRight: 14, display: 'flex', alignItems: 'center' }}>
               <MiniBar pct={f.score} color={p.primary} track="rgba(192,57,43,0.10)" />
             </div>
-            <span style={{ fontFamily: FONT.num, fontSize: 12, fontWeight: 700, color: p.primary }}>{f.score}<span style={{ fontSize: 12, fontWeight: 400, color: p.ink3 }}>/100</span></span>
+            <span style={{ fontFamily: FONT.num, fontSize: 12, fontWeight: 700, color: p.accentInk }}>{f.score}<span style={{ fontSize: 12, fontWeight: 400, color: p.ink3 }}>/100</span></span>
           </div>
         ))}
       </div>
@@ -864,7 +864,7 @@ function ApplicationCard({ p, app, passport, onResolve }: { p: Palette; app: App
       </div>
       <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, marginBottom: 6 }}>
         Filed {formatAgo(app.filedAt)}
-        {app.purpose ? ` · purpose: ${PURPOSE_LABELS[app.purpose.category]}${app.purpose.note ? `  “${app.purpose.note}”` : ''} (self-reported)` : ''}
+        {app.purpose ? ` · purpose: ${PURPOSE_LABELS[app.purpose.category]}${app.purpose.note ? ` “${app.purpose.note}”` : ''} (self-reported)` : ''}
       </p>
 
       {app.status === 'referred' && (
@@ -952,9 +952,9 @@ function PricingStrip({ p, pricing, adopted, onAdopt }: { p: Palette; pricing: P
         <button
           onClick={() => onAdopt(pricing.suggestedRate)}
           disabled={isAdopted}
-          style={{ width: '100%', marginTop: 8, padding: '8px 0', borderRadius: 8, border: `1.5px solid ${p.primary}`, cursor: isAdopted ? 'default' : 'pointer', background: isAdopted ? p.accentSoft : 'transparent', color: isAdopted ? p.accentInk : p.primary, fontFamily: FONT.ui, fontSize: 12, fontWeight: 700 }}
+          style={{ width: '100%', marginTop: 8, padding: '8px 0', borderRadius: 8, border: `1.5px solid ${p.primary}`, cursor: isAdopted ? 'default' : 'pointer', background: isAdopted ? p.accentSoft : 'transparent', color: p.accentInk, fontFamily: FONT.ui, fontSize: 12, fontWeight: 700 }}
         >
-          {isAdopted ? `✓ Custom-priced at ${asPct(adopted!)}  re-checked for affordability` : `Adopt ${asPct(pricing.suggestedRate)}  re-prices the installment`}
+          {isAdopted ? `✓ Custom-priced at ${asPct(adopted!)}: re-checked for affordability` : `Adopt ${asPct(pricing.suggestedRate)}: re-prices the installment`}
         </button>
       )}
       <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, marginTop: 5, lineHeight: 1.5 }}>{pricing.reasons[pricing.reasons.length - 1]}</p>
@@ -1020,7 +1020,7 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
             <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', fontFamily: FONT.num, fontSize: 12, fontWeight: 600, color: p.ink3, pointerEvents: 'none' }}>RM</span>
             <input type="text" value={amount} onChange={(e) => setAmount(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAssess()} style={{ width: '100%', padding: '9px 12px 9px 33px', borderRadius: 8, border: `1.5px solid ${p.hairline}`, fontSize: 14.5, fontWeight: 700, color: p.ink1, background: p.surface2, outline: 'none', fontFamily: FONT.num }} />
           </div>
-          <button onClick={handleAssess} style={{ padding: '9px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', background: p.primary, color: 'white', fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, flexShrink: 0 }}>Assess</button>
+          <button onClick={handleAssess} style={{ padding: '9px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', background: p.accentInk, color: 'white', fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, flexShrink: 0 }}>Assess</button>
         </div>
         {setPurpose && (
           <div style={{ marginTop: 8 }}>
@@ -1102,7 +1102,7 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
                 <p style={{ fontFamily: FONT.mono, fontSize: 12, color: p.ink2, lineHeight: 1.5, margin: 0 }}>{co.constraint.length > 120 ? co.constraint.slice(0, 117) + '…' : co.constraint}</p>
                 <button
                   onClick={() => onCounterOffer?.(co.amount)}
-                  style={{ alignSelf: 'flex-start', padding: '7px 14px', borderRadius: 7, border: 'none', cursor: 'pointer', background: p.primary, color: 'white', fontFamily: FONT.ui, fontSize: 12, fontWeight: 700 }}
+                  style={{ alignSelf: 'flex-start', padding: '7px 14px', borderRadius: 7, border: 'none', cursor: 'pointer', background: p.accentInk, color: 'white', fontFamily: FONT.ui, fontSize: 12, fontWeight: 700 }}
                 >
                   Assess at this amount
                 </button>
@@ -1154,7 +1154,7 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                           {g.rows.map((r, i) => (
                             <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
-                              <span style={{ fontFamily: FONT.mono, fontSize: 12, fontWeight: 600, color: p.primary, lineHeight: 1.6, minWidth: 20, textAlign: 'right', flexShrink: 0 }}>{String(offset + i + 1).padStart(2, '0')}</span>
+                              <span style={{ fontFamily: FONT.mono, fontSize: 12, fontWeight: 600, color: p.accentInk, lineHeight: 1.6, minWidth: 20, textAlign: 'right', flexShrink: 0 }}>{String(offset + i + 1).padStart(2, '0')}</span>
                               <div style={{ width: 1, background: p.accentSoft, alignSelf: 'stretch', marginTop: 3 }} />
                               <p style={{ fontFamily: FONT.mono, fontSize: 12, lineHeight: 1.55, color: p.ink1 }}>{r.text}</p>
                             </div>
@@ -1168,7 +1168,7 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
                 {decision.reasons.map((reason, i) => (
                   <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
-                    <span style={{ fontFamily: FONT.mono, fontSize: 12, fontWeight: 600, color: p.primary, lineHeight: 1.6, minWidth: 20, textAlign: 'right', flexShrink: 0 }}>{String(i + 1).padStart(2, '0')}</span>
+                    <span style={{ fontFamily: FONT.mono, fontSize: 12, fontWeight: 600, color: p.accentInk, lineHeight: 1.6, minWidth: 20, textAlign: 'right', flexShrink: 0 }}>{String(i + 1).padStart(2, '0')}</span>
                     <div style={{ width: 1, background: p.accentSoft, alignSelf: 'stretch', marginTop: 3 }} />
                     <p style={{ fontFamily: FONT.mono, fontSize: 12, lineHeight: 1.55, color: p.ink1 }}>{reason}</p>
                   </div>
@@ -1181,7 +1181,7 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
             <div style={{ padding: '12px 20px 0', flexShrink: 0 }}>
               <button
                 onClick={() => setMemoOpen(true)}
-                style={{ width: '100%', padding: '10px 0', borderRadius: 9, border: `1.5px solid ${p.primary}`, cursor: 'pointer', background: 'transparent', color: p.primary, fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700 }}
+                style={{ width: '100%', padding: '10px 0', borderRadius: 9, border: `1.5px solid ${p.primary}`, cursor: 'pointer', background: 'transparent', color: p.accentInk, fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700 }}
               >
                 Generate audit memo
               </button>
@@ -1509,7 +1509,7 @@ function TourCard({
         )}
         <button
           onClick={onNext}
-          style={{ padding: '7px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', background: p.primary, color: 'white', fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700 }}
+          style={{ padding: '7px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', background: p.accentInk, color: 'white', fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700 }}
         >
           {index === total - 1 ? 'Done' : 'Next'}
         </button>
@@ -1526,7 +1526,7 @@ function PersonaPicker({ onSelect }: { onSelect: (id: string) => void }) {
     <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#f4f6f4', padding: 24 }}>
       <div style={{ textAlign: 'center', marginBottom: 28 }}>
         <p style={{ fontFamily: FONT.ui, fontSize: 20, fontWeight: 800, color: '#1a2b22' }}>Pip Credit · Lender Console</p>
-        <p style={{ fontFamily: FONT.ui, fontSize: 12.5, color: '#5d6b63', marginTop: 4 }}>Demo  select a lender, no credentials.</p>
+        <p style={{ fontFamily: FONT.ui, fontSize: 12.5, color: '#5d6b63', marginTop: 4 }}>Demo: select a lender, no credentials.</p>
       </div>
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 900 }}>
         {LENDER_REGISTRY.map((l) => (
@@ -1903,14 +1903,19 @@ export default function Console() {
 
   if (showPersonaPicker) return <PersonaPicker onSelect={switchLender} />;
 
+  const TAB_LABELS: Record<Tab, string> = { verify: 'Verify Passport', portfolio: 'Portfolio', capital: 'Capital Markets', policy: 'Policy' };
+
   return (
     <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: p.bg }}>
+      <h1 style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}>
+        Pip Credit Lender Console: {activeLender.name}
+      </h1>
       <Header p={p} tab={tab} setTab={setTab} alert={showAlert} onRestartTour={restartTour} activeLender={activeLender} onSwitchLender={switchLender} />
       {showAlert && <AlertBanner caseId={flagCaseId} flagTime={flagTime} />}
       {showTour && (
         <TourCard p={p} stepIndex={tourStepIndex} onTab={setTab} onNext={tourNext} onBack={tourBack} onExit={dismissTour} />
       )}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
+      <main aria-label={TAB_LABELS[tab]} style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
         {tab === 'verify' ? (
           <>
             <QueueRail p={p} apps={apps} selectedId={selectedAppId} onSelect={onSelectApp} onSeed={onSeed} onPasteNew={onPasteNew} />
@@ -1925,7 +1930,7 @@ export default function Console() {
         ) : (
           <PolicyTab key={`${activeLenderId}:${storedPolicy.updatedAt ?? 'defaults'}`} p={palette(false)} stored={storedPolicy} onSaved={onPolicySaved} lenderId={activeLenderId} lenderName={activeLender.name} />
         )}
-      </div>
+      </main>
     </div>
   );
 }

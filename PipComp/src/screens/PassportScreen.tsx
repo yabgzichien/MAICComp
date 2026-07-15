@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
 
   gateTitle: { fontFamily: uiFont(700), fontSize: 17, color: colors.ink, marginTop: 12, textAlign: 'center' },
   gateBody: { fontFamily: uiFont(500), fontSize: 13.5, color: colors.ink2, lineHeight: 20, textAlign: 'center', marginTop: 8 },
-  gateBtn: { alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 999, backgroundColor: colors.accent, marginTop: 18, alignSelf: 'stretch' },
+  gateBtn: { alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 999, backgroundColor: colors.accentInk, marginTop: 18, alignSelf: 'stretch' },
   gateBtnText: { fontFamily: uiFont(700), fontSize: 14.5, color: colors.onAccent },
 
   /* passport card */
@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
   codeRow: { flexDirection: 'row', gap: 8, marginTop: 18, alignSelf: 'stretch' },
   codeField: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surface2, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: colors.line },
   codeText: { flex: 1, fontFamily: numFont(500), fontSize: 12, color: colors.ink2 },
-  copyBtn: { borderRadius: 10, paddingHorizontal: 16, justifyContent: 'center', backgroundColor: colors.accent },
+  copyBtn: { borderRadius: 10, paddingHorizontal: 16, justifyContent: 'center', backgroundColor: colors.accentInk },
   copyBtnDone: { backgroundColor: colors.accentSoft },
   copyText: { fontFamily: uiFont(700), fontSize: 12.5, color: '#fff' },
   copyTextDone: { color: colors.accentInk },

@@ -8,6 +8,9 @@ import { FadeIn } from '../components/Motion';
 import { CreditGauge } from '../components/CreditGauge';
 import { Icon } from '../components/Icon';
 import { Card, TopBar } from '../components/ui';
+import { TourAnchor } from '../components/TourAnchor';
+import { BORROWER_TOUR_STEPS, clampTourStep } from '../lib/tourSteps';
+import { useAppData } from '../state/store';
 import { useCreditProfile } from '../state/useCreditProfile';
 import { colors, numFont, uiFont } from '../theme';
 
@@ -39,8 +42,10 @@ export function CreditScreen({
 }) {
   const insets = useSafeAreaInsets();
   const { score, dataConfidence, coverage, momentum } = useCreditProfile();
+  const { tourActive, tourStepIndex } = useAppData();
   const capped = score.confidenceCapped;
   const confidence = dataConfidence.confidence;
+  const activeTourAnchor = tourActive ? BORROWER_TOUR_STEPS[clampTourStep(tourStepIndex, BORROWER_TOUR_STEPS.length)].anchorId ?? null : null;
 
   const avg = Math.round(score.factors.reduce((s, f) => s + f.subScore, 0) / Math.max(score.factors.length, 1));
   const barColor = confidence >= 0.4 ? colors.accent : colors.red;
@@ -63,7 +68,9 @@ export function CreditScreen({
         {/* Gauge + confidence */}
         <Card style={styles.gaugeCard}>
           <View style={{ alignItems: 'center', paddingTop: 6 }}>
-            <CreditGauge score={score.score} band={score.band} size={300} />
+            <TourAnchor id="credit-gauge" activeId={activeTourAnchor}>
+              <CreditGauge score={score.score} band={score.band} size={300} />
+            </TourAnchor>
           </View>
           <View style={styles.confBadge}>
             <View style={styles.confHead}>
@@ -238,6 +245,6 @@ const styles = StyleSheet.create({
   askBar: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.line, paddingHorizontal: 16, paddingTop: 12 },
   askTitle: { fontFamily: uiFont(700), fontSize: 13, color: colors.accentInk, marginBottom: 1 },
   askSub: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink2 },
-  askBtn: { backgroundColor: colors.accent, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 9, minWidth: 76, alignItems: 'center', justifyContent: 'center' },
+  askBtn: { backgroundColor: colors.accentInk, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 9, minWidth: 76, alignItems: 'center', justifyContent: 'center' },
   askBtnText: { fontFamily: uiFont(700), fontSize: 12, color: colors.onAccent },
 });
