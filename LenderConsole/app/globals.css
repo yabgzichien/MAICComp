@@ -33,6 +33,16 @@ textarea {
   outline-offset: 2px !important;
 }
 
+/* Recharts (Brief K charts) measures text width via a cached off-screen span it appends
+   directly to document.body (node_modules/recharts/.../DOMUtils.js  not app code, so it can't
+   be fixed at a call site). It already sets aria-hidden="true", but aria-hidden doesn't stop
+   the text from being selected/copied (e.g. a Ctrl+A over the page), which is the "stray
+   measurement span" finding from the 2026-07-12/2026-07-15 reviews. This is the one thing that
+   IS fixable from app code without touching the library: make it unselectable. */
+#recharts_measurement_span {
+  user-select: none;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

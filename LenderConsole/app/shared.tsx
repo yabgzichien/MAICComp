@@ -1,9 +1,59 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, type ReactNode, type RefObject } from 'react';
 import { FONT, GLOSSARY, type Palette } from './tokens';
+
+const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Modal accessibility (2026-07-15 agent-work review, item 6b): Esc-to-close already existed
+ * per-modal; this adds the two things that didn't  focus moves into the dialog on open (and
+ * back to whatever triggered it on close), and Tab/Shift+Tab cycles within the dialog instead
+ * of escaping to the page behind the scrim. One hook so CreditMemo and AdverseActionLetter
+ * (the two real modals) share one implementation rather than drifting.
+ */
+export function useModalA11y(dialogRef: RefObject<HTMLElement | null>, onClose: () => void): void {
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const dialog = dialogRef.current;
+    const focusables = (): HTMLElement[] =>
+      dialog ? Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter((el) => el.offsetParent !== null) : [];
+
+    (focusables()[0] ?? dialog)?.focus();
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const els = focusables();
+      if (els.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      const first = els[0];
+      const last = els[els.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      previouslyFocused?.focus?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onClose]);
+}
 
 export function SectionLabel({ children, color }: { children: ReactNode; color?: string }) {
   return (
     <p
+      role="heading"
+      aria-level={2}
       style={{
         fontFamily: FONT.ui,
         fontSize: 12,
