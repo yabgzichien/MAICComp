@@ -22,7 +22,7 @@ import {
   upsertSnapshot,
 } from '../db/budgetRepo';
 import { resetAllData as dbResetAllData } from '../db/db';
-import { loadDemoProfile } from '../data/demoProfile';
+import { loadDemoProfile, type DemoProfileId } from '../data/demoProfile';
 import {
   addAccount as dbAddAccount,
   addBalanceEntry as dbAddBalanceEntry,
@@ -155,7 +155,9 @@ interface AppData {
   saveBudget: (income: number, allocations: Record<string, number>) => Promise<void>;
   resetBudget: () => Promise<void>;
   resetAllData: () => Promise<void>;
-  loadDemoData: () => Promise<void>;
+  /** Wipe all data AND reset onboarding so the setup wizard re-appears. */
+  resetToOnboarding: () => Promise<void>;
+  loadDemoData: (profile?: DemoProfileId) => Promise<void>;
   addAccount: (name: string, kind: AccountKind, cls: string, openingValue: number, asOf: string) => Promise<void>;
   updateAccount: (id: string, fields: { name: string; cls: string }) => Promise<void>;
   deleteAccount: (id: string) => Promise<void>;
@@ -406,8 +408,14 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     await refreshAll();
   }, [refreshAll]);
 
-  const loadDemoData = useCallback(async () => {
-    await loadDemoProfile();
+  const resetToOnboarding = useCallback(async () => {
+    await dbResetAllData();
+    await setMeta(ONBOARDING_KEY, 'false');
+    setOnboardingComplete(false);
+  }, []);
+
+  const loadDemoData = useCallback(async (profile?: DemoProfileId) => {
+    await loadDemoProfile(profile);
     await refreshAll();
   }, [refreshAll]);
 
@@ -663,6 +671,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     saveBudget,
     resetBudget,
     resetAllData,
+    resetToOnboarding,
     loadDemoData,
     addAccount,
     updateAccount,

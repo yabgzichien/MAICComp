@@ -7,21 +7,17 @@ import { clearMemory } from '../db/memoryRepo';
 import { getProvider, llmErrorMessage } from '../llm';
 import { confirmAction, notify } from '../lib/platformAlert';
 import { configFor, loadSettings, type LLMSettings, type ProviderRole } from '../settings/settingsStore';
+import { DEMO_PROFILES, type DemoProfileId } from '../data/demoProfile';
 import { useAppData } from '../state/store';
 import { colors, radius, uiFont } from '../theme';
 
 type TestState = { status: 'idle' | 'busy' | 'ok' | 'fail'; message?: string };
 
-/** Mask an API key for display, keeping a hint of the start and end. */
-function maskKey(key: string): string {
-  if (!key) return 'Not configured';
-  if (key.length <= 10) return '•'.repeat(key.length);
-  return `${key.slice(0, 4)}…${key.slice(-4)}`;
-}
 
-export function SettingsScreen({ onBack, onMigrate, onOpenLender = () => {}, onOpenAttacks = () => {} }: { onBack: () => void; onMigrate?: () => void; onOpenLender?: () => void; onOpenAttacks?: () => void }) {
+
+export function SettingsScreen({ onBack, onMigrate, onOpenLender = () => {}, onOpenAttacks = () => {}, onResetToOnboarding }: { onBack: () => void; onMigrate?: () => void; onOpenLender?: () => void; onOpenAttacks?: () => void; onResetToOnboarding?: () => void }) {
   const insets = useSafeAreaInsets();
-  const { memory, refreshAll, expectedIncome, allocations, hasBudget, resetBudget, resetAllData, loadDemoData, startTour } = useAppData();
+  const { memory, refreshAll, expectedIncome, allocations, hasBudget, resetBudget, resetAllData, resetToOnboarding, loadDemoData, startTour } = useAppData();
   const [settings, setSettings] = useState<LLMSettings | null>(null);
   const [resettingDemo, setResettingDemo] = useState(false);
 
@@ -51,6 +47,18 @@ export function SettingsScreen({ onBack, onMigrate, onOpenLender = () => {}, onO
       'This deletes all transactions, learned merchants, and your budget, and restores the default categories. This can’t be undone.',
       'Reset',
       () => resetAllData()
+    );
+  };
+
+  const resetToOnboardingConfirm = () => {
+    confirmAction(
+      'Reset & go to setup?',
+      'This deletes all transactions, learned merchants, your budget, and restores the default categories. You will be returned to the setup wizard. This can’t be undone.',
+      'Reset & restart',
+      async () => {
+        await resetToOnboarding();
+        onResetToOnboarding?.();
+      }
     );
   };
 
@@ -178,18 +186,7 @@ export function SettingsScreen({ onBack, onMigrate, onOpenLender = () => {}, onO
           </Pressable>
         )}
 
-        <Card style={{ padding: 16, marginTop: onMigrate ? 14 : 0 }}>
-          <View style={styles.providerRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.providerName}>Load demo profile</Text>
-              <Text style={styles.providerSub}>Populate 6 months of credit-invisible gig-worker history (gig income, e-wallet spend, Pay-Later liability) for demos.</Text>
-            </View>
-            <Pressable onPress={() => loadDemoData()} style={styles.resetBtn}>
-              <Icon name="sparkles" size={16} color={colors.accent} />
-              <Text style={[styles.resetText, { color: colors.accent }]}>Load</Text>
-            </Pressable>
-          </View>
-        </Card>
+        <DemoProfilePicker onLoad={(id) => loadDemoData(id)} />
 
         <Eyebrow style={{ marginTop: 26, marginBottom: 10 }}>Lender tools</Eyebrow>
         <Pressable
@@ -270,12 +267,28 @@ export function SettingsScreen({ onBack, onMigrate, onOpenLender = () => {}, onO
             </Pressable>
           </View>
         </Card>
+
+        <Card style={[{ padding: 16, marginTop: 10 }, styles.dangerCard]}>
+          <View style={styles.providerRow}>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Icon name="alert" size={13} color="#b3261e" />
+                <Text style={[styles.providerName, { color: '#b3261e' }]}>Reset & go to setup</Text>
+              </View>
+              <Text style={styles.providerSub}>Wipe all data and return to the setup wizard. Useful for a full fresh start. This can't be undone.</Text>
+            </View>
+            <Pressable onPress={resetToOnboardingConfirm} style={styles.resetBtn}>
+              <Icon name="trash" size={16} color="#b3261e" />
+              <Text style={[styles.resetText, { color: '#b3261e' }]}>Reset</Text>
+            </Pressable>
+          </View>
+        </Card>
       </ScrollView>
     </View>
   );
 }
 
-/** One fixed provider: shows its pinned model + masked key (read-only) and a connection test. */
+/** One fixed provider: shows its pinned model and a connection test (key is never displayed). */
 function ProviderCard({
   settings,
   role,
@@ -293,7 +306,6 @@ function ProviderCard({
   model: string;
   apiKey: string;
 }) {
-  const [showKey, setShowKey] = useState(false);
   const [test, setTest] = useState<TestState>({ status: 'idle' });
 
   const runTest = async () => {
@@ -327,19 +339,6 @@ function ProviderCard({
         <Text style={styles.fieldValue}>{model}</Text>
       </ReadonlyField>
 
-      <ReadonlyField label="API key">
-        <View style={styles.keyRow}>
-          <Text style={[styles.fieldValue, { flex: 1 }]} numberOfLines={1}>
-            {showKey ? apiKey || 'Not configured' : maskKey(apiKey)}
-          </Text>
-          {!!apiKey && (
-            <Pressable onPress={() => setShowKey((s) => !s)} hitSlop={8} style={styles.eyeBtn}>
-              <Icon name={showKey ? 'x' : 'search'} size={15} color={colors.ink2} />
-            </Pressable>
-          )}
-        </View>
-      </ReadonlyField>
-
       <Pressable onPress={runTest} style={({ pressed }) => [styles.testBtn, pressed && { opacity: 0.9 }]}>
         {test.status === 'busy' ? (
           <ActivityIndicator color={colors.accent} size="small" />
@@ -354,6 +353,90 @@ function ProviderCard({
       {test.status === 'ok' && <Text style={[styles.result, { color: colors.accentInk }]}>✓ {test.message}</Text>}
       {test.status === 'fail' && <Text style={[styles.result, { color: '#b3261e' }]}>{test.message}</Text>}
     </Card>
+  );
+}
+
+// ── Demo Profile Picker ───────────────────────────────────────────────────────
+
+/** Accent color for each profile — distinct so judges visually parse the spectrum at a glance. */
+const PROFILE_ACCENT: Record<DemoProfileId, string> = {
+  aina: colors.accent,
+  ravi: '#2e7d32',   // deep green — strong/Excellent
+  faizal: '#c0392b', // red-amber  — fraud-flagged
+};
+
+const PROFILE_ICON: Record<DemoProfileId, IconName> = {
+  aina: 'sparkles',
+  ravi: 'check',
+  faizal: 'alert',
+};
+
+function DemoProfilePicker({ onLoad }: { onLoad: (id: DemoProfileId) => void }) {
+  const [loading, setLoading] = useState<DemoProfileId | null>(null);
+
+  const handleLoad = (id: DemoProfileId) => {
+    const meta = DEMO_PROFILES.find((p) => p.id === id)!;
+    confirmAction(
+      `Load ${meta.name}?`,
+      `This replaces whatever is currently loaded with ${meta.name}'s demo data. This can't be undone.`,
+      'Load',
+      async () => {
+        setLoading(id);
+        try {
+          await onLoad(id);
+        } finally {
+          setLoading(null);
+        }
+      }
+    );
+  };
+
+  const [primary, ...secondary] = DEMO_PROFILES;
+
+  return (
+    <View style={{ gap: 10 }}>
+      {/* Primary row — Aina, the default profile */}
+      <Card style={{ padding: 16 }}>
+        <View style={styles.providerRow}>
+          <View style={[styles.providerBadge, { backgroundColor: `${PROFILE_ACCENT[primary.id]}18` }]}>
+            <Icon name={PROFILE_ICON[primary.id]} size={16} color={PROFILE_ACCENT[primary.id]} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.providerName}>{primary.name}</Text>
+            <Text style={styles.providerSub}>{primary.story}</Text>
+          </View>
+          <Pressable onPress={() => handleLoad(primary.id)} style={styles.resetBtn} disabled={loading !== null}>
+            {loading === primary.id
+              ? <ActivityIndicator size="small" color={PROFILE_ACCENT[primary.id]} />
+              : <>
+                  <Icon name={PROFILE_ICON[primary.id]} size={16} color={PROFILE_ACCENT[primary.id]} />
+                  <Text style={[styles.resetText, { color: PROFILE_ACCENT[primary.id] }]}>Load</Text>
+                </>}
+          </Pressable>
+        </View>
+      </Card>
+
+      {/* Secondary rows — Ravi and Faizal */}
+      {secondary.map((profile) => (
+        <Pressable
+          key={profile.id}
+          onPress={() => handleLoad(profile.id)}
+          disabled={loading !== null}
+          style={({ pressed }) => [styles.providerRow, styles.migrateRow, { opacity: pressed ? 0.88 : 1 }]}
+        >
+          <View style={[styles.providerBadge, { backgroundColor: `${PROFILE_ACCENT[profile.id]}18` }]}>
+            {loading === profile.id
+              ? <ActivityIndicator size="small" color={PROFILE_ACCENT[profile.id]} />
+              : <Icon name={PROFILE_ICON[profile.id]} size={16} color={PROFILE_ACCENT[profile.id]} />}
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.providerName, { color: PROFILE_ACCENT[profile.id] }]}>{profile.name}</Text>
+            <Text style={styles.providerSub}>{profile.story}</Text>
+          </View>
+          <Icon name="chevronRight" size={18} color={colors.ink3} />
+        </Pressable>
+      ))}
+    </View>
   );
 }
 
@@ -401,8 +484,6 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
   fieldValue: { fontFamily: uiFont(500), fontSize: 14, color: colors.ink },
-  keyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  eyeBtn: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   testBtn: {
     flexDirection: 'row',
     alignItems: 'center',
