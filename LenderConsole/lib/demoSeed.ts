@@ -122,6 +122,37 @@ export function seedApplications(
     }
   }
 
+  // NEW queue (2026-07-15 agent-work review item 4): no code path ever produces
+  // status:'new'  fileApplication's statusFor() maps every engine decision straight to
+  // approved/declined/referred, so the workbench's entry-point column was permanently
+  // empty. Seeds two "just arrived, not yet triaged" entries: the same two applicants
+  // re-presented at a different requested amount (a legitimately separate application,
+  // not a duplicate of their primary filing above), filed normally so their decision is
+  // real, then marked New so an officer has something to open first.
+  const NEW_QUEUE_ENTRIES: { label: string; amount: number; purpose: DeclaredPurpose }[] = [
+    { label: 'Nurul Izzati binti Rashid', amount: 3000, purpose: { category: 'working-capital' } },
+    { label: 'Aisyah Putri Wijaya', amount: 5000, purpose: { category: 'equipment' } },
+  ];
+  for (const entry of NEW_QUEUE_ENTRIES) {
+    const applicant = DEMO_APPLICANTS.find((d) => d.label === entry.label);
+    if (!applicant) continue;
+    let parsed;
+    try {
+      parsed = parsePassportCode(applicant.code);
+    } catch {
+      continue;
+    }
+    const verify = verifyPassport(parsed.passport, parsed.signature, parsed.issuerSignature, now);
+    if (!verify.valid) continue;
+    const decision = decisionFor(parsed.passport, entry.amount, products, policy);
+    if (!decision) continue;
+    const at = new Date(now.getTime() - 20 * 60_000); // arrived minutes ago
+    const result = fileApplication(apps, filingInputFor(applicant.code, parsed.passport, decision, entry.amount, entry.purpose), at);
+    if (result.filed && result.id) {
+      apps = result.apps.map((a) => (a.id === result.id ? { ...a, status: 'new' as const } : a));
+    }
+  }
+
   // Stacking case (Brief G): two presentments of the same passport within 24h.
   const presentments: Presentment[] = [];
   const dup = DEMO_APPLICANTS.find((d) => d.role === 'stacking-duplicate');

@@ -28,7 +28,16 @@ describe('seedApplications', () => {
   it('files one application per non-checkin, non-duplicate demo applicant, plus the sample', () => {
     const { apps } = seed();
     const expectedFiled = DEMO_APPLICANTS.filter((d) => d.role !== 'checkin' && d.role !== 'stacking-duplicate').length;
-    expect(apps.length).toBe(expectedFiled + 1); // + sample
+    expect(apps.length).toBe(expectedFiled + 1 + 2); // + sample + the 2 NEW-queue re-presentments
+  });
+
+  it('seeds two unresolved New entries so the entry-point queue is never empty (2026-07-15 review item 4)', () => {
+    const { apps } = seed();
+    const newQueue = orderQueue(apps, 'new');
+    expect(newQueue).toHaveLength(2);
+    for (const a of newQueue) {
+      expect(a.engineDecision).toMatch(/^(approve|refer|decline)$/); // a real decision, just not yet triaged
+    }
   });
 
   it('produces the spec §C queue-status mix', () => {

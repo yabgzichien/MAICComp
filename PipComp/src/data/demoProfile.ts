@@ -1,30 +1,51 @@
 import { addTransactions } from '../db/txnRepo';
 import { addAccount, addBalanceEntry } from '../db/accountsRepo';
-import { setAllocations, setExpectedIncome } from '../db/budgetRepo';
-import { buildDemoSeed } from './demoSeed';
+import { setAllocations, setExpectedIncome, upsertSnapshot } from '../db/budgetRepo';
+import { buildAinaSeed, buildRaviSeed, buildFaizalSeed } from './demoSeed';
 
-export { buildDemoSeed, type DemoAccountSeed, type DemoSeed } from './demoSeed';
+export { buildAinaSeed, buildRaviSeed, buildFaizalSeed, buildDemoSeed, type DemoAccountSeed, type DemoSeed } from './demoSeed';
+
+// ── Profile registry ──────────────────────────────────────────────────────────
+
+export type DemoProfileId = 'aina' | 'ravi' | 'faizal';
+
+/** UI-facing metadata for each profile, used by Settings to render the picker. */
+export const DEMO_PROFILES: ReadonlyArray<{
+  id: DemoProfileId;
+  name: string;
+  story: string;
+}> = [
+  {
+    id: 'aina',
+    name: 'Aina',
+    story: 'Online seller — real but uneven e-wallet income. The credit-invisible gig worker.',
+  },
+  {
+    id: 'ravi',
+    name: 'Ravi',
+    story: 'Multi-platform delivery driver — steadier income, strong savings, no debt.',
+  },
+  {
+    id: 'faizal',
+    name: 'Faizal',
+    story: 'Working capital applicant — but his uploaded data triggers the fraud-confidence layer.',
+  },
+] as const;
+
+// ── Persister ─────────────────────────────────────────────────────────────────
 
 /**
- * Seed a realistic **credit-invisible** gig-worker history for the demo.
+ * Seed a demo profile into the store. Replaces whatever is currently loaded —
+ * same replace-on-load behaviour as the original single-profile version.
  *
- * Deliberately tuned so the Passport Builder Coach tells the inclusion story:
- *  - ~RM2,595/mo gig income vs a healthy surplus (a real, bankable saver);
- *  - spending recorded on only ~5 shared days/month → **thin coverage (~15 of 90 days)**, so
- *    the borrower starts **gated to the RM500 Emergency tier** despite the healthy cash-flow
- *    the "un-assessable" starting point;
- *  - a motorbike hire-purchase liability being paid down, and two rising cash accounts, so net
- *    worth is mildly negative and honestly improving rather than a flat zero.
- *
- * Result: the coach's headline lever is live  extending recorded history to 30 days flips the
- * offer from Emergency REFER to an **approved Starter loan**  the "make the un-assessable
- * assessable" beat, made interactive. Building an on-time repayment record lifts the score too.
- *
- * This is a thin persister: `buildDemoSeed` (src/data/demoSeed.ts) is the pure, unit-tested
- * builder; this function just writes its shape into the store.
+ * Defaults to `'aina'` so all existing call sites (store.tsx `loadDemoData`,
+ * `resetDemoConfirm`) continue to work unchanged with no argument.
  */
-export async function loadDemoProfile(): Promise<void> {
-  const seed = buildDemoSeed(new Date());
+export async function loadDemoProfile(profile: DemoProfileId = 'aina'): Promise<void> {
+  const seed =
+    profile === 'ravi' ? buildRaviSeed(new Date())
+    : profile === 'faizal' ? buildFaizalSeed(new Date())
+    : buildAinaSeed(new Date());
 
   await addTransactions(seed.transactions);
 
@@ -38,4 +59,18 @@ export async function loadDemoProfile(): Promise<void> {
 
   await setExpectedIncome(seed.budget.expectedIncome);
   await setAllocations(seed.budget.allocations);
+
+  // Backfill budget snapshots for all months in the demo seed that contain transactions
+  // so the category spending breakdown shows up for every month in the Monthly Recap.
+  const months = Array.from(
+    new Set(
+      seed.transactions
+        .map((t) => t.date?.slice(0, 7))
+        .filter((m): m is string => typeof m === 'string' && m.length === 7)
+    )
+  );
+  for (const month of months) {
+    await upsertSnapshot(month, seed.budget.expectedIncome, seed.budget.allocations);
+  }
 }
+
