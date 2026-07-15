@@ -32,11 +32,9 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
  */
 export function AddFlow({
   onClose,
-  onOpenSettings,
   initialPhase = 'attach',
 }: {
   onClose: () => void;
-  onOpenSettings: () => void;
   initialPhase?: Phase;
 }) {
   const { commitCategorized, memory, categories, catById } = useAppData();
@@ -127,14 +125,13 @@ export function AddFlow({
         hasKey={hasKey}
         onClose={onClose}
         onPicked={onPicked}
-        onOpenSettings={onOpenSettings}
         onManual={() => setPhase('manual')}
         onImport={() => setPhase('import')}
       />
     );
   }
   if (phase === 'import') {
-    return <ImportScreen onClose={onClose} onOpenSettings={onOpenSettings} />;
+    return <ImportScreen onClose={onClose} />;
   }
   if (phase === 'guessing') {
     return (

@@ -255,7 +255,6 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
             setAddInitial('attach');
             setScreen('add');
           }}
-          onOpenSettings={() => setScreen('settings')}
           onOpenCategories={() => setScreen('categories')}
           onOpenAll={() => {
             setTxnFilter(null);
@@ -274,7 +273,6 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
         <AddFlow
           initialPhase={addInitial}
           onClose={() => setScreen('home')}
-          onOpenSettings={() => setScreen('settings')}
         />
       )}
       {screen === 'settings' && (
@@ -286,6 +284,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
           }}
           onOpenLender={() => setScreen('lender')}
           onOpenAttacks={() => setScreen('attacks')}
+          onResetToOnboarding={() => setScreen('home')}
         />
       )}
       {screen === 'attacks' && <AttackGalleryScreen onBack={() => setScreen('settings')} />}
@@ -316,7 +315,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
           initialMonth={calendarMonth}
         />
       )}
-      {screen === 'networth' && <NetWorthScreen onBack={() => setScreen('home')} onOpenSettings={() => setScreen('settings')} />}
+      {screen === 'networth' && <NetWorthScreen onBack={() => setScreen('home')} />}
       {screen === 'credit' && (
         <CreditScreen
           onBack={() => setScreen('home')}

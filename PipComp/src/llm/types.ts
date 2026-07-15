@@ -26,9 +26,9 @@ export function llmErrorMessage(e: unknown): string {
   if (e instanceof LLMError) {
     switch (e.code) {
       case 'no_key':
-        return 'Add your API key in Settings first.';
+        return "This feature isn't available right now.";
       case 'auth':
-        return 'That API key was rejected. Check it in Settings.';
+        return "This feature isn't available right now.";
       case 'rate_limit':
         return 'Rate limit reached. Wait a moment and try again.';
       case 'network':

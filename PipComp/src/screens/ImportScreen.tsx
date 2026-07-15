@@ -26,7 +26,7 @@ const ACCEPT = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ];
 
-export function ImportScreen({ onClose, onOpenSettings }: { onClose: () => void; onOpenSettings: () => void }) {
+export function ImportScreen({ onClose }: { onClose: () => void }) {
   const insets = useSafeAreaInsets();
   const { commitCategorized } = useAppData();
   const [phase, setPhase] = useState<Phase>('reading');
@@ -139,14 +139,12 @@ export function ImportScreen({ onClose, onOpenSettings }: { onClose: () => void;
         {phase === 'needprovider' && (
           <>
             <PipSays expr="curious">
-              <BubbleText>
-                Importing files needs your <B>Google Gemini</B> key. Add it under <B>Settings → Document import</B>, then try again.
-              </BubbleText>
+              <BubbleText>File import isn't available right now. Try again in a moment.</BubbleText>
             </PipSays>
             <View style={{ marginTop: 22 }}>
-              <PrimaryButton onPress={onOpenSettings}>
-                <Icon name="gear" size={18} color="#fff" />
-                <BtnLabel>Open Settings</BtnLabel>
+              <PrimaryButton onPress={onClose}>
+                <Icon name="chevronLeft" size={18} color="#fff" />
+                <BtnLabel>Go back</BtnLabel>
               </PrimaryButton>
             </View>
           </>

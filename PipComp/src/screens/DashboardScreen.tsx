@@ -34,7 +34,6 @@ const dayKey = (d: Date) => {
 
 export function DashboardScreen({
   onScan,
-  onOpenSettings,
   onOpenCategories,
   onOpenAll,
   onOpenBreakdown,
@@ -46,7 +45,6 @@ export function DashboardScreen({
   onOpenCoach = () => {},
 }: {
   onScan: () => void;
-  onOpenSettings: () => void;
   onOpenCategories: () => void;
   onOpenAll: () => void;
   onOpenBreakdown: () => void;
@@ -538,7 +536,7 @@ const styles = StyleSheet.create({
   askStrip: { borderRadius: 22, backgroundColor: colors.accentSoft, padding: 13, flexDirection: 'row', alignItems: 'center', gap: 12 },
   askTitle: { fontFamily: uiFont(700), fontSize: 13, color: colors.accentInk, marginBottom: 2 },
   askSub: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink2 },
-  askBtn: { backgroundColor: colors.accent, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8, ...platformShadow(colors.accent, 0.32, 16, { width: 0, height: 8 }, 3) },
+  askBtn: { backgroundColor: colors.accentInk, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8, ...platformShadow(colors.accent, 0.32, 16, { width: 0, height: 8 }, 3) },
   askBtnText: { fontFamily: uiFont(700), fontSize: 12, color: colors.onAccent },
 
   /* generic cta */

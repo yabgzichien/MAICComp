@@ -136,7 +136,7 @@ export function KycScreen({ onBack, onDone }: { onBack: () => void; onDone?: () 
             <Eyebrow style={{ marginTop: 22, marginBottom: 6 }}>Work & income (optional)</Eyebrow>
             <Text style={styles.occLede}>
               Self-declared context a lender sees alongside your verified figures. Shared only under a
-              Tier 1 grant, and always labelled &ldquo;self-declared&rdquo;  never presented as verified.
+              Tier 1 grant, and always labelled &ldquo;self-declared&rdquo;. Never presented as verified.
             </Text>
 
             <TextInput
@@ -275,7 +275,7 @@ const styles = StyleSheet.create({
   errorText: { fontFamily: uiFont(600), fontSize: 13, color: '#c0392b', marginTop: 14 },
   verifyBtn: {
     alignItems: 'center', justifyContent: 'center', height: 50, borderRadius: 999,
-    backgroundColor: colors.accent, marginTop: 18,
+    backgroundColor: colors.accentInk, marginTop: 18,
   },
   verifyBtnDisabled: { opacity: 0.45 },
   verifyBtnText: { fontFamily: uiFont(700), fontSize: 15, color: colors.onAccent },
@@ -299,6 +299,6 @@ const styles = StyleSheet.create({
   chipText: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2 },
   chipTextOn: { color: colors.accentInk },
 
-  doneBtn: { alignItems: 'center', justifyContent: 'center', height: 46, borderRadius: 999, backgroundColor: colors.accent, marginTop: 18 },
+  doneBtn: { alignItems: 'center', justifyContent: 'center', height: 46, borderRadius: 999, backgroundColor: colors.accentInk, marginTop: 18 },
   doneBtnText: { fontFamily: uiFont(700), fontSize: 14.5, color: colors.onAccent },
 });

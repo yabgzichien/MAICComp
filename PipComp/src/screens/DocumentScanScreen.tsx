@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
   permRoot: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', gap: 10 },
   permTitle: { fontFamily: uiFont(700), fontSize: 17, color: colors.ink, marginTop: 6 },
   permBody: { fontFamily: uiFont(500), fontSize: 13.5, color: colors.ink2, textAlign: 'center', lineHeight: 19 },
-  permBtn: { height: 48, borderRadius: 999, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch', marginTop: 14 },
+  permBtn: { height: 48, borderRadius: 999, backgroundColor: colors.accentInk, alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch', marginTop: 14 },
   permBtnText: { fontFamily: uiFont(700), fontSize: 15, color: colors.onAccent },
   permCancel: { marginTop: 14 },
   permCancelText: { fontFamily: uiFont(600), fontSize: 13.5, color: colors.ink2 },

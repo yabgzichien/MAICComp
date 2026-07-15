@@ -17,14 +17,12 @@ export function AttachScreen({
   hasKey,
   onClose,
   onPicked,
-  onOpenSettings,
   onManual,
   onImport,
 }: {
   hasKey: boolean;
   onClose: () => void;
   onPicked: (img: PickedImage) => void;
-  onOpenSettings: () => void;
   onManual: () => void;
   onImport: () => void;
 }) {
@@ -94,10 +92,10 @@ export function AttachScreen({
         </View>
 
         {!hasKey && (
-          <Pressable onPress={onOpenSettings} style={styles.keyNotice}>
+          <Pressable onPress={onManual} style={styles.keyNotice}>
             <Icon name="sparkles" size={18} color={colors.accentInk} />
             <Text style={styles.keyNoticeText}>
-              Add your free Groq API key in Settings to enable scanning.
+              Scanning isn't available right now. Enter a transaction manually instead.
             </Text>
             <Icon name="chevronRight" size={16} color={colors.accentInk} />
           </Pressable>

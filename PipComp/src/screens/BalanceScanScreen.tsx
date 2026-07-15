@@ -31,7 +31,7 @@ interface HoldingRow {
 
 const parseAmount = (s: string): number => Math.max(0, parseFloat(s.replace(/[^0-9.]/g, '')) || 0);
 
-export function BalanceScanScreen({ onClose, onOpenSettings }: { onClose: () => void; onOpenSettings: () => void }) {
+export function BalanceScanScreen({ onClose }: { onClose: () => void }) {
   const insets = useSafeAreaInsets();
   const { accounts, accountValues, addAccount, addHolding, setBalance } = useAppData();
   const [phase, setPhase] = useState<Phase>('pick');
@@ -160,7 +160,7 @@ export function BalanceScanScreen({ onClose, onOpenSettings }: { onClose: () => 
     if (!selectedAccount || amount <= 0) return;
     const next = Math.round((currentVal + amount) * 100) / 100;
     await setBalance(selectedAccount.id, next, todayISO());
-    setDoneMsg(`Added RM ${fmt(amount)} to ${selectedAccount.name}  new balance RM ${fmt(next)}.`);
+    setDoneMsg(`Added RM ${fmt(amount)} to ${selectedAccount.name}. New balance RM ${fmt(next)}.`);
     setPhase('done');
   };
   const doCreate = async () => {
@@ -182,7 +182,7 @@ export function BalanceScanScreen({ onClose, onOpenSettings }: { onClose: () => 
         {phase === 'pick' && (
           <>
             <PipSays expr="curious">
-              <BubbleText>Snap or pick a screenshot of a <B>bank account, e-wallet, loan statement, or crypto wallet</B>  I'll read it and figure out what to do with it.</BubbleText>
+              <BubbleText>Snap or pick a screenshot of a <B>bank account, e-wallet, loan statement, or crypto wallet</B>. I'll read it and figure out what to do with it.</BubbleText>
             </PipSays>
             <View style={{ gap: 14, marginTop: 22 }}>
               <SourceButton icon="camera" title="Take a photo" sub="Point at your balance" onPress={takePhoto} disabled={busy} />
@@ -200,8 +200,8 @@ export function BalanceScanScreen({ onClose, onOpenSettings }: { onClose: () => 
 
         {phase === 'needprovider' && (
           <>
-            <PipSays expr="curious"><BubbleText>Scanning needs your <B>Google Gemini</B> key. Add it under <B>Settings → Document import</B>, then try again.</BubbleText></PipSays>
-            <View style={{ marginTop: 22 }}><PrimaryButton onPress={onOpenSettings}><Icon name="gear" size={18} color="#fff" /><BtnLabel>Open Settings</BtnLabel></PrimaryButton></View>
+            <PipSays expr="curious"><BubbleText>Scanning isn't available right now. Try again in a moment.</BubbleText></PipSays>
+            <View style={{ marginTop: 22 }}><PrimaryButton onPress={onClose}><Icon name="chevronLeft" size={18} color="#fff" /><BtnLabel>Go back</BtnLabel></PrimaryButton></View>
           </>
         )}
 

@@ -10,7 +10,7 @@ export async function scanIdentityImage(base64: string, mimeType: string): Promi
   const cfg = configFor(await loadSettings(), 'general');
   const provider = getProvider(cfg.provider);
   if (!cfg.apiKey || !provider.extractIdentity) {
-    throw new LLMError('no_key', 'Scanning needs an API key (Settings). You can also enter your details manually.');
+    throw new LLMError('no_key', "Scanning isn't available right now. You can also enter your details manually.");
   }
   return provider.extractIdentity({
     apiKey: cfg.apiKey,

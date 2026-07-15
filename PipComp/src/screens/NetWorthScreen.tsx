@@ -57,7 +57,7 @@ function lastMonths(n: number): string[] {
   return out;
 }
 
-export function NetWorthScreen({ onBack, onOpenSettings = () => {} }: { onBack: () => void; onOpenSettings?: () => void }) {
+export function NetWorthScreen({ onBack }: { onBack: () => void }) {
   const insets = useSafeAreaInsets();
   const { accounts, balanceEntries, accountValues, prices, pricesAsOf, refreshPrices } = useAppData();
   const [adding, setAdding] = useState(false);
@@ -105,7 +105,7 @@ export function NetWorthScreen({ onBack, onOpenSettings = () => {} }: { onBack: 
 
   // Safe to branch here  all hooks above have run unconditionally.
   if (scanning) {
-    return <BalanceScanScreen onClose={() => setScanning(false)} onOpenSettings={onOpenSettings} />;
+    return <BalanceScanScreen onClose={() => setScanning(false)} />;
   }
 
   return (
@@ -187,7 +187,6 @@ export function NetWorthScreen({ onBack, onOpenSettings = () => {} }: { onBack: 
   );
 }
 
-// ── Gradient hero ───────────────────────────────────────────────────────────
 function HeroCard({
   nw,
   series,
@@ -206,6 +205,14 @@ function HeroCard({
   setMode: (m: ValueMode) => void;
 }) {
   const deltaUp = (delta ?? 0) >= 0;
+  const prevNet = series.length >= 2 ? series[series.length - 2] : 0;
+  const pct = prevNet !== 0 ? (delta ?? 0) / Math.abs(prevNet) * 100 : 0;
+  const pctAbs = Math.abs(pct);
+  const deltaColor = deltaUp ? '#42e893' : '#ff8a7a';
+  const deltaValText = mode === 'percent'
+    ? `${pctAbs.toFixed(1)}%`
+    : `RM ${fmt(Math.abs(delta ?? 0))}`;
+
   return (
     <View style={styles.hero}>
       {/* gradient fill */}
@@ -245,14 +252,14 @@ function HeroCard({
           <Svg width={10} height={10} viewBox="0 0 12 12" fill="none">
             <Path
               d={deltaUp ? 'M6 10V2M6 2L3 5M6 2L9 5' : 'M6 2v8M6 10L3 7M6 10L9 7'}
-              stroke="#42e893"
+              stroke={deltaColor}
               strokeWidth={2}
               strokeLinecap="round"
               strokeLinejoin="round"
             />
           </Svg>
-          <Text style={styles.deltaText}>
-            {deltaUp ? '+' : '−'}RM {fmt(Math.abs(delta))} vs {prevMonth}
+          <Text style={[styles.deltaText, { color: deltaColor }]}>
+            {deltaUp ? '+' : '−'}{deltaValText} vs {prevMonth}
           </Text>
         </View>
       )}
@@ -1021,10 +1028,10 @@ const styles = StyleSheet.create({
 
   /* scan row */
   scanRow: { flexDirection: 'row', gap: 9, marginHorizontal: 16, marginBottom: 4 },
-  scanBanner: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.accent, borderRadius: 16, padding: 10, paddingRight: 14, ...platformShadow(colors.accent, 0.3, 14, { width: 0, height: 4 }, 3) },
+  scanBanner: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.accentInk, borderRadius: 16, padding: 10, paddingRight: 14, ...platformShadow(colors.accent, 0.3, 14, { width: 0, height: 4 }, 3) },
   scanIcon: { width: 30, height: 30, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
   scanTitle: { fontFamily: uiFont(700), fontSize: 13, color: '#fff' },
-  scanSub: { fontFamily: uiFont(500), fontSize: 11, color: 'rgba(255,255,255,0.68)', marginTop: 1 },
+  scanSub: { fontFamily: uiFont(500), fontSize: 11, color: 'rgba(255,255,255,0.85)', marginTop: 1 },
   addBtn: { width: 50, height: 50, borderRadius: 14, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
 
   /* group + class labels */
@@ -1075,7 +1082,7 @@ const styles = StyleSheet.create({
   asOf: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, textAlign: 'center', marginTop: 16 },
   subRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   subChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line2 },
-  subChipOn: { backgroundColor: colors.accent, borderColor: colors.accent },
+  subChipOn: { backgroundColor: colors.accentInk, borderColor: colors.accentInk },
   subChipText: { fontFamily: uiFont(700), fontSize: 13, color: colors.ink2 },
   subChipTextOn: { color: '#fff' },
   pickerBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, paddingHorizontal: 14, paddingVertical: 14 },
