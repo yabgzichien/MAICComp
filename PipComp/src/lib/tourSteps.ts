@@ -44,13 +44,14 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     id: 'credit-score',
     screen: 'credit',
     title: 'A transparent score',
-    body: 'Score, data confidence, and a per-factor breakdown  nothing is a black box.',
+    body: 'Score, data confidence, and a per-factor breakdown. Nothing is a black box.',
+    anchorId: 'credit-gauge',
   },
   {
     id: 'coach-hero',
     screen: 'coach',
     title: "Pip's coach",
-    body: 'A concrete next step with a real before/after  not generic advice.',
+    body: 'A concrete next step with a real before/after. Not generic advice.',
     anchorId: 'coach-hero-card',
   },
   {
@@ -58,6 +59,7 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     screen: 'loans',
     title: 'Loan tiers',
     body: 'Every tier shows its likely outcome up front, computed by the real engine.',
+    anchorId: 'loans-tier-stack',
   },
   {
     id: 'passport-consent',

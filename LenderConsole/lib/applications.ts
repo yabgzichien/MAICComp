@@ -105,7 +105,7 @@ export function fileApplication(
   
   const auditDetail = input.source === 'direct'
     ? 'submitted by borrower via direct apply'
-    : (resolved ? `engine ${input.engineDecision}  resolved as filed` : 'engine refer. Awaiting officer decision');
+    : (resolved ? `engine ${input.engineDecision}. Resolved as filed` : 'engine refer. Awaiting officer decision');
 
   const record: ApplicationRecord = {
     id: `${input.subject.slice(0, 8)}-${now.getTime().toString(36)}-${input.requestedAmount}`,

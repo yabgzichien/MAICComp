@@ -23,13 +23,13 @@ export const CONSOLE_TOUR_STEPS: ConsoleTourStep[] = [
     id: 'trust',
     tab: 'verify',
     title: 'Five trust checks',
-    body: 'Signature, issuer, freshness, consent, and stacking  before any score is shown.',
+    body: 'Signature, issuer, freshness, consent, and stacking. Before any score is shown.',
   },
   {
     id: 'decision',
     tab: 'verify',
     title: 'The decision engine',
-    body: 'Assess an amount, see the waterfall, and any counter-offer  all deterministic.',
+    body: 'Assess an amount, see the waterfall, and any counter-offer. All deterministic.',
   },
   {
     id: 'memo',

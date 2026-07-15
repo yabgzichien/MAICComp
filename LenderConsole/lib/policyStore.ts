@@ -131,7 +131,7 @@ function validateProducts(raw: unknown, errors: string[]): LoanProduct[] | undef
     if (typeof id !== 'string' || !(CANONICAL_TIER_IDS as readonly string[]).includes(id)) {
       errors.push(`${at}.id: must be one of ${CANONICAL_TIER_IDS.join(' | ')} (the engine's coverage gates key on these).`);
     } else if (seen.has(id)) {
-      errors.push(`${at}.id: duplicate tier "${id}"  each slot may appear once.`);
+      errors.push(`${at}.id: duplicate tier "${id}". Each slot may appear once.`);
     } else {
       seen.add(id);
     }

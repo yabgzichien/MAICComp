@@ -200,7 +200,7 @@ function decisionStatementFor(kind: LetterKind, requestedAmount: number, co: Ret
     return `Your application for ${rm(requestedAmount)} has been declined.`;
   }
   if (kind === 'refer' && co) {
-    return `Your application for ${rm(requestedAmount)} requires further review before a decision can be made. If approved, we would be able to offer at most ${rm(co.amount)} at ${rm(co.installment)}/mo  this is not a firm offer.`;
+    return `Your application for ${rm(requestedAmount)} requires further review before a decision can be made. If approved, we would be able to offer at most ${rm(co.amount)} at ${rm(co.installment)}/mo. This is not a firm offer.`;
   }
   return `Your application for ${rm(requestedAmount)} requires further review before a decision can be made.`;
 }
@@ -255,7 +255,7 @@ const KIND_LABEL: Record<LetterKind, string> = {
  *  convention as creditMemo.ts's memoToMarkdown (narration is a screen-only enhancement). */
 export function letterToText(letter: AdverseActionLetter): string {
   const lines: string[] = [];
-  lines.push(`ADVERSE-ACTION LETTER  ${KIND_LABEL[letter.kind]}`);
+  lines.push(`ADVERSE-ACTION LETTER: ${KIND_LABEL[letter.kind]}`);
   lines.push(`${letter.applicant} · ${letter.date}`);
   lines.push('');
   lines.push(letter.decisionStatement);
@@ -269,7 +269,7 @@ export function letterToText(letter: AdverseActionLetter): string {
       `Original request: ${rm(letter.counterOffer.originalRequest)} · ${letter.counterOffer.indicative ? 'Indicative' : 'Countered'} amount: ${rm(letter.counterOffer.counteredAmount)} at ${rm(letter.counterOffer.installment)}/mo`,
     );
     lines.push(`Driving constraint: ${letter.counterOffer.constraint}`);
-    if (letter.counterOffer.indicative) lines.push('This is not a firm offer  a final amount depends on manual review.');
+    if (letter.counterOffer.indicative) lines.push('This is not a firm offer. A final amount depends on manual review.');
     lines.push('');
   }
   lines.push('DATA RELIED UPON');
@@ -299,7 +299,7 @@ export function letterToPdfDoc(letter: AdverseActionLetter): PdfDoc {
       lines: [
         `Original request: ${rm(co.originalRequest)} · ${co.indicative ? 'Indicative' : 'Countered'} amount: ${rm(co.counteredAmount)} at ${rm(co.installment)}/mo`,
         `Driving constraint: ${co.constraint}`,
-        ...(co.indicative ? ['This is not a firm offer  a final amount depends on manual review.'] : []),
+        ...(co.indicative ? ['This is not a firm offer. A final amount depends on manual review.'] : []),
       ],
     });
   }

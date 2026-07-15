@@ -216,7 +216,7 @@ export function buildCreditMemo(
     groupedRationale: groupRationale(decision),
     compliance: buildCompliance(passport, decision, policy),
     conditions: resolution
-      ? [`Officer resolution  ${resolution.outcome} by ${resolution.officer}: "${resolution.rationale}" (recorded in the application audit trail).`, ...buildConditions(decision)]
+      ? [`Officer resolution: ${resolution.outcome} by ${resolution.officer}: "${resolution.rationale}" (recorded in the application audit trail).`, ...buildConditions(decision)]
       : buildConditions(decision),
     counterOffer,
     pricing,
@@ -231,12 +231,12 @@ export function memoToMarkdown(memo: CreditMemo): string {
   lines.push('# Credit Memo');
   lines.push('');
   lines.push(`**Applicant:** ${h.applicant}${h.nricMasked ? ` (${h.nricMasked})` : ''}`);
-  lines.push(`**Date:** ${h.date}  ·  **Evidence:** ${h.evidenceShort}  ·  **Passport valid until:** ${h.validUntil}`);
-  lines.push(`**Requested:** ${rm(h.requestedAmount)}  ·  **Offered:** ${rm(h.offeredAmount)}`);
+  lines.push(`**Date:** ${h.date} · **Evidence:** ${h.evidenceShort} · **Passport valid until:** ${h.validUntil}`);
+  lines.push(`**Requested:** ${rm(h.requestedAmount)} · **Offered:** ${rm(h.offeredAmount)}`);
   lines.push('');
   lines.push('## Decision');
   lines.push('');
-  lines.push(`**${memo.decision.label}**  up to ${rm(memo.decision.maxAmount)} at ${rm(memo.decision.installment)}/mo.`);
+  lines.push(`**${memo.decision.label}** up to ${rm(memo.decision.maxAmount)} at ${rm(memo.decision.installment)}/mo.`);
   lines.push('');
   if (memo.pricing) {
     const pr = memo.pricing;
@@ -248,7 +248,7 @@ export function memoToMarkdown(memo: CreditMemo): string {
   lines.push('## Panel findings');
   lines.push('');
   for (const f of memo.findings) {
-    lines.push(`- **${f.label}:** ${f.verdict} (${f.confidence}%)  ${f.signals.join('; ')}`);
+    lines.push(`- **${f.label}:** ${f.verdict} (${f.confidence}%): ${f.signals.join('; ')}`);
   }
   lines.push('');
   lines.push('## Rationale');
@@ -264,7 +264,7 @@ export function memoToMarkdown(memo: CreditMemo): string {
     for (const r of memo.rationale) lines.push(`- ${r}`);
     lines.push('');
   }
-  lines.push('## Consumer Credit Act 2025  affordability assessment');
+  lines.push('## Consumer Credit Act 2025: affordability assessment');
   lines.push('');
   for (const c of memo.compliance) {
     lines.push(`- ${c.met ? '✓ Met' : '✗ Not met'}  ${c.requirement}. ${c.evidence}.`);
@@ -274,7 +274,7 @@ export function memoToMarkdown(memo: CreditMemo): string {
     const co = memo.counterOffer;
     lines.push('## Counter-offer');
     lines.push('');
-    lines.push(`Original request: ${rm(co.originalRequest)}  ·  Countered amount: ${rm(co.counteredAmount)}`);
+    lines.push(`Original request: ${rm(co.originalRequest)} · Countered amount: ${rm(co.counteredAmount)}`);
     lines.push('');
     lines.push(`Driving constraint: ${co.constraint}`);
     lines.push('');
@@ -295,7 +295,7 @@ export function memoToPdfDoc(memo: CreditMemo): PdfDoc {
   const sections: PdfDoc['sections'] = [
     {
       heading: 'Decision',
-      lines: [`${memo.decision.label}  up to ${rm(memo.decision.maxAmount)} at ${rm(memo.decision.installment)}/mo.`],
+      lines: [`${memo.decision.label}: up to ${rm(memo.decision.maxAmount)} at ${rm(memo.decision.installment)}/mo.`],
     },
   ];
   if (memo.pricing) {
@@ -311,7 +311,7 @@ export function memoToPdfDoc(memo: CreditMemo): PdfDoc {
   }
   sections.push({
     heading: 'Panel findings',
-    lines: memo.findings.map((f) => `- ${f.label}: ${f.verdict} (${f.confidence}%)  ${f.signals.join('; ')}`),
+    lines: memo.findings.map((f) => `- ${f.label}: ${f.verdict} (${f.confidence}%): ${f.signals.join('; ')}`),
   });
   if (memo.groupedRationale.length > 0) {
     for (const g of memo.groupedRationale) sections.push({ heading: g.label, lines: g.reasons.map((r) => `- ${r}`) });
@@ -319,14 +319,14 @@ export function memoToPdfDoc(memo: CreditMemo): PdfDoc {
     sections.push({ heading: 'Rationale', lines: memo.rationale.map((r) => `- ${r}`) });
   }
   sections.push({
-    heading: 'Consumer Credit Act 2025  affordability assessment',
+    heading: 'Consumer Credit Act 2025: affordability assessment',
     lines: memo.compliance.map((c) => `${c.met ? '✓ Met' : '✗ Not met'}  ${c.requirement}. ${c.evidence}.`),
   });
   if (memo.counterOffer) {
     const co = memo.counterOffer;
     sections.push({
       heading: 'Counter-offer',
-      lines: [`Original request: ${rm(co.originalRequest)}  ·  Countered amount: ${rm(co.counteredAmount)}`, `Driving constraint: ${co.constraint}`],
+      lines: [`Original request: ${rm(co.originalRequest)} · Countered amount: ${rm(co.counteredAmount)}`, `Driving constraint: ${co.constraint}`],
     });
   }
   sections.push({ heading: 'Conditions & next steps', lines: memo.conditions.map((c) => `- ${c}`) });

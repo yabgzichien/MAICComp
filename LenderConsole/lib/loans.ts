@@ -221,7 +221,7 @@ function applyCoverageTierFilter(
       products: keep(['emergency', 'starter']),
       forceRefer: false,
       reasons: [
-        { category: 'data-quality', text: `${policy.fullLadderFromDays}+ days of history but coverage is only ${pct}%  eligibility capped to Starter Capital and below until coverage reaches ${Math.round(policy.minCoverageRatioForFullLadder * 100)}%.` },
+        { category: 'data-quality', text: `${policy.fullLadderFromDays}+ days of history but coverage is only ${pct}%. Eligibility capped to Starter Capital and below until coverage reaches ${Math.round(policy.minCoverageRatioForFullLadder * 100)}%.` },
       ],
     };
   }

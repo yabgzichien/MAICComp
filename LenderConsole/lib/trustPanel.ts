@@ -54,7 +54,7 @@ function freshnessRow(passport: CreditPassport, now: Date): TrustRow {
   if (daysLeft <= FRESHNESS_WARN_DAYS) {
     return { key: 'freshness', label, state: 'warn', detail: `Inside the signed window but expires in ${daysLeft} day(s). Ask for a re-issued passport soon` };
   }
-  return { key: 'freshness', label, state: 'pass', detail: `Inside the signed validity window  ${daysLeft} days left (until ${passport.validUntil.slice(0, 10)})` };
+  return { key: 'freshness', label, state: 'pass', detail: `Inside the signed validity window. ${daysLeft} days left (until ${passport.validUntil.slice(0, 10)})` };
 }
 
 function stackingRow(priors: Presentment[], windowHours: number, now: Date): TrustRow {
@@ -86,7 +86,7 @@ function consentRow(passport: CreditPassport, lapsedTiers: ConsentTier[] | undef
     return { key: 'consent', label, state: 'warn', detail: `${names} consent lapsed. Ask the applicant to re-share the passport` };
   }
   const tiers = receipts.map((r) => r.tier).sort((a, b) => a - b).map((t) => TIER_NAME[t]);
-  return { key: 'consent', label, state: 'pass', detail: `Signed consent receipts: ${tiers.join(' + ')}  granted ${receipts[0].grantedAt.slice(0, 10)}, provable field-by-field` };
+  return { key: 'consent', label, state: 'pass', detail: `Signed consent receipts: ${tiers.join(' + ')}, granted ${receipts[0].grantedAt.slice(0, 10)}, provable field-by-field` };
 }
 
 /** Derive the five trust rows, in display order. */

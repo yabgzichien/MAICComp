@@ -176,19 +176,19 @@ export function CategorizeScreen({
           <PipSays expr={showBanner ? 'curious' : isIncome ? 'happy' : suggestion ? 'idle' : 'curious'}>
             {showBanner ? (
               <BubbleText>
-                Hmm  <B>‘{item!.merchant}’</B> looks like a duplicate of one you logged on <B>{dupDay}</B>.
+                Hmm. <B>‘{item!.merchant}’</B> looks like a duplicate of one you logged on <B>{dupDay}</B>.
               </BubbleText>
             ) : suggestion && suggestionCat && suggestionIsGuess ? (
               <BubbleText>
-                ‘{item!.merchant}’  I think this might be <B>{suggestionCat.label}</B>. Does that look right?
+                ‘{item!.merchant}’. I think this might be <B>{suggestionCat.label}</B>. Does that look right?
               </BubbleText>
             ) : suggestion && suggestionCat ? (
               <BubbleText>
-                ‘{item!.merchant}’  I’ve pre-filled <B>{suggestionCat.label}</B> from last time.
+                ‘{item!.merchant}’. I’ve pre-filled <B>{suggestionCat.label}</B> from last time.
               </BubbleText>
             ) : isIncome ? (
               <BubbleText>
-                ‘{item!.merchant}’  money <B>received</B>. What kind of income?
+                ‘{item!.merchant}’. Money <B>received</B>. What kind of income?
               </BubbleText>
             ) : (
               <BubbleText>

@@ -314,7 +314,7 @@ function applyCoverageTierFilter(
       reasons: [
         {
           category: 'data-quality',
-          text: `${policy.fullLadderFromDays}+ days of history but coverage is only ${pct}%  eligibility capped to Starter Capital and below until coverage reaches ${Math.round(policy.minCoverageRatioForFullLadder * 100)}%.`,
+          text: `${policy.fullLadderFromDays}+ days of history but coverage is only ${pct}%. Eligibility capped to Starter Capital and below until coverage reaches ${Math.round(policy.minCoverageRatioForFullLadder * 100)}%.`,
         },
       ],
     };

@@ -115,7 +115,7 @@ export function ExtractScreen({
           {phase === 'result' && items.length > 0 && (
             <PipSays expr="happy">
               <BubbleText>
-                Got it  <B>{items.length} transaction{items.length > 1 ? 's' : ''}</B>, RM {fmt(total)} total.
+                Got it. <B>{items.length} transaction{items.length > 1 ? 's' : ''}</B>, RM {fmt(total)} total.
                 {recognized > 0 ? (
                   <BubbleText>
                     {' '}I already recognise <B>{recognized}</B> of them.
