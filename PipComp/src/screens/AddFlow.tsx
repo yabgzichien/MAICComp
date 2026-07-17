@@ -5,6 +5,7 @@ import { getProvider } from '../llm';
 import { suggestForMerchant } from '../lib/recommend';
 import type { CategorySuggestion, ExtractedTxn, Transaction } from '../lib/types';
 import { configFor, loadSettings } from '../settings/settingsStore';
+import { emitTourSignal } from '../lib/tourSignals';
 import { useAppData, type NewLearned } from '../state/store';
 import { colors } from '../theme';
 import { AttachScreen, type PickedImage } from './AttachScreen';
@@ -37,7 +38,7 @@ export function AddFlow({
   onClose: () => void;
   initialPhase?: Phase;
 }) {
-  const { commitCategorized, memory, categories, catById } = useAppData();
+  const { commitCategorized, memory, categories, catById, tourActive } = useAppData();
 
   const [phase, setPhase] = useState<Phase>(initialPhase);
   const [image, setImage] = useState<PickedImage | null>(null);
@@ -59,6 +60,7 @@ export function AddFlow({
   };
 
   const onExtracted = async (items: ExtractedTxn[]) => {
+    emitTourSignal('scan-extracted');
     setExtracted(items);
 
     const learned: (CategorySuggestion | null)[] = items.map((it) => {
@@ -110,6 +112,7 @@ export function AddFlow({
     setResult(created);
     setNewLearned(learned);
     setPhase('saved');
+    emitTourSignal('scan-saved');
   };
 
   const onManualComplete = async (item: ExtractedTxn, categoryId: string) => {
@@ -127,6 +130,7 @@ export function AddFlow({
         onPicked={onPicked}
         onManual={() => setPhase('manual')}
         onImport={() => setPhase('import')}
+        showSamples={tourActive}
       />
     );
   }

@@ -36,6 +36,7 @@ import { readPresentmentLog, recordPresentment } from '../lib/presentmentStore';
 import { deriveTrustRows, type TrustRowState } from '../lib/trustPanel';
 import {
   fileApplication,
+  mergeServerApplications,
   readApplications,
   recordCheckIn,
   recordLetterGenerated,
@@ -1642,6 +1643,20 @@ export default function Console() {
    *  presentment log. Used on boot and on every lender switch. */
   const loadForLender = (lenderId: string, codeUsed: string, amountUsed: string) => {
     setApps(readApplications(undefined, lenderId));
+    // Merge this lender's direct-apply submissions (borrowers who sent from the Pip app) into
+    // its own pipeline. Deduped by fileApplication's subject+amount identity, then persisted so
+    // an adopted submission behaves exactly like an officer-filed one on every later load.
+    fetch(`/api/apply?lender=${lenderId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((server: unknown) => {
+        if (!Array.isArray(server) || server.length === 0) return;
+        const merged = mergeServerApplications(readApplications(undefined, lenderId), server);
+        if (merged.changed) {
+          writeApplications(merged.apps, undefined, lenderId);
+          setApps(merged.apps);
+        }
+      })
+      .catch(() => {});
     fetch(`/api/policy?lender=${lenderId}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((sp: StoredPolicy | null) => {

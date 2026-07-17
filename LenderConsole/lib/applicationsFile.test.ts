@@ -69,4 +69,13 @@ describe('applicationsFile — server-side direct-apply store', () => {
     const viaLib = fileApplication([], input({ subject: 'e'.repeat(64) }), NOW).apps;
     expect(stored[0].audit).toEqual(viaLib[0].audit);
   });
+
+  // Multi-lender direct-apply (2026-07-16): the lenderId param exists so each registry lender
+  // gets its own mailbox (keyFor). An explicit filePath still wins for tests, so passing a
+  // non-default lenderId alongside one must not break the round-trip (back-compat guarantee).
+  it('accepts a lenderId param without disturbing the explicit-filePath round-trip', async () => {
+    const result = await appendServerApplication(tmp, input({ subject: 'f'.repeat(64) }), NOW, 'koperasi-sejahtera');
+    expect(result.filed).toBe(true);
+    expect((await readServerApplications(tmp, 'koperasi-sejahtera')).map((a) => a.subject)).toEqual(['f'.repeat(64)]);
+  });
 });

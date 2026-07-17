@@ -136,6 +136,32 @@ export function fileApplication(
   return { apps: [...apps, record], filed: true, id: record.id };
 }
 
+/**
+ * Merge direct-apply submissions from the per-lender server mailbox into the console's local
+ * pipeline (multi-lender direct-apply, 2026-07-16). A server record is already a fully-formed
+ * ApplicationRecord (filed by appendServerApplication), so it is adopted as-is  keeping its
+ * id, its "submitted by borrower via direct apply" audit line, and its `source: 'direct'`
+ * badge. Dedupe is on (subject + requestedAmount), the same identity fileApplication uses, so a
+ * submission already in the local pipeline (adopted on an earlier load, or filed by the
+ * officer) is never duplicated. Returns `changed` so the caller only re-persists when needed.
+ */
+export function mergeServerApplications(
+  local: ApplicationRecord[],
+  server: unknown[],
+): { apps: ApplicationRecord[]; changed: boolean } {
+  const keyOf = (a: ApplicationRecord) => `${a.subject} | ${a.requestedAmount}`;
+  const seen = new Set(local.map(keyOf));
+  const additions: ApplicationRecord[] = [];
+  for (const rec of server) {
+    if (!isRecord(rec)) continue;
+    const key = keyOf(rec);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    additions.push(rec);
+  }
+  return additions.length > 0 ? { apps: [...local, ...additions], changed: true } : { apps: local, changed: false };
+}
+
 function decisionOutcome(verdict: Decision, value: number): number {
   return verdict === 'decline' ? 0 : value;
 }

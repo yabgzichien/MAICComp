@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BudgetProgressList } from '../components/BudgetProgressList';
 import { Icon } from '../components/Icon';
+import { InfoButton } from '../components/InfoButton';
 import { Pip } from '../components/Pip';
 import { Amount, BtnLabel, Card, CatBadge, Eyebrow, PrimaryButton, ProgressTrack, TopBar } from '../components/ui';
 import { allocatedTotal, averageMonthlySpend, budgetHash, categoryStatus, currentMonthKey, leftover, txnMonthKey } from '../lib/budget';
@@ -92,11 +93,17 @@ export function BudgetScreen({ onBack, onOpenRecap = () => {} }: { onBack: () =>
         <Card style={{ padding: 18 }}>
           <View style={styles.rowBetween}>
             <View>
-              <Eyebrow>Income</Eyebrow>
+              <View style={styles.eyebrowRow}>
+                <Eyebrow>Income</Eyebrow>
+                <InfoButton entry="net_cash_flow" />
+              </View>
               <Amount value={expectedIncome} size={22} weight={700} />
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <Eyebrow>{left < 0 ? 'Over' : 'Unallocated'}</Eyebrow>
+              <View style={styles.eyebrowRow}>
+                <Eyebrow>{left < 0 ? 'Over' : 'Unallocated'}</Eyebrow>
+                {left >= 0 && <InfoButton entry="unallocated" />}
+              </View>
               <Amount value={Math.abs(left)} size={22} weight={700} color={left < 0 ? STATUS_COLOR.over : colors.accent} />
             </View>
           </View>
@@ -151,6 +158,7 @@ export function BudgetScreen({ onBack, onOpenRecap = () => {} }: { onBack: () =>
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   muted: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 6 },
   adviceCard: { padding: 16, marginTop: 14, backgroundColor: colors.accentTint, borderColor: colors.accentSoft },
   adviceHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },

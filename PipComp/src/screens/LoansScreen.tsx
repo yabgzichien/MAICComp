@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../components/Icon';
+import { InfoButton } from '../components/InfoButton';
 import { Amount, Card, Eyebrow, TopBar } from '../components/ui';
 import { TourAnchor } from '../components/TourAnchor';
 import { shortDate } from '../lib/dates';
@@ -228,7 +229,10 @@ export function LoansScreen({
         showsVerticalScrollIndicator={false}
       >
         {/* 1. Offers list */}
-        <Eyebrow style={{ marginBottom: 10 }}>Offers for you</Eyebrow>
+        <View style={styles.eyebrowRow}>
+          <Eyebrow>Offers for you</Eyebrow>
+          <InfoButton entry="apr" />
+        </View>
         <Text style={styles.intro}>
           Based on your Pip Score ({score.score} · {score.band}), here's what each tier would likely decide 
           tap one to apply.
@@ -243,10 +247,14 @@ export function LoansScreen({
                 <View style={styles.offerHeader}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.offerTitle}>{product.label}</Text>
-                    <Text style={styles.offerSub}>
-                      RM{product.minAmount.toLocaleString('en-MY')}–{product.maxAmount.toLocaleString('en-MY')} ·{' '}
-                      {product.tenorMonths} mo · {Math.round(product.apr * 100)}% APR
-                    </Text>
+                    <View style={styles.offerSubRow}>
+                      <Text style={styles.offerSub}>
+                        RM{product.minAmount.toLocaleString('en-MY')}–{product.maxAmount.toLocaleString('en-MY')} ·{' '}
+                        {product.tenorMonths} mo · {Math.round(product.apr * 100)}% APR
+                      </Text>
+                      <InfoButton entry="apr" />
+                      <InfoButton entry="tenor" />
+                    </View>
                   </View>
                   <View style={[styles.decisionPill, { backgroundColor: decisionColor(decision.decision) + '1a' }]}>
                     <Text style={[styles.decisionPillText, { color: decisionColor(decision.decision) }]}>
@@ -376,7 +384,10 @@ export function LoansScreen({
         {/* 3. Repayment schedule */}
         {repayments.length > 0 && (
           <>
-            <Eyebrow style={{ marginTop: 22, marginBottom: 10 }}>Repayment schedule</Eyebrow>
+            <View style={[styles.eyebrowRow, { marginTop: 22 }]}>
+              <Eyebrow>Repayment schedule</Eyebrow>
+              <InfoButton entry="repayment_schedule" />
+            </View>
             <Card style={{ overflow: 'hidden' }}>
               {repayments.map((r, idx) => (
                 <View key={r.id} style={[styles.repayRow, idx > 0 && styles.repayDivider]}>
@@ -500,11 +511,13 @@ const styles = StyleSheet.create({
   gateBtn: { alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 999, backgroundColor: colors.accentInk, marginTop: 18, alignSelf: 'stretch' },
   gateBtnText: { fontFamily: uiFont(700), fontSize: 14.5, color: colors.onAccent },
   intro: { fontFamily: uiFont(500), fontSize: 13, color: colors.ink2, lineHeight: 18, marginBottom: 12 },
+  eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
   offerCard: { padding: 16, marginBottom: 12 },
   offerCardSelected: { borderColor: colors.accent, borderWidth: 1.5 },
   offerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   offerTitle: { fontFamily: uiFont(700), fontSize: 15.5, color: colors.ink },
-  offerSub: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, marginTop: 2 },
+  offerSubRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  offerSub: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2 },
   decisionPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
   decisionPillText: { fontFamily: uiFont(700), fontSize: 11.5 },
   offerAmounts: { flexDirection: 'row', gap: 28, marginTop: 12 },

@@ -16,6 +16,10 @@ export interface DirectApplyRequest {
   passportCode: string;
   requestedAmount: number;
   purpose?: DeclaredPurpose;
+  /** Which registry lender to file with (multi-lender direct-apply, 2026-07-16). The console
+   *  decides against THIS lender's policy/products and files into its queue. Omitted → the
+   *  console defaults to TEKUN, so an older borrower build still routes somewhere valid. */
+  lenderId?: string;
 }
 
 export interface DirectApplyDecision {
@@ -57,6 +61,7 @@ export async function submitApplication(baseUrl: string, req: DirectApplyRequest
           passportCode: req.passportCode,
           requestedAmount: req.requestedAmount,
           ...(req.purpose ? { purpose: req.purpose } : {}),
+          ...(req.lenderId ? { lenderId: req.lenderId } : {}),
         }),
         signal: ctrl.signal,
       });

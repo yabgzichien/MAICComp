@@ -9,6 +9,7 @@ import Svg, { Path } from 'react-native-svg';
 import { Icon } from '../components/Icon';
 import { Card, TopBar } from '../components/ui';
 import type { ConsentScopeRow } from '../lib/consentScopes';
+import { useAppData } from '../state/store';
 import { colors, platformShadow, uiFont } from '../theme';
 
 function GuardLine({ text }: { text: string }) {
@@ -66,6 +67,7 @@ export function PassportCeremonyScreen({
   error: string | null;
 }) {
   const insets = useSafeAreaInsets();
+  const { tourActive } = useAppData();
   const hasIdentity = tier1.length > 0;
   const hasSpending = tier2.length > 0;
   const hasMonitoring = tier3 !== null;
@@ -77,7 +79,7 @@ export function PassportCeremonyScreen({
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: 18, paddingBottom: insets.bottom + 30 }}
+        contentContainerStyle={{ padding: 18, paddingBottom: insets.bottom + (tourActive ? 250 : 30) }}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.headingRow}>

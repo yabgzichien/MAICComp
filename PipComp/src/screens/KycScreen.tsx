@@ -12,6 +12,7 @@ import { parseNric, validateNric } from '../lib/ekyc';
 import { llmErrorMessage } from '../llm';
 import type { IdentityExtraction } from '../llm/ekycPrompt';
 import { scanIdentityImage } from '../ekyc/scan';
+import { SAMPLE_IDENTITY } from '../data/sampleIdentity';
 import { useAppData } from '../state/store';
 import type { EmploymentType } from '../db/occupationRepo';
 import { colors, uiFont } from '../theme';
@@ -26,7 +27,7 @@ const EMPLOYMENT_OPTIONS: { value: EmploymentType; label: string }[] = [
 
 export function KycScreen({ onBack, onDone }: { onBack: () => void; onDone?: () => void }) {
   const insets = useSafeAreaInsets();
-  const { kyc, verifyIdentity, occupation, saveOccupation } = useAppData();
+  const { kyc, verifyIdentity, occupation, saveOccupation, tourActive } = useAppData();
   const finish = onDone ?? onBack;
 
   // Self-declared occupation (Brief P)  captured once identity is verified, pre-filled if set.
@@ -112,7 +113,10 @@ export function KycScreen({ onBack, onDone }: { onBack: () => void; onDone?: () 
       <View style={{ paddingTop: insets.top + 4 }}>
         <TopBar title="Verify identity" onBack={onBack} />
       </View>
-      <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: insets.bottom + 30 }} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={{ padding: 18, paddingBottom: insets.bottom + (tourActive ? 250 : 30) }}
+        keyboardShouldPersistTaps="handled"
+      >
         <Card style={styles.noteCard}>
           <Text style={styles.noteText}>
             Demo verification (mock). We validate your MyKad structure and read its details.
@@ -187,6 +191,21 @@ export function KycScreen({ onBack, onDone }: { onBack: () => void; onDone?: () 
           </>
         ) : (
           <>
+            {tourActive && (
+              <Pressable
+                style={styles.sampleBtn}
+                onPress={() => {
+                  setError('');
+                  setName(SAMPLE_IDENTITY.fullName);
+                  setNric(SAMPLE_IDENTITY.nric);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Use the sample identity"
+              >
+                <Icon name="check" size={16} color={colors.accentInk} stroke={2.4} />
+                <Text style={styles.sampleBtnText}>Use sample identity (demo)</Text>
+              </Pressable>
+            )}
             <View style={styles.scanRow}>
               <Pressable style={styles.scanBtn} onPress={() => setScanning(true)} disabled={scanBusy}>
                 <Icon name="camera" size={18} color={colors.accent} />
@@ -256,6 +275,12 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   noteCard: { padding: 14, marginBottom: 16, backgroundColor: '#fffbf0', borderColor: '#f5d78a' },
   noteText: { fontFamily: uiFont(500), fontSize: 12.5, color: '#7a4d00', lineHeight: 18 },
+  sampleBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
+    height: 46, borderRadius: 14, backgroundColor: colors.accentTint,
+    borderWidth: 1.5, borderColor: colors.accent, marginTop: 6, marginBottom: 4,
+  },
+  sampleBtnText: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.accentInk },
   scanRow: { flexDirection: 'row', gap: 10, marginTop: 6 },
   scanBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,

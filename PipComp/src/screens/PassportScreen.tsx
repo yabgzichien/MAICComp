@@ -2,22 +2,26 @@
 // Two-phase flow (Brief I): the consent ceremony first  nothing mints on mount 
 // then the signed passport card. Regenerate routes back through the ceremony.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
+import { ActivityIndicator, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { PipEmblem } from '../components/CoinMascot';
-import { ErrorBoundary } from '../components/ErrorBoundary';
 import { FadeIn } from '../components/Motion';
 import { Icon } from '../components/Icon';
-import { Card, TopBar } from '../components/ui';
+import { Amount, Card, TopBar } from '../components/ui';
 import { getOrCreateKeypair } from '../crypto/keys';
 import { issuerSign } from '../crypto/issuer';
 import { buildPassport, type CreditPassport } from '../lib/passport';
 import { buildConsentReceipts, buildPassportDraft, monitoringScopeRow, tier0ScopeRows, tier1ScopeRows, tier2ScopeRows } from '../lib/consentScopes';
 import { useCreditProfile } from '../state/useCreditProfile';
 import { useAppData } from '../state/store';
-import { DEFAULT_PRODUCTS } from '../lib/loans';
+import { decideLoan, DEFAULT_PRODUCTS, type Decision } from '../lib/loans';
+import { submitApplication, type DirectApplyResult } from '../lib/directApply';
+import { fetchLenderDirectory, LENDER_API_BASE, type LenderProfile } from '../lib/lenderDirectory';
+import { PURPOSE_CATEGORIES, PURPOSE_LABELS, type PurposeCategory } from '../lib/loanPurpose';
+import { TourAnchor } from '../components/TourAnchor';
+import { emitTourSignal } from '../lib/tourSignals';
+import { BORROWER_TOUR_STEPS, clampTourStep } from '../lib/tourSteps';
 import { PassportCeremonyScreen } from './PassportCeremonyScreen';
 import { colors, numFont, platformShadow, uiFont } from '../theme';
 
@@ -29,10 +33,29 @@ function formatDate(iso: string): string {
   }
 }
 
+const DEC_GREEN = '#1f8a5b';
+const DEC_RED = '#c5402f';
+const DEC_AMBER = '#a3791f';
+
+// Mirrors LoansScreen's decision copy exactly  the send card can never read as
+// "auto-approved": the lender's engine decides, this only relays its verdict.
+function decisionColor(d: Decision): string {
+  if (d === 'approve') return DEC_GREEN;
+  if (d === 'refer') return DEC_AMBER;
+  return DEC_RED;
+}
+
+function decisionLabel(d: Decision): string {
+  if (d === 'approve') return 'Likely approved';
+  if (d === 'refer') return 'Refer for review';
+  return 'Likely declined';
+}
+
 export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () => void; onOpenKyc?: () => void }) {
   const insets = useSafeAreaInsets();
   const { profile, score, dataConfidence, coverage, momentum, coachInput, incomeQuality, spendingProfile, obligations } = useCreditProfile();
-  const { kyc, occupation, loanApplications, loanProducts } = useAppData();
+  const { kyc, occupation, loanApplications, loanProducts, tourActive, tourStepIndex } = useAppData();
+  const activeTourAnchor = tourActive ? BORROWER_TOUR_STEPS[clampTourStep(tourStepIndex, BORROWER_TOUR_STEPS.length)].anchorId ?? null : null;
 
   const [phase, setPhase] = useState<'consent' | 'minted'>('consent');
   const [includeIdentity, setIncludeIdentity] = useState(true);
@@ -55,6 +78,72 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
   const [signature, setSignature] = useState<string | null>(null);
   const [issuerSignature, setIssuerSignature] = useState<string | null>(null);
   const [shared, setShared] = useState(false);
+
+  // Direct-apply send (spec 2026-07-11; multi-lender 2026-07-16): the passport goes straight
+  // to the chosen lender console's POST /api/apply. The borrower picks one of the published
+  // lenders; the amount range + supportable pre-fill + eligibility all recompute against THAT
+  // lender's package & policy, so raising the amount above what a given lender supports triggers
+  // its counter-offer path. Amount pre-fills at the supportable amount so one tap still works.
+  const [amount, setAmount] = useState<number | null>(null);
+  const [purpose, setPurpose] = useState<PurposeCategory>('working-capital');
+  const [sendBusy, setSendBusy] = useState(false);
+  const [sendResult, setSendResult] = useState<DirectApplyResult | null>(null);
+
+  // Published lender directory (GET /api/lenders). Fetched once on mount; a transport failure
+  // leaves it empty and the send flow falls back to the built-in ladder (routes to TEKUN).
+  const [lenders, setLenders] = useState<LenderProfile[]>([]);
+  const [selectedLenderId, setSelectedLenderId] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetchLenderDirectory().then((dir) => {
+      if (!alive) return;
+      setLenders(dir.lenders);
+      setSelectedLenderId((cur) => cur ?? dir.lenders[0]?.id ?? null);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const selectedLender = useMemo(
+    () => lenders.find((l) => l.id === selectedLenderId) ?? null,
+    [lenders, selectedLenderId]
+  );
+
+  // The chosen lender's real published ladder + thresholds drive the amount bounds and the
+  // supportable pre-fill  not a hardcoded ladder  so what the borrower sees matches what that
+  // lender's console will decide. Falls back to the engine default before the directory loads.
+  const sendProducts = selectedLender?.products ?? DEFAULT_PRODUCTS;
+  const sendPolicy = selectedLender?.policy;
+  const ladderMin = useMemo(() => Math.min(...sendProducts.map((p) => p.minAmount)), [sendProducts]);
+  const ladderMax = useMemo(() => Math.max(...sendProducts.map((p) => p.maxAmount)), [sendProducts]);
+  const supportable = useMemo(
+    () =>
+      decideLoan({
+        score: score.score,
+        band: score.band,
+        confidence: score.confidence,
+        avgMonthlySurplus: profile.avgSurplus,
+        monthlyDebtService: profile.monthlyDebtService,
+        avgIncome: profile.avgIncome,
+        requestedAmount: ladderMax,
+        products: sendProducts,
+        coverageRatio: coverage.ratio,
+        coverageDaysCovered: coverage.daysCovered,
+        integrityFloorBreached: dataConfidence.integrityFloorBreached,
+        ...(sendPolicy ? { policy: sendPolicy } : {}),
+      }).maxAmount,
+    [score, profile, sendProducts, sendPolicy, coverage, dataConfidence, ladderMax]
+  );
+  const defaultAmount = supportable > 0 ? supportable : ladderMin;
+  const effectiveAmount = amount ?? defaultAmount;
+
+  // Switching lenders re-defaults the amount to the new lender's supportable figure and clears
+  // any stale verdict  the borrower is now asking a different lender.
+  const selectLender = (id: string) => {
+    setSelectedLenderId(id);
+    setAmount(null);
+    setSendResult(null);
+  };
 
   const sharedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
@@ -117,6 +206,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
       setSignature(result.signature);
       setIssuerSignature(result.issuerSignature ?? null);
       setPhase('minted');
+      emitTourSignal('passport-minted');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.toLowerCase().includes('secure store') || msg.toLowerCase().includes('platform')) {
@@ -156,6 +246,39 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg && msg.toLowerCase().includes('error')) console.error('Share error:', msg);
+    }
+  };
+
+  const stepAmount = (delta: number) => {
+    setSendResult(null);
+    setAmount((cur) => {
+      const base = cur ?? defaultAmount;
+      const next = Math.round(base + delta);
+      return Math.max(ladderMin, Math.min(ladderMax, next));
+    });
+  };
+
+  // Send the signed passport code to the console. submitApplication never throws  every
+  // failure resolves to a typed result (offline / rejected / duplicate), so the card always
+  // lands in a well-defined state and can nudge the borrower to the offline fallback below.
+  const sendToLender = async () => {
+    if (!pasteCode) return;
+    setSendBusy(true);
+    setSendResult(null);
+    try {
+      const result = await submitApplication(LENDER_API_BASE, {
+        passportCode: pasteCode,
+        requestedAmount: effectiveAmount,
+        purpose: { category: purpose },
+        // Route to the chosen lender; a generic/offline placeholder carries no real id, so we
+        // omit it and let the console default (TEKUN) rather than send an unknown lender.
+        ...(selectedLender && selectedLender.id !== 'offline' ? { lenderId: selectedLender.id } : {}),
+      });
+      setSendResult(result);
+    } catch {
+      setSendResult({ status: 'offline' });
+    } finally {
+      setSendBusy(false);
     }
   };
 
@@ -215,6 +338,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
       <Text style={styles.subtitle}>Share your verified score with any lender</Text>
 
       <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: insets.bottom + 30 }} showsVerticalScrollIndicator={false}>
+        <TourAnchor id="passport-card" activeId={activeTourAnchor}>
         <FadeIn key={passport.issuedAt} style={styles.passportCard}>
           {/* Dark header strip */}
           <View style={styles.header}>
@@ -247,36 +371,6 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
                   <Text style={styles.scorePillText}>{passport.band}</Text>
                 </View>
               </View>
-            </View>
-          </View>
-
-          {/* QR body */}
-          <View style={styles.qrBody}>
-            <Text style={styles.scanHint}>Present to lender · Scan to verify</Text>
-            <View style={styles.qrWrap}>
-              <ErrorBoundary
-                fallback={() => (
-                  <View style={[styles.qrFallback, { width: 168, height: 168 }]}>
-                    <Text style={styles.qrFallbackText}>QR unavailable</Text>
-                    <Text style={styles.qrFallbackSub}>Use Share or the code below</Text>
-                  </View>
-                )}
-              >
-                <QRCode value={pasteCode} size={168} ecl="L" color={colors.passportDark} backgroundColor="#ffffff" />
-              </ErrorBoundary>
-            </View>
-
-            <View style={styles.codeRow}>
-              <View style={styles.codeField}>
-                <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-                  <Rect x={5} y={11} width={14} height={11} rx={2} stroke={colors.accent} strokeWidth={2} />
-                  <Path d="M8 11V7a4 4 0 018 0v4" stroke={colors.accent} strokeWidth={2} strokeLinecap="round" />
-                </Svg>
-                <Text style={styles.codeText} numberOfLines={1}>{shortCode}</Text>
-              </View>
-              <Pressable onPress={handleShare} style={[styles.copyBtn, shared && styles.copyBtnDone]}>
-                <Text style={[styles.copyText, shared && styles.copyTextDone]}>{shared ? '✓ Shared' : 'Share'}</Text>
-              </Pressable>
             </View>
           </View>
 
@@ -325,6 +419,166 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
             </Pressable>
           </View>
         </FadeIn>
+        </TourAnchor>
+
+        {/* Request financing  direct-apply straight to the chosen lender console */}
+        <Card style={styles.reqCard}>
+          <Text style={styles.reqTitle}>Request financing</Text>
+          <Text style={styles.reqSub}>Pick a lender and send this signed passport straight to them to apply. Only your signed aggregates travel — never your raw transactions.</Text>
+
+          {lenders.length > 0 && (
+            <>
+              <Text style={styles.reqLabel}>Lender</Text>
+              <View style={styles.lenderList}>
+                {lenders.map((l) => {
+                  const on = selectedLender?.id === l.id;
+                  return (
+                    <Pressable
+                      key={l.id}
+                      onPress={() => selectLender(l.id)}
+                      style={[styles.lenderRow, on && styles.lenderRowOn]}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: on }}
+                    >
+                      <View style={[styles.lenderDot, { backgroundColor: l.brandColor }]} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.lenderName} numberOfLines={1}>{l.name}</Text>
+                        <Text style={styles.lenderBlurb} numberOfLines={2}>{l.blurb}</Text>
+                      </View>
+                      {on && <Icon name="check" size={16} color={colors.accentInk} stroke={2.6} />}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </>
+          )}
+
+          <Text style={[styles.reqLabel, lenders.length > 0 && { marginTop: 16 }]}>Amount</Text>
+          <View style={styles.stepperRow}>
+            <Pressable onPress={() => stepAmount(-500)} style={({ pressed }) => [styles.stepperBtn, pressed && styles.stepperPressed]}>
+              <Icon name="chevronLeft" size={18} color={colors.accent} />
+            </Pressable>
+            <View style={{ flex: 1, alignItems: 'center' }}>
+              <Amount value={effectiveAmount} size={22} />
+              <Text style={styles.stepperHint}>RM{ladderMin.toLocaleString('en-MY')}–{ladderMax.toLocaleString('en-MY')}</Text>
+            </View>
+            <Pressable onPress={() => stepAmount(500)} style={({ pressed }) => [styles.stepperBtn, pressed && styles.stepperPressed]}>
+              <Icon name="chevronRight" size={18} color={colors.accent} />
+            </Pressable>
+          </View>
+
+          <Text style={[styles.reqLabel, { marginTop: 16 }]}>Purpose</Text>
+          <View style={styles.purposeWrap}>
+            {PURPOSE_CATEGORIES.map((c) => {
+              const on = purpose === c;
+              return (
+                <Pressable
+                  key={c}
+                  onPress={() => { setPurpose(c); setSendResult(null); }}
+                  style={[styles.purposeChip, on && styles.purposeChipOn]}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: on }}
+                >
+                  <Text style={[styles.purposeChipText, on && styles.purposeChipTextOn]}>{PURPOSE_LABELS[c]}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Pressable
+            onPress={sendToLender}
+            disabled={sendBusy}
+            style={({ pressed }) => [styles.sendBtn, (sendBusy || pressed) && { opacity: 0.92 }]}
+            accessibilityRole="button"
+          >
+            {sendBusy ? (
+              <ActivityIndicator size="small" color={colors.onAccent} />
+            ) : (
+              <>
+                <Text style={styles.sendBtnText}>
+                  {selectedLender && selectedLender.id !== 'offline' ? `Send to ${selectedLender.name.split(' ')[0]}` : 'Send request to lender'}
+                </Text>
+                <Icon name="arrowRight" size={16} color={colors.onAccent} />
+              </>
+            )}
+          </Pressable>
+
+          {sendResult && sendResult.status === 'filed' && (
+            <View style={styles.resultBox}>
+              <View style={styles.resultHeader}>
+                <Text style={styles.resultTitle} numberOfLines={1}>
+                  {selectedLender && selectedLender.id !== 'offline' ? `Sent to ${selectedLender.name}` : 'Sent to lender'}
+                </Text>
+                <View style={[styles.decisionPill, { backgroundColor: decisionColor(sendResult.decision.decision) + '1a' }]}>
+                  <Text style={[styles.decisionPillText, { color: decisionColor(sendResult.decision.decision) }]}>
+                    {decisionLabel(sendResult.decision.decision)}
+                  </Text>
+                </View>
+              </View>
+              {sendResult.decision.maxAmount > 0 && (
+                <View style={styles.offerAmounts}>
+                  <View>
+                    <Text style={styles.amountLabel}>Offered</Text>
+                    <Amount value={sendResult.decision.maxAmount} size={18} />
+                  </View>
+                  <View>
+                    <Text style={styles.amountLabel}>Installment / mo</Text>
+                    <Amount value={sendResult.decision.installment} size={18} />
+                  </View>
+                </View>
+              )}
+              {sendResult.decision.reasons.length > 0 && (
+                <View style={styles.reasonsBlock}>
+                  {sendResult.decision.reasons.map((reason, idx) => (
+                    <View key={idx} style={styles.reasonRow}>
+                      <Icon name="dots" size={6} color={colors.ink3} />
+                      <Text style={styles.reasonText}>{reason}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+              <Text style={styles.resultFoot}>Filed in the lender's queue for review.</Text>
+            </View>
+          )}
+
+          {sendResult && sendResult.status === 'duplicate' && (
+            <View style={styles.noticeBox}>
+              <Text style={styles.noticeText}>You've already sent this passport to this lender — it's in their queue.</Text>
+            </View>
+          )}
+
+          {sendResult && sendResult.status === 'rejected' && (
+            <View style={[styles.noticeBox, styles.noticeError]}>
+              {sendResult.reasons.map((reason, idx) => (
+                <Text key={idx} style={[styles.noticeText, { color: DEC_RED }]}>{reason}</Text>
+              ))}
+            </View>
+          )}
+
+          {sendResult && sendResult.status === 'offline' && (
+            <View style={styles.noticeBox}>
+              <Text style={styles.noticeText}>Couldn't reach the lender console. Present your signed code offline instead — see below.</Text>
+            </View>
+          )}
+        </Card>
+
+        {/* Offline fallback  the manual hand-over that keeps working with no connection */}
+        <Card style={styles.fallbackCard}>
+          <Text style={styles.fallbackTitle}>Present offline instead</Text>
+          <Text style={styles.fallbackSub}>No connection to a lender? Share your signed code — any lender can verify it offline, no server needed.</Text>
+          <View style={styles.codeRow}>
+            <View style={styles.codeField}>
+              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+                <Rect x={5} y={11} width={14} height={11} rx={2} stroke={colors.accent} strokeWidth={2} />
+                <Path d="M8 11V7a4 4 0 018 0v4" stroke={colors.accent} strokeWidth={2} strokeLinecap="round" />
+              </Svg>
+              <Text style={styles.codeText} numberOfLines={1}>{shortCode}</Text>
+            </View>
+            <Pressable onPress={handleShare} style={[styles.copyBtn, shared && styles.copyBtnDone]}>
+              <Text style={[styles.copyText, shared && styles.copyTextDone]}>{shared ? '✓ Shared' : 'Share'}</Text>
+            </Pressable>
+          </View>
+        </Card>
       </ScrollView>
     </View>
   );
@@ -363,13 +617,7 @@ const styles = StyleSheet.create({
   scorePill: { marginTop: 4, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 3 },
   scorePillText: { fontFamily: uiFont(700), fontSize: 11, color: 'rgba(255,255,255,0.82)' },
 
-  qrBody: { padding: 20, alignItems: 'center', backgroundColor: '#fff' },
-  scanHint: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink2, marginBottom: 14, letterSpacing: 0.4 },
-  qrWrap: { borderRadius: 14, padding: 4, borderWidth: 1, borderColor: colors.line, backgroundColor: '#fff' },
-  qrFallback: { alignItems: 'center', justifyContent: 'center', gap: 4, padding: 12, borderRadius: 10, backgroundColor: colors.surface2 },
-  qrFallbackText: { fontFamily: uiFont(600), fontSize: 12, color: colors.ink },
-  qrFallbackSub: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink2, textAlign: 'center' },
-  codeRow: { flexDirection: 'row', gap: 8, marginTop: 18, alignSelf: 'stretch' },
+  codeRow: { flexDirection: 'row', gap: 8, marginTop: 14, alignSelf: 'stretch' },
   codeField: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surface2, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: colors.line },
   codeText: { flex: 1, fontFamily: numFont(500), fontSize: 12, color: colors.ink2 },
   copyBtn: { borderRadius: 10, paddingHorizontal: 16, justifyContent: 'center', backgroundColor: colors.accentInk },
@@ -393,4 +641,47 @@ const styles = StyleSheet.create({
   webKeyNote: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink2, textAlign: 'center', marginBottom: 10, lineHeight: 14 },
   regenBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 4 },
   regenText: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2 },
+
+  /* request financing */
+  reqCard: { padding: 18, marginTop: 16 },
+  reqTitle: { fontFamily: uiFont(700), fontSize: 16, color: colors.ink },
+  reqSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, lineHeight: 18, marginTop: 4, marginBottom: 14 },
+  reqLabel: { fontFamily: uiFont(700), fontSize: 11, color: colors.ink2, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 },
+  lenderList: { gap: 8 },
+  lenderRow: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 12, paddingVertical: 11, borderRadius: 12, backgroundColor: colors.surface2, borderWidth: 1.5, borderColor: colors.line },
+  lenderRowOn: { backgroundColor: colors.accentTint, borderColor: colors.accent },
+  lenderDot: { width: 12, height: 12, borderRadius: 999 },
+  lenderName: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.ink },
+  lenderBlurb: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, lineHeight: 15, marginTop: 2 },
+  stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  stepperBtn: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentTint, borderWidth: 1, borderColor: colors.accentSoft },
+  stepperPressed: { transform: [{ scale: 0.92 }] },
+  stepperHint: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink3, marginTop: 3 },
+  purposeWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  purposeChip: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 999, backgroundColor: colors.surface2, borderWidth: 1.5, borderColor: colors.line },
+  purposeChipOn: { backgroundColor: colors.accentTint, borderColor: colors.accent },
+  purposeChipText: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink2 },
+  purposeChipTextOn: { color: colors.accentInk },
+  sendBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 52, borderRadius: 999, backgroundColor: colors.accentInk, marginTop: 18 },
+  sendBtnText: { fontFamily: uiFont(700), fontSize: 15, color: colors.onAccent },
+
+  resultBox: { marginTop: 16, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 14 },
+  resultHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  resultTitle: { flex: 1, marginRight: 8, fontFamily: uiFont(700), fontSize: 13.5, color: colors.ink },
+  decisionPill: { borderRadius: 999, paddingHorizontal: 11, paddingVertical: 4 },
+  decisionPillText: { fontFamily: uiFont(700), fontSize: 12 },
+  offerAmounts: { flexDirection: 'row', gap: 28, marginTop: 12 },
+  amountLabel: { fontFamily: uiFont(600), fontSize: 11, color: colors.ink2, marginBottom: 3 },
+  reasonsBlock: { marginTop: 12, gap: 5 },
+  reasonRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 7 },
+  reasonText: { flex: 1, fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, lineHeight: 18 },
+  resultFoot: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, marginTop: 12 },
+  noticeBox: { marginTop: 14, backgroundColor: colors.surface2, borderRadius: 12, padding: 12, gap: 4 },
+  noticeError: { backgroundColor: '#c5402f14' },
+  noticeText: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, lineHeight: 18 },
+
+  /* offline fallback */
+  fallbackCard: { padding: 18, marginTop: 14 },
+  fallbackTitle: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.ink },
+  fallbackSub: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, lineHeight: 17, marginTop: 4 },
 });

@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../components/Icon';
+import { InfoButton } from '../components/InfoButton';
 import { Card, Eyebrow, ProgressTrack, TopBar } from '../components/ui';
 import { type CreditPassport, verifyPassport } from '../lib/passport';
 import { ISSUER_PUBLIC_KEY_HEX } from '../crypto/issuer';
@@ -173,7 +174,10 @@ export function LenderScreen({ onBack }: { onBack: () => void }) {
 
         {view === 'verify' && (
           <>
-        <Eyebrow style={{ marginBottom: 10 }}>Credit Passport Verification</Eyebrow>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+          <Eyebrow>Credit Passport Verification</Eyebrow>
+          <InfoButton entry="credit_passport" />
+        </View>
 
         <Card style={styles.introCard}>
           <Text style={styles.introText}>
@@ -330,7 +334,10 @@ function CapitalMarketsSection() {
 
   return (
     <>
-      <Eyebrow style={{ marginBottom: 10 }}>AI-Structured Micro-Sukuk</Eyebrow>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+        <Eyebrow>AI-Structured Micro-Sukuk</Eyebrow>
+        <InfoButton entry="micro_sukuk" />
+      </View>
 
       <Card style={styles.introCard}>
         <Text style={styles.introText}>

@@ -11,6 +11,8 @@
 import * as path from 'path';
 import { readJson, writeJson } from './kvStore';
 import { DEFAULT_STORED_POLICY, validateStoredPolicy, type PolicyValidation, type StoredPolicy } from './policyStore';
+import { LENDER_REGISTRY } from './lenderRegistry';
+import { DEFAULT_POLICY } from './loans';
 
 const STORE_KEY = 'policy';
 const DEFAULT_LENDER_ID = 'tekun';
@@ -40,6 +42,24 @@ export async function readStoredPolicy(filePath?: string, lenderId: string = DEF
   const v = validateStoredPolicy(parsed);
   if (!v.ok) return DEFAULT_STORED_POLICY;
   return typeof parsed.updatedAt === 'string' ? { ...v.value, updatedAt: parsed.updatedAt } : v.value;
+}
+
+/**
+ * The EFFECTIVE policy a lender decides with (multi-lender direct-apply, 2026-07-16). Resolves
+ * the gap that `readStoredPolicy` falls back to the generic DEFAULT_STORED_POLICY (TEKUN's
+ * ladder) for a lender that has never opened its Policy editor  which would silently decide a
+ * Koperasi or Dana Niaga application against TEKUN's package. Rule: an EDITED policy (carries
+ * `updatedAt`) is honoured as-is; otherwise the lender's own registry package is used, so an
+ * unedited lender decides with the ladder it publishes on /api/lenders, not TEKUN's. An unknown
+ * lender keeps the generic default. This is the single source of truth for /api/apply,
+ * /api/policy (GET), and /api/lenders, so all three agree on every lender's real ladder.
+ */
+export async function readLenderPolicy(lenderId: string = DEFAULT_LENDER_ID, filePath?: string): Promise<StoredPolicy> {
+  const stored = await readStoredPolicy(filePath, lenderId);
+  if (stored.updatedAt) return stored;
+  const registry = LENDER_REGISTRY.find((l) => l.id === lenderId);
+  if (!registry) return stored;
+  return { policy: registry.policy ?? DEFAULT_POLICY, products: registry.products };
 }
 
 /** Validate and persist `lenderId`'s policy. Rejection never touches the store; success

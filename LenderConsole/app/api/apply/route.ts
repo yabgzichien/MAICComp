@@ -10,9 +10,20 @@
 import { NextResponse } from 'next/server';
 import { parsePassportCode, verifyPassport } from '../../../lib/passport';
 import { decideLoan } from '../../../lib/loans';
-import { readStoredPolicy } from '../../../lib/policyFile';
+import { readLenderPolicy } from '../../../lib/policyFile';
 import { appendServerApplication, readServerApplications } from '../../../lib/applicationsFile';
+import { LENDER_REGISTRY } from '../../../lib/lenderRegistry';
 import type { DeclaredPurpose, PurposeCategory } from '../../../lib/applications';
+
+const DEFAULT_LENDER_ID = 'tekun';
+
+/** Resolve an untrusted lender id to a known registry id, or null. Defaults to TEKUN when
+ *  omitted (a borrower app that predates multi-lender routing still files into TEKUN). */
+function resolveLenderId(raw: unknown): string | null {
+  if (raw === undefined || raw === null || raw === '') return DEFAULT_LENDER_ID;
+  if (typeof raw !== 'string') return null;
+  return LENDER_REGISTRY.some((l) => l.id === raw) ? raw : null;
+}
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -74,6 +85,10 @@ export async function POST(req: Request) {
   if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
     return NextResponse.json({ filed: false, errors: ['requestedAmount must be a positive number.'] }, { status: 400, headers: CORS_HEADERS });
   }
+  const lenderId = resolveLenderId(b.lenderId);
+  if (lenderId === null) {
+    return NextResponse.json({ filed: false, errors: ['Unknown lender.'] }, { status: 400, headers: CORS_HEADERS });
+  }
 
   let parsed;
   try {
@@ -92,7 +107,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ filed: false, errors: ['Passport carries no affordability assessment to decide against.'] }, { status: 400, headers: CORS_HEADERS });
   }
 
-  const stored = await readStoredPolicy();
+  const stored = await readLenderPolicy(lenderId);
   const decision = decideLoan({
     score: parsed.passport.score,
     confidence: assessment.confidence,
@@ -107,18 +122,23 @@ export async function POST(req: Request) {
   });
 
   const purpose = parsePurpose(b.purpose);
-  const result = await appendServerApplication(undefined, {
-    passportCode: b.passportCode,
-    subject: parsed.passport.subject,
-    applicantLabel: parsed.passport.holder?.name ?? 'Applicant',
-    requestedAmount,
-    engineDecision: decision.decision,
-    offeredAmount: decision.maxAmount,
-    installment: decision.installment,
-    ...(decision.breakdown?.tierLabel ? { tierLabel: decision.breakdown.tierLabel } : {}),
-    ...(purpose ? { purpose } : {}),
-    source: 'direct',
-  });
+  const result = await appendServerApplication(
+    undefined,
+    {
+      passportCode: b.passportCode,
+      subject: parsed.passport.subject,
+      applicantLabel: parsed.passport.holder?.name ?? 'Applicant',
+      requestedAmount,
+      engineDecision: decision.decision,
+      offeredAmount: decision.maxAmount,
+      installment: decision.installment,
+      ...(decision.breakdown?.tierLabel ? { tierLabel: decision.breakdown.tierLabel } : {}),
+      ...(purpose ? { purpose } : {}),
+      source: 'direct',
+    },
+    new Date(),
+    lenderId,
+  );
 
   return NextResponse.json(
     {
@@ -131,12 +151,14 @@ export async function POST(req: Request) {
   );
 }
 
-// Same-origin only  Console.tsx pulls this on load to merge direct submissions into its
-// own queue. Not part of the public surface (unlike GET /api/lenders).
+// Same-origin only  Console.tsx pulls this per lender on load to merge that lender's direct
+// submissions into its own queue. Not part of the public surface (unlike GET /api/lenders).
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-  return NextResponse.json(await readServerApplications());
+export async function GET(req: Request) {
+  const lenderId = resolveLenderId(new URL(req.url).searchParams.get('lender'));
+  // An unknown lender reads as empty rather than erroring  the console must never fail to load.
+  return NextResponse.json(lenderId === null ? [] : await readServerApplications(undefined, lenderId));
 }
 
 export async function OPTIONS() {

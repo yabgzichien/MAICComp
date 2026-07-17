@@ -44,11 +44,14 @@ export const LENDER_REGISTRY: LenderProfile[] = [
   {
     id: 'koperasi-sejahtera',
     name: 'Koperasi Usahawan Sejahtera',
-    blurb: 'Member-owned credit cooperative. The cheapest rates in the directory, but a stricter score bar and no emergency tier.',
+    blurb: 'Member-owned credit cooperative. The cheapest rates in the directory, but a stricter score bar and no emergency tier — built for established members.',
     brandColor: '#1f8a5b',
+    // Cheapest money in the directory (10-12%), but you must be established: high score
+    // bars, no emergency safety net, no big-ticket scale tier. A thin-file borrower is
+    // turned away here  the "come back with a track record" archetype.
     products: [
-      { id: 'starter', label: 'Anggota Starter', minScore: 560, minAmount: 1000, maxAmount: 4000, tenorMonths: 12, apr: 0.14 },
-      { id: 'growth', label: 'Anggota Growth', minScore: 680, minAmount: 5000, maxAmount: 12000, tenorMonths: 18, apr: 0.12 },
+      { id: 'starter', label: 'Anggota Starter', minScore: 600, minAmount: 1500, maxAmount: 4000, tenorMonths: 12, apr: 0.12 },
+      { id: 'growth', label: 'Anggota Growth', minScore: 700, minAmount: 5000, maxAmount: 15000, tenorMonths: 24, apr: 0.10 },
     ],
     policy: DEFAULT_POLICY,
     officer: 'Siti Fatimah',
@@ -57,11 +60,15 @@ export const LENDER_REGISTRY: LenderProfile[] = [
   {
     id: 'dana-niaga',
     name: 'Dana Niaga Capital',
-    blurb: 'Digital micro-lender. Accessible entry tiers with fast decisions, priced higher but capped below 30% APR.',
+    blurb: 'Digital micro-lender. The widest entry in the directory and fast decisions, priced higher for the convenience but capped just below 30% APR.',
     brandColor: '#b45309',
+    // Says yes fastest and to the widest score range at the entry tier (380), but you pay
+    // for speed/convenience: highest APRs in the directory, held just under the CCA 2025
+    // 30% advisory ceiling. No ultra-cheap credit, no RM20k scale tier.
     products: [
-      { id: 'emergency', label: 'Micro Boost', minScore: 400, minAmount: 300, maxAmount: 1500, tenorMonths: 6, apr: 0.28 },
-      { id: 'starter', label: 'Niaga Flex', minScore: 600, minAmount: 2000, maxAmount: 8000, tenorMonths: 12, apr: 0.24 },
+      { id: 'emergency', label: 'Micro Boost', minScore: 380, minAmount: 300, maxAmount: 1500, tenorMonths: 6, apr: 0.29 },
+      { id: 'starter', label: 'Niaga Flex', minScore: 560, minAmount: 2000, maxAmount: 8000, tenorMonths: 12, apr: 0.25 },
+      { id: 'growth', label: 'Niaga Growth', minScore: 660, minAmount: 8000, maxAmount: 15000, tenorMonths: 18, apr: 0.22 },
     ],
     policy: DEFAULT_POLICY,
     officer: 'Ravi Kumar',

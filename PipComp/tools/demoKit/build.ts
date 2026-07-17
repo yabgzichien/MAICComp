@@ -62,7 +62,9 @@ function dayInCurrentMonth(now: Date, dayOfMonth: number): Date {
 
 function displayDate(d: Date): string {
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  // Year included: a year-less date ("2 Jul") makes vision extraction guess the year, and
+  // it guessed a past one live  which zeroed the tour's coverage-delta beat.
+  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }
 
 /** Spreads `count` rows across the days elapsed so far this month, earliest first. */

@@ -9,6 +9,7 @@ import { InstitutionField } from '../components/InstitutionField';
 import { BalanceScanScreen } from './BalanceScanScreen';
 import { ScanBalanceButton } from '../components/ScanBalanceButton';
 import { TickerSearchModal } from '../components/TickerSearchModal';
+import { InfoButton } from '../components/InfoButton';
 import { BtnLabel, Card, Eyebrow, PrimaryButton, type ValueMode } from '../components/ui';
 import { shortDate } from '../lib/dates';
 import { fmt } from '../lib/format';
@@ -790,7 +791,10 @@ function HoldingGroupSheet({
             </Text>
           )}
 
-          <Eyebrow style={{ marginTop: 20, marginBottom: 10 }}>{ordered.length} lot{ordered.length === 1 ? '' : 's'}</Eyebrow>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 20, marginBottom: 10 }}>
+            <Eyebrow>{ordered.length} lot{ordered.length === 1 ? '' : 's'}</Eyebrow>
+            <InfoButton entry="holdings" />
+          </View>
           <Card style={{ overflow: 'hidden' }}>
             {ordered.map(({ id, quantity, createdAt, cost }) => {
               const value = accountValues[id] ?? 0;

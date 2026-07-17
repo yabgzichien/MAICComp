@@ -19,8 +19,11 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { BottomNav, type NavTab } from './src/components/BottomNav';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { Pip } from './src/components/Pip';
-import { TourCard, TourResumeChip } from './src/components/TourCard';
-import { BORROWER_TOUR_STEPS, clampTourStep } from './src/lib/tourSteps';
+import { MissionBanner, TourCard, TourResumeChip, type TourRecapItem } from './src/components/TourCard';
+import { TourSpotlight } from './src/components/TourSpotlight';
+import { actProgress, BORROWER_TOUR_STEPS, clampTourStep, type TourStep } from './src/lib/tourSteps';
+import { classifyScreenChange, classifySignal } from './src/lib/tourDrive';
+import { onTourSignal } from './src/lib/tourSignals';
 import { AddFlow } from './src/screens/AddFlow';
 import { AllTransactionsScreen } from './src/screens/AllTransactionsScreen';
 import { BreakdownScreen } from './src/screens/BreakdownScreen';
@@ -39,7 +42,9 @@ import { NetWorthScreen } from './src/screens/NetWorthScreen';
 import { RecapScreen } from './src/screens/RecapScreen';
 import { CalendarScreen } from './src/screens/CalendarScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { GlossaryModal } from './src/components/InfoButton';
 import { AccentProvider } from './src/state/accent';
+import { GlossaryProvider } from './src/state/glossary';
 import { AppDataProvider, useAppData } from './src/state/store';
 import { useNow } from './src/state/useNow';
 import { colors, platformShadow, uiFont } from './src/theme';
@@ -83,9 +88,11 @@ export default function App() {
       <SafeAreaProvider>
         <AppDataProvider>
           <AccentProvider>
-            <ErrorBoundary>
-              <Root fontsLoaded={fontsLoaded} />
-            </ErrorBoundary>
+            <GlossaryProvider>
+              <ErrorBoundary>
+                <Root fontsLoaded={fontsLoaded} />
+              </ErrorBoundary>
+            </GlossaryProvider>
           </AccentProvider>
         </AppDataProvider>
         <StatusBar style="dark" />
@@ -144,8 +151,17 @@ function StatusClock() {
   return <Text style={webStyles.clock}>{`${hh}:${mm}`}</Text>;
 }
 
+/** Judge-readable labels for the finale recap, one per interactive step. */
+const TOUR_RECAP_LABELS: Record<string, string> = {
+  'open-credit': 'Opened her score',
+  'scan-mission': 'Scanned a real statement',
+  whatif: 'Tested a what-if lever',
+  'kyc-verify': 'Verified her identity',
+  'mint-passport': 'Minted the passport',
+};
+
 function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
-  const { ready, onboardingComplete, tourActive, tourStepIndex, setTourStep, pauseTour, exitTour, startTour } = useAppData();
+  const { ready, onboardingComplete, tourActive, tourStepIndex, setTourStep, pauseTour, exitTour, startTour, coverage } = useAppData();
   const insets = useSafeAreaInsets();
   const [screen, setScreen] = useState<Screen>('home');
   const [txnFilter, setTxnFilter] = useState<string | null>(null);
@@ -159,31 +175,99 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
     setScreen('kyc');
   };
 
-  // Judge guided tour (2026-07-12 spec). `tourDrivenRef` distinguishes a screen change the
-  // tour itself made (advancing to the next step) from one the judge made by tapping the
-  // real app  the latter pauses the tour rather than snapping the screen back, so the tour
-  // never fights the user for control.
+  // Judge guided tour v2 (Interactive Judge Tour spec, 2026-07-16). `tourDrivenRef`
+  // distinguishes a screen change the tour itself made from one the judge made by tapping
+  // the real app; the pure classifiers in lib/tourDrive.ts decide what a judge-made change
+  // means for the active step (advance a do-step, step a mission phase, or pause). The
+  // tour never fights the user for control: stray taps pause it, and the Resume chip
+  // brings it back to the same step. Mission phase, recap facts, and the coverage delta
+  // are in-memory only  a resume across an app kill restarts the step cleanly.
   const [tourPaused, setTourPaused] = useState(false);
   const tourDrivenRef = useRef(false);
+  const advancingRef = useRef(false);
+  const [missionPhase, setMissionPhase] = useState<number | null>(null);
+  const [celebrateText, setCelebrateText] = useState<string | null>(null);
+  const [coverageBefore, setCoverageBefore] = useState<number | null>(null);
+  const recapRef = useRef(new Map<string, boolean>());
+  const celebrateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentTourStep = tourActive ? BORROWER_TOUR_STEPS[clampTourStep(tourStepIndex, BORROWER_TOUR_STEPS.length)] : null;
 
+  const resetMission = () => {
+    setMissionPhase(null);
+  };
+
+  /** Wrap up a do/mission step: record it for the recap, flash the celebration on the
+   *  current card so the judge sees their action land, then move on. Skips advance
+   *  immediately and are honestly recorded as skipped. */
+  const completeStep = (step: TourStep, skipped: boolean) => {
+    if (advancingRef.current) return;
+    recapRef.current.set(step.id, !skipped);
+    if (step.kind === 'mission') resetMission();
+    const advance = () => {
+      advancingRef.current = false;
+      setCelebrateText(null);
+      const next = tourStepIndex + 1;
+      if (next >= BORROWER_TOUR_STEPS.length) {
+        void exitTour();
+        setTourPaused(false);
+        return;
+      }
+      void setTourStep(next);
+    };
+    if (skipped || !step.celebrate) {
+      advance();
+      return;
+    }
+    advancingRef.current = true;
+    setCelebrateText(step.celebrate);
+    celebrateTimer.current = setTimeout(advance, 1400);
+  };
+
+  useEffect(() => () => {
+    if (celebrateTimer.current) clearTimeout(celebrateTimer.current);
+  }, []);
+
+  // Tour-driven navigation: every step opens on its own screen. The ref is only set when
+  // the screen really changes  setScreen to the same value never fires the change effect,
+  // and a stale ref would swallow the judge's next real tap.
   useEffect(() => {
     if (!tourActive || !currentTourStep) return;
-    tourDrivenRef.current = true;
-    setScreen(currentTourStep.screen);
+    setScreen((prev) => {
+      if (prev === currentTourStep.screen) return prev;
+      tourDrivenRef.current = true;
+      return currentTourStep.screen;
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tourActive, tourStepIndex]);
 
   useEffect(() => {
-    if (!tourActive) return;
-    if (tourDrivenRef.current) {
-      tourDrivenRef.current = false;
-      return;
+    if (!tourActive || !currentTourStep) return;
+    const wasTourDriven = tourDrivenRef.current;
+    tourDrivenRef.current = false;
+    if (advancingRef.current) return;
+    const outcome = classifyScreenChange(currentTourStep, missionPhase ?? 0, screen, wasTourDriven);
+    if (outcome === 'advance') completeStep(currentTourStep, false);
+    else if (outcome === 'phase') setMissionPhase((p) => (p ?? 0) + 1);
+    else if (outcome === 'pause') {
+      resetMission();
+      setTourPaused(true);
+      void pauseTour();
     }
-    setTourPaused(true);
-    void pauseTour();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen]);
+
+  // Semantic signals (chip taps, scan milestones, eKYC, minting) drive the steps a screen
+  // change can't observe.
+  useEffect(() => {
+    if (!tourActive || !currentTourStep) return;
+    return onTourSignal((name) => {
+      if (advancingRef.current) return;
+      const outcome = classifySignal(currentTourStep, missionPhase ?? 0, name);
+      if (outcome === 'advance') completeStep(currentTourStep, false);
+      else if (outcome === 'phase') setMissionPhase((p) => (p ?? 0) + 1);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tourActive, tourStepIndex, missionPhase]);
 
   const tourNext = () => {
     if (!currentTourStep) return;
@@ -196,7 +280,13 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
     void setTourStep(next);
   };
   const tourBack = () => void setTourStep(Math.max(0, tourStepIndex - 1));
+  const tourSkip = () => {
+    if (currentTourStep) completeStep(currentTourStep, true);
+  };
   const tourExit = () => {
+    resetMission();
+    setCelebrateText(null);
+    advancingRef.current = false;
     void exitTour();
     setTourPaused(false);
   };
@@ -208,10 +298,46 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
    *  Gallery from the tour, not only Settings). Ends the tour and jumps straight there. */
   const tourAction = () => {
     if (!currentTourStep?.actionScreen) return;
-    void exitTour();
-    setTourPaused(false);
+    tourExit();
     setScreen(currentTourStep.actionScreen as Screen);
   };
+  /** The mission CTA: remember today's coverage for the delta beat, then open the REAL add
+   *  flow at its attach screen. The judge chooses  upload their own screenshot or tap a
+   *  provided sample; the app never injects an image on its own. */
+  const tourMissionStart = () => {
+    setCoverageBefore(coverage.daysCovered);
+    setMissionPhase(0);
+    tourDrivenRef.current = true;
+    setScreen('add');
+  };
+
+  /** Runtime line for the coverage-delta step: the honest before→after, or the honest
+   *  flat-line fallback  never a fake delta. */
+  const tourDetail =
+    currentTourStep?.id === 'coverage-delta' && coverageBefore != null
+      ? coverage.daysCovered > coverageBefore
+        ? `${coverageBefore} → ${coverage.daysCovered} days recorded in the last 90`
+        : 'Statement recorded. These days were already covered.'
+      : null;
+
+  const tourRecap: TourRecapItem[] | null =
+    currentTourStep?.id === 'finale' && recapRef.current.size > 0
+      ? Object.keys(TOUR_RECAP_LABELS)
+          .filter((id) => recapRef.current.has(id))
+          .map((id) => ({ label: TOUR_RECAP_LABELS[id], done: recapRef.current.get(id) === true }))
+      : null;
+
+  const tourProgress = actProgress(BORROWER_TOUR_STEPS, tourStepIndex);
+
+  // Card placement, deterministic (a measurement-driven flip proved unreliable  it left the
+  // card covering the very button it was pointing at). A do-step whose target sits in the
+  // scrollable body (all our anchored do-steps: the credit card, Build-my-score, the what-if
+  // chips) puts the card at the TOP so the bottom stays clear; the anchor scrolls itself into
+  // view below it. Everything else keeps the card at its home at the bottom  explain-step
+  // anchors are always upper-content, and the no-anchor do-steps (KYC, mint) put their
+  // action at the foot of a scroll that gains tour-time bottom padding so it clears the card.
+  const tourCardPlacement: 'bottom' | 'top' =
+    currentTourStep && currentTourStep.kind === 'do' && currentTourStep.anchorId ? 'top' : 'bottom';
 
   // Persistent bottom nav appears only on the four primary destinations.
   const navTab: NavTab | null =
@@ -355,19 +481,48 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
       )}
       </View>
       {navTab && <BottomNav active={navTab} onNavigate={goTab} />}
-      {tourActive && currentTourStep && (
+      {tourActive && currentTourStep && !tourPaused && (
+        <TourSpotlight
+          onDimPress={() => {
+            resetMission();
+            setTourPaused(true);
+            void pauseTour();
+          }}
+        />
+      )}
+      {tourActive && currentTourStep && currentTourStep.kind === 'mission' && missionPhase !== null ? (
+        <MissionBanner
+          instruction={currentTourStep.mission?.phases[missionPhase]?.instruction ?? ''}
+          phaseIndex={missionPhase}
+          phaseCount={currentTourStep.mission?.phases.length ?? 0}
+          topInset={insets.top}
+          onSkip={tourSkip}
+          onExit={tourExit}
+        />
+      ) : tourActive && currentTourStep ? (
         <TourCard
           step={currentTourStep}
           index={tourStepIndex}
           total={BORROWER_TOUR_STEPS.length}
+          progress={tourProgress}
+          detail={tourDetail}
+          celebrate={celebrateText}
+          recap={tourRecap}
           bottomInset={navTab ? 0 : insets.bottom}
+          topInset={insets.top}
+          placement={tourCardPlacement}
           onNext={tourNext}
           onBack={tourBack}
           onExit={tourExit}
+          onSkip={tourSkip}
           onAction={tourAction}
+          onMissionStart={tourMissionStart}
         />
+      ) : null}
+      {tourPaused && !tourActive && (
+        <TourResumeChip bottomInset={navTab ? 0 : insets.bottom} progress={tourProgress} onResume={tourResume} />
       )}
-      {tourPaused && !tourActive && <TourResumeChip bottomInset={navTab ? 0 : insets.bottom} onResume={tourResume} />}
+      <GlossaryModal />
     </View>
   );
 }

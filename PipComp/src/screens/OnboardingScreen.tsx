@@ -105,7 +105,7 @@ export function OnboardingScreen() {
             <>
               <Icon name="sparkles" size={16} color={PROFILE_ACCENT[selectedProfile]} />
               <Text style={[styles.tourText, { color: PROFILE_ACCENT[selectedProfile] }]}>
-                Take the 2-minute tour
+                Take the hands-on tour
               </Text>
             </>
           )}

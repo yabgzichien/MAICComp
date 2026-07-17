@@ -43,21 +43,26 @@ describe('LENDER_REGISTRY (GET /api/lenders payload)', () => {
     }
   });
 
-  it('non-TEKUN lenders stay under 30% APR (competition rate-optics rule)', () => {
+  it('non-TEKUN lenders stay below 30% APR (competition rate-optics rule)', () => {
     for (const l of LENDER_REGISTRY.filter((x) => x.id !== 'tekun')) {
-      for (const p of l.products) expect(p.apr).toBeLessThanOrEqual(0.28);
+      for (const p of l.products) expect(p.apr).toBeLessThan(0.3);
     }
   });
 
   it('the two demo lenders genuinely differ from TEKUN (thresholds and pricing)', () => {
     const [, koperasi, dana] = LENDER_REGISTRY;
-    // Koperasi: no emergency safety net, cheaper credit, higher score bar.
+    // Koperasi: cheapest money in the directory, but no emergency safety net, no big-ticket
+    // scale tier, and the highest entry score bar  the "established members only" archetype.
     expect(koperasi.products.some((p) => p.id === 'emergency')).toBe(false);
-    expect(Math.min(...koperasi.products.map((p) => p.minScore))).toBeGreaterThan(500);
-    expect(Math.max(...koperasi.products.map((p) => p.apr))).toBeLessThan(0.16);
-    // Dana Niaga: accessible entry tier below TEKUN's starter bar, micro ceilings.
+    expect(koperasi.products.some((p) => p.id === 'scale')).toBe(false);
+    expect(Math.min(...koperasi.products.map((p) => p.minScore))).toBeGreaterThanOrEqual(600);
+    expect(Math.max(...koperasi.products.map((p) => p.apr))).toBeLessThanOrEqual(0.12);
+    // Dana Niaga: the widest, most accessible entry tier (below TEKUN's starter bar) but the
+    // highest APRs in the directory and no RM20k scale tier  fast convenience credit.
     expect(Math.min(...dana.products.map((p) => p.minScore))).toBeLessThan(500);
-    expect(Math.max(...dana.products.map((p) => p.maxAmount))).toBeLessThanOrEqual(8000);
+    expect(dana.products.some((p) => p.id === 'scale')).toBe(false);
+    expect(Math.max(...dana.products.map((p) => p.maxAmount))).toBeLessThanOrEqual(15000);
+    expect(Math.max(...dana.products.map((p) => p.apr))).toBeGreaterThan(Math.max(...koperasi.products.map((p) => p.apr)));
   });
 });
 

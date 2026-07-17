@@ -61,6 +61,7 @@ import { getMeta, setMeta } from '../db/metaRepo';
 import { MockEkycProvider } from '../ekyc/mock';
 import type { EkycResult } from '../ekyc/types';
 import { BORROWER_TOUR_STEPS, clampTourStep } from '../lib/tourSteps';
+import { emitTourSignal } from '../lib/tourSignals';
 
 const ONBOARDING_KEY = 'onboarding_complete';
 const TOUR_ACTIVE_KEY = 'tour_active';
@@ -601,6 +602,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       };
       await setKyc(identity);
       setKycState({ ...identity, status: 'verified' });
+      emitTourSignal('kyc-verified');
     }
     return result;
   }, []);

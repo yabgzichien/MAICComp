@@ -33,9 +33,11 @@ describe('buildDemoKit', () => {
     const monthPrefix = `${NOW.getFullYear()}-${String(NOW.getMonth() + 1).padStart(2, '0')}`;
     for (const kit of buildDemoKit(NOW)) {
       for (const row of kit.rows) {
-        // display date is 'D Mon'  reparse against NOW's year/month to check the window.
-        const [dayStr, monStr] = row.date.split(' ');
-        const parsed = new Date(`${monStr} ${dayStr}, ${NOW.getFullYear()}`);
+        // display date is 'D Mon YYYY' (year printed so vision extraction can't misdate the
+        // rows into a past year)  reparse to check the window.
+        const [dayStr, monStr, yearStr] = row.date.split(' ');
+        expect(yearStr).toBe(String(NOW.getFullYear()));
+        const parsed = new Date(`${monStr} ${dayStr}, ${yearStr}`);
         expect(parsed.getTime()).toBeLessThanOrEqual(NOW.getTime());
         expect(`${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}`).toBe(monthPrefix);
       }

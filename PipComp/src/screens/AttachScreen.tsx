@@ -1,10 +1,11 @@
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image as RNImage, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, type IconName } from '../components/Icon';
 import { B, BubbleText, Card, PipSays, TopBar } from '../components/ui';
 import { notify } from '../lib/platformAlert';
+import { SAMPLE_STATEMENTS } from '../data/sampleStatements';
 import { colors, radius, uiFont } from '../theme';
 
 export interface PickedImage {
@@ -19,12 +20,16 @@ export function AttachScreen({
   onPicked,
   onManual,
   onImport,
+  showSamples = false,
 }: {
   hasKey: boolean;
   onClose: () => void;
   onPicked: (img: PickedImage) => void;
   onManual: () => void;
   onImport: () => void;
+  /** Offer the bundled demo statements as one-tap samples (used during the judge tour)
+   *  alongside the real upload options, so the app never injects an image on its own. */
+  showSamples?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const [busy, setBusy] = useState(false);
@@ -99,6 +104,28 @@ export function AttachScreen({
             </Text>
             <Icon name="chevronRight" size={16} color={colors.accentInk} />
           </Pressable>
+        )}
+
+        {showSamples && (
+          <View style={{ paddingHorizontal: 18, paddingTop: 18 }}>
+            <Text style={styles.sampleLabel}>NO SCREENSHOT HANDY? TAP A SAMPLE</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 12, paddingVertical: 4, paddingRight: 4 }}
+            >
+              {SAMPLE_STATEMENTS.map((s) => (
+                <Pressable key={s.id} onPress={() => onPicked(s.image)} style={styles.sampleCard} disabled={busy}>
+                  <RNImage source={{ uri: s.image.uri }} style={styles.sampleThumb} resizeMode="cover" />
+                  <View style={{ padding: 10 }}>
+                    <Text style={styles.sampleTitle} numberOfLines={1}>{s.label}</Text>
+                    <Text style={styles.sampleSub} numberOfLines={1}>{s.provider}</Text>
+                  </View>
+                </Pressable>
+              ))}
+            </ScrollView>
+            <Text style={styles.sampleOr}>or use your own below</Text>
+          </View>
         )}
 
         <View style={{ paddingHorizontal: 18, paddingTop: 22, gap: 14 }}>
@@ -207,6 +234,19 @@ const styles = StyleSheet.create({
   },
   sourceTitle: { fontFamily: uiFont(700), fontSize: 15.5, color: colors.ink },
   sourceSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 1 },
+  sampleLabel: { fontFamily: uiFont(700), fontSize: 11, letterSpacing: 0.5, color: colors.ink3, marginBottom: 10 },
+  sampleCard: {
+    width: 150,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.accentSoft,
+    overflow: 'hidden',
+  },
+  sampleThumb: { width: '100%', height: 96, backgroundColor: colors.accentTint },
+  sampleTitle: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.ink },
+  sampleSub: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, marginTop: 1 },
+  sampleOr: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink3, marginTop: 12 },
   hint: {
     paddingHorizontal: 24,
     paddingTop: 26,

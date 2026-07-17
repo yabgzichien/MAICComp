@@ -6,6 +6,7 @@ import { BudgetProgressList } from '../components/BudgetProgressList';
 import { CoinMascot } from '../components/CoinMascot';
 import { FadeIn } from '../components/Motion';
 import { Icon, type IconName } from '../components/Icon';
+import { InfoButton } from '../components/InfoButton';
 import { Pip } from '../components/Pip';
 import { ScoreBandBar } from '../components/ScoreBandBar';
 import { Amount, BtnLabel, Card, Eyebrow, PrimaryButton } from '../components/ui';
@@ -151,12 +152,14 @@ export function DashboardScreen({
             />
 
             {/* 3  Compact credit card */}
-            <CreditCompactCard
-              score={score.score}
-              band={score.band}
-              confidence={dataConfidence.confidence}
-              onPress={onOpenCredit}
-            />
+            <TourAnchor id="credit-hero-card" activeId={activeTourAnchor}>
+              <CreditCompactCard
+                score={score.score}
+                band={score.band}
+                confidence={dataConfidence.confidence}
+                onPress={onOpenCredit}
+              />
+            </TourAnchor>
 
             {/* Quick actions */}
             <QuickActions
@@ -310,7 +313,10 @@ function CashFlowCard({
     <Card style={styles.cashCard}>
       <View style={styles.cashTop}>
         <View style={{ flex: 1 }}>
-          <Eyebrow>Net cash flow · {monthName()}</Eyebrow>
+          <View style={styles.eyebrowRow}>
+            <Eyebrow>Net cash flow · {monthName()}</Eyebrow>
+            <InfoButton entry="net_cash_flow" />
+          </View>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 6 }}>
             <Text style={[styles.cashSign, { color: pos ? colors.accent : RED }]}>{pos ? '+' : '−'}</Text>
             <Amount value={Math.abs(net)} size={30} weight={700} color={pos ? colors.accent : RED} />
@@ -327,7 +333,10 @@ function CashFlowCard({
         <>
           <View style={styles.cashDivider} />
           <View style={styles.sectionHead}>
-            <Eyebrow>Where it goes</Eyebrow>
+            <View style={styles.eyebrowRow}>
+              <Eyebrow>Where it goes</Eyebrow>
+              <InfoButton entry="where_it_goes" />
+            </View>
             <Pressable onPress={onSeeAll} hitSlop={8}>
               <Text style={styles.seeAll}>See all →</Text>
             </Pressable>
@@ -475,6 +484,7 @@ const styles = StyleSheet.create({
   pipBubble: { width: 44, height: 44, borderRadius: 999, backgroundColor: colors.accentTint, alignItems: 'center', justifyContent: 'center' },
 
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   seeAll: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.accent },
 
   /* streak */

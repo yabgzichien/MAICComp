@@ -7,7 +7,7 @@
 // lender's own stored policy; an unknown id 400s rather than silently writing a stray key.
 
 import { NextResponse } from 'next/server';
-import { readStoredPolicy, writeStoredPolicy } from '../../../lib/policyFile';
+import { readLenderPolicy, writeStoredPolicy } from '../../../lib/policyFile';
 import { LENDER_REGISTRY } from '../../../lib/lenderRegistry';
 
 // The GET must re-read the store on every request  never prerendered at build time.
@@ -27,7 +27,7 @@ function lenderIdFrom(req: Request): { id: string } | { error: NextResponse } {
 export async function GET(req: Request) {
   const lender = lenderIdFrom(req);
   if ('error' in lender) return lender.error;
-  return NextResponse.json(await readStoredPolicy(undefined, lender.id));
+  return NextResponse.json(await readLenderPolicy(lender.id));
 }
 
 export async function PUT(req: Request) {

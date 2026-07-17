@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   fileApplication,
   isApplicationRecord,
+  mergeServerApplications,
   orderQueue,
   readApplications,
   recordCheckIn,
@@ -372,5 +373,50 @@ describe('recordLetterGenerated', () => {
     const before = JSON.parse(JSON.stringify(base));
     recordLetterGenerated(base, base[0].id, 'refer', NOW);
     expect(base).toEqual(before);
+  });
+});
+
+// ── mergeServerApplications (multi-lender direct-apply, 2026-07-16): fold a lender's
+// server-mailbox direct submissions into its local console pipeline, deduped ──────────
+describe('mergeServerApplications', () => {
+  const serverRec = (overrides: Partial<FileApplicationInput> = {}) => file([], { source: 'direct', ...overrides }).apps[0];
+
+  it('adopts a new direct submission as-is, preserving its id, source, and audit', () => {
+    const rec = serverRec({ subject: 'z'.repeat(64), requestedAmount: 3000 });
+    const { apps, changed } = mergeServerApplications([], [rec]);
+    expect(changed).toBe(true);
+    expect(apps).toHaveLength(1);
+    expect(apps[0]).toEqual(rec);
+    expect(apps[0].source).toBe('direct');
+  });
+
+  it('does not duplicate a submission already present locally (same subject + amount)', () => {
+    const rec = serverRec({ subject: 'z'.repeat(64), requestedAmount: 3000 });
+    const { apps, changed } = mergeServerApplications([rec], [rec]);
+    expect(changed).toBe(false);
+    expect(apps).toHaveLength(1);
+  });
+
+  it('treats a different requested amount from the same subject as a distinct application', () => {
+    const first = serverRec({ subject: 'z'.repeat(64), requestedAmount: 3000 });
+    const second = serverRec({ subject: 'z'.repeat(64), requestedAmount: 5000 });
+    const { apps, changed } = mergeServerApplications([first], [second]);
+    expect(changed).toBe(true);
+    expect(apps.map((a) => a.requestedAmount).sort()).toEqual([3000, 5000]);
+  });
+
+  it('ignores malformed entries in the server payload rather than throwing', () => {
+    const rec = serverRec({ subject: 'z'.repeat(64), requestedAmount: 3000 });
+    const { apps, changed } = mergeServerApplications([], [null, { junk: true }, rec, 42]);
+    expect(changed).toBe(true);
+    expect(apps).toHaveLength(1);
+    expect(apps[0].id).toBe(rec.id);
+  });
+
+  it('reports no change (and returns the same reference) when there is nothing new to add', () => {
+    const local = [serverRec({ subject: 'z'.repeat(64), requestedAmount: 3000 })];
+    const result = mergeServerApplications(local, []);
+    expect(result.changed).toBe(false);
+    expect(result.apps).toBe(local);
   });
 });

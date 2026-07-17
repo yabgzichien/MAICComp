@@ -9,6 +9,7 @@ import { CoinMascot } from '../components/CoinMascot';
 import { FadeIn } from '../components/Motion';
 import { Icon } from '../components/Icon';
 import { TourAnchor } from '../components/TourAnchor';
+import { emitTourSignal } from '../lib/tourSignals';
 import { Card, TopBar } from '../components/ui';
 import { getProvider } from '../llm';
 import { buildCoachPrompt, COACH_SYSTEM_PROMPT, coachPlanFallback } from '../llm/coachPrompt';
@@ -331,17 +332,22 @@ export function PassportCoachScreen({
         {plan.whatIfs.length > 0 && (
           <>
             <Text style={styles.sectionLabel}>TRY A WHAT-IF</Text>
-            <View style={styles.chipRow}>
-              {chips.map(({ w, i }) => (
-                <Pressable
-                  key={`${w.lever}-${w.magnitude}`}
-                  onPress={() => setSelected(selected === i ? null : i)}
-                  style={[styles.chip, selected === i && styles.chipActive]}
-                >
-                  <Text style={[styles.chipText, selected === i && styles.chipTextActive]}>{w.magnitude}</Text>
-                </Pressable>
-              ))}
-            </View>
+            <TourAnchor id="whatif-chips" activeId={activeTourAnchor}>
+              <View style={styles.chipRow}>
+                {chips.map(({ w, i }) => (
+                  <Pressable
+                    key={`${w.lever}-${w.magnitude}`}
+                    onPress={() => {
+                      setSelected(selected === i ? null : i);
+                      emitTourSignal('coach-chip-tapped');
+                    }}
+                    style={[styles.chip, selected === i && styles.chipActive]}
+                  >
+                    <Text style={[styles.chipText, selected === i && styles.chipTextActive]}>{w.magnitude}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </TourAnchor>
             {surplusAllFlat && <Text style={styles.blockedNote}>{surplusWhatIfs[0].note}</Text>}
             {activeWhatIf && <SimCard action={activeWhatIf} tone="whatif" />}
           </>

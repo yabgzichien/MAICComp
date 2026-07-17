@@ -45,6 +45,18 @@ describe('submitApplication', () => {
     expect(body).toEqual({ passportCode: '{"passport":{}}', requestedAmount: 4000, purpose: { category: 'stock', note: 'Raya stock-up' } });
   });
 
+  it('includes lenderId in the body when routing to a specific lender', async () => {
+    const fetchMock = jest.fn().mockResolvedValue({ ok: true, json: async () => GOOD_RESPONSE });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    await submitApplication('https://console.example', {
+      passportCode: '{"passport":{}}',
+      requestedAmount: 4000,
+      lenderId: 'koperasi-sejahtera',
+    });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.lenderId).toBe('koperasi-sejahtera');
+  });
+
   it('returns a rejected result with server-given reasons on a 400 response', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: false,

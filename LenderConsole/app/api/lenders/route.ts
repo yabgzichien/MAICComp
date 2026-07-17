@@ -5,7 +5,7 @@
 
 import { NextResponse } from 'next/server';
 import { composeRegistry, LENDER_REGISTRY } from '../../../lib/lenderRegistry';
-import { readStoredPolicy } from '../../../lib/policyFile';
+import { readLenderPolicy } from '../../../lib/policyFile';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -18,7 +18,7 @@ export async function GET() {
   // Tenancy spec): the ladder each lender's Policy tab edits is the ladder borrowers are
   // coached toward  the flywheel, for all three registry lenders, not just TEKUN.
   const storedByLenderId = Object.fromEntries(
-    await Promise.all(LENDER_REGISTRY.map(async (l) => [l.id, await readStoredPolicy(undefined, l.id)] as const))
+    await Promise.all(LENDER_REGISTRY.map(async (l) => [l.id, await readLenderPolicy(l.id)] as const))
   );
   return NextResponse.json(composeRegistry(storedByLenderId), { headers: CORS_HEADERS });
 }

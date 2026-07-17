@@ -7,6 +7,7 @@ import { CoinMascot } from '../components/CoinMascot';
 import { FadeIn } from '../components/Motion';
 import { CreditGauge } from '../components/CreditGauge';
 import { Icon } from '../components/Icon';
+import { InfoButton } from '../components/InfoButton';
 import { Card, TopBar } from '../components/ui';
 import { TourAnchor } from '../components/TourAnchor';
 import { BORROWER_TOUR_STEPS, clampTourStep } from '../lib/tourSteps';
@@ -71,6 +72,10 @@ export function CreditScreen({
             <TourAnchor id="credit-gauge" activeId={activeTourAnchor}>
               <CreditGauge score={score.score} band={score.band} size={300} />
             </TourAnchor>
+            <View style={styles.gaugeInfoRow}>
+              <InfoButton entry="score" />
+              <InfoButton entry="band" />
+            </View>
           </View>
           <View style={styles.confBadge}>
             <View style={styles.confHead}>
@@ -80,7 +85,10 @@ export function CreditScreen({
               </Svg>
               <View style={{ flex: 1 }}>
                 <View style={styles.confTitleRow}>
-                  <Text style={styles.confTitle}>{verifiedLabel(confidence)}</Text>
+                  <View style={styles.confTitleGroup}>
+                    <Text style={styles.confTitle}>{verifiedLabel(confidence)}</Text>
+                    <InfoButton entry="confidence" />
+                  </View>
                   <Text style={styles.confPct}>{Math.round(confidence * 100)}%</Text>
                 </View>
                 <View style={styles.confTrack}>
@@ -103,7 +111,10 @@ export function CreditScreen({
               </View>
             )}
             {capped && (
-              <Text style={styles.cappedNote}>ⓘ Your band is limited by data confidence. Verify more to unlock your full score.</Text>
+              <View style={styles.cappedRow}>
+                <InfoButton entry="confidence" />
+                <Text style={styles.cappedNote}>Your band is limited by data confidence. Verify more to unlock your full score.</Text>
+              </View>
             )}
             <View style={{ marginTop: 10, gap: 6 }}>
               {dataConfidence.reasons.map((r) => (
@@ -137,21 +148,26 @@ export function CreditScreen({
             <Icon name="chevronRight" size={18} color={colors.ink3} />
           </Card>
         </Pressable>
-        <Pressable onPress={onOpenCoach} style={({ pressed }) => [{ opacity: pressed ? 0.95 : 1 }]}>
-          <Card style={styles.cta}>
-            <View style={styles.ctaIcon}><Icon name="trending" size={22} color={colors.accent} /></View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.ctaTitle}>Build my score</Text>
-              <Text style={styles.ctaSub}>See what unlocks a bigger loan, with live simulations</Text>
-            </View>
-            <Icon name="chevronRight" size={18} color={colors.ink3} />
-          </Card>
-        </Pressable>
+        <TourAnchor id="build-score-cta" activeId={activeTourAnchor}>
+          <Pressable onPress={onOpenCoach} style={({ pressed }) => [{ opacity: pressed ? 0.95 : 1 }]}>
+            <Card style={styles.cta}>
+              <View style={styles.ctaIcon}><Icon name="trending" size={22} color={colors.accent} /></View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.ctaTitle}>Build my score</Text>
+                <Text style={styles.ctaSub}>See what unlocks a bigger loan, with live simulations</Text>
+              </View>
+              <Icon name="chevronRight" size={18} color={colors.ink3} />
+            </Card>
+          </Pressable>
+        </TourAnchor>
 
         {/* Factors */}
         <Card style={styles.factorsCard}>
           <View style={styles.factorsHead}>
-            <Text style={styles.factorsHeadLabel}>Score Factors · {score.factors.length}</Text>
+            <View style={styles.factorsHeadLabelRow}>
+              <Text style={styles.factorsHeadLabel}>Score Factors · {score.factors.length}</Text>
+              <InfoButton entry="score" />
+            </View>
             <Text style={styles.factorsHeadAvg}>Avg {avg}/100</Text>
           </View>
           {score.factors.map((f, idx) => {
@@ -208,9 +224,11 @@ const styles = StyleSheet.create({
   navIcon: { width: 36, height: 36, borderRadius: 999, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
 
   gaugeCard: { borderRadius: 26, padding: 0, paddingTop: 18, overflow: 'hidden' },
+  gaugeInfoRow: { flexDirection: 'row', gap: 8, marginTop: 6 },
   confBadge: { margin: 16, marginTop: 8, borderRadius: 16, backgroundColor: colors.accentSoft, padding: 14 },
   confHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   confTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  confTitleGroup: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   confTitle: { fontFamily: uiFont(700), fontSize: 13, color: colors.accentInk },
   confPct: { fontFamily: numFont(700), fontSize: 13, color: colors.accent },
   confTrack: { height: 5, borderRadius: 5, backgroundColor: 'rgba(20,40,30,0.10)', overflow: 'hidden' },
@@ -219,7 +237,8 @@ const styles = StyleSheet.create({
   momentumRowDown: { backgroundColor: 'rgba(192,57,43,0.08)' },
   momentumArrow: { fontFamily: numFont(700), fontSize: 15, color: colors.accent },
   momentumText: { fontFamily: uiFont(600), fontSize: 11.5, color: colors.accentInk, flex: 1, lineHeight: 15 },
-  cappedNote: { fontFamily: uiFont(600), fontSize: 11.5, color: '#a05c00', marginTop: 8, lineHeight: 16 },
+  cappedRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 7, marginTop: 8 },
+  cappedNote: { fontFamily: uiFont(600), fontSize: 11.5, color: '#a05c00', lineHeight: 16, flex: 1 },
   reasonRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   reasonText: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, flex: 1 },
 
@@ -230,6 +249,7 @@ const styles = StyleSheet.create({
 
   factorsCard: { marginTop: 12, paddingHorizontal: 18, paddingBottom: 8, overflow: 'hidden' },
   factorsHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: colors.line },
+  factorsHeadLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   factorsHeadLabel: { fontFamily: uiFont(600), fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: colors.ink2 },
   factorsHeadAvg: { fontFamily: numFont(600), fontSize: 12, color: colors.ink2 },
   factorRow: { paddingVertical: 11 },

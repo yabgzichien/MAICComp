@@ -39,7 +39,10 @@ export const OFFLINE_LENDER: LenderProfile = {
   products: DEFAULT_PRODUCTS,
 };
 
-const BASE = process.env.EXPO_PUBLIC_LENDER_API_URL ?? 'http://localhost:3000';
+/** The single configured lender console base URL. Shared with the direct-apply send flow
+ *  (PassportScreen) so both the directory fetch and the application POST hit the same origin. */
+export const LENDER_API_BASE = process.env.EXPO_PUBLIC_LENDER_API_URL ?? 'http://localhost:3000';
+const BASE = LENDER_API_BASE;
 const FETCH_TIMEOUT_MS = 6_000;
 
 const isFiniteNum = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
