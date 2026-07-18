@@ -1,39 +1,16 @@
 'use client';
 
-// Queue rail (Brief O)  the left edge of the two-pane workbench. Lists the four
-// queues with counts and age badges; Referred shows oldest first (the pure
-// orderQueue rule), because the longest-waiting file is the officer's next job.
+// Queue rail (Brief O; rescoped 2026-07-18 console IA split)  the left edge of the
+// two-pane workbench. Pure triage: New and Referred are the officer's actual work,
+// shown expanded; Declined is a collapsed Archive (its one real revisit case is
+// generating an adverse-action letter). Approved loans and the Watchlist moved to the
+// Servicing tab, which owns the approved book operationally.
 
 import { useState } from 'react';
 import { FONT, type Palette } from './tokens';
-import { orderQueue, watchlistApplications, type ApplicationRecord, type ApplicationStatus } from '../lib/applications';
+import { orderQueue, type ApplicationRecord, type ApplicationStatus } from '../lib/applications';
 import { formatAgo } from '../lib/presentment';
 import { TourAnchor } from './TourAnchor';
-import { mapBook } from '../lib/portfolio';
-import { loanPerformance, type LoanPerfStatus } from '../lib/performance';
-
-const PERF_STYLE: Record<LoanPerfStatus, { label: string; color: string; bg: string }> = {
-  current: { label: 'Current', color: '#1f8a5b', bg: '#e7f4ec' },
-  late: { label: 'Late', color: '#a3791f', bg: '#fdf3dc' },
-  delinquent: { label: 'Delinquent', color: '#c0392b', bg: '#fde8e8' },
-};
-
-/** Repayment status chip (portfolio performance): only renders once an approved loan has
- *  actually had an instalment come due  a same-instant "just approved" loan shows nothing
- *  rather than a misleading "Current" badge for a schedule that hasn't started. */
-function PerformanceChip({ app }: { app: ApplicationRecord }) {
-  if (app.status !== 'approved') return null;
-  const book = mapBook([app]);
-  if (book.length === 0) return null;
-  const perf = loanPerformance(book[0]);
-  if (perf.dueCount === 0) return null;
-  const s = PERF_STYLE[perf.status];
-  return (
-    <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: s.color, background: s.bg, borderRadius: 5, padding: '1px 6px', marginLeft: 4, flexShrink: 0 }}>
-      {s.label}
-    </span>
-  );
-}
 
 const BAND_COLOR: Record<string, string> = {
   Building: '#c0392b',
@@ -44,7 +21,8 @@ const BAND_COLOR: Record<string, string> = {
 };
 
 /** Verdict-driving signal (P2.10): band + confidence, so an officer can triage a queue
- *  without opening every card. */
+ *  without opening every card. Triage-only cards (New/Referred)  archived/serviced
+ *  cards don't carry this; the detail pane shows it the moment the file opens. */
 function VerdictChip({ p, app }: { p: Palette; app: ApplicationRecord }) {
   if (!app.band && app.confidencePct === undefined) return null;
   const color = app.band ? BAND_COLOR[app.band] ?? p.ink2 : p.ink2;
@@ -63,8 +41,6 @@ function VerdictChip({ p, app }: { p: Palette; app: ApplicationRecord }) {
 const QUEUES: { status: ApplicationStatus; label: string }[] = [
   { status: 'new', label: 'New' },
   { status: 'referred', label: 'Referred' },
-  { status: 'approved', label: 'Approved' },
-  { status: 'declined', label: 'Declined' },
 ];
 
 const STATUS_COLOR: Record<ApplicationStatus, string> = {
@@ -75,6 +51,54 @@ const STATUS_COLOR: Record<ApplicationStatus, string> = {
 };
 
 const rm = (n: number): string => `RM${Math.round(n).toLocaleString('en-MY')}`;
+
+function QueueCard({ p, a, selected, onSelect }: { p: Palette; a: ApplicationRecord; selected: boolean; onSelect: () => void }) {
+  return (
+    <button
+      onClick={onSelect}
+      style={{
+        display: 'block',
+        width: '100%',
+        textAlign: 'left',
+        padding: '7px 9px',
+        marginBottom: 4,
+        borderRadius: 8,
+        cursor: 'pointer',
+        border: selected ? `1.5px solid ${p.primary}` : `1px solid ${p.hairline}`,
+        background: selected ? p.accentTint : p.surface,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+        <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{a.applicantLabel}</span>
+        {a.source === 'direct' && (
+          <span
+            title="Submitted by the borrower via direct apply. No officer transcribed this"
+            style={{
+              fontFamily: FONT.ui,
+              fontSize: 12,
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              padding: '1px 5px',
+              borderRadius: 4,
+              background: 'transparent',
+              border: `1px solid ${p.hairline}`,
+              color: p.ink2,
+              marginLeft: 4,
+              flexShrink: 0,
+            }}
+          >
+            direct
+          </span>
+        )}
+      </div>
+      <p style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink2, marginTop: 2 }}>
+        {rm(a.requestedAmount)} · filed {formatAgo(a.filedAt)}
+      </p>
+      <VerdictChip p={p} app={a} />
+    </button>
+  );
+}
 
 export default function QueueRail({
   p,
@@ -96,8 +120,14 @@ export default function QueueRail({
   forceSeedButton?: boolean;
 }) {
   const [search, setSearch] = useState('');
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const q = search.trim().toLowerCase();
   const matches = (a: ApplicationRecord) => !q || a.applicantLabel.toLowerCase().includes(q) || a.id.toLowerCase().includes(q);
+
+  const triageQueues = QUEUES.map(({ status, label }) => ({ status, label, queue: orderQueue(apps, status).filter(matches) }));
+  const triageEmpty = triageQueues.every((t) => t.queue.length === 0);
+  const archived = orderQueue(apps, 'declined').filter(matches);
+  const servicedCount = apps.filter((a) => a.status === 'approved').length;
 
   return (
     <TourAnchor id="queue-rail">
@@ -139,58 +169,17 @@ export default function QueueRail({
         </div>
       )}
 
-      {(() => {
-        const watchlist = watchlistApplications(apps).filter(matches);
-        if (watchlist.length === 0) return null;
-        return (
-          <div style={{ padding: '10px 8px 4px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px', marginBottom: 5 }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: '#c0392b', letterSpacing: '0.07em', textTransform: 'uppercase' }}>
-                <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#c0392b', display: 'inline-block' }} />
-                Watchlist
-              </span>
-              <span style={{ fontFamily: FONT.num, fontSize: 12, fontWeight: 700, color: '#c0392b' }}>{watchlist.length}</span>
-            </div>
-            {watchlist.map((a) => {
-              const selected = a.id === selectedId;
-              const latest = a.checkIns![a.checkIns!.length - 1];
-              const critical = latest.flags.some((f) => f.severity === 'critical');
-              return (
-                <button
-                  key={a.id}
-                  onClick={() => onSelect(a)}
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    textAlign: 'left',
-                    padding: '7px 9px',
-                    marginBottom: 4,
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                    border: selected ? '1.5px solid #c0392b' : '1px solid #f0c4bd',
-                    background: selected ? '#fdecea' : '#fff8f7',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                    <p style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{a.applicantLabel}</p>
-                    <PerformanceChip app={a} />
-                  </div>
-                  <p style={{ fontFamily: FONT.ui, fontSize: 12, color: critical ? '#c0392b' : '#a3791f', marginTop: 2, fontWeight: 600 }}>
-                    {latest.flags.length} flag(s){critical ? ' · critical' : ''}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-        );
-      })()}
-
-      {q && watchlistApplications(apps).filter(matches).length === 0 && QUEUES.every(({ status }) => orderQueue(apps, status).filter(matches).length === 0) && (
+      {q && triageEmpty && archived.length === 0 && (
         <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, padding: '10px 12px' }}>No applicants match &quot;{search}&quot;.</p>
       )}
 
-      {QUEUES.map(({ status, label }) => {
-        const queue = orderQueue(apps, status).filter(matches);
+      {!q && triageEmpty && servicedCount > 0 && (
+        <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, padding: '10px 12px', lineHeight: 1.5 }}>
+          Nothing needs your review right now. {servicedCount} loan{servicedCount === 1 ? '' : 's'} in <strong style={{ color: p.ink2 }}>Servicing</strong>.
+        </p>
+      )}
+
+      {triageQueues.map(({ status, label, queue }) => {
         if (q && queue.length === 0) return null;
         return (
           <div key={status} style={{ padding: '10px 8px 4px' }}>
@@ -201,58 +190,37 @@ export default function QueueRail({
               </span>
               <span style={{ fontFamily: FONT.num, fontSize: 12, fontWeight: 700, color: queue.length > 0 ? p.ink1 : p.ink3 }}>{queue.length}</span>
             </div>
-            {queue.map((a) => {
-              const selected = a.id === selectedId;
-              return (
-                <button
-                  key={a.id}
-                  onClick={() => onSelect(a)}
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    textAlign: 'left',
-                    padding: '7px 9px',
-                    marginBottom: 4,
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                    border: selected ? `1.5px solid ${p.primary}` : `1px solid ${p.hairline}`,
-                    background: selected ? p.accentTint : p.surface,
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                    <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{a.applicantLabel}</span>
-                    {a.source === 'direct' && (
-                      <span
-                        title="Submitted by the borrower via direct apply. No officer transcribed this"
-                        style={{
-                          fontFamily: FONT.ui,
-                          fontSize: 12,
-                          fontWeight: 800,
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.05em',
-                          padding: '1px 4px',
-                          borderRadius: 4,
-                          background: '#d3f9d8',
-                          color: '#2b8a3e',
-                          marginLeft: 4,
-                          flexShrink: 0
-                        }}
-                      >
-                        direct
-                      </span>
-                    )}
-                    <PerformanceChip app={a} />
-                  </div>
-                  <p style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink2, marginTop: 2 }}>
-                    {rm(a.requestedAmount)} · filed {formatAgo(a.filedAt)}
-                  </p>
-                  <VerdictChip p={p} app={a} />
-                </button>
-              );
-            })}
+            {queue.map((a) => (
+              <QueueCard key={a.id} p={p} a={a} selected={a.id === selectedId} onSelect={() => onSelect(a)} />
+            ))}
           </div>
         );
       })}
+
+      {archived.length > 0 && (() => {
+        const expanded = archiveOpen || q.length > 0; // a search that matches an archived file must actually show it
+        return (
+          <div style={{ padding: '10px 8px 4px' }}>
+            <button
+              onClick={() => setArchiveOpen((v) => !v)}
+              aria-expanded={expanded}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '0 4px', marginBottom: 5, border: 'none', background: 'transparent', cursor: 'pointer' }}
+            >
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink3, letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: STATUS_COLOR.declined, display: 'inline-block' }} />
+                Archive · Declined
+                <svg width="8" height="6" viewBox="0 0 9 6" fill="none" style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
+                  <path d="M1 1L4.5 4.5L8 1" stroke={p.ink3} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+              <span style={{ fontFamily: FONT.num, fontSize: 12, fontWeight: 700, color: p.ink3 }}>{archived.length}</span>
+            </button>
+            {expanded && archived.map((a) => (
+              <QueueCard key={a.id} p={p} a={a} selected={a.id === selectedId} onSelect={() => onSelect(a)} />
+            ))}
+          </div>
+        );
+      })()}
 
       <div style={{ marginTop: 'auto', padding: '10px 12px' }}>
         <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink2, lineHeight: 1.5 }}>

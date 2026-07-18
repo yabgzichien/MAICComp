@@ -8,7 +8,7 @@ import {
   type ConsoleTourStep,
 } from './tourSteps';
 
-const CONSOLE_TABS = ['verify', 'portfolio', 'capital', 'policy'];
+const CONSOLE_TABS = ['verify', 'servicing', 'portfolio', 'capital', 'policy'];
 
 describe('CONSOLE_TOUR_STEPS', () => {
   it("is a valid registry against the console's real tabs", () => {

@@ -23,6 +23,7 @@ import { SAMPLE_POOL } from '../lib/samplePool';
 import { poolStatCells, trancheViews } from '../lib/poolView';
 import { bookToPool, mapBook } from '../lib/portfolio';
 import { loanPerformance, type LoanPerformance } from '../lib/performance';
+import { chipKindFor, orderServicingList } from '../lib/servicing';
 import PolicyTab from './PolicyTab';
 import PortfolioTab from './PortfolioTab';
 import { buildDecisionFile, decisionFileName } from '../lib/decisionFile';
@@ -67,7 +68,7 @@ import AdverseActionLetterModal from './AdverseActionLetter';
 import { buildAdverseActionLetter } from '../lib/adverseAction';
 import { BenfordChart, ConfidenceCeilingTick, CoverageStrip, DecisionWaterfall, HeadroomBar, MomentumSpark } from './DecisionViz';
 
-type Tab = 'verify' | 'portfolio' | 'capital' | 'policy';
+type Tab = 'verify' | 'servicing' | 'portfolio' | 'capital' | 'policy';
 /** Which pool the Capital Markets tab structures (Brief Q): the synthetic sample or the live approved book. */
 type PoolSource = 'sample' | 'live';
 const BAND_SEGMENTS = ['#c0392b', '#d98a00', '#3ab07a', '#1f8a5b', '#145c3d'];
@@ -175,18 +176,23 @@ function DemoModeChip({ p }: { p: Palette }) {
   );
 }
 
-function Header({ p, tab, setTab, alert, onRestartTour, onResetToDefaults, resettingDefaults, activeLender, onSwitchLender }: { p: Palette; tab: Tab; setTab: (t: Tab) => void; alert: boolean; onRestartTour: () => void; onResetToDefaults: () => void; resettingDefaults: boolean; activeLender: LenderProfile; onSwitchLender: (id: string) => void }) {
+function Header({ p, tab, setTab, alert, onRestartTour, onResetToDefaults, resettingDefaults, activeLender, onSwitchLender, watchlistCount }: { p: Palette; tab: Tab; setTab: (t: Tab) => void; alert: boolean; onRestartTour: () => void; onResetToDefaults: () => void; resettingDefaults: boolean; activeLender: LenderProfile; onSwitchLender: (id: string) => void; watchlistCount: number }) {
   const [menuOpen, setMenuOpen] = useState(false);
   return (
     <header style={{ height: 50, background: p.surface, borderBottom: alert ? `2px solid ${p.primary}` : `1px solid ${p.hairline}`, display: 'flex', alignItems: 'center', padding: '0 22px', flexShrink: 0, position: 'relative' }}>
       <BrandMark p={p} onRestartTour={onRestartTour} activeLender={activeLender} />
       <nav aria-label="Console sections" style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
         <div style={{ display: 'flex', background: p.surface2, borderRadius: 10, padding: 3, gap: 2, border: `1px solid ${p.hairline}` }}>
-          {([['verify', 'Verify Passport'], ['portfolio', 'Portfolio'], ['capital', 'Capital Markets'], ['policy', 'Policy']] as [Tab, string][]).map(([key, label]) => {
+          {([['verify', 'Verify Passport'], ['servicing', 'Servicing'], ['portfolio', 'Portfolio'], ['capital', 'Capital Markets'], ['policy', 'Policy']] as [Tab, string][]).map(([key, label]) => {
             const active = key === tab;
             return (
-              <button key={key} onClick={() => setTab(key)} aria-current={active ? 'page' : undefined} style={{ padding: '6px 22px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: FONT.ui, fontSize: 12.5, fontWeight: active ? 700 : 500, background: active ? p.accentInk : 'transparent', color: active ? 'white' : p.ink2, whiteSpace: 'nowrap' }}>
+              <button key={key} onClick={() => setTab(key)} aria-current={active ? 'page' : undefined} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 22px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: FONT.ui, fontSize: 12.5, fontWeight: active ? 700 : 500, background: active ? p.accentInk : 'transparent', color: active ? 'white' : p.ink2, whiteSpace: 'nowrap' }}>
                 {label}
+                {key === 'servicing' && watchlistCount > 0 && (
+                  <span aria-label={`${watchlistCount} loan(s) on the watchlist`} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 16, height: 16, padding: '0 4px', borderRadius: 8, background: active ? 'white' : '#c0392b', color: active ? p.accentInk : 'white', fontFamily: FONT.num, fontSize: 11, fontWeight: 800 }}>
+                    {watchlistCount}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -1575,6 +1581,96 @@ function PersonaPicker({ onSelect }: { onSelect: (id: string) => void }) {
   );
 }
 
+// ── Servicing tab (console IA split, 2026-07-18) ────────────────────────────────
+// The approved book's operational home: watchlist pinned first, a performance/watchlist
+// status chip per card (never more than one, per lib/servicing.ts's priority rule), and a
+// detail pane that reuses ApplicationCard's resolve/monitoring/schedule/record-repayment
+// stack  read-and-service only, no re-assess amount field (that stays a Verify-tab job).
+
+const CHIP_STYLE: Record<import('../lib/servicing').ChipKind, { label: string; color: string; bg: string }> = {
+  watchlist: { label: 'Watchlist', color: '#c0392b', bg: '#fde8e8' },
+  delinquent: { label: 'Delinquent', color: '#c0392b', bg: '#fde8e8' },
+  late: { label: 'Late', color: '#a3791f', bg: '#fdf3dc' },
+  direct: { label: 'Direct', color: '#2b8a3e', bg: '#d3f9d8' },
+};
+
+function ServicingChip({ app, isWatchlisted }: { app: ApplicationRecord; isWatchlisted: boolean }) {
+  const book = mapBook([app]);
+  const perfStatus = book.length > 0 ? loanPerformance(book[0]).status : null;
+  const kind = chipKindFor(app, isWatchlisted, perfStatus);
+  if (!kind) return null;
+  const s = CHIP_STYLE[kind];
+  return (
+    <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: s.color, background: s.bg, borderRadius: 5, padding: '1px 6px', marginLeft: 4, flexShrink: 0 }}>
+      {s.label}
+    </span>
+  );
+}
+
+const rmShort = (n: number): string => `RM${Math.round(n).toLocaleString('en-MY')}`;
+
+function ServicingList({ p, apps, ordered, watchlistIds, selectedId, onSelect }: { p: Palette; apps: ApplicationRecord[]; ordered: ApplicationRecord[]; watchlistIds: Set<string>; selectedId: string | null; onSelect: (app: ApplicationRecord) => void }) {
+  return (
+    <nav aria-label="Serviced loans" style={{ width: 260, background: p.surface2, borderRight: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto' }}>
+      <div style={{ padding: '14px 12px 10px', borderBottom: `1px solid ${p.hairline}` }}>
+        <p role="heading" aria-level={2} style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink2, letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: 4 }}>Servicing · Approved Book</p>
+        <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5 }}>{apps.filter((a) => a.status === 'approved').length} loan(s) disbursed</p>
+      </div>
+      {ordered.length > 0 && (
+        <div style={{ padding: '10px 8px 4px' }}>
+          {ordered.map((a) => {
+            const selected = a.id === selectedId;
+            const isWatchlisted = watchlistIds.has(a.id);
+            return (
+              <button
+                key={a.id}
+                onClick={() => onSelect(a)}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '7px 9px',
+                  marginBottom: 4,
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  border: selected ? (isWatchlisted ? '1.5px solid #c0392b' : `1.5px solid ${p.primary}`) : isWatchlisted ? '1px solid #f0c4bd' : `1px solid ${p.hairline}`,
+                  background: selected ? (isWatchlisted ? '#fdecea' : p.accentTint) : isWatchlisted ? '#fff8f7' : p.surface,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                  <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{a.applicantLabel}</span>
+                  <ServicingChip app={a} isWatchlisted={isWatchlisted} />
+                </div>
+                <p style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink2, marginTop: 2 }}>
+                  {rmShort(a.offeredAmount)} · disbursed {formatAgo(a.resolvedAt ?? a.filedAt)}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </nav>
+  );
+}
+
+function ServicingEmpty({ p, text }: { p: Palette; text: string }) {
+  return (
+    <div style={{ flex: 1, background: p.bg, overflowY: 'auto', padding: '40px', minWidth: 360 }}>
+      <div style={{ maxWidth: 480, padding: '18px 20px', borderRadius: 12, background: p.surface, border: `1px solid ${p.hairline}`, boxShadow: p.shadow }}>
+        <p style={{ fontFamily: FONT.ui, fontSize: 12.5, color: p.ink2, lineHeight: 1.6 }}>{text}</p>
+      </div>
+    </div>
+  );
+}
+
+function ServicingDetail({ p, app, passport, onResolve, onRecordRepayment }: { p: Palette; app: ApplicationRecord; passport: CreditPassport | null; onResolve: (outcome: 'approved' | 'declined', rationale: string) => void; onRecordRepayment: (instalmentSeq: number, amount: number, outcome: RepaymentOutcome) => void }) {
+  return (
+    <div style={{ width: 340, background: p.surface, borderLeft: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto', padding: '14px 0' }}>
+      <ApplicationCard p={p} app={app} passport={passport} onResolve={onResolve} onRecordRepayment={onRecordRepayment} />
+    </div>
+  );
+}
+
 export default function Console() {
   const [tab, setTab] = useState<Tab>('verify');
   const [code, setCode] = useState(SAMPLE_CODE);
@@ -1937,6 +2033,9 @@ export default function Console() {
   const selectedApp = apps.find((a) => a.id === selectedAppId) ?? null;
   // The live approved book (Brief Q)  maps approved applications into the pool shape.
   const book = useMemo(() => bookToPool(apps), [apps]);
+  // Servicing tab (console IA split, 2026-07-18): the approved book, watchlist-first.
+  const servicingList = useMemo(() => orderServicingList(apps), [apps]);
+  const servicingWatchlistIds = useMemo(() => new Set(watchlistApplications(apps).map((a) => a.id)), [apps]);
 
   // Risk-based pricing suggestion (Brief R) for the current offer  computed from the
   // ORIGINAL ladder rate (not the adopted one) so the strip always shows ladder vs suggested.
@@ -1963,7 +2062,7 @@ export default function Console() {
 
   if (showPersonaPicker) return <PersonaPicker onSelect={switchLender} />;
 
-  const TAB_LABELS: Record<Tab, string> = { verify: 'Verify Passport', portfolio: 'Portfolio', capital: 'Capital Markets', policy: 'Policy' };
+  const TAB_LABELS: Record<Tab, string> = { verify: 'Verify Passport', servicing: 'Servicing', portfolio: 'Portfolio', capital: 'Capital Markets', policy: 'Policy' };
 
   return (
     <TourActiveAnchorContext.Provider value={tour.activeAnchorId}>
@@ -1971,7 +2070,7 @@ export default function Console() {
       <h1 style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}>
         Pip Credit Lender Console: {activeLender.name}
       </h1>
-      <Header p={p} tab={tab} setTab={setTab} alert={showAlert} onRestartTour={tour.restart} onResetToDefaults={onResetToDefaults} resettingDefaults={resettingDefaults} activeLender={activeLender} onSwitchLender={switchLender} />
+      <Header p={p} tab={tab} setTab={setTab} alert={showAlert} onRestartTour={tour.restart} onResetToDefaults={onResetToDefaults} resettingDefaults={resettingDefaults} activeLender={activeLender} onSwitchLender={switchLender} watchlistCount={servicingWatchlistIds.size} />
       {showAlert && <AlertBanner caseId={flagCaseId} flagTime={flagTime} />}
       {tour.visible && !tour.paused && <TourSpotlight onDimPress={tour.pause} />}
       {tour.visible && <TourCard p={p} c={tour} officer={activeLender.officer} lender={activeLender.name} />}
@@ -1982,6 +2081,20 @@ export default function Console() {
             {showPassportInput && <LeftPanel p={p} flagged={flagged} statusValid={flagged ? false : statusValid} code={code} setCode={setCode} onVerify={onVerify} />}
             {showAlert ? <CenterAlert p={p} flagTime={flagTime} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} lapsedTiers={state.credential.verification.lapsedTiers} /> : <InvalidCenter p={p} reasons={state.reasons} />}
             {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} onCounterOffer={onCounterOffer} isCounterOffer={isCounterOffer} stacking={stackingSignal} selectedApp={selectedApp} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onGenerateLetter={onGenerateLetter} purpose={purpose} setPurpose={setPurpose} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} pricing={pricing} adoptedRate={adoptedRate} onAdoptRate={onAdoptRate} lenderName={activeLender.name} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} lenderName={activeLender.name} />}
+          </>
+        ) : tab === 'servicing' ? (
+          <>
+            <ServicingList p={p} apps={apps} ordered={servicingList} watchlistIds={servicingWatchlistIds} selectedId={selectedAppId} onSelect={onSelectApp} />
+            {servicingList.length === 0 ? (
+              <ServicingEmpty p={p} text="No approved loans yet. Approve applications on the Verify tab (or seed the pipeline) and they appear here for servicing." />
+            ) : selectedApp && selectedApp.status === 'approved' && state.status === 'valid' ? (
+              <>
+                <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} lapsedTiers={state.credential.verification.lapsedTiers} />
+                <ServicingDetail p={p} app={selectedApp} passport={state.passport} onResolve={onResolve} onRecordRepayment={onRecordRepayment} />
+              </>
+            ) : (
+              <ServicingEmpty p={p} text="Select a loan from the list to service it: repayment status, monitoring check-ins, and audit trail." />
+            )}
           </>
         ) : tab === 'portfolio' ? (
           <PortfolioTab p={palette(false)} apps={apps} onStructure={() => { setPoolSource('live'); setTab('capital'); }} />

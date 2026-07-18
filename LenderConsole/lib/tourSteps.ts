@@ -6,7 +6,7 @@
 // state, spotlight, and signal subscription from this data. Kept separate from the tour's
 // runtime state so the steps stay trivially unit-testable.
 
-export type ConsoleTourTab = 'verify' | 'portfolio' | 'capital' | 'policy';
+export type ConsoleTourTab = 'verify' | 'servicing' | 'portfolio' | 'capital' | 'policy';
 export type ConsoleTourStepKind = 'explain' | 'do';
 
 /** Semantic events the console emits while the tour listens (see `lib/tourSignals.ts`). The
@@ -81,8 +81,8 @@ export const CONSOLE_TOUR_STEPS: ConsoleTourStep[] = [
     act: 2,
     actLabel: 'Fill your desk',
     anchorId: 'queue-rail',
-    title: 'Your whole book',
-    body: 'New, referred, approved, declined, watchlist. The whole book, at a glance.',
+    title: 'Only what needs you',
+    body: 'New and referred files need your call. Approved loans move to Servicing; declines sit in the archive below.',
   },
   // ── Act 3 · Make the call ───────────────────────────────────────────────────
   {
