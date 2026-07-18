@@ -11,7 +11,7 @@ import { NextResponse } from 'next/server';
 import { parsePassportCode, verifyPassport } from '../../../lib/passport';
 import { decideLoan } from '../../../lib/loans';
 import { readLenderPolicy } from '../../../lib/policyFile';
-import { appendServerApplication, readServerApplications } from '../../../lib/applicationsFile';
+import { appendServerApplication, clearServerApplications, readServerApplications } from '../../../lib/applicationsFile';
 import { LENDER_REGISTRY } from '../../../lib/lenderRegistry';
 import type { DeclaredPurpose, PurposeCategory } from '../../../lib/applications';
 
@@ -163,4 +163,16 @@ export async function GET(req: Request) {
 
 export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
+}
+
+// Same-origin only, like GET  the console's own "Reset to defaults" action empties its
+// mailbox. Demo-only: this console has no authentication, so the mailbox holds only test
+// submissions from the paired borrower app, never a real lender's live pipeline.
+export async function DELETE(req: Request) {
+  const lenderId = resolveLenderId(new URL(req.url).searchParams.get('lender'));
+  if (lenderId === null) {
+    return NextResponse.json({ cleared: false, errors: ['Unknown lender.'] }, { status: 400 });
+  }
+  await clearServerApplications(undefined, lenderId);
+  return NextResponse.json({ cleared: true });
 }

@@ -128,22 +128,22 @@ export function CreditScreen({
         </Card>
 
         {/* Loans + Passport entry points (kept) */}
-        <Pressable onPress={onOpenLoans} style={({ pressed }) => [{ opacity: pressed ? 0.95 : 1 }]}>
-          <Card style={styles.cta}>
-            <View style={styles.ctaIcon}><Icon name="wallet" size={22} color={colors.accent} /></View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.ctaTitle}>Loans</Text>
-              <Text style={styles.ctaSub}>See offers, apply, and track repayments</Text>
-            </View>
-            <Icon name="chevronRight" size={18} color={colors.ink3} />
-          </Card>
-        </Pressable>
         <Pressable onPress={onOpenPassport} style={({ pressed }) => [{ opacity: pressed ? 0.95 : 1 }]}>
           <Card style={styles.cta}>
             <View style={styles.ctaIcon}><Icon name="scan" size={22} color={colors.accent} /></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.ctaTitle}>Credit Passport</Text>
-              <Text style={styles.ctaSub}>Generate a signed credential to share with lenders</Text>
+              <Text style={styles.ctaSub}>Apply for financing with your signed passport</Text>
+            </View>
+            <Icon name="chevronRight" size={18} color={colors.ink3} />
+          </Card>
+        </Pressable>
+        <Pressable onPress={onOpenLoans} style={({ pressed }) => [{ opacity: pressed ? 0.95 : 1 }]}>
+          <Card style={styles.cta}>
+            <View style={styles.ctaIcon}><Icon name="wallet" size={22} color={colors.accent} /></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.ctaTitle}>My Financing</Text>
+              <Text style={styles.ctaSub}>Track repayments and share check-ins</Text>
             </View>
             <Icon name="chevronRight" size={18} color={colors.ink3} />
           </Card>

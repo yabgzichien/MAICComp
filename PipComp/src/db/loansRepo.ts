@@ -14,8 +14,10 @@ export type ApplicationStatus = 'active' | 'completed' | 'defaulted';
 //   'scheduled'  not yet due / not yet paid
 //   'paid'       paid on or before the due date
 //   'late'       paid after the due date
+//   'missed'     a single installment the borrower skipped (dents the track record, does not
+//                pay down the loan liability); distinct from a whole-loan 'defaulted'
 //   'defaulted'  never paid; the application was reported as defaulted
-export type RepaymentStatus = 'scheduled' | 'paid' | 'late' | 'defaulted';
+export type RepaymentStatus = 'scheduled' | 'paid' | 'late' | 'missed' | 'defaulted';
 
 // --- Row shapes (raw SQLite columns) -------------------------------------
 interface ProductRow {
@@ -36,6 +38,8 @@ interface ApplicationRow {
   score_at: number;
   status: string;
   created_at: string;
+  lender_label: string | null;
+  liability_account_id: string | null;
 }
 
 interface RepaymentRow {
@@ -56,6 +60,10 @@ export interface LoanApplication {
   scoreAt: number;
   status: ApplicationStatus;
   createdAt: string;
+  lenderLabel: string | null;
+  /** The Net-worth liability account created when this loan was booked, so repayments can
+   *  pay it down. Null for referred/declined applications and legacy rows. */
+  liabilityAccountId: string | null;
 }
 
 export interface Repayment {
@@ -71,6 +79,8 @@ export interface Repayment {
 export interface RepaymentSummary {
   onTime: number;
   total: number;
+  /** Installments the borrower skipped  drives the borrowing-limit progression penalty. */
+  missed: number;
 }
 
 // --- Row -> domain mappers -------------------------------------------------
@@ -95,7 +105,7 @@ function toApplicationStatus(value: string): ApplicationStatus {
 }
 
 function toRepaymentStatus(value: string): RepaymentStatus {
-  return value === 'paid' || value === 'late' || value === 'defaulted' ? value : 'scheduled';
+  return value === 'paid' || value === 'late' || value === 'missed' || value === 'defaulted' ? value : 'scheduled';
 }
 
 function toApplication(r: ApplicationRow): LoanApplication {
@@ -107,6 +117,8 @@ function toApplication(r: ApplicationRow): LoanApplication {
     scoreAt: r.score_at,
     status: toApplicationStatus(r.status),
     createdAt: r.created_at,
+    lenderLabel: r.lender_label ?? null,
+    liabilityAccountId: r.liability_account_id ?? null,
   };
 }
 
@@ -145,21 +157,23 @@ export async function createApplication(
   productId: string,
   requestedAmount: number,
   decision: LoanDecision,
-  scoreAt: number
+  scoreAt: number,
+  lenderLabel: string | null = null
 ): Promise<LoanApplication> {
   const db = await getDb();
   const id = genId();
   const createdAt = new Date().toISOString();
   await db.runAsync(
-    `INSERT INTO loan_applications (id, product_id, requested_amount, decision, score_at, status, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO loan_applications (id, product_id, requested_amount, decision, score_at, status, created_at, lender_label)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     productId,
     requestedAmount,
     decision.decision,
     scoreAt,
     'active',
-    createdAt
+    createdAt,
+    lenderLabel
   );
   return {
     id,
@@ -169,7 +183,16 @@ export async function createApplication(
     scoreAt,
     status: 'active',
     createdAt,
+    lenderLabel,
+    liabilityAccountId: null,
   };
+}
+
+/** Link a booked loan to the Net-worth liability account that represents it, so repayments
+ *  can pay that account down as the borrower repays. */
+export async function setLoanLiabilityAccount(applicationId: string, accountId: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('UPDATE loan_applications SET liability_account_id = ? WHERE id = ?', accountId, applicationId);
 }
 
 /**
@@ -184,7 +207,7 @@ export async function markApplicationStatus(applicationId: string, status: Appli
 export async function listApplications(): Promise<LoanApplication[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<ApplicationRow>(
-    'SELECT id, product_id, requested_amount, decision, score_at, status, created_at FROM loan_applications ORDER BY created_at DESC'
+    'SELECT id, product_id, requested_amount, decision, score_at, status, created_at, lender_label, liability_account_id FROM loan_applications ORDER BY created_at DESC'
   );
   return rows.map(toApplication);
 }
@@ -239,6 +262,36 @@ export async function scheduleRepayments(
 }
 
 /**
+ * Persist a PRE-COMPUTED repayment schedule verbatim (a sibling of `scheduleRepayments`
+ * that does NOT recompute installments): each row's `amount`/`dueDate` is written exactly
+ * as given  used when booking an accepted lender offer, where the lender's decided
+ * installment is authoritative and must not be re-derived from apr. All rows `status:
+ * 'scheduled'` with `paid_on: null`, wrapped in a single transaction for atomicity.
+ */
+export async function insertSchedule(
+  applicationId: string,
+  rows: { dueDate: string; amount: number }[]
+): Promise<Repayment[]> {
+  const db = await getDb();
+  const repayments: Repayment[] = [];
+  await db.withTransactionAsync(async () => {
+    for (const row of rows) {
+      const id = genId();
+      await db.runAsync(
+        `INSERT INTO repayments (id, application_id, due_date, paid_on, amount, status)
+         VALUES (?, ?, ?, NULL, ?, 'scheduled')`,
+        id,
+        applicationId,
+        row.dueDate,
+        row.amount
+      );
+      repayments.push({ id, applicationId, dueDate: row.dueDate, paidOn: null, amount: row.amount, status: 'scheduled' });
+    }
+  });
+  return repayments;
+}
+
+/**
  * Mark a repayment as paid. The caller decides on-time vs late (e.g. by comparing
  * to the current date or to the due date) and passes that verdict via `onTime`;
  * we store it as `status: 'paid' | 'late'` and set `paid_on` (defaults to now).
@@ -252,6 +305,13 @@ export async function markRepaymentPaid(repaymentId: string, onTime: boolean, pa
     status,
     repaymentId
   );
+}
+
+/** Mark a single installment as missed  a track-record negative that does NOT pay down the
+ *  loan liability (the borrower skipped it). Distinct from a whole-loan default. */
+export async function markRepaymentMissed(repaymentId: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync("UPDATE repayments SET paid_on = NULL, status = 'missed' WHERE id = ?", repaymentId);
 }
 
 export async function listRepayments(applicationId?: string): Promise<Repayment[]> {
@@ -269,17 +329,20 @@ export async function listRepayments(applicationId?: string): Promise<Repayment[
 
 /**
  * Track-record summary for the credit-score "repayment history" factor:
- * `total` = every repayment that has actually been paid (status 'paid' or 'late'),
- * `onTime` = the subset of those paid on or before their due date (status 'paid').
- * Scheduled-but-not-yet-due repayments are excluded  they're not a track record yet.
+ * `total` = every repayment the borrower has resolved  paid on time, paid late, or MISSED,
+ * `onTime` = the subset paid on or before their due date (status 'paid').
+ * A missed installment counts against the borrower (in `total`, not `onTime`), so it lowers
+ * the on-time ratio the score reads. Scheduled-but-not-yet-due repayments are excluded
+ * they're not a track record yet.
  */
 export async function repaymentSummary(): Promise<RepaymentSummary> {
   const db = await getDb();
-  const row = await db.getFirstAsync<{ on_time: number; total: number }>(
+  const row = await db.getFirstAsync<{ on_time: number; total: number; missed: number }>(
     `SELECT
        SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) AS on_time,
-       SUM(CASE WHEN status IN ('paid', 'late') THEN 1 ELSE 0 END) AS total
+       SUM(CASE WHEN status IN ('paid', 'late', 'missed') THEN 1 ELSE 0 END) AS total,
+       SUM(CASE WHEN status = 'missed' THEN 1 ELSE 0 END) AS missed
      FROM repayments`
   );
-  return { onTime: row?.on_time ?? 0, total: row?.total ?? 0 };
+  return { onTime: row?.on_time ?? 0, total: row?.total ?? 0, missed: row?.missed ?? 0 };
 }

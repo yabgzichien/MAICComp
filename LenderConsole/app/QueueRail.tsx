@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { FONT, type Palette } from './tokens';
 import { orderQueue, watchlistApplications, type ApplicationRecord, type ApplicationStatus } from '../lib/applications';
 import { formatAgo } from '../lib/presentment';
+import { TourAnchor } from './TourAnchor';
 
 const BAND_COLOR: Record<string, string> = {
   Building: '#c0392b',
@@ -57,6 +58,7 @@ export default function QueueRail({
   onSelect,
   onSeed,
   onPasteNew,
+  forceSeedButton = false,
 }: {
   p: Palette;
   apps: ApplicationRecord[];
@@ -64,12 +66,16 @@ export default function QueueRail({
   onSelect: (app: ApplicationRecord) => void;
   onSeed: () => void;
   onPasteNew: () => void;
+  /** The console tour keeps the seed button visible even on a non-empty pipeline so the
+   *  "seed the pipeline" step stays completable on a restart. */
+  forceSeedButton?: boolean;
 }) {
   const [search, setSearch] = useState('');
   const q = search.trim().toLowerCase();
   const matches = (a: ApplicationRecord) => !q || a.applicantLabel.toLowerCase().includes(q) || a.id.toLowerCase().includes(q);
 
   return (
+    <TourAnchor id="queue-rail">
     <nav aria-label="Applicant pipeline" style={{ width: 212, background: p.surface2, borderRight: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto' }}>
       <div style={{ padding: '14px 12px 10px', borderBottom: `1px solid ${p.hairline}` }}>
         <p role="heading" aria-level={2} style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink2, letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: 8 }}>Pipeline</p>
@@ -90,17 +96,21 @@ export default function QueueRail({
         </button>
       </div>
 
-      {apps.length === 0 && (
+      {(apps.length === 0 || forceSeedButton) && (
         <div style={{ padding: '14px 12px' }}>
-          <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink2, lineHeight: 1.55, marginBottom: 9 }}>
-            No applications yet. Verifying a passport files one automatically, or seed a demo pipeline:
-          </p>
-          <button
-            onClick={onSeed}
-            style={{ width: '100%', padding: '8px 0', borderRadius: 8, border: 'none', cursor: 'pointer', background: p.accentInk, color: 'white', fontFamily: FONT.ui, fontSize: 12, fontWeight: 700 }}
-          >
-            Seed demo pipeline
-          </button>
+          {apps.length === 0 && (
+            <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink2, lineHeight: 1.55, marginBottom: 9 }}>
+              No applications yet. Verifying a passport files one automatically, or seed a demo pipeline:
+            </p>
+          )}
+          <TourAnchor id="seed-button">
+            <button
+              onClick={onSeed}
+              style={{ width: '100%', padding: '8px 0', borderRadius: 8, border: 'none', cursor: 'pointer', background: p.accentInk, color: 'white', fontFamily: FONT.ui, fontSize: 12, fontWeight: 700 }}
+            >
+              Seed demo pipeline
+            </button>
+          </TourAnchor>
         </div>
       )}
 
@@ -221,5 +231,6 @@ export default function QueueRail({
         </p>
       </div>
     </nav>
+    </TourAnchor>
   );
 }

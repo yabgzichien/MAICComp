@@ -165,6 +165,20 @@ async function init(): Promise<SQLite.SQLiteDatabase> {
     // column already present
   }
 
+  // Migration: lender attribution on loan applications (accept-offer booking).
+  try {
+    await db.execAsync('ALTER TABLE loan_applications ADD COLUMN lender_label TEXT');
+  } catch {
+    // column already present
+  }
+
+  // Migration: link a booked loan to its Net-worth liability account (repayment pays it down).
+  try {
+    await db.execAsync('ALTER TABLE loan_applications ADD COLUMN liability_account_id TEXT');
+  } catch {
+    // column already present
+  }
+
   await ensureSeedCategories(db);
   await seedProducts(db);
   return db;

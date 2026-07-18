@@ -161,7 +161,7 @@ const TOUR_RECAP_LABELS: Record<string, string> = {
 };
 
 function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
-  const { ready, onboardingComplete, tourActive, tourStepIndex, setTourStep, pauseTour, exitTour, startTour, coverage } = useAppData();
+  const { ready, onboardingComplete, tourActive, tourStepIndex, setTourStep, pauseTour, exitTour, startTour, coverage, kyc } = useAppData();
   const insets = useSafeAreaInsets();
   const [screen, setScreen] = useState<Screen>('home');
   const [txnFilter, setTxnFilter] = useState<string | null>(null);
@@ -269,6 +269,22 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tourActive, tourStepIndex, missionPhase]);
 
+  // Auto-complete the eKYC do-step when identity was already verified before the tour got
+  // there (e.g. via the onboarding screen's own separate "Verify my identity" gate, or a
+  // second tour pass). KycScreen swaps straight to its post-verification view in that case,
+  // so the "Verify identity" button the step is waiting on never renders and its
+  // 'kyc-verified' signal never fires  the tour would otherwise stall on this step forever,
+  // and the judge's real navigation onward (tapping the occupation form's own Done button)
+  // was being misread as wandering off and pausing the tour. Safe against a genuine
+  // in-progress verification: setKycState and emitTourSignal('kyc-verified') always run back
+  // to back synchronously in store.tsx, so a fresh verify's completeStep call (and its
+  // advancingRef guard) always wins the race before this effect's next run sees kyc change.
+  useEffect(() => {
+    if (!tourActive || !currentTourStep || tourPaused) return;
+    if (currentTourStep.id === 'kyc-verify' && kyc != null) completeStep(currentTourStep, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tourActive, tourStepIndex, tourPaused, kyc]);
+
   const tourNext = () => {
     if (!currentTourStep) return;
     const next = tourStepIndex + 1;
@@ -333,11 +349,17 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
   // card covering the very button it was pointing at). A do-step whose target sits in the
   // scrollable body (all our anchored do-steps: the credit card, Build-my-score, the what-if
   // chips) puts the card at the TOP so the bottom stays clear; the anchor scrolls itself into
-  // view below it. Everything else keeps the card at its home at the bottom  explain-step
-  // anchors are always upper-content, and the no-anchor do-steps (KYC, mint) put their
-  // action at the foot of a scroll that gains tour-time bottom padding so it clears the card.
+  // view below it. 'coach-plan' is the one EXPLAIN step that needs the same treatment: it
+  // anchors the same below-the-fold "next steps" card as the 'whatif' do-step right after it
+  // on the same screen (found live: the bottom card covered the bottom of that card, including
+  // its resilience line). Everything else keeps the card at its home at the bottom
+  // explain-step anchors are otherwise upper-content, and the no-anchor do-steps (KYC, mint)
+  // put their action at the foot of a scroll that gains tour-time bottom padding so it clears
+  // the card.
   const tourCardPlacement: 'bottom' | 'top' =
-    currentTourStep && currentTourStep.kind === 'do' && currentTourStep.anchorId ? 'top' : 'bottom';
+    currentTourStep && currentTourStep.anchorId && (currentTourStep.kind === 'do' || currentTourStep.id === 'coach-plan')
+      ? 'top'
+      : 'bottom';
 
   // Persistent bottom nav appears only on the four primary destinations.
   const navTab: NavTab | null =
@@ -455,10 +477,11 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
           onBack={() => setScreen('credit')}
           onOpenKyc={() => openKyc('loans')}
           onOpenPassport={() => setScreen('passport')}
+          onOpenCoach={() => setScreen('coach')}
         />
       )}
       {screen === 'passport' && (
-        <PassportScreen onBack={() => setScreen('credit')} onOpenKyc={() => openKyc('passport')} />
+        <PassportScreen onBack={() => setScreen('credit')} onOpenKyc={() => openKyc('passport')} onOpenLoans={() => setScreen('loans')} />
       )}
       {screen === 'coach' && (
         <PassportCoachScreen

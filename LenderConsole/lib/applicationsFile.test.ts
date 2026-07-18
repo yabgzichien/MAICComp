@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { fileApplication, type ApplicationRecord, type FileApplicationInput } from './applications';
-import { appendServerApplication, readServerApplications } from './applicationsFile';
+import { appendServerApplication, clearServerApplications, readServerApplications } from './applicationsFile';
 
 const NOW = new Date('2026-07-11T12:00:00.000Z');
 
@@ -77,5 +77,28 @@ describe('applicationsFile — server-side direct-apply store', () => {
     const result = await appendServerApplication(tmp, input({ subject: 'f'.repeat(64) }), NOW, 'koperasi-sejahtera');
     expect(result.filed).toBe(true);
     expect((await readServerApplications(tmp, 'koperasi-sejahtera')).map((a) => a.subject)).toEqual(['f'.repeat(64)]);
+  });
+
+  describe('clearServerApplications', () => {
+    it('empties a mailbox that held submissions', async () => {
+      await appendServerApplication(tmp, input({ subject: 'g'.repeat(64) }), NOW);
+      expect(await readServerApplications(tmp)).toHaveLength(1);
+      await clearServerApplications(tmp);
+      expect(await readServerApplications(tmp)).toEqual([]);
+    });
+
+    it('is a no-op on an already-empty mailbox', async () => {
+      await expect(clearServerApplications(tmp)).resolves.not.toThrow();
+      expect(await readServerApplications(tmp)).toEqual([]);
+    });
+
+    // Mirrors the "lenderId param" test above: an explicit filePath still wins, so passing a
+    // non-default lenderId alongside one must not break the round-trip (lender-keyed isolation
+    // itself lives in the shared keyFor/defaultFilePathFor helpers, unchanged here).
+    it('accepts a lenderId param without disturbing the explicit-filePath round-trip', async () => {
+      await appendServerApplication(tmp, input({ subject: 'l'.repeat(64) }), NOW, 'koperasi-sejahtera');
+      await clearServerApplications(tmp, 'koperasi-sejahtera');
+      expect(await readServerApplications(tmp, 'koperasi-sejahtera')).toEqual([]);
+    });
   });
 });

@@ -2,6 +2,7 @@ import {
   buildCoachPlan,
   diagnoseConstraint,
   simulateCoverage,
+  simulateStress,
   simulateSurplus,
   simulateTrackRecord,
   stressIncome,
@@ -232,6 +233,66 @@ describe('stressIncome', () => {
     expect(points[0].maxAmount).toBeGreaterThanOrEqual(points[2].maxAmount);
     expect(survivesDipPct(points)).toBeGreaterThanOrEqual(10);
     expect(survivesDipPct(points)).toBeLessThan(100);
+  });
+});
+
+describe('simulateStress', () => {
+  it('holds or weakens the offer as income is cut  never improves it', () => {
+    // A genuine approve baseline (coverage 45 → Starter, surplus 700 → an affordable offer).
+    const input: CoachPlanInput = {
+      profile: baseProfile({ avgSurplus: 700, savingsRate: 700 / 2500 }),
+      coverage: coverageOf(45),
+      confidenceTxns: txns(),
+      expenseRatio: 0.6,
+      products: DEFAULT_PRODUCTS,
+    };
+
+    const sim = simulateStress(input, 0.2);
+
+    expect(sim.maxAmountTo).toBeLessThanOrEqual(sim.maxAmountFrom);
+    expect(sim.scoreTo).toBeLessThanOrEqual(sim.scoreFrom);
+  });
+});
+
+describe('buildCoachPlan income-stress what-ifs', () => {
+  it('offers protective income-dip chips to probe a real offer against a downturn', () => {
+    const input: CoachPlanInput = {
+      profile: baseProfile({ avgSurplus: 700, savingsRate: 700 / 2500 }),
+      coverage: coverageOf(45),
+      confidenceTxns: txns(),
+      expenseRatio: 0.6,
+      products: DEFAULT_PRODUCTS,
+    };
+
+    const plan = buildCoachPlan(input);
+    const stress = plan.whatIfs.filter((w) => w.lever === 'stress');
+
+    expect(stress.length).toBeGreaterThanOrEqual(2);
+    for (const s of stress) {
+      expect(s.magnitude).toMatch(/−\d+% income/);
+      // A downside test is never dressed up as an improvement, and always carries an honest note.
+      expect(s.changed).toBe(false);
+      expect(s.note).toBeTruthy();
+      expect(s.sim.maxAmountTo).toBeLessThanOrEqual(s.sim.maxAmountFrom);
+    }
+    // Stress probes never enter the ranked "next steps"  those are genuine improvements only.
+    expect(plan.actions.some((a) => a.lever === 'stress')).toBe(false);
+  });
+
+  it('omits income-stress chips when there is no supportable offer to protect', () => {
+    const input: CoachPlanInput = {
+      profile: baseProfile(),
+      coverage: coverageOf(90),
+      confidenceTxns: txns(),
+      expenseRatio: 0.6,
+      products: DEFAULT_PRODUCTS,
+      adverseRecord: 'hard', // hard-adverse → decline, nothing to stress-test
+    };
+
+    const plan = buildCoachPlan(input);
+
+    expect(plan.baseline.maxAmount).toBe(0);
+    expect(plan.whatIfs.some((w) => w.lever === 'stress')).toBe(false);
   });
 });
 

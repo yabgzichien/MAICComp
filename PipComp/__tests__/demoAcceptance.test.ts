@@ -1,8 +1,8 @@
 /**
  * Judge demo acceptance tests (spec F2, F3): the coach's hero beat compiles from the seed, and
- * the Loans screen's per-tier preview never contradicts the real gated decision (regression
- * guard for UI/UX P0-3  the Loans screen used to show "Likely approved" tier cards a
- * thin-coverage borrower would actually be REFERred on).
+ * the passport send-card's `supportable` pre-fill stays honestly coverage-gated  the full-ladder
+ * decision the Credit Passport pre-fills its requested amount from must remain a gated REFER for
+ * the thin-coverage persona, never an unqualified approve.
  */
 import { buildDemoSeed } from '../src/data/demoSeed';
 import { assembleCredit, type CreditInputs } from '../src/lib/assembleCredit';
@@ -97,42 +97,26 @@ describe('demo acceptance: the persona stays in the spec-pinned Good band (spec 
   });
 });
 
-describe('demo acceptance: Loans screen never contradicts the engine (spec F3, regression guard for UI/UX P0-3)', () => {
-  it('every tier preview equals the real coverage-gated decision, and Emergency alone is the reachable tier', () => {
+describe('demo acceptance: the passport send-card supportable is coverage-gated (spec F3, honesty)', () => {
+  it('the full-ladder coverage-gated decision the passport pre-fills from stays a gated refer for the thin-coverage persona', () => {
     const { profile, score, coverage, dataConfidence } = assemble();
-
-    // Mirrors LoansScreen.tsx's `previews` computation exactly.
-    const previews = DEFAULT_PRODUCTS.map((product) => ({
-      product,
-      decision: decideLoan({
-        score: score.score,
-        band: score.band,
-        confidence: score.confidence,
-        avgMonthlySurplus: profile.avgSurplus,
-        monthlyDebtService: profile.monthlyDebtService,
-        avgIncome: profile.avgIncome,
-        requestedAmount: product.maxAmount,
-        products: [product],
-        coverageRatio: coverage.ratio,
-        coverageDaysCovered: coverage.daysCovered,
-        integrityFloorBreached: dataConfidence.integrityFloorBreached,
-      }),
-    }));
-
-    // The seed's coverage is deliberately thin (<30 days)  every tier card must show the
-    // honest coverage-gated outcome, never an unqualified "Likely approved".
-    for (const { product, decision } of previews) {
-      if (product.id === 'emergency') {
-        expect(decision.decision).toBe('refer');
-        expect(decision.maxAmount).toBeGreaterThan(0);
-      } else {
-        expect(decision.decision).not.toBe('approve');
-      }
-      // The false "Score X is below the minimum tier threshold" misattribution (UI/UX P0-3)
-      // must never appear when the real blocker is coverage.
-      const hasFalseScoreReason = decision.reasons.some((r) => /below the minimum tier threshold/.test(r));
-      const hasCoverageReason = decision.reasons.some((r) => /Coverage \d+%/.test(r));
-      if (hasCoverageReason) expect(hasFalseScoreReason).toBe(false);
-    }
+    const ladderMax = Math.max(...DEFAULT_PRODUCTS.map((p) => p.maxAmount));
+    // Mirrors PassportScreen.tsx's `supportable` computation (all products at once, coverage-gated).
+    const gated = decideLoan({
+      score: score.score,
+      band: score.band,
+      confidence: score.confidence,
+      avgMonthlySurplus: profile.avgSurplus,
+      monthlyDebtService: profile.monthlyDebtService,
+      avgIncome: profile.avgIncome,
+      requestedAmount: ladderMax,
+      products: DEFAULT_PRODUCTS,
+      coverageRatio: coverage.ratio,
+      coverageDaysCovered: coverage.daysCovered,
+      integrityFloorBreached: dataConfidence.integrityFloorBreached,
+    });
+    // Thin coverage → the honest gated outcome is a refer, never an unqualified approve
+    // (the same property the removed Loans-tier test asserted, now on the passport surface).
+    expect(gated.decision).toBe('refer');
   });
 });

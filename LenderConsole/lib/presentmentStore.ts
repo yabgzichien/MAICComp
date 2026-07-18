@@ -51,3 +51,13 @@ export function recordPresentment(entry: Presentment, storage: Storage | null = 
     // Quota/security errors degrade to "no log", same as SSR  never break verification.
   }
 }
+
+/** Wipe `lenderId`'s stored log entirely (console reset-to-defaults). */
+export function clearPresentmentLog(storage: Storage | null = defaultStorage(), lenderId: string = DEFAULT_LENDER_ID): void {
+  if (!storage) return;
+  try {
+    storage.removeItem(keyFor(lenderId));
+  } catch {
+    // Best-effort; a failed clear just leaves the log as-is.
+  }
+}

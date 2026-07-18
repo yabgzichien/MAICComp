@@ -9,6 +9,7 @@
 import React, { useEffect, useState } from 'react';
 import { FONT, type Palette } from './tokens';
 import { SectionLabel } from './shared';
+import { TourAnchor } from './TourAnchor';
 import { DEFAULT_POLICY, DEFAULT_PRODUCTS, type LenderPolicy, type LoanProduct } from '../lib/loans';
 import { aprWarnings, CANONICAL_TIER_IDS, validateStoredPolicy, type StoredPolicy } from '../lib/policyStore';
 import { findLender, type LenderProfile } from '../lib/lenderRegistry';
@@ -225,6 +226,7 @@ export default function PolicyTab({
 
       <div style={{ padding: '18px 40px 26px', display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 1080, margin: '0 auto' }}>
         {/* ── Affordability thresholds ── */}
+        <TourAnchor id="policy-thresholds">
         <div style={{ background: p.surface, borderRadius: 12, padding: '14px 18px', boxShadow: p.shadow }}>
           <SectionLabel color={p.ink2}>Affordability thresholds</SectionLabel>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px 22px', marginTop: 10 }}>
@@ -240,6 +242,7 @@ export default function PolicyTab({
             ))}
           </div>
         </div>
+        </TourAnchor>
 
         {/* ── Pricing (risk-based assistant, Brief R) ── */}
         <div style={{ background: p.surface, borderRadius: 12, padding: '14px 18px', boxShadow: p.shadow }}>

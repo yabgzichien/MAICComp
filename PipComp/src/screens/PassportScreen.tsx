@@ -16,6 +16,7 @@ import { buildConsentReceipts, buildPassportDraft, monitoringScopeRow, tier0Scop
 import { useCreditProfile } from '../state/useCreditProfile';
 import { useAppData } from '../state/store';
 import { decideLoan, DEFAULT_PRODUCTS, type Decision } from '../lib/loans';
+import { computeBorrowingLimit, outstandingExposure } from '../lib/borrowingLimit';
 import { submitApplication, type DirectApplyResult } from '../lib/directApply';
 import { fetchLenderDirectory, LENDER_API_BASE, type LenderProfile } from '../lib/lenderDirectory';
 import { PURPOSE_CATEGORIES, PURPOSE_LABELS, type PurposeCategory } from '../lib/loanPurpose';
@@ -51,10 +52,10 @@ function decisionLabel(d: Decision): string {
   return 'Likely declined';
 }
 
-export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () => void; onOpenKyc?: () => void }) {
+export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () => {} }: { onBack: () => void; onOpenKyc?: () => void; onOpenLoans?: () => void }) {
   const insets = useSafeAreaInsets();
   const { profile, score, dataConfidence, coverage, momentum, coachInput, incomeQuality, spendingProfile, obligations } = useCreditProfile();
-  const { kyc, occupation, loanApplications, loanProducts, tourActive, tourStepIndex } = useAppData();
+  const { kyc, occupation, loanApplications, loanProducts, repaymentSummary, accountValues, tourActive, tourStepIndex, acceptLenderOffer } = useAppData();
   const activeTourAnchor = tourActive ? BORROWER_TOUR_STEPS[clampTourStep(tourStepIndex, BORROWER_TOUR_STEPS.length)].anchorId ?? null : null;
 
   const [phase, setPhase] = useState<'consent' | 'minted'>('consent');
@@ -88,6 +89,8 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
   const [purpose, setPurpose] = useState<PurposeCategory>('working-capital');
   const [sendBusy, setSendBusy] = useState(false);
   const [sendResult, setSendResult] = useState<DirectApplyResult | null>(null);
+  const [booked, setBooked] = useState(false);
+  const [bookingBusy, setBookingBusy] = useState(false);
 
   // Published lender directory (GET /api/lenders). Fetched once on mount; a transport failure
   // leaves it empty and the send flow falls back to the built-in ladder (routes to TEKUN).
@@ -134,7 +137,28 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
       }).maxAmount,
     [score, profile, sendProducts, sendPolicy, coverage, dataConfidence, ladderMax]
   );
-  const defaultAmount = supportable > 0 ? supportable : ladderMin;
+  // Graduated borrowing limit: the affordability max (supportable) composed with a repayment-driven
+  // progression cap, minus what's already outstanding on active loans. The amount the borrower can
+  // request is capped at `available`, so a thin repayment record or existing exposure genuinely
+  // limits how much they can ask for  not just what the engine would counter.
+  const outstandingPrincipal = useMemo(
+    () => outstandingExposure(loanApplications, accountValues),
+    [loanApplications, accountValues]
+  );
+  const borrowing = useMemo(
+    () =>
+      computeBorrowingLimit({
+        engineMax: supportable,
+        ladderMax,
+        repaymentOnTime: repaymentSummary.onTime,
+        repaymentMissed: repaymentSummary.missed,
+        outstandingPrincipal,
+      }),
+    [supportable, ladderMax, repaymentSummary, outstandingPrincipal]
+  );
+  const requestCeiling = Math.max(0, Math.min(ladderMax, borrowing.available));
+  const requestFloor = Math.min(ladderMin, requestCeiling);
+  const defaultAmount = Math.min(supportable > 0 ? supportable : ladderMin, requestCeiling);
   const effectiveAmount = amount ?? defaultAmount;
 
   // Switching lenders re-defaults the amount to the new lender's supportable figure and clears
@@ -143,6 +167,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
     setSelectedLenderId(id);
     setAmount(null);
     setSendResult(null);
+    setBooked(false);
   };
 
   const sharedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -251,10 +276,11 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
 
   const stepAmount = (delta: number) => {
     setSendResult(null);
+    setBooked(false);
     setAmount((cur) => {
       const base = cur ?? defaultAmount;
       const next = Math.round(base + delta);
-      return Math.max(ladderMin, Math.min(ladderMax, next));
+      return Math.max(requestFloor, Math.min(requestCeiling, next));
     });
   };
 
@@ -265,6 +291,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
     if (!pasteCode) return;
     setSendBusy(true);
     setSendResult(null);
+    setBooked(false);
     try {
       const result = await submitApplication(LENDER_API_BASE, {
         passportCode: pasteCode,
@@ -275,10 +302,30 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
         ...(selectedLender && selectedLender.id !== 'offline' ? { lenderId: selectedLender.id } : {}),
       });
       setSendResult(result);
+      setBooked(false);
     } catch {
       setSendResult({ status: 'offline' });
+      setBooked(false);
     } finally {
       setSendBusy(false);
+    }
+  };
+
+  // Accept the lender's approved offer  books it locally into "My Financing" via the store's
+  // acceptLenderOffer action (Task 3). Only reachable when the last decision was an approve
+  // with a positive amount; see the FILED result block below.
+  const acceptOffer = async () => {
+    if (!sendResult || sendResult.status !== 'filed') return;
+    setBookingBusy(true);
+    try {
+      const app = await acceptLenderOffer(
+        sendResult.decision,
+        { products: sendProducts, name: selectedLender?.name ?? 'Lender' },
+        score.score
+      );
+      if (app) setBooked(true);
+    } finally {
+      setBookingBusy(false);
     }
   };
 
@@ -453,14 +500,26 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
             </>
           )}
 
-          <Text style={[styles.reqLabel, lenders.length > 0 && { marginTop: 16 }]}>Amount</Text>
+          {/* Borrowing power  the graduated limit (repayment record + affordability, minus exposure). */}
+          <View style={[styles.powerBox, lenders.length > 0 && { marginTop: 16 }]}>
+            <View style={styles.powerHeader}>
+              <Text style={styles.powerLabel}>Borrowing power</Text>
+              <Text style={styles.powerAmount}>
+                RM{borrowing.available.toLocaleString('en-MY')}
+                <Text style={styles.powerOf}> of RM{borrowing.limit.toLocaleString('en-MY')}</Text>
+              </Text>
+            </View>
+            <Text style={styles.powerReason}>{borrowing.reason}</Text>
+          </View>
+
+          <Text style={[styles.reqLabel, { marginTop: 16 }]}>Amount</Text>
           <View style={styles.stepperRow}>
             <Pressable onPress={() => stepAmount(-500)} style={({ pressed }) => [styles.stepperBtn, pressed && styles.stepperPressed]}>
               <Icon name="chevronLeft" size={18} color={colors.accent} />
             </Pressable>
             <View style={{ flex: 1, alignItems: 'center' }}>
               <Amount value={effectiveAmount} size={22} />
-              <Text style={styles.stepperHint}>RM{ladderMin.toLocaleString('en-MY')}–{ladderMax.toLocaleString('en-MY')}</Text>
+              <Text style={styles.stepperHint}>RM{requestFloor.toLocaleString('en-MY')}–{requestCeiling.toLocaleString('en-MY')}</Text>
             </View>
             <Pressable onPress={() => stepAmount(500)} style={({ pressed }) => [styles.stepperBtn, pressed && styles.stepperPressed]}>
               <Icon name="chevronRight" size={18} color={colors.accent} />
@@ -474,7 +533,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
               return (
                 <Pressable
                   key={c}
-                  onPress={() => { setPurpose(c); setSendResult(null); }}
+                  onPress={() => { setPurpose(c); setSendResult(null); setBooked(false); }}
                   style={[styles.purposeChip, on && styles.purposeChipOn]}
                   accessibilityRole="radio"
                   accessibilityState={{ selected: on }}
@@ -538,6 +597,31 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
                 </View>
               )}
               <Text style={styles.resultFoot}>Filed in the lender's queue for review.</Text>
+
+              {sendResult.decision.decision === 'approve' && sendResult.decision.maxAmount > 0 && (
+                booked ? (
+                  <View style={styles.bookedRow}>
+                    <Icon name="check" size={14} color={DEC_GREEN} stroke={2.6} />
+                    <Text style={styles.bookedText}>Booked — track it in My Financing.</Text>
+                    <Pressable onPress={onOpenLoans} style={styles.bookedBtn} accessibilityRole="button">
+                      <Text style={styles.bookedBtnText}>Go to My Financing</Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <Pressable
+                    onPress={acceptOffer}
+                    disabled={bookingBusy}
+                    style={({ pressed }) => [styles.acceptBtn, (bookingBusy || pressed) && { opacity: 0.92 }]}
+                    accessibilityRole="button"
+                  >
+                    {bookingBusy ? (
+                      <ActivityIndicator size="small" color={colors.onAccent} />
+                    ) : (
+                      <Text style={styles.acceptBtnText}>Accept this offer</Text>
+                    )}
+                  </Pressable>
+                )
+              )}
             </View>
           )}
 
@@ -657,6 +741,12 @@ const styles = StyleSheet.create({
   stepperBtn: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentTint, borderWidth: 1, borderColor: colors.accentSoft },
   stepperPressed: { transform: [{ scale: 0.92 }] },
   stepperHint: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink3, marginTop: 3 },
+  powerBox: { backgroundColor: colors.accentTint, borderRadius: 12, borderWidth: 1, borderColor: colors.accentSoft, padding: 12 },
+  powerHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 },
+  powerLabel: { fontFamily: uiFont(700), fontSize: 11, color: colors.ink2, letterSpacing: 0.8, textTransform: 'uppercase' },
+  powerAmount: { fontFamily: uiFont(800), fontSize: 15, color: colors.accentInk },
+  powerOf: { fontFamily: uiFont(600), fontSize: 12, color: colors.ink2 },
+  powerReason: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, lineHeight: 16, marginTop: 6 },
   purposeWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   purposeChip: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 999, backgroundColor: colors.surface2, borderWidth: 1.5, borderColor: colors.line },
   purposeChipOn: { backgroundColor: colors.accentTint, borderColor: colors.accent },
@@ -676,6 +766,12 @@ const styles = StyleSheet.create({
   reasonRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 7 },
   reasonText: { flex: 1, fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, lineHeight: 18 },
   resultFoot: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, marginTop: 12 },
+  acceptBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: 999, backgroundColor: DEC_GREEN, marginTop: 14 },
+  acceptBtnText: { fontFamily: uiFont(700), fontSize: 14.5, color: colors.onAccent },
+  bookedRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 14, flexWrap: 'wrap' },
+  bookedText: { flex: 1, fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink },
+  bookedBtn: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: DEC_GREEN },
+  bookedBtnText: { fontFamily: uiFont(700), fontSize: 12.5, color: colors.onAccent },
   noticeBox: { marginTop: 14, backgroundColor: colors.surface2, borderRadius: 12, padding: 12, gap: 4 },
   noticeError: { backgroundColor: '#c5402f14' },
   noticeText: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, lineHeight: 18 },

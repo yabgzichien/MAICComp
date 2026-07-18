@@ -8,6 +8,7 @@
 import React, { useMemo } from 'react';
 import { FONT, type Palette } from './tokens';
 import { MiniBar, SectionLabel } from './shared';
+import { TourAnchor } from './TourAnchor';
 import { buildPortfolio, type BreakdownRow } from '../lib/portfolio';
 import { formatPoolMoney } from '../lib/poolView';
 import type { ApplicationRecord } from '../lib/applications';
@@ -112,10 +113,12 @@ export default function PortfolioTab({ p, apps, onStructure }: { p: Palette; app
             </div>
           )}
 
+          <TourAnchor id="portfolio-bands">
           <div style={{ padding: '18px 40px 8px', display: 'flex', gap: 16, flexWrap: 'wrap', flexShrink: 0 }}>
             <BreakdownTable p={p} title="Exposure by Credit Band" rows={book.bandBreakdown} accent={p.primary} />
             <BreakdownTable p={p} title="Exposure by Declared Purpose" rows={book.purposeBreakdown} accent="#3b5bdb" />
           </div>
+          </TourAnchor>
 
           <div style={{ padding: '4px 40px 24px', marginTop: 'auto' }}>
             <div style={{ padding: '11px 18px', borderRadius: 10, background: p.surface, border: `1px solid ${p.hairline}`, boxShadow: p.shadow }}>

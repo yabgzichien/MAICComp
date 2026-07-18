@@ -57,3 +57,10 @@ export async function appendServerApplication(
   }
   return { filed: result.filed, id: result.id };
 }
+
+/** Empty `lenderId`'s server-side direct-apply mailbox (console reset-to-defaults). Demo-only
+ *  operation: this console has no authentication, so the mailbox holds only test/demo
+ *  submissions from the paired borrower app, never a real lender's live pipeline. */
+export async function clearServerApplications(filePath?: string, lenderId: string = DEFAULT_LENDER_ID): Promise<void> {
+  await writeJson(keyFor(lenderId), defaultFilePathFor(lenderId), [], filePath);
+}

@@ -2,7 +2,7 @@
 // Console-side persistence for the presentment log (Brief G) — localStorage-backed,
 // injectable storage, SSR-safe.
 import { describe, expect, it } from 'vitest';
-import { readPresentmentLog, recordPresentment } from './presentmentStore';
+import { clearPresentmentLog, readPresentmentLog, recordPresentment } from './presentmentStore';
 import type { Presentment } from './presentment';
 
 function fakeStorage(initial: Record<string, string> = {}): Storage {
@@ -66,6 +66,29 @@ describe('recordPresentment', () => {
       setItem: () => { throw new Error('QuotaExceededError'); },
     };
     expect(() => recordPresentment({ id: 'a', at: '2026-06-01T00:00:00.000Z' }, failing)).not.toThrow();
+  });
+});
+
+describe('clearPresentmentLog', () => {
+  it('removes a stored log so a later read comes back empty', () => {
+    const s = fakeStorage();
+    recordPresentment({ id: 'a', at: '2026-06-01T00:00:00.000Z' }, s);
+    expect(readPresentmentLog(s)).toHaveLength(1);
+    clearPresentmentLog(s);
+    expect(readPresentmentLog(s)).toEqual([]);
+  });
+
+  it('only clears the given lender  a sibling lender log is untouched', () => {
+    const s = fakeStorage();
+    recordPresentment({ id: 'a', at: '2026-06-01T00:00:00.000Z' }, s, 'tekun');
+    recordPresentment({ id: 'b', at: '2026-06-01T00:00:00.000Z' }, s, 'koperasi-sejahtera');
+    clearPresentmentLog(s, 'tekun');
+    expect(readPresentmentLog(s, 'tekun')).toEqual([]);
+    expect(readPresentmentLog(s, 'koperasi-sejahtera')).toHaveLength(1);
+  });
+
+  it('is a no-op (never throws) when storage is unavailable (SSR)', () => {
+    expect(() => clearPresentmentLog(null)).not.toThrow();
   });
 });
 

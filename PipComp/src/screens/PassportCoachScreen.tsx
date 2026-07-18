@@ -54,6 +54,9 @@ const START_LABEL: Record<CoachLever, string> = {
   coverage: 'Scan more history',
   surplus: 'Set a budget',
   track: 'See loan offers',
+  // Stress probes never appear as a ranked "next step" (they aren't an improvement), so this
+  // deep-link label is never rendered  present only to satisfy the exhaustive lever map.
+  stress: 'See loan offers',
 };
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {

@@ -58,6 +58,24 @@ describe('computeCreditScore', () => {
       if (f.key !== 'track_record') expect(f.notYetScored).toBeUndefined();
     }
   });
+
+  const trackRecordOf = (p: CreditProfile) =>
+    computeCreditScore(p).factors.find((f) => f.key === 'track_record')!.subScore;
+
+  it('track_record rises with each additional on-time repayment (volume)', () => {
+    const one = trackRecordOf({ ...strong, repaymentOnTime: 1, repaymentTotal: 1 });
+    const two = trackRecordOf({ ...strong, repaymentOnTime: 2, repaymentTotal: 2 });
+    const three = trackRecordOf({ ...strong, repaymentOnTime: 3, repaymentTotal: 3 });
+    expect(two).toBeGreaterThan(one);
+    expect(three).toBeGreaterThan(two);
+  });
+
+  it('a missed installment lowers track_record versus paying it on time', () => {
+    // Same three attempts: all on-time vs the third missed (in the total, not the on-time count).
+    const allPaid = trackRecordOf({ ...strong, repaymentOnTime: 3, repaymentTotal: 3 });
+    const oneMissed = trackRecordOf({ ...strong, repaymentOnTime: 2, repaymentTotal: 3 });
+    expect(oneMissed).toBeLessThan(allPaid);
+  });
 });
 
 describe('bandFor', () => {

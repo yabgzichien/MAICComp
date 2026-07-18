@@ -43,7 +43,10 @@ import {
   createApplication as dbCreateApplication,
   listApplications as dbListApplications,
   scheduleRepayments as dbScheduleRepayments,
+  insertSchedule as dbInsertSchedule,
+  setLoanLiabilityAccount as dbSetLoanLiabilityAccount,
   markRepaymentPaid as dbMarkRepaymentPaid,
+  markRepaymentMissed as dbMarkRepaymentMissed,
   markApplicationStatus as dbMarkApplicationStatus,
   listRepayments as dbListRepayments,
   repaymentSummary as dbRepaymentSummary,
@@ -51,7 +54,9 @@ import {
   type Repayment,
   type RepaymentSummary,
 } from '../db/loansRepo';
-import { decideLoan, type LoanDecision, type LoanProduct } from '../lib/loans';
+import { DEFAULT_PRODUCTS, decideLoan, type LoanDecision, type LoanProduct } from '../lib/loans';
+import { buildBookedLoan, outstandingAfter } from '../lib/acceptOffer';
+import type { DirectApplyDecision } from '../lib/directApply';
 import type { CreditBand } from '../lib/creditScore';
 import { budgetHash, monthKey } from '../lib/budget';
 import { computeCoverage, type Coverage } from '../lib/coverage';
@@ -184,7 +189,18 @@ interface AppData {
     }
   ) => Promise<{ application: LoanApplication; decision: LoanDecision }>;
   recordRepayment: (repaymentId: string, onTime: boolean) => Promise<void>;
+  /** Mark a single installment missed  a track-record negative that does not pay down the
+   *  loan liability. Distinct from `reportDefault` (whole-loan). */
+  missRepayment: (repaymentId: string) => Promise<void>;
   reportDefault: (applicationId: string) => Promise<void>;
+  /** Book an approved lender offer locally: create an application + schedule (using the
+   *  lender's decided installment) attributed to the lender. Returns null if the offer
+   *  isn't bookable (not an approval, non-positive amount, or no matching product). */
+  acceptLenderOffer: (
+    offer: DirectApplyDecision,
+    lender: { products: LoanProduct[]; name: string },
+    scoreAt: number
+  ) => Promise<LoanApplication | null>;
 }
 
 const Ctx = createContext<AppData | null>(null);
@@ -206,6 +222,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [repaymentSummaryState, setRepaymentSummaryState] = useState<RepaymentSummary>({
     onTime: 0,
     total: 0,
+    missed: 0,
   });
   const [kyc, setKycState] = useState<KycIdentity | null>(null);
   const [occupation, setOccupationState] = useState<Occupation | null>(null);
@@ -559,6 +576,34 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     [loanProducts, refreshLoanState, transactions]
   );
 
+  // Book an approved lender offer locally. The lender already decided the installment, so we
+  // persist that exact schedule (via `buildBookedLoan` + `dbInsertSchedule`) rather than
+  // recomputing it, and attribute the application to the lender's name. Feeds the borrower's
+  // real track record (repayment history) the same way `applyForLoan` does.
+  const acceptLenderOffer = useCallback(
+    async (
+      offer: DirectApplyDecision,
+      lender: { products: LoanProduct[]; name: string },
+      scoreAt: number
+    ): Promise<LoanApplication | null> => {
+      const booked = buildBookedLoan(offer, lender.products, new Date());
+      if (!booked) return null;
+      const application = await dbCreateApplication(booked.productId, booked.principal, offer, scoreAt, lender.name);
+      await dbInsertSchedule(application.id, booked.schedule);
+      // Represent the loan as a declining liability on the Net Worth screen (same convention the
+      // demo seed uses for its motor loan). Opening balance = principal; each repayment pays it
+      // down a straight-line slice. Linked to the application so recordRepayment can find it.
+      const liability = await dbAddAccount(`${lender.name} loan`, 'liability', 'personal', booked.principal, todayKey());
+      await dbSetLoanLiabilityAccount(application.id, liability.id);
+      await refreshLoanState();
+      const [accts, entries] = await Promise.all([listAccounts(), listBalanceEntries()]);
+      setAccounts(accts);
+      setBalanceEntries(entries);
+      return application;
+    },
+    [refreshLoanState]
+  );
+
   const completeOnboarding = useCallback(async () => {
     await setMeta(ONBOARDING_KEY, 'true');
     setOnboardingComplete(true);
@@ -615,6 +660,35 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const recordRepayment = useCallback(
     async (repaymentId: string, onTime: boolean) => {
       await dbMarkRepaymentPaid(repaymentId, onTime);
+
+      // Pay down the loan's Net-worth liability by one straight-line principal slice. The
+      // in-memory `repayments` list is still pre-update here, so the count of already-settled
+      // installments plus this one gives how many are now paid.
+      const repayment = repayments.find((r) => r.id === repaymentId);
+      const application = repayment ? loanApplications.find((a) => a.id === repayment.applicationId) : undefined;
+      if (application?.liabilityAccountId) {
+        const productList = loanProducts.length > 0 ? loanProducts : DEFAULT_PRODUCTS;
+        const tenor = productList.find((p) => p.id === application.productId)?.tenorMonths ?? 0;
+        const paidBefore = repayments.filter(
+          (r) => r.applicationId === application.id && (r.status === 'paid' || r.status === 'late')
+        ).length;
+        const outstanding = outstandingAfter(application.requestedAmount, tenor, paidBefore + 1);
+        await upsertDailyBalanceEntry(application.liabilityAccountId, outstanding, todayKey());
+      }
+
+      await refreshLoanState();
+      const [accts, entries] = await Promise.all([listAccounts(), listBalanceEntries()]);
+      setAccounts(accts);
+      setBalanceEntries(entries);
+    },
+    [refreshLoanState, repayments, loanApplications, loanProducts]
+  );
+
+  // Skip an installment: a track-record negative (the score reads it via repaymentSummary),
+  // but it does NOT pay down the liability  the borrower didn't pay.
+  const missRepayment = useCallback(
+    async (repaymentId: string) => {
+      await dbMarkRepaymentMissed(repaymentId);
       await refreshLoanState();
     },
     [refreshLoanState]
@@ -688,7 +762,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     saveAdvice,
     applyForLoan,
     recordRepayment,
+    missRepayment,
     reportDefault,
+    acceptLenderOffer,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
