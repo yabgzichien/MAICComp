@@ -33,6 +33,17 @@ export interface CheckIn {
   flags: EarlyWarningFlag[];
 }
 
+/** One repayment event on a disbursed loan (portfolio performance): the console's own
+ *  ledger of what was actually collected, independent of the passport's self-reported
+ *  repaymentRecord. `amount` is what was actually collected (0 on a missed instalment). */
+export type RepaymentOutcome = 'on-time' | 'late' | 'missed';
+export interface RepaymentEvent {
+  at: string;
+  instalmentSeq: number;
+  amount: number;
+  outcome: RepaymentOutcome;
+}
+
 export interface ApplicationRecord {
   id: string;
   /** The full pasted code  the detail pane rehydrates by re-running evaluate on it. */
@@ -61,6 +72,9 @@ export interface ApplicationRecord {
   /** Post-disbursement check-ins (Brief S), oldest first. Absent/empty on applications that
    *  predate monitoring or have never been re-verified. */
   checkIns?: CheckIn[];
+  /** Repayment ledger (portfolio performance), oldest first. Absent/empty on applications
+   *  that predate the feature or have not yet had an instalment come due. */
+  repayments?: RepaymentEvent[];
   source?: 'direct' | 'officer';
 }
 
@@ -230,6 +244,27 @@ export function recordCheckIn(
   return apps.map((a) =>
     a.id === id
       ? { ...a, checkIns: [...(a.checkIns ?? []), checkIn], audit: [...a.audit, { at, action: 'check-in', detail }] }
+      : a,
+  );
+}
+
+/**
+ * Record one repayment event (portfolio performance): appends it to the application's
+ * repayment ledger, audit-trailed. Never changes `status` or `resolution`  a repayment
+ * informs performance reporting, it never re-decides the loan.
+ */
+export function recordRepayment(
+  apps: ApplicationRecord[],
+  id: string,
+  event: { instalmentSeq: number; amount: number; outcome: RepaymentOutcome },
+  now: Date = new Date(),
+): ApplicationRecord[] {
+  const at = now.toISOString();
+  const repayment: RepaymentEvent = { at, ...event };
+  const detail = `instalment ${event.instalmentSeq}: ${event.outcome}${event.amount > 0 ? ` (RM${Math.round(event.amount).toLocaleString('en-MY')})` : ''}`;
+  return apps.map((a) =>
+    a.id === id
+      ? { ...a, repayments: [...(a.repayments ?? []), repayment], audit: [...a.audit, { at, action: 'repayment', detail }] }
       : a,
   );
 }

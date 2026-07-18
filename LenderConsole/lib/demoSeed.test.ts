@@ -11,6 +11,7 @@ import { parsePassportCode } from './passport';
 import { buildPortfolio, bookToPool } from './portfolio';
 import { structurePool } from './securitization';
 import { DEMO_APPLICANTS } from '../app/demoApplicants';
+import { buildPerformance } from './performance';
 
 const NOW = new Date('2026-07-14T12:00:00.000Z');
 
@@ -94,5 +95,41 @@ describe('seedApplications', () => {
     for (const t of tranches) {
       expect(t.thicknessRM).toBeGreaterThanOrEqual(5000);
     }
+  });
+
+  // ── Portfolio Performance (2026-07-18 design): the seed's repayment beat ────────
+  describe('repayment performance seed', () => {
+    it('the seeded book has real repayment data on first seed, never an empty state', () => {
+      const { apps } = seed();
+      const dash = buildPerformance(apps, NOW);
+      expect(dash.hasRepaymentData).toBe(true);
+      expect(dash.loanCount).toBeGreaterThan(0);
+    });
+
+    it('at least one band clears the small-sample threshold with real cohort rates', () => {
+      const { apps } = seed();
+      const dash = buildPerformance(apps, NOW);
+      const solidCohort = dash.bands.find((b) => !b.smallSample);
+      expect(solidCohort).toBeDefined();
+      expect(solidCohort!.onTimeRate).toBeGreaterThan(0);
+    });
+
+    it("Siti's loan reads one instalment behind, corroborating her watchlist check-in rather than contradicting it", () => {
+      const { apps } = seed();
+      const siti = apps.find((a) => a.applicantLabel === 'Siti Aminah binti Kassim')!;
+      expect(siti.repayments).toBeDefined();
+      const dash = buildPerformance(apps, NOW);
+      const good = dash.bands.find((b) => b.band === 'Good')!;
+      // Siti is Good-band and behind; the cohort's collection rate must be < 100% to reflect it.
+      expect(good.collectionRate).toBeLessThan(1);
+      expect(good.onTimeRate).toBeGreaterThan(0); // the rest of the Good cohort is current
+    });
+
+    it('every other seeded loan with repayments is fully collected to date (no cohort silently contradicts the "mostly current" story)', () => {
+      const { apps } = seed();
+      const dash = buildPerformance(apps, NOW);
+      // Portfolio-wide realized loss stays at 0: nothing was missed, Siti is merely behind schedule.
+      expect(dash.realizedLossRate).toBe(0);
+    });
   });
 });

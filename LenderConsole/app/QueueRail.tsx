@@ -9,6 +9,31 @@ import { FONT, type Palette } from './tokens';
 import { orderQueue, watchlistApplications, type ApplicationRecord, type ApplicationStatus } from '../lib/applications';
 import { formatAgo } from '../lib/presentment';
 import { TourAnchor } from './TourAnchor';
+import { mapBook } from '../lib/portfolio';
+import { loanPerformance, type LoanPerfStatus } from '../lib/performance';
+
+const PERF_STYLE: Record<LoanPerfStatus, { label: string; color: string; bg: string }> = {
+  current: { label: 'Current', color: '#1f8a5b', bg: '#e7f4ec' },
+  late: { label: 'Late', color: '#a3791f', bg: '#fdf3dc' },
+  delinquent: { label: 'Delinquent', color: '#c0392b', bg: '#fde8e8' },
+};
+
+/** Repayment status chip (portfolio performance): only renders once an approved loan has
+ *  actually had an instalment come due  a same-instant "just approved" loan shows nothing
+ *  rather than a misleading "Current" badge for a schedule that hasn't started. */
+function PerformanceChip({ app }: { app: ApplicationRecord }) {
+  if (app.status !== 'approved') return null;
+  const book = mapBook([app]);
+  if (book.length === 0) return null;
+  const perf = loanPerformance(book[0]);
+  if (perf.dueCount === 0) return null;
+  const s = PERF_STYLE[perf.status];
+  return (
+    <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: s.color, background: s.bg, borderRadius: 5, padding: '1px 6px', marginLeft: 4, flexShrink: 0 }}>
+      {s.label}
+    </span>
+  );
+}
 
 const BAND_COLOR: Record<string, string> = {
   Building: '#c0392b',
@@ -146,7 +171,10 @@ export default function QueueRail({
                     background: selected ? '#fdecea' : '#fff8f7',
                   }}
                 >
-                  <p style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.applicantLabel}</p>
+                  <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                    <p style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{a.applicantLabel}</p>
+                    <PerformanceChip app={a} />
+                  </div>
                   <p style={{ fontFamily: FONT.ui, fontSize: 12, color: critical ? '#c0392b' : '#a3791f', marginTop: 2, fontWeight: 600 }}>
                     {latest.flags.length} flag(s){critical ? ' · critical' : ''}
                   </p>
@@ -213,6 +241,7 @@ export default function QueueRail({
                         direct
                       </span>
                     )}
+                    <PerformanceChip app={a} />
                   </div>
                   <p style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink2, marginTop: 2 }}>
                     {rm(a.requestedAmount)} · filed {formatAgo(a.filedAt)}

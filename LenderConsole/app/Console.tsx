@@ -21,7 +21,8 @@ import { priceLoan, repriceProducts, type PricingSuggestion } from '../lib/prici
 import { structurePool, type CreditBand, type PoolLoan } from '../lib/securitization';
 import { SAMPLE_POOL } from '../lib/samplePool';
 import { poolStatCells, trancheViews } from '../lib/poolView';
-import { bookToPool } from '../lib/portfolio';
+import { bookToPool, mapBook } from '../lib/portfolio';
+import { loanPerformance, type LoanPerformance } from '../lib/performance';
 import PolicyTab from './PolicyTab';
 import PortfolioTab from './PortfolioTab';
 import { buildDecisionFile, decisionFileName } from '../lib/decisionFile';
@@ -45,6 +46,7 @@ import {
   readApplications,
   recordCheckIn,
   recordLetterGenerated,
+  recordRepayment,
   resolveApplication,
   watchlistApplications,
   writeApplications,
@@ -52,6 +54,7 @@ import {
   type DeclaredPurpose,
   type FileApplicationInput,
   type PurposeCategory,
+  type RepaymentOutcome,
 } from '../lib/applications';
 import { diffCheckIn, monitoringStatus, type EarlyWarningFlag, type MonitoringStatus } from '../lib/earlyWarning';
 import { seedApplications } from '../lib/demoSeed';
@@ -846,7 +849,91 @@ function MonitoringSection({ p, app, passport }: { p: Palette; app: ApplicationR
   );
 }
 
-function ApplicationCard({ p, app, passport, onResolve }: { p: Palette; app: ApplicationRecord; passport?: CreditPassport | null; onResolve: (outcome: 'approved' | 'declined', rationale: string) => void }) {
+type ScheduleDot = 'paid-on-time' | 'paid-late' | 'missed' | 'overdue' | 'upcoming';
+
+function scheduleDots(app: ApplicationRecord, perf: LoanPerformance): ScheduleDot[] {
+  const events = app.repayments ?? [];
+  return Array.from({ length: perf.tenorMonths }, (_, i) => {
+    const seq = i + 1;
+    const ev = events.find((e) => e.instalmentSeq === seq);
+    if (ev) return ev.outcome === 'missed' ? 'missed' : ev.outcome === 'late' ? 'paid-late' : 'paid-on-time';
+    return seq <= perf.dueCount ? 'overdue' : 'upcoming';
+  });
+}
+
+/** Per-instalment repayment schedule strip (portfolio performance): one dot per instalment,
+ *  with an aria-label carrying the same summary in words  the dots are presentation, never
+ *  the only carrier of the information. */
+function ScheduleStrip({ p, app }: { p: Palette; app: ApplicationRecord }) {
+  const book = mapBook([app]);
+  if (book.length === 0) return null;
+  const perf = loanPerformance(book[0]);
+  if (perf.tenorMonths <= 0) return null;
+  const dots = scheduleDots(app, perf);
+  const dotColor = (d: ScheduleDot): string => {
+    if (d === 'paid-on-time') return p.primary;
+    if (d === 'paid-late') return p.amber;
+    if (d === 'missed') return p.red;
+    if (d === 'overdue') return perf.status === 'delinquent' ? p.red : p.amber;
+    return p.hairline;
+  };
+  const behindNote =
+    perf.status === 'late'
+      ? ', one instalment behind'
+      : perf.status === 'delinquent'
+        ? perf.missedCount > 0
+          ? `, ${perf.missedCount} missed`
+          : ', two or more instalments behind'
+        : '';
+  const label = `Repayment schedule: paid ${perf.paidCount} of ${perf.tenorMonths} instalments${behindNote}.`;
+  return (
+    <div style={{ marginTop: 8, borderTop: `1px solid ${p.hairline}`, paddingTop: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink2 }}>Repayment schedule</span>
+        <span style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink3 }}>{perf.paidCount}/{perf.tenorMonths}</span>
+      </div>
+      <div role="img" aria-label={label} title={label} style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+        {dots.map((d, i) => (
+          <span key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor(d), flexShrink: 0 }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Officer-facing "record a repayment" mini-form (portfolio performance): appends the next
+ *  scheduled instalment's outcome to the loan's ledger, audit-trailed. Hides itself once every
+ *  instalment on the loan's tenor has been recorded  there is nothing left to record. */
+function RecordRepaymentForm({ p, app, onRecord }: { p: Palette; app: ApplicationRecord; onRecord: (instalmentSeq: number, amount: number, outcome: RepaymentOutcome) => void }) {
+  const [outcome, setOutcome] = useState<RepaymentOutcome>('on-time');
+  const book = mapBook([app]);
+  if (book.length === 0) return null;
+  const tenorMonths = book[0].loan.tenorMonths;
+  const nextSeq = (app.repayments?.length ?? 0) + 1;
+  if (nextSeq > tenorMonths) return null;
+  return (
+    <div style={{ marginTop: 8, borderTop: `1px solid ${p.hairline}`, paddingTop: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+      <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>Record instalment {nextSeq}:</span>
+      <select
+        value={outcome}
+        onChange={(e) => setOutcome(e.target.value as RepaymentOutcome)}
+        style={{ padding: '4px 6px', borderRadius: 6, border: `1.5px solid ${p.hairline}`, fontSize: 12, color: p.ink1, background: p.surface, fontFamily: FONT.ui, outline: 'none' }}
+      >
+        <option value="on-time">On-time</option>
+        <option value="late">Late</option>
+        <option value="missed">Missed</option>
+      </select>
+      <button
+        onClick={() => onRecord(nextSeq, outcome === 'missed' ? 0 : app.installment, outcome)}
+        style={{ padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: p.accentInk, color: 'white', fontFamily: FONT.ui, fontSize: 12, fontWeight: 700 }}
+      >
+        Record
+      </button>
+    </div>
+  );
+}
+
+function ApplicationCard({ p, app, passport, onResolve, onRecordRepayment }: { p: Palette; app: ApplicationRecord; passport?: CreditPassport | null; onResolve: (outcome: 'approved' | 'declined', rationale: string) => void; onRecordRepayment?: (instalmentSeq: number, amount: number, outcome: RepaymentOutcome) => void }) {
   const [rationale, setRationale] = useState('');
   const s = APP_STATUS_STYLE[app.status];
   const canResolve = rationale.trim().length > 0;
@@ -916,6 +1003,8 @@ function ApplicationCard({ p, app, passport, onResolve }: { p: Palette; app: App
       )}
 
       {app.status === 'approved' && <MonitoringSection p={p} app={app} passport={passport ?? null} />}
+      {app.status === 'approved' && <ScheduleStrip p={p} app={app} />}
+      {app.status === 'approved' && onRecordRepayment && <RecordRepaymentForm p={p} app={app} onRecord={onRecordRepayment} />}
 
       <div style={{ marginTop: 8, borderTop: `1px solid ${p.hairline}`, paddingTop: 6 }}>
         {app.audit.map((e, i) => (
@@ -965,7 +1054,7 @@ function PricingStrip({ p, pricing, adopted, onAdopt }: { p: Palette; pricing: P
   );
 }
 
-function RightDecision({ p, passport, decision, credential, amount, setAmount, onAssess, onCounterOffer, isCounterOffer, stacking, selectedApp, onResolve, onGenerateLetter, purpose, setPurpose, policy, policyUpdatedAt, pricing, adoptedRate, onAdoptRate, lenderName }: { p: Palette; passport: CreditPassport | null; decision: LoanDecision | null; credential: Credential | null; amount: string; setAmount: (s: string) => void; onAssess: () => void; onCounterOffer?: (counterAmount: number) => void; isCounterOffer?: boolean; stacking?: StackingSignal; selectedApp?: ApplicationRecord | null; onResolve?: (outcome: 'approved' | 'declined', rationale: string) => void; onGenerateLetter?: () => void; purpose?: DeclaredPurpose | null; setPurpose?: (p: DeclaredPurpose | null) => void; policy?: LenderPolicy; policyUpdatedAt?: string; pricing?: PricingSuggestion | null; adoptedRate?: number | null; onAdoptRate?: (rate: number) => void; lenderName: string }) {
+function RightDecision({ p, passport, decision, credential, amount, setAmount, onAssess, onCounterOffer, isCounterOffer, stacking, selectedApp, onResolve, onRecordRepayment, onGenerateLetter, purpose, setPurpose, policy, policyUpdatedAt, pricing, adoptedRate, onAdoptRate, lenderName }: { p: Palette; passport: CreditPassport | null; decision: LoanDecision | null; credential: Credential | null; amount: string; setAmount: (s: string) => void; onAssess: () => void; onCounterOffer?: (counterAmount: number) => void; isCounterOffer?: boolean; stacking?: StackingSignal; selectedApp?: ApplicationRecord | null; onResolve?: (outcome: 'approved' | 'declined', rationale: string) => void; onRecordRepayment?: (instalmentSeq: number, amount: number, outcome: RepaymentOutcome) => void; onGenerateLetter?: () => void; purpose?: DeclaredPurpose | null; setPurpose?: (p: DeclaredPurpose | null) => void; policy?: LenderPolicy; policyUpdatedAt?: string; pricing?: PricingSuggestion | null; adoptedRate?: number | null; onAdoptRate?: (rate: number) => void; lenderName: string }) {
   const [memoOpen, setMemoOpen] = useState(false);
   const [letterOpen, setLetterOpen] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
@@ -1056,7 +1145,7 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
         )}
       </div>
 
-      {selectedApp && onResolve && <ApplicationCard p={p} app={selectedApp} passport={passport} onResolve={onResolve} />}
+      {selectedApp && onResolve && <ApplicationCard p={p} app={selectedApp} passport={passport} onResolve={onResolve} onRecordRepayment={onRecordRepayment} />}
 
       {decision ? (
         <>
@@ -1818,6 +1907,13 @@ export default function Console() {
     syncApps(resolveApplication(apps, selectedAppId, outcome, rationale, new Date(), activeLender.officer));
   };
 
+  /** Officer-recorded repayment (portfolio performance): appends one instalment outcome to
+   *  the selected loan's ledger, audit-trailed. Never touches status/resolution. */
+  const onRecordRepayment = (instalmentSeq: number, amt: number, outcome: RepaymentOutcome) => {
+    if (!selectedAppId) return;
+    syncApps(recordRepayment(apps, selectedAppId, { instalmentSeq, amount: amt, outcome }, new Date()));
+  };
+
   /** Records that an adverse-action letter was generated (Brief J stretch), audit-trailed 
    *  a no-op when the currently-loaded passport isn't tied to a filed application. */
   const onGenerateLetter = () => {
@@ -1885,7 +1981,7 @@ export default function Console() {
             <QueueRail p={p} apps={apps} selectedId={selectedAppId} onSelect={onSelectApp} onSeed={onSeed} onPasteNew={onPasteNew} forceSeedButton={tour.forceSeedButton} />
             {showPassportInput && <LeftPanel p={p} flagged={flagged} statusValid={flagged ? false : statusValid} code={code} setCode={setCode} onVerify={onVerify} />}
             {showAlert ? <CenterAlert p={p} flagTime={flagTime} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} lapsedTiers={state.credential.verification.lapsedTiers} /> : <InvalidCenter p={p} reasons={state.reasons} />}
-            {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} onCounterOffer={onCounterOffer} isCounterOffer={isCounterOffer} stacking={stackingSignal} selectedApp={selectedApp} onResolve={onResolve} onGenerateLetter={onGenerateLetter} purpose={purpose} setPurpose={setPurpose} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} pricing={pricing} adoptedRate={adoptedRate} onAdoptRate={onAdoptRate} lenderName={activeLender.name} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} lenderName={activeLender.name} />}
+            {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} onCounterOffer={onCounterOffer} isCounterOffer={isCounterOffer} stacking={stackingSignal} selectedApp={selectedApp} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onGenerateLetter={onGenerateLetter} purpose={purpose} setPurpose={setPurpose} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} pricing={pricing} adoptedRate={adoptedRate} onAdoptRate={onAdoptRate} lenderName={activeLender.name} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} lenderName={activeLender.name} />}
           </>
         ) : tab === 'portfolio' ? (
           <PortfolioTab p={palette(false)} apps={apps} onStructure={() => { setPoolSource('live'); setTab('capital'); }} />

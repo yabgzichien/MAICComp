@@ -5,16 +5,18 @@
 // structures the live book in Capital Markets. No new risk math: buildPortfolio maps the
 // approved-applications store into the pool shape and reuses securitization.ts's aggregates.
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { FONT, type Palette } from './tokens';
-import { MiniBar, SectionLabel } from './shared';
+import { InfoButton, InfoModal, MiniBar, SectionLabel } from './shared';
 import { TourAnchor } from './TourAnchor';
 import { buildPortfolio, type BreakdownRow } from '../lib/portfolio';
+import { buildPerformance, type CohortRow } from '../lib/performance';
 import { formatPoolMoney } from '../lib/poolView';
 import type { ApplicationRecord } from '../lib/applications';
 
 const pct1 = (x: number): string => `${(x * 100).toFixed(1)}%`;
 const pct2 = (x: number): string => `${(x * 100).toFixed(2)}%`;
+const rm = (n: number): string => `RM${Math.round(n).toLocaleString('en-MY')}`;
 
 function BreakdownTable({ p, title, rows, accent }: { p: Palette; title: string; rows: BreakdownRow[]; accent: string }) {
   return (
@@ -32,6 +34,96 @@ function BreakdownTable({ p, title, rows, accent }: { p: Palette; title: string;
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** Verdict-first read of a band's realized loss against what the risk model predicted
+ *  figures come second, mirroring the forensics table's verdict-first precedent. A cohort
+ *  under the small-sample threshold never gets a confident verdict, honest or otherwise. */
+function perfVerdict(row: CohortRow): { text: string; color: string } {
+  if (row.smallSample) return { text: 'Too few loans yet to judge', color: '#5d6b63' };
+  if (row.realizedLossRate <= row.expectedLossRate) return { text: 'Performing better than predicted', color: '#1f8a5b' };
+  return { text: "Underperforming its risk model", color: '#c0392b' };
+}
+
+function PerformanceStat({ label, value, info, onInfo }: { label: string; value: string; info: string; onInfo: (entry: string) => void }) {
+  return (
+    <div style={{ flex: 1, minWidth: 110, display: 'flex', flexDirection: 'column', gap: 7 }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontFamily: FONT.ui, fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.38)', letterSpacing: '0.10em', textTransform: 'uppercase' }}>
+        {label}
+        <InfoButton entry={info} onOpen={onInfo} dark />
+      </span>
+      <span style={{ fontFamily: FONT.num, fontSize: 27, fontWeight: 700, color: 'white', letterSpacing: '-0.5px', lineHeight: 1 }}>{value}</span>
+    </div>
+  );
+}
+
+function PerformanceTable({ p, rows, onInfo }: { p: Palette; rows: CohortRow[]; onInfo: (entry: string) => void }) {
+  return (
+    <div style={{ background: p.surface, borderRadius: 12, padding: '14px 16px', boxShadow: p.shadow }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        <SectionLabel color={p.ink2}>Repayment Performance by Band</SectionLabel>
+        <InfoButton entry="cohort" onOpen={onInfo} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '90px 60px 1fr 100px', gap: 10, padding: '4px 6px', borderBottom: `1px solid ${p.hairline}`, marginBottom: 4 }}>
+        {['Band', 'Loans', 'Verdict', 'On-time / Collected'].map((h) => (
+          <span key={h} style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 600, color: p.ink3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{h}</span>
+        ))}
+      </div>
+      {rows.map((r) => {
+        const verdict = perfVerdict(r);
+        return (
+          <div key={r.band} style={{ display: 'grid', gridTemplateColumns: '90px 60px 1fr 100px', gap: 10, alignItems: 'center', padding: '8px 6px', borderBottom: `1px solid ${p.hairline}` }}>
+            <span style={{ fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, color: p.ink1 }}>{r.band}</span>
+            <span style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink2 }}>{r.loanCount}</span>
+            <div>
+              <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: verdict.color }}>{verdict.text}</span>
+              {!r.smallSample && (
+                <p style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink3, marginTop: 1 }}>
+                  realized {pct2(r.realizedLossRate)} vs expected {pct2(r.expectedLossRate)}
+                </p>
+              )}
+            </div>
+            <span style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink2, textAlign: 'right' }}>
+              {pct1(r.onTimeRate)} · {pct1(r.collectionRate)}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function PerformanceSection({ p, apps }: { p: Palette; apps: ApplicationRecord[] }) {
+  const perf = useMemo(() => buildPerformance(apps), [apps]);
+  const [info, setInfo] = useState<string | null>(null);
+
+  if (perf.loanCount === 0) return null;
+
+  return (
+    <div style={{ padding: '4px 40px 8px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <InfoModal entry={info} onClose={() => setInfo(null)} p={p} />
+      <SectionLabel color={p.ink2}>Performance · The Validation Loop</SectionLabel>
+
+      {!perf.hasRepaymentData ? (
+        <div style={{ padding: '18px 20px', borderRadius: 12, background: p.surface, border: `1px solid ${p.hairline}`, boxShadow: p.shadow }}>
+          <p style={{ fontFamily: FONT.ui, fontSize: 13, fontWeight: 700, color: p.ink1, marginBottom: 4 }}>No repayments recorded yet</p>
+          <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.55 }}>
+            Performance appears here once the first instalment on an approved loan comes due and is recorded.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div style={{ background: 'linear-gradient(135deg, #0e1812 0%, #17211a 100%)', borderRadius: 12, padding: '18px 22px', display: 'flex', alignItems: 'stretch', flexWrap: 'wrap', gap: 16 }}>
+            <PerformanceStat label="Collection Rate" value={pct1(perf.collectionRate)} info="collection_rate" onInfo={setInfo} />
+            <PerformanceStat label="On-Time Rate" value={pct1(perf.onTimeRate)} info="on_time_rate" onInfo={setInfo} />
+            <PerformanceStat label="Realized vs Expected Loss" value={`${pct2(perf.realizedLossRate)} / ${pct2(perf.expectedLossRate)}`} info="realized_loss" onInfo={setInfo} />
+            <PerformanceStat label="Interest Collected" value={rm(perf.interestCollected)} info="interest_collected" onInfo={setInfo} />
+          </div>
+          <PerformanceTable p={p} rows={perf.bands} onInfo={setInfo} />
+        </>
+      )}
     </div>
   );
 }
@@ -118,6 +210,10 @@ export default function PortfolioTab({ p, apps, onStructure }: { p: Palette; app
             <BreakdownTable p={p} title="Exposure by Credit Band" rows={book.bandBreakdown} accent={p.primary} />
             <BreakdownTable p={p} title="Exposure by Declared Purpose" rows={book.purposeBreakdown} accent="#3b5bdb" />
           </div>
+          </TourAnchor>
+
+          <TourAnchor id="portfolio-performance">
+            <PerformanceSection p={p} apps={apps} />
           </TourAnchor>
 
           <div style={{ padding: '4px 40px 24px', marginTop: 'auto' }}>

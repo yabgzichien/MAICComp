@@ -64,17 +64,22 @@ export interface Portfolio {
   concentrations: ConcentrationFlag[];
 }
 
-interface BookLoan {
+export interface BookLoan {
   loan: PoolLoan;
   confidence: number;
   purposeLabel: string;
+  /** The source application record  lets a downstream consumer (e.g. the performance
+   *  module) read repayments/resolvedAt without re-parsing the passport a second time. */
+  app: ApplicationRecord;
 }
 
 const isCreditBand = (b: string): b is CreditBand => (BAND_ORDER as string[]).includes(b);
 
 /** Map the approved book to internal loans, parsing each stored passport defensively.
- *  Approved rows with no offer, or an unparseable code, are skipped rather than throwing. */
-function mapBook(apps: ApplicationRecord[]): BookLoan[] {
+ *  Approved rows with no offer, or an unparseable code, are skipped rather than throwing.
+ *  Exported so other modules (e.g. lib/performance.ts) reuse this one parse-and-map pass
+ *  instead of duplicating passport parsing. */
+export function mapBook(apps: ApplicationRecord[]): BookLoan[] {
   const out: BookLoan[] = [];
   for (const a of apps) {
     if (a.status !== 'approved' || !(a.offeredAmount > 0)) continue;
@@ -100,6 +105,7 @@ function mapBook(apps: ApplicationRecord[]): BookLoan[] {
       },
       confidence: passport.assessment?.confidence ?? 0,
       purposeLabel: a.purpose ? PURPOSE_LABELS[a.purpose.category] ?? UNDECLARED : UNDECLARED,
+      app: a,
     });
   }
   return out;

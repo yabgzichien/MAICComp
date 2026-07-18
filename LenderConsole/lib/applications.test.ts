@@ -11,6 +11,7 @@ import {
   readApplications,
   recordCheckIn,
   recordLetterGenerated,
+  recordRepayment,
   resolveApplication,
   watchlistApplications,
   writeApplications,
@@ -339,6 +340,45 @@ describe('watchlistApplications', () => {
     let apps = referred();
     apps = recordCheckIn(apps, apps[0].id, '{}', [{ key: 'income-drop' as const, severity: 'watch' as const, evidence: 'x' }], NOW);
     expect(watchlistApplications(apps)).toEqual([]);
+  });
+});
+
+// ── recordRepayment (portfolio performance): the console-side repayment ledger ──
+
+describe('recordRepayment', () => {
+  const approved = () => file([], { engineDecision: 'approve' }).apps;
+
+  it('appends a repayment event and an audit entry without changing status or resolution', () => {
+    const base = approved();
+    const apps = recordRepayment(base, base[0].id, { instalmentSeq: 1, amount: 350, outcome: 'on-time' }, NOW);
+    expect(apps[0].status).toBe('approved');
+    expect(apps[0].resolution).toBeUndefined();
+    expect(apps[0].repayments).toHaveLength(1);
+    expect(apps[0].repayments![0]).toEqual({ at: NOW.toISOString(), instalmentSeq: 1, amount: 350, outcome: 'on-time' });
+    const lastAudit = apps[0].audit[apps[0].audit.length - 1];
+    expect(lastAudit.action).toBe('repayment');
+    expect(lastAudit.detail).toContain('on-time');
+  });
+
+  it('a missed instalment still records, with an honest "missed" audit note', () => {
+    const base = approved();
+    const apps = recordRepayment(base, base[0].id, { instalmentSeq: 2, amount: 0, outcome: 'missed' }, NOW);
+    expect(apps[0].repayments![0].outcome).toBe('missed');
+    expect(apps[0].audit[apps[0].audit.length - 1].detail).toMatch(/missed/i);
+  });
+
+  it('accumulates multiple repayments in order, oldest first', () => {
+    let apps = approved();
+    apps = recordRepayment(apps, apps[0].id, { instalmentSeq: 1, amount: 350, outcome: 'on-time' }, hoursAgo(48));
+    apps = recordRepayment(apps, apps[0].id, { instalmentSeq: 2, amount: 350, outcome: 'on-time' }, hoursAgo(1));
+    expect(apps[0].repayments!.map((r) => r.instalmentSeq)).toEqual([1, 2]);
+  });
+
+  it('the input array is not mutated', () => {
+    const base = approved();
+    const before = JSON.parse(JSON.stringify(base));
+    recordRepayment(base, base[0].id, { instalmentSeq: 1, amount: 350, outcome: 'on-time' }, NOW);
+    expect(base).toEqual(before);
   });
 });
 
