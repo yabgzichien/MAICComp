@@ -94,7 +94,8 @@ async function init(): Promise<SQLite.SQLiteDatabase> {
       symbol      TEXT,
       ticker      TEXT,
       quantity    REAL,
-      cost        REAL
+      cost        REAL,
+      icon        TEXT
     );
     CREATE TABLE IF NOT EXISTS balance_entries (
       id          TEXT PRIMARY KEY NOT NULL,
@@ -150,7 +151,7 @@ async function init(): Promise<SQLite.SQLiteDatabase> {
   }
 
   // Migration: holding columns on `accounts` for live-priced investments.
-  for (const col of ['sub TEXT', 'symbol TEXT', 'ticker TEXT', 'quantity REAL', 'cost REAL']) {
+  for (const col of ['sub TEXT', 'symbol TEXT', 'ticker TEXT', 'quantity REAL', 'cost REAL', 'icon TEXT']) {
     try {
       await db.execAsync(`ALTER TABLE accounts ADD COLUMN ${col}`);
     } catch {
@@ -177,6 +178,37 @@ async function init(): Promise<SQLite.SQLiteDatabase> {
     await db.execAsync('ALTER TABLE loan_applications ADD COLUMN liability_account_id TEXT');
   } catch {
     // column already present
+  }
+
+  // Migration: which registry lender this loan is with (Bidirectional Servicing Sync,
+  // 2026-07-18 design)  the id the console's /api/servicing expects, distinct from
+  // lender_label's display name. Null for a self-decided (non-lender-routed) application.
+  try {
+    await db.execAsync('ALTER TABLE loan_applications ADD COLUMN lender_id TEXT');
+  } catch {
+    // column already present
+  }
+
+  // Migration: default provenance (2026-07-18 design)  when this loan was marked defaulted
+  // and by which side, so a synced-in lender-reported default can be told apart from a
+  // locally-simulated one, and so the shared merge has an honest `at` to latch on.
+  for (const col of ['defaulted_at TEXT', 'defaulted_source TEXT']) {
+    try {
+      await db.execAsync(`ALTER TABLE loan_applications ADD COLUMN ${col}`);
+    } catch {
+      // column already present
+    }
+  }
+
+  // Migration: the declared purpose a loan was booked under (My Financing polish,
+  // 2026-07-19)  previously sent to the lender but never stored locally, so the borrower's
+  // own loan list couldn't show "why" a loan exists. Null for loans booked before this shipped.
+  for (const col of ['purpose_category TEXT', 'purpose_note TEXT']) {
+    try {
+      await db.execAsync(`ALTER TABLE loan_applications ADD COLUMN ${col}`);
+    } catch {
+      // column already present
+    }
   }
 
   await ensureSeedCategories(db);
@@ -260,6 +292,7 @@ export async function resetAllData(): Promise<void> {
       DELETE FROM loan_applications;
       DELETE FROM loan_products;
       DELETE FROM occupation;
+      DELETE FROM kyc;
     `);
     await seedCategories(db);
     await seedProducts(db);

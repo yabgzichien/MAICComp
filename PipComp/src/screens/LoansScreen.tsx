@@ -1,12 +1,13 @@
 // src/screens/LoansScreen.tsx
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../components/Icon';
 import { InfoButton } from '../components/InfoButton';
-import { Amount, Card, Eyebrow, TopBar } from '../components/ui';
+import { Amount, Card, Eyebrow, ProgressTrack, TopBar } from '../components/ui';
 import { shortDate } from '../lib/dates';
 import { DEFAULT_PRODUCTS } from '../lib/loans';
+import { buildLoanPackages, financingTotals, type LoanPackage } from '../lib/loanSummary';
 import type { Repayment, RepaymentStatus } from '../db/loansRepo';
 import { useAppData } from '../state/store';
 import { useCreditProfile } from '../state/useCreditProfile';
@@ -34,6 +35,60 @@ function repaymentStatusLabel(s: RepaymentStatus): string {
   return 'Scheduled';
 }
 
+/** One "package" card per loan (My Financing polish, 2026-07-19): lender + purpose + progress,
+ *  never the raw per-installment list  tapping it is how you reach that loan's own schedule. */
+function LoanPackageCard({ pkg, onPress }: { pkg: LoanPackage; onPress: () => void }) {
+  const pct = pkg.tenorMonths > 0 ? (pkg.paidCount / pkg.tenorMonths) * 100 : 0;
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.pkgCard, pressed && { opacity: 0.92 }]}
+      accessibilityRole="button"
+      accessibilityLabel={`${pkg.lenderLabel}, ${pkg.purposeLabel}, open full schedule`}
+    >
+      <View style={styles.pkgRow}>
+        <View style={styles.lenderBadge}>
+          <Icon name="wallet" size={18} color={colors.accentInk} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.pkgLender} numberOfLines={1}>{pkg.lenderLabel}</Text>
+          <Text style={styles.pkgPurpose} numberOfLines={1}>{pkg.purposeLabel}</Text>
+        </View>
+        <Icon name="chevronRight" size={16} color={colors.ink3} />
+      </View>
+
+      {pkg.status === 'defaulted' ? (
+        <View style={styles.pkgFooterRow}>
+          <Amount value={pkg.outstandingPrincipal} size={16} />
+          <View style={[styles.statusPill, { backgroundColor: '#fce8e6' }]}>
+            <Text style={[styles.statusPillText, { color: RED }]}>Defaulted</Text>
+          </View>
+        </View>
+      ) : pkg.status === 'settled' ? (
+        <View style={styles.pkgFooterRow}>
+          <Amount value={pkg.principal} size={16} />
+          <View style={[styles.statusPill, { backgroundColor: colors.accentTint }]}>
+            <Text style={[styles.statusPillText, { color: colors.accentInk }]}>Paid off</Text>
+          </View>
+        </View>
+      ) : (
+        <>
+          <View style={styles.pkgFooterRow}>
+            <Amount value={pkg.outstandingPrincipal} size={16} />
+            <Text style={styles.pkgMuted}>outstanding</Text>
+          </View>
+          <View style={{ marginTop: 8 }}>
+            <ProgressTrack pct={pct} height={5} />
+            <Text style={styles.pkgMuted}>
+              {pkg.paidCount} of {pkg.tenorMonths} paid · RM{Math.round(pkg.monthlyInstallment).toLocaleString('en-MY')}/mo
+            </Text>
+          </View>
+        </>
+      )}
+    </Pressable>
+  );
+}
+
 export function LoansScreen({
   onBack,
   onOpenKyc = () => {},
@@ -46,10 +101,15 @@ export function LoansScreen({
   onOpenCoach?: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const { kyc, loanProducts, loanApplications, repayments, repaymentSummary, recordRepayment, missRepayment, reportDefault } =
+  const { kyc, loanProducts, loanApplications, repayments, recordRepayment, missRepayment, reportDefault, pullServicing, adoptApprovedOffers, markFinancingSeen } =
     useAppData();
+  const { score } = useCreditProfile();
 
   const products = loanProducts.length > 0 ? loanProducts : DEFAULT_PRODUCTS;
+
+  // Master/detail within this one screen (no new route): null shows the loan-package list,
+  // an id drills into that loan's own full schedule + demo beats.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const [repayBusy, setRepayBusy] = useState<string | null>(null);
   const [repayMsg, setRepayMsg] = useState('');
@@ -60,16 +120,29 @@ export function LoansScreen({
   const [defaultBusy, setDefaultBusy] = useState<string | null>(null);
   const [defaultError, setDefaultError] = useState('');
 
-  const activeApplications = useMemo(
-    () => loanApplications.filter((a) => a.status === 'active'),
-    [loanApplications]
-  );
+  // Poll-on-focus (Bidirectional Servicing Sync, 2026-07-18 + approval-notify, 2026-07-19):
+  // this screen only ever mounts while the borrower is actually on it (App.tsx swaps screens by
+  // conditional render, not a persistent navigator), so a mount effect IS the focus signal.
+  // Order matters: adopt any newly-approved financing so it appears, pull servicing events,
+  // then clear the unseen badge  the borrower is now looking at My Financing, so nothing here
+  // is "unseen" anymore (a loan approved later, while they're elsewhere, re-badges via Home).
+  useEffect(() => {
+    (async () => {
+      await adoptApprovedOffers(score.score);
+      await pullServicing();
+      await markFinancingSeen();
+    })().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Demo beat 1: simulate the next scheduled repayment being paid on time.
-  const nextScheduled = useMemo(
-    () => repayments.find((r) => r.status === 'scheduled'),
-    [repayments]
-  );
+  // One package per loan (My Financing polish, 2026-07-19): groups the flat, cross-lender
+  // repayments list back into "TEKUN · Emergency", "Naga · Working capital", etc.
+  const packages = useMemo(() => buildLoanPackages(loanApplications, repayments, products), [loanApplications, repayments, products]);
+  const totals = useMemo(() => financingTotals(packages), [packages]);
+  const ongoingPackages = useMemo(() => packages.filter((p) => p.status === 'ongoing'), [packages]);
+  const settledPackages = useMemo(() => packages.filter((p) => p.status === 'settled'), [packages]);
+  const defaultedPackages = useMemo(() => packages.filter((p) => p.status === 'defaulted'), [packages]);
+  const selectedPackage = useMemo(() => (selectedId ? packages.find((p) => p.application.id === selectedId) ?? null : null), [packages, selectedId]);
 
   const simulateOnTimeRepayment = async (repayment: Repayment) => {
     setRepayBusy(repayment.id);
@@ -87,8 +160,6 @@ export function LoansScreen({
     }
   };
 
-  // Demo beat 1b: simulate skipping the next installment  dents the track record (and score)
-  // without paying down the loan liability.
   const simulateMissed = async (repayment: Repayment) => {
     setMissBusy(repayment.id);
     setMissMsg('');
@@ -105,7 +176,6 @@ export function LoansScreen({
     }
   };
 
-  // Demo beat 2: simulate a default being reported (mock CTOS placeholder).
   const simulateDefault = async (applicationId: string) => {
     setDefaultBusy(applicationId);
     setDefaultError('');
@@ -117,8 +187,6 @@ export function LoansScreen({
       setDefaultBusy(null);
     }
   };
-
-  const productLabel = (productId: string) => products.find((p) => p.id === productId)?.label ?? productId;
 
   // eKYC gate: applying for financing requires a verified identity.
   if (!kyc) {
@@ -144,6 +212,186 @@ export function LoansScreen({
     );
   }
 
+  // Detail: one loan's own full schedule + demo beats, scoped to it alone.
+  if (selectedPackage) {
+    const pkg = selectedPackage;
+    const onTime = pkg.repayments.filter((r) => r.status === 'paid').length;
+    const totalResolved = pkg.paidCount + pkg.missedCount;
+    return (
+      <View style={styles.root}>
+        <View style={{ paddingTop: insets.top + 4 }}>
+          <TopBar title={pkg.lenderLabel} onBack={() => setSelectedId(null)} />
+        </View>
+        <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: insets.bottom + 30 }} showsVerticalScrollIndicator={false}>
+          <Card style={{ padding: 16 }}>
+            <View style={styles.pkgRow}>
+              <View style={styles.lenderBadge}>
+                <Icon name="wallet" size={20} color={colors.accentInk} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.detailTitle}>{pkg.productLabel}</Text>
+                <Text style={styles.pkgPurpose}>{pkg.purposeLabel} · {pkg.lenderLabel}</Text>
+              </View>
+            </View>
+            <View style={{ marginTop: 16 }}>
+              <Amount value={pkg.principal} size={22} />
+              <Text style={styles.muted}>Principal disbursed</Text>
+            </View>
+            {pkg.tenorMonths > 0 && (
+              <View style={{ marginTop: 14 }}>
+                <ProgressTrack pct={(pkg.paidCount / pkg.tenorMonths) * 100} />
+                <Text style={[styles.muted, { marginTop: 6 }]}>
+                  {pkg.paidCount} of {pkg.tenorMonths} instalments paid · RM{Math.round(pkg.monthlyInstallment).toLocaleString('en-MY')}/mo
+                </Text>
+              </View>
+            )}
+          </Card>
+
+          {/* Defaulted terminal state (Bidirectional Servicing Sync, 2026-07-18 design):
+              `defaultedSource` tells apart a lender-reported default (synced in from the
+              console) from this app's own simulate-default demo beat. */}
+          {pkg.status === 'defaulted' && (
+            <Card style={[styles.demoCard, { borderColor: RED, backgroundColor: '#fce8e6', marginTop: 14 }]}>
+              <Text style={[styles.demoTitle, { color: RED }]}>Defaulted</Text>
+              <Text style={[styles.demoBody, { color: RED }]}>
+                {pkg.application.defaultedSource === 'lender'
+                  ? `Reported as defaulted by ${pkg.lenderLabel}.`
+                  : 'You reported this loan as defaulted (demo).'}{' '}
+                This loan is written off and counts against your track record — it never rewrites a passport you've
+                already signed, but the next one you mint will carry the lower score.
+              </Text>
+            </Card>
+          )}
+
+          {pkg.repayments.length > 0 && (
+            <>
+              <View style={[styles.eyebrowRow, { marginTop: 22 }]}>
+                <Eyebrow>Repayment schedule</Eyebrow>
+                <InfoButton entry="repayment_schedule" />
+              </View>
+              <Card style={{ overflow: 'hidden' }}>
+                {pkg.repayments.map((r, idx) => (
+                  <View key={r.id} style={[styles.repayRow, idx > 0 && styles.repayDivider]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.repayDate}>Due {shortDate(r.dueDate)}</Text>
+                      <Text style={[styles.repayStatus, { color: repaymentStatusColor(r.status) }]}>
+                        {repaymentStatusLabel(r.status)}
+                        {r.paidOn ? ` · ${shortDate(r.paidOn)}` : ''}
+                      </Text>
+                    </View>
+                    <Amount value={r.amount} size={15} />
+                  </View>
+                ))}
+              </Card>
+              <Text style={styles.muted}>
+                Track record on this loan: {onTime} of {totalResolved} repayments on time.
+              </Text>
+            </>
+          )}
+
+          {/* Demo beats  only meaningful on a loan still being repaid. */}
+          {pkg.status === 'ongoing' && (
+            <>
+              <Eyebrow style={{ marginTop: 22, marginBottom: 10 }}>Demo beats</Eyebrow>
+              <Card style={[styles.demoCard, { borderColor: colors.accentSoft, backgroundColor: colors.accentTint }]}>
+                <View style={styles.demoBadgeRow}>
+                  <View style={styles.demoBadge}>
+                    <Icon name="sparkles" size={12} color={colors.accentInk} />
+                    <Text style={styles.demoBadgeText}>Demo</Text>
+                  </View>
+                  <Text style={styles.demoTitle}>Simulate on-time repayment → score rises</Text>
+                </View>
+                <Text style={styles.demoBody}>
+                  {pkg.nextDue
+                    ? `Mark your next scheduled repayment (due ${shortDate(pkg.nextDue.dueDate)}, ${'RM' + Math.round(pkg.nextDue.amount).toLocaleString('en-MY')}) as paid on time. Your repayment-history factor, and your Pip Score. Should move. Re-open Credit to confirm.`
+                    : 'All scheduled repayments are settled. Re-open Credit to see how your track record moved your Pip Score.'}
+                </Text>
+                {pkg.nextDue && (
+                  <Pressable
+                    onPress={() => simulateOnTimeRepayment(pkg.nextDue!)}
+                    style={[styles.applyBtn, { backgroundColor: colors.accentInk }]}
+                    disabled={repayBusy === pkg.nextDue.id}
+                  >
+                    {repayBusy === pkg.nextDue.id ? (
+                      <ActivityIndicator size="small" color={colors.onAccent} />
+                    ) : (
+                      <>
+                        <Icon name="trending" size={16} color={colors.onAccent} />
+                        <Text style={styles.applyBtnText}>Simulate on-time repayment</Text>
+                      </>
+                    )}
+                  </Pressable>
+                )}
+                {repayMsg ? <Text style={[styles.muted, { marginTop: 10 }]}>{repayMsg}</Text> : null}
+                {repayError ? <Text style={[styles.muted, { marginTop: 10, color: RED }]}>{repayError}</Text> : null}
+              </Card>
+
+              <Card style={[styles.demoCard, { marginTop: 12 }]}>
+                <View style={styles.demoBadgeRow}>
+                  <View style={[styles.demoBadge, { backgroundColor: '#fdecdc' }]}>
+                    <Icon name="alert" size={12} color={AMBER} />
+                    <Text style={[styles.demoBadgeText, { color: AMBER }]}>Demo</Text>
+                  </View>
+                  <Text style={styles.demoTitle}>Simulate a missed payment → score drops</Text>
+                </View>
+                <Text style={styles.demoBody}>
+                  {pkg.nextDue
+                    ? 'Skip your next installment. It dents your track record (and Pip Score) without paying down the loan — the opposite of an on-time payment. Re-open Credit to confirm.'
+                    : 'No scheduled installments left to miss.'}
+                </Text>
+                {pkg.nextDue && (
+                  <Pressable
+                    onPress={() => simulateMissed(pkg.nextDue!)}
+                    style={[styles.applyBtn, { backgroundColor: AMBER_BTN }]}
+                    disabled={missBusy === pkg.nextDue.id}
+                  >
+                    {missBusy === pkg.nextDue.id ? (
+                      <ActivityIndicator size="small" color={colors.onAccent} />
+                    ) : (
+                      <>
+                        <Icon name="alert" size={16} color={colors.onAccent} />
+                        <Text style={styles.applyBtnText}>Simulate missed payment</Text>
+                      </>
+                    )}
+                  </Pressable>
+                )}
+                {missMsg ? <Text style={[styles.muted, { marginTop: 10 }]}>{missMsg}</Text> : null}
+                {missError ? <Text style={[styles.muted, { marginTop: 10, color: RED }]}>{missError}</Text> : null}
+              </Card>
+
+              <Card style={[styles.demoCard, { marginTop: 12 }]}>
+                <View style={styles.demoBadgeRow}>
+                  <View style={[styles.demoBadge, { backgroundColor: '#fce8e6' }]}>
+                    <Icon name="alert" size={12} color={RED} />
+                    <Text style={[styles.demoBadgeText, { color: RED }]}>Demo</Text>
+                  </View>
+                  <Text style={styles.demoTitle}>Simulate default → reported to CTOS (mock)</Text>
+                </View>
+                <Text style={styles.demoBody}>Marks this loan defaulted (demo — no real bureau is notified).</Text>
+                <Pressable
+                  onPress={() => simulateDefault(pkg.application.id)}
+                  style={[styles.applyBtn, { backgroundColor: RED, marginTop: 10 }]}
+                  disabled={defaultBusy === pkg.application.id}
+                >
+                  {defaultBusy === pkg.application.id ? (
+                    <ActivityIndicator size="small" color={colors.onAccent} />
+                  ) : (
+                    <>
+                      <Icon name="alert" size={16} color={colors.onAccent} />
+                      <Text style={styles.applyBtnText}>Report default on {pkg.productLabel} (mock CTOS)</Text>
+                    </>
+                  )}
+                </Pressable>
+                {defaultError ? <Text style={[styles.muted, { marginTop: 10, color: RED }]}>{defaultError}</Text> : null}
+              </Card>
+            </>
+          )}
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // List: stats on top, then one package card per loan.
   return (
     <View style={styles.root}>
       <View style={{ paddingTop: insets.top + 4 }}>
@@ -154,7 +402,7 @@ export function LoansScreen({
         showsVerticalScrollIndicator={false}
       >
         {/* Empty state: nothing disbursed yet  applying happens on the Credit Passport. */}
-        {repayments.length === 0 && activeApplications.length === 0 && (
+        {packages.length === 0 && (
           <Card style={styles.gateCard}>
             <Icon name="trending" size={30} color={colors.accentInk} />
             <Text style={styles.gateTitle}>No financing yet</Text>
@@ -171,35 +419,53 @@ export function LoansScreen({
           </Card>
         )}
 
-        {/* 3. Repayment schedule */}
-        {repayments.length > 0 && (
-          <>
-            <View style={[styles.eyebrowRow, { marginTop: 22 }]}>
-              <Eyebrow>Repayment schedule</Eyebrow>
-              <InfoButton entry="repayment_schedule" />
-            </View>
-            <Card style={{ overflow: 'hidden' }}>
-              {repayments.map((r, idx) => (
-                <View key={r.id} style={[styles.repayRow, idx > 0 && styles.repayDivider]}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.repayDate}>Due {shortDate(r.dueDate)}</Text>
-                    <Text style={[styles.repayStatus, { color: repaymentStatusColor(r.status) }]}>
-                      {repaymentStatusLabel(r.status)}
-                      {r.paidOn ? ` · ${shortDate(r.paidOn)}` : ''}
-                    </Text>
-                  </View>
-                  <Amount value={r.amount} size={15} />
-                </View>
-              ))}
+        {/* Summary stats (My Financing polish, 2026-07-19): the two numbers a borrower with
+            several loans actually wants up top  what they owe per month in total, and how
+            much principal is still outstanding. Scoped to ongoing loans only; a settled or
+            defaulted loan isn't a live monthly obligation anymore (see financingTotals). */}
+        {packages.length > 0 && (
+          <View style={styles.statsRow}>
+            <Card style={styles.statTile}>
+              <Text style={styles.statLabel}>Monthly repayment</Text>
+              <Amount value={totals.totalMonthlyRepayment} size={19} />
             </Card>
-            <Text style={styles.muted}>
-              Track record so far: {repaymentSummary.onTime} of {repaymentSummary.total} repayments on time.
-            </Text>
+            <Card style={styles.statTile}>
+              <Text style={styles.statLabel}>Total unpaid</Text>
+              <Amount value={totals.totalUnpaidPrincipal} size={19} />
+            </Card>
+          </View>
+        )}
+
+        {ongoingPackages.length > 0 && (
+          <>
+            <Eyebrow style={{ marginTop: 4, marginBottom: 10 }}>Your loans</Eyebrow>
+            {ongoingPackages.map((pkg) => (
+              <LoanPackageCard key={pkg.application.id} pkg={pkg} onPress={() => setSelectedId(pkg.application.id)} />
+            ))}
           </>
         )}
 
-        {/* 3.5 Post-disbursement check-in (Brief S) */}
-        {activeApplications.length > 0 && (
+        {settledPackages.length > 0 && (
+          <>
+            <Eyebrow style={{ marginTop: 22, marginBottom: 10 }}>Paid off</Eyebrow>
+            {settledPackages.map((pkg) => (
+              <LoanPackageCard key={pkg.application.id} pkg={pkg} onPress={() => setSelectedId(pkg.application.id)} />
+            ))}
+          </>
+        )}
+
+        {defaultedPackages.length > 0 && (
+          <>
+            <Eyebrow style={{ marginTop: 22, marginBottom: 10 }}>Defaulted</Eyebrow>
+            {defaultedPackages.map((pkg) => (
+              <LoanPackageCard key={pkg.application.id} pkg={pkg} onPress={() => setSelectedId(pkg.application.id)} />
+            ))}
+          </>
+        )}
+
+        {/* Post-disbursement check-in (Brief S)  a fresh passport share, not tied to any one
+            lender, so it lives at the list level rather than inside a specific loan's detail. */}
+        {ongoingPackages.length > 0 && (
           <>
             <Eyebrow style={{ marginTop: 22, marginBottom: 10 }}>Keep your lender in the loop</Eyebrow>
             <Card style={{ padding: 16 }}>
@@ -213,111 +479,6 @@ export function LoansScreen({
                 <Icon name="trending" size={16} color={colors.onAccent} />
                 <Text style={styles.applyBtnText}>Share a check-in</Text>
               </Pressable>
-            </Card>
-          </>
-        )}
-
-        {/* 4. Demo beats  only meaningful once a real loan exists (booked via the Credit Passport). */}
-        {activeApplications.length > 0 && (
-          <>
-            <Eyebrow style={{ marginTop: 22, marginBottom: 10 }}>Demo beats</Eyebrow>
-            <Card style={[styles.demoCard, { borderColor: colors.accentSoft, backgroundColor: colors.accentTint }]}>
-              <View style={styles.demoBadgeRow}>
-                <View style={styles.demoBadge}>
-                  <Icon name="sparkles" size={12} color={colors.accentInk} />
-                  <Text style={styles.demoBadgeText}>Demo</Text>
-                </View>
-                <Text style={styles.demoTitle}>Simulate on-time repayment → score rises</Text>
-              </View>
-              <Text style={styles.demoBody}>
-                {nextScheduled
-                  ? `Mark your next scheduled repayment (due ${shortDate(nextScheduled.dueDate)}, ${'RM' + Math.round(nextScheduled.amount).toLocaleString('en-MY')}) as paid on time. Your repayment-history factor, and your Pip Score. Should move. Re-open Credit to confirm.`
-                  : 'All scheduled repayments are settled. Re-open Credit to see how your track record moved your Pip Score.'}
-              </Text>
-              {nextScheduled && (
-                <Pressable
-                  onPress={() => simulateOnTimeRepayment(nextScheduled)}
-                  style={[styles.applyBtn, { backgroundColor: colors.accentInk }]}
-                  disabled={repayBusy === nextScheduled.id}
-                >
-                  {repayBusy === nextScheduled.id ? (
-                    <ActivityIndicator size="small" color={colors.onAccent} />
-                  ) : (
-                    <>
-                      <Icon name="trending" size={16} color={colors.onAccent} />
-                      <Text style={styles.applyBtnText}>Simulate on-time repayment</Text>
-                    </>
-                  )}
-                </Pressable>
-              )}
-              {repayMsg ? <Text style={[styles.muted, { marginTop: 10 }]}>{repayMsg}</Text> : null}
-              {repayError ? <Text style={[styles.muted, { marginTop: 10, color: RED }]}>{repayError}</Text> : null}
-            </Card>
-
-            <Card style={[styles.demoCard, { marginTop: 12 }]}>
-              <View style={styles.demoBadgeRow}>
-                <View style={[styles.demoBadge, { backgroundColor: '#fdecdc' }]}>
-                  <Icon name="alert" size={12} color={AMBER} />
-                  <Text style={[styles.demoBadgeText, { color: AMBER }]}>Demo</Text>
-                </View>
-                <Text style={styles.demoTitle}>Simulate a missed payment → score drops</Text>
-              </View>
-              <Text style={styles.demoBody}>
-                {nextScheduled
-                  ? 'Skip your next installment. It dents your track record (and Pip Score) without paying down the loan — the opposite of an on-time payment. Re-open Credit to confirm.'
-                  : 'No scheduled installments left to miss.'}
-              </Text>
-              {nextScheduled && (
-                <Pressable
-                  onPress={() => simulateMissed(nextScheduled)}
-                  style={[styles.applyBtn, { backgroundColor: AMBER_BTN }]}
-                  disabled={missBusy === nextScheduled.id}
-                >
-                  {missBusy === nextScheduled.id ? (
-                    <ActivityIndicator size="small" color={colors.onAccent} />
-                  ) : (
-                    <>
-                      <Icon name="alert" size={16} color={colors.onAccent} />
-                      <Text style={styles.applyBtnText}>Simulate missed payment</Text>
-                    </>
-                  )}
-                </Pressable>
-              )}
-              {missMsg ? <Text style={[styles.muted, { marginTop: 10 }]}>{missMsg}</Text> : null}
-              {missError ? <Text style={[styles.muted, { marginTop: 10, color: RED }]}>{missError}</Text> : null}
-            </Card>
-
-            <Card style={[styles.demoCard, { marginTop: 12 }]}>
-              <View style={styles.demoBadgeRow}>
-                <View style={[styles.demoBadge, { backgroundColor: '#fce8e6' }]}>
-                  <Icon name="alert" size={12} color={RED} />
-                  <Text style={[styles.demoBadgeText, { color: RED }]}>Demo</Text>
-                </View>
-                <Text style={styles.demoTitle}>Simulate default → reported to CTOS (mock)</Text>
-              </View>
-              <Text style={styles.demoBody}>
-                Marks the loan defaulted (demo — no real bureau is notified).
-              </Text>
-              {activeApplications.map((app) => (
-                <Pressable
-                  key={app.id}
-                  onPress={() => simulateDefault(app.id)}
-                  style={[styles.applyBtn, { backgroundColor: RED, marginTop: 10 }]}
-                  disabled={defaultBusy === app.id}
-                >
-                  {defaultBusy === app.id ? (
-                    <ActivityIndicator size="small" color={colors.onAccent} />
-                  ) : (
-                    <>
-                      <Icon name="alert" size={16} color={colors.onAccent} />
-                      <Text style={styles.applyBtnText}>
-                        Report default on {productLabel(app.productId)} (mock CTOS)
-                      </Text>
-                    </>
-                  )}
-                </Pressable>
-              ))}
-              {defaultError ? <Text style={[styles.muted, { marginTop: 10, color: RED }]}>{defaultError}</Text> : null}
             </Card>
           </>
         )}
@@ -367,4 +528,35 @@ const styles = StyleSheet.create({
   demoBadgeText: { fontFamily: uiFont(700), fontSize: 11, color: colors.accentInk },
   demoTitle: { fontFamily: uiFont(700), fontSize: 14.5, color: colors.ink, flex: 1 },
   demoBody: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, lineHeight: 17, marginTop: 10 },
+  detailTitle: { fontFamily: uiFont(700), fontSize: 16, color: colors.ink },
+
+  // ── Stats row (My Financing polish, 2026-07-19) ──
+  statsRow: { flexDirection: 'row', gap: 10, marginTop: 4, marginBottom: 4 },
+  statTile: { flex: 1, padding: 14 },
+  statLabel: { fontFamily: uiFont(600), fontSize: 11.5, color: colors.ink2, marginBottom: 6 },
+
+  // ── Loan package card ──
+  pkgCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.line2,
+    padding: 14,
+    marginBottom: 10,
+  },
+  pkgRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  lenderBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: colors.accentTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pkgLender: { fontFamily: uiFont(700), fontSize: 14.5, color: colors.ink },
+  pkgPurpose: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 1 },
+  pkgFooterRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 12 },
+  pkgMuted: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, marginTop: 6 },
+  statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
+  statusPillText: { fontFamily: uiFont(700), fontSize: 11.5 },
 });

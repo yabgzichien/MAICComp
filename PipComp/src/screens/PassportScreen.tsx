@@ -320,8 +320,9 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
     try {
       const app = await acceptLenderOffer(
         sendResult.decision,
-        { products: sendProducts, name: selectedLender?.name ?? 'Lender' },
-        score.score
+        { id: selectedLender && selectedLender.id !== 'offline' ? selectedLender.id : undefined, products: sendProducts, name: selectedLender?.name ?? 'Lender' },
+        score.score,
+        { category: purpose }
       );
       if (app) setBooked(true);
     } finally {

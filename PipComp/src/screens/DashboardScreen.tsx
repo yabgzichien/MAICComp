@@ -58,9 +58,18 @@ export function DashboardScreen({
 }) {
   const insets = useSafeAreaInsets();
   const now = useNow();
-  const { transactions, catById, allocations, hasBudget, coverage, tourActive, tourStepIndex, startTour } = useAppData();
+  const { transactions, catById, allocations, hasBudget, coverage, tourActive, tourStepIndex, startTour, adoptApprovedOffers } = useAppData();
   const { score, dataConfidence } = useCreditProfile();
   const activeTourAnchor = tourActive ? BORROWER_TOUR_STEPS[clampTourStep(tourStepIndex, BORROWER_TOUR_STEPS.length)].anchorId ?? null : null;
+
+  // Poll the approved-offer back-channel on Home focus (approval-notify, 2026-07-19): if an
+  // officer approved a referred application since the last visit, this auto-books it and bumps
+  // the unseen badge on the Loan tab  so the borrower notices the new financing without
+  // needing to open My Financing first. Best-effort; an unreachable console degrades silently.
+  useEffect(() => {
+    adoptApprovedOffers(score.score).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const monthTxns = useMemo(() => {
     const cur = currentMonthKey();

@@ -5,7 +5,7 @@
 // schedule and aggregates. Fixture style (passport `code()` helper) mirrors portfolio.test.ts
 // since band is read off the parsed passport, never the unsigned display field.
 import { describe, expect, it } from 'vitest';
-import { buildPerformance, loanPerformance, monthsElapsed, SMALL_SAMPLE_MIN_LOANS } from './performance';
+import { buildPerformance, loanPerformance, monthsElapsed, settledSummary, SMALL_SAMPLE_MIN_LOANS } from './performance';
 import { mapBook } from './portfolio';
 import type { ApplicationRecord, RepaymentEvent } from './applications';
 import { loanPD, DEFAULT_ASSUMPTIONS } from './securitization';
@@ -188,6 +188,42 @@ describe('buildPerformance', () => {
     expect(good.realizedLossRate).toBeCloseTo(300 / 5000);
   });
 
+  // ── Defaulted-loan realized loss (Bidirectional Servicing Sync, 2026-07-18 design) ──
+
+  it('a defaulted loan contributes its outstanding principal at default, not just its missed instalments', () => {
+    // Good band → 18-month tenor. 2 of 18 paid (missed instalments don't count toward
+    // paidCount), then defaulted: outstanding = 5000 * (18 - 2) / 18.
+    const apps = [
+      approved({
+        band: 'Good',
+        offeredAmount: 5000,
+        installment: 300,
+        repayments: [event(1, 'on-time'), event(2, 'on-time'), event(3, 'missed')],
+        defaulted: { value: true, at: '2026-03-01T00:00:00.000Z', source: 'lender' },
+      }),
+    ];
+    const dash = buildPerformance(apps, new Date('2026-04-01T00:00:00.000Z'));
+    const good = dash.bands.find((r) => r.band === 'Good')!;
+    const expectedOutstanding = Math.round((5000 * (18 - 2)) / 18);
+    expect(good.realizedLossRate).toBeCloseTo(expectedOutstanding / 5000);
+    // Materially larger than the missed-instalments-only measure it replaces for this loan.
+    expect(expectedOutstanding).toBeGreaterThan(300);
+    expect(dash.realizedLossRate).toBeCloseTo(expectedOutstanding / 5000);
+  });
+
+  it('a defaulted loan with nothing paid yet loses its full principal', () => {
+    const apps = [approved({ band: 'Good', offeredAmount: 5000, installment: 300, defaulted: { value: true, at: '2026-01-15T00:00:00.000Z', source: 'borrower' } })];
+    const dash = buildPerformance(apps, new Date('2026-02-01T00:00:00.000Z'));
+    const good = dash.bands.find((r) => r.band === 'Good')!;
+    expect(good.realizedLossRate).toBeCloseTo(1);
+  });
+
+  it('a non-defaulted loan is unaffected by the defaulted branch (regression guard)', () => {
+    const apps = [approved({ band: 'Good', offeredAmount: 5000, installment: 300, repayments: [event(1, 'missed')] })];
+    const dash = buildPerformance(apps, new Date('2026-02-01T00:00:00.000Z'));
+    expect(dash.bands.find((r) => r.band === 'Good')?.realizedLossRate).toBeCloseTo(300 / 5000);
+  });
+
   it('expected loss rate per band matches securitization loanPD × lgd (fraud-neutral, approved loans)', () => {
     const apps = [approved({ band: 'Excellent' })];
     const dash = buildPerformance(apps, new Date('2026-01-01T00:00:00.000Z'));
@@ -208,5 +244,40 @@ describe('buildPerformance', () => {
     const dash = buildPerformance(apps, new Date('2026-03-01T00:00:00.000Z'));
     const principalPortion = 5000 * (2 / 18);
     expect(dash.interestCollected).toBeCloseTo(600 - principalPortion);
+  });
+});
+
+// ── settledSummary (2026-07-18 stats/advisor design): the "Fully repaid" beat ─────
+
+describe('settledSummary', () => {
+  const fullTenorPaid = (n: number, amount = 300) =>
+    Array.from({ length: n }, (_, i) => event(i + 1, 'on-time', amount));
+
+  it('an empty book has zero settled loans', () => {
+    expect(settledSummary([])).toEqual({ count: 0, principalReturned: 0, realizedLossRate: 0 });
+  });
+
+  it('a loan mid-schedule is not counted as settled', () => {
+    const apps = [approved({ band: 'Good', offeredAmount: 5000, repayments: fullTenorPaid(10) })];
+    expect(settledSummary(apps)).toEqual({ count: 0, principalReturned: 0, realizedLossRate: 0 });
+  });
+
+  it('a fully-repaid (Good, 18-month) loan counts, with its principal returned and zero loss', () => {
+    const apps = [approved({ band: 'Good', offeredAmount: 5000, repayments: fullTenorPaid(18) })];
+    const s = settledSummary(apps);
+    expect(s.count).toBe(1);
+    expect(s.principalReturned).toBe(5000);
+    expect(s.realizedLossRate).toBe(0);
+  });
+
+  it('sums principal across multiple settled loans and excludes active ones', () => {
+    const apps = [
+      approved({ subject: 'a', band: 'Good', offeredAmount: 5000, repayments: fullTenorPaid(18) }),
+      approved({ subject: 'b', band: 'Fair', offeredAmount: 3000, repayments: fullTenorPaid(12) }), // Fair -> 12-month tenor
+      approved({ subject: 'c', band: 'Good', offeredAmount: 4000, repayments: fullTenorPaid(5) }), // still active
+    ];
+    const s = settledSummary(apps);
+    expect(s.count).toBe(2);
+    expect(s.principalReturned).toBe(8000);
   });
 });

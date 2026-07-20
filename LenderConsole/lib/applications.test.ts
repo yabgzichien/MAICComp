@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   fileApplication,
   isApplicationRecord,
+  markDefault,
   mergeServerApplications,
   orderQueue,
   readApplications,
@@ -378,6 +379,51 @@ describe('recordRepayment', () => {
     const base = approved();
     const before = JSON.parse(JSON.stringify(base));
     recordRepayment(base, base[0].id, { instalmentSeq: 1, amount: 350, outcome: 'on-time' }, NOW);
+    expect(base).toEqual(before);
+  });
+});
+
+// ── Loan default flag (Bidirectional Servicing Sync, 2026-07-18 design) ──────────
+
+describe('markDefault', () => {
+  const approved = () => file([], { engineDecision: 'approve' }).apps;
+
+  it('sets the defaulted flag with an audit entry, defaulting source to lender', () => {
+    const base = approved();
+    const apps = markDefault(base, base[0].id, undefined, NOW);
+    expect(apps[0].defaulted).toEqual({ value: true, at: NOW.toISOString(), source: 'lender' });
+    const lastAudit = apps[0].audit[apps[0].audit.length - 1];
+    expect(lastAudit.action).toBe('defaulted');
+    expect(lastAudit.detail).toMatch(/console/i);
+  });
+
+  it('records a borrower-sourced default with its own wording', () => {
+    const base = approved();
+    const apps = markDefault(base, base[0].id, 'borrower', NOW);
+    expect(apps[0].defaulted?.source).toBe('borrower');
+    expect(apps[0].audit[apps[0].audit.length - 1].detail).toMatch(/borrower app/i);
+  });
+
+  it('never changes status or resolution', () => {
+    const base = approved();
+    const apps = markDefault(base, base[0].id, undefined, NOW);
+    expect(apps[0].status).toBe('approved');
+    expect(apps[0].resolution).toBeUndefined();
+  });
+
+  it('is a monotonic latch: a second call leaves the first at/source/audit untouched', () => {
+    let apps = approved();
+    apps = markDefault(apps, apps[0].id, 'lender', hoursAgo(48));
+    const auditLenBefore = apps[0].audit.length;
+    apps = markDefault(apps, apps[0].id, 'borrower', NOW);
+    expect(apps[0].defaulted).toEqual({ value: true, at: hoursAgo(48).toISOString(), source: 'lender' });
+    expect(apps[0].audit).toHaveLength(auditLenBefore);
+  });
+
+  it('the input array is not mutated', () => {
+    const base = approved();
+    const before = JSON.parse(JSON.stringify(base));
+    markDefault(base, base[0].id, undefined, NOW);
     expect(base).toEqual(before);
   });
 });

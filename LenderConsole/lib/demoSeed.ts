@@ -85,10 +85,21 @@ export function seedApplications(
   now: Date = new Date(),
 ): SeedResult {
   const toFile = DEMO_APPLICANTS.filter((d) => d.role !== 'checkin' && d.role !== 'stacking-duplicate');
+  // Requested-amount overrides at seed time only (never touches the signed passport, so
+  // no re-signing needed): once Lim Poh Choo's loan settles below (2026-07-18 stats/
+  // advisor design) and leaves live exposure, the pool needs Nurul's and Chong's real
+  // affordability headroom (both already unconstrained  their offer already matched
+  // their request at the old amount) pulled forward so the book still clears the
+  // Capital-Markets tranche floor and no band crosses the concentration threshold.
+  // Re-verified against demoSeed.test.ts's exact assertions.
+  const REQUEST_OVERRIDES: Record<string, number> = {
+    'Nurul Izzati binti Rashid': 9000,
+    'Chong Wei Ming': 14000,
+  };
   const seeds: { code: string; amount: number; purpose: DeclaredPurpose; label: string }[] = [
     ...toFile.map((d, i) => ({
       code: d.code,
-      amount: d.requestedAmount,
+      amount: REQUEST_OVERRIDES[d.label] ?? d.requestedAmount,
       purpose: { category: PURPOSE_CYCLE[i % PURPOSE_CYCLE.length] } as DeclaredPurpose,
       label: d.label,
     })),
@@ -172,6 +183,15 @@ export function seedApplications(
   // repayment ledger corroborates her existing watchlist check-in (income down 25%)
   // instead of contradicting it. 'sample' is excluded: at its requested amount the sample
   // passport declines (below the Growth tier minimum), so it never reaches the approved book.
+  //
+  // Settled loans (2026-07-18 stats/advisor design): Lim's loan runs its full 18-month
+  // Good-band schedule, so the Servicing "Settled" section and Portfolio's "Fully repaid"
+  // beat both have real data on first seed. Deliberately NOT Farid (the book's only
+  // Fair-band loan)  a fully-repaid loan honestly stops counting toward live exposure,
+  // and removing a band's sole representative entirely tips the concentration check on
+  // the remaining bands (verified: it does). Good band keeps Nurul + Siti after Lim
+  // settles, so no band vanishes from the live pool; demoSeed.test.ts's band/tranche/
+  // concentration assertions were re-verified against these exact numbers.
   const REPAYMENT_SEED: { label: string; monthsAgo: number; paidMonths: number }[] = [
     { label: 'Farid bin Osman', monthsAgo: 4, paidMonths: 4 },
     { label: 'Nurul Izzati binti Rashid', monthsAgo: 3, paidMonths: 3 },
@@ -179,7 +199,7 @@ export function seedApplications(
     { label: 'Siti Aminah binti Kassim', monthsAgo: 3, paidMonths: 2 },
     { label: 'Aisyah Putri Wijaya', monthsAgo: 5, paidMonths: 5 },
     { label: 'Ravindran a/l Muthu', monthsAgo: 6, paidMonths: 6 },
-    { label: 'Lim Poh Choo', monthsAgo: 3, paidMonths: 3 },
+    { label: 'Lim Poh Choo', monthsAgo: 18, paidMonths: 18 },
   ];
   for (const seed of REPAYMENT_SEED) {
     const id = filedIdByLabel.get(seed.label);

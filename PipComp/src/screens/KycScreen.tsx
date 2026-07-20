@@ -13,6 +13,7 @@ import { llmErrorMessage } from '../llm';
 import type { IdentityExtraction } from '../llm/ekycPrompt';
 import { scanIdentityImage } from '../ekyc/scan';
 import { SAMPLE_IDENTITY } from '../data/sampleIdentity';
+import { emitTourSignal } from '../lib/tourSignals';
 import { useAppData } from '../state/store';
 import type { EmploymentType } from '../db/occupationRepo';
 import { colors, uiFont } from '../theme';
@@ -48,6 +49,10 @@ export function KycScreen({ onBack, onDone }: { onBack: () => void; onDone?: () 
         setSavingOcc(false);
       }
     }
+    // Fired before navigating away (harmless, unconditional  see tourSignals.ts) so the
+    // guided tour's kyc-verify step, which now waits for the work & income section too (not
+    // just identity), completes right here instead of skipping straight past it.
+    emitTourSignal('kyc-occupation-saved');
     finish();
   }
 

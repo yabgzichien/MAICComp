@@ -1,6 +1,8 @@
 import { addTransactions } from '../db/txnRepo';
 import { addAccount, addBalanceEntry } from '../db/accountsRepo';
 import { setAllocations, setExpectedIncome, upsertSnapshot } from '../db/budgetRepo';
+import { clearKyc } from '../db/kycRepo';
+import { clearOccupation } from '../db/occupationRepo';
 import { buildAinaSeed, buildRaviSeed, buildFaizalSeed } from './demoSeed';
 
 export { buildAinaSeed, buildRaviSeed, buildFaizalSeed, buildDemoSeed, type DemoAccountSeed, type DemoSeed } from './demoSeed';
@@ -46,6 +48,12 @@ export async function loadDemoProfile(profile: DemoProfileId = 'aina'): Promise<
     profile === 'ravi' ? buildRaviSeed(new Date())
     : profile === 'faizal' ? buildFaizalSeed(new Date())
     : buildAinaSeed(new Date());
+
+  // Loading a persona is a fresh start for identity too — otherwise a KYC verified for an
+  // earlier persona/session would carry over and bake the wrong holder name into the next
+  // minted passport. The borrower re-verifies for this persona (the tour's own KYC beat).
+  await clearKyc();
+  await clearOccupation();
 
   await addTransactions(seed.transactions);
 

@@ -67,6 +67,30 @@ function interestCollectedFor(b: BookLoan, perf: LoanPerformance): number {
   return Math.max(0, perf.amountCollected - principalShare);
 }
 
+/** Outstanding principal remaining after `paidCount` instalments, straight-line: each paid
+ *  instalment retires an equal principal/tenorMonths slice (mirrors PipComp's own
+ *  outstandingAfter  the two are kept in sync so the console and the borrower app agree on
+ *  what a loan's remaining balance is). Rounded to whole RM to match how loan amounts are
+ *  otherwise displayed here. */
+function outstandingAfter(principal: number, tenorMonths: number, paidCount: number): number {
+  if (tenorMonths <= 0) return 0;
+  const remaining = Math.max(0, tenorMonths - Math.max(0, paidCount));
+  return Math.round((principal * remaining) / tenorMonths);
+}
+
+/**
+ * The realized-loss amount one loan contributes. A defaulted loan is a realized loss of its
+ * ENTIRE remaining unpaid balance (nothing more will ever be collected on it), not just the
+ * instalments individually flagged missed  so this is `outstandingAfter` at the point of
+ * default, not `missedCount * installment`. A non-defaulted loan keeps the existing
+ * missed-instalments-only measure (a loan can be delinquent without being a realized loss
+ * yet  it may still catch up).
+ */
+function realizedLossAmountFor(b: BookLoan, perf: LoanPerformance): number {
+  if (b.app.defaulted?.value) return outstandingAfter(b.loan.principal, perf.tenorMonths, perf.paidCount);
+  return perf.missedCount * perf.installment;
+}
+
 export interface CohortRow {
   band: CreditBand;
   loanCount: number;
@@ -74,7 +98,7 @@ export interface CohortRow {
   onTimeRate: number; // 0..1, share of recorded repayment events that were on-time
   collectionRate: number; // 0..1, amount collected / amount due to date
   expectedLossRate: number; // 0..1, from securitization's band PD × LGD (fraud-neutral)
-  realizedLossRate: number; // 0..1, missed scheduled amount / band exposure
+  realizedLossRate: number; // 0..1, (missed scheduled amount + defaulted loans' outstanding principal) / band exposure
   smallSample: boolean;
 }
 
@@ -100,7 +124,7 @@ function aggregateCohort(rows: { b: BookLoan; perf: LoanPerformance }[], a: Secu
   const totalCollected = rows.reduce((s, r) => s + r.perf.amountCollected, 0);
   const onTimeEvents = rows.reduce((s, r) => s + r.perf.paidCount - (r.b.app.repayments ?? []).filter((e) => e.outcome === 'late').length, 0);
   const totalEvents = rows.reduce((s, r) => s + (r.b.app.repayments ?? []).length, 0);
-  const missedAmount = rows.reduce((s, r) => s + r.perf.missedCount * r.perf.installment, 0);
+  const missedAmount = rows.reduce((s, r) => s + realizedLossAmountFor(r.b, r.perf), 0);
   const band = rows[0]?.b.loan.band ?? 'Building';
   return {
     loanCount: rows.length,
@@ -140,7 +164,7 @@ export function buildPerformance(
   const totalCollected = rows.reduce((s, r) => s + r.perf.amountCollected, 0);
   const totalEvents = rows.reduce((s, r) => s + (r.b.app.repayments ?? []).length, 0);
   const totalOnTime = rows.reduce((s, r) => s + (r.b.app.repayments ?? []).filter((e) => e.outcome === 'on-time').length, 0);
-  const totalMissedAmount = rows.reduce((s, r) => s + r.perf.missedCount * r.perf.installment, 0);
+  const totalMissedAmount = rows.reduce((s, r) => s + realizedLossAmountFor(r.b, r.perf), 0);
   const interestCollected = rows.reduce((s, r) => s + interestCollectedFor(r.b, r.perf), 0);
   const weightedExpectedLoss =
     totalExposure > 0 ? rows.reduce((s, r) => s + loanPD(r.b.loan.band, 0, assumptions) * assumptions.lgd * r.b.loan.principal, 0) / totalExposure : 0;
@@ -155,5 +179,38 @@ export function buildPerformance(
     realizedLossRate: totalExposure > 0 ? totalMissedAmount / totalExposure : 0,
     interestCollected,
     hasRepaymentData: totalEvents > 0,
+  };
+}
+
+export interface SettledSummary {
+  count: number;
+  principalReturned: number;
+  /** Always 0 in practice  a missed instalment permanently blocks paidCount from ever
+   *  reaching tenorMonths, so "settled" and "zero realized loss" coincide by
+   *  construction. Computed honestly anyway rather than hardcoded, so this stays true if
+   *  that invariant ever changes. */
+  realizedLossRate: number;
+}
+
+/**
+ * The "fully repaid" cohort  loans excluded from live exposure (lib/portfolio.ts) once
+ * settled, but kept here deliberately: this is the validation loop's strongest evidence,
+ * "N loans, RM x returned, zero loss", and buildPerformance's own aggregates (unlike
+ * portfolio.ts) intentionally still include settled loans for exactly this reason.
+ */
+export function settledSummary(apps: ApplicationRecord[]): SettledSummary {
+  const settled = mapBook(apps).filter((b) => {
+    const perf = loanPerformance(b);
+    return perf.tenorMonths > 0 && perf.paidCount >= perf.tenorMonths;
+  });
+  const principalReturned = settled.reduce((s, b) => s + b.loan.principal, 0);
+  const missedAmount = settled.reduce((s, b) => {
+    const perf = loanPerformance(b);
+    return s + perf.missedCount * perf.installment;
+  }, 0);
+  return {
+    count: settled.length,
+    principalReturned,
+    realizedLossRate: principalReturned > 0 ? missedAmount / principalReturned : 0,
   };
 }

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { catColorsForHue } from '../lib/catColors';
 import type { TxnType } from '../lib/types';
@@ -27,11 +28,26 @@ export function AddCategoryModal({
   const insets = useSafeAreaInsets();
   const { addCategory } = useAppData();
   const [name, setName] = useState('');
-  const [icon, setIcon] = useState<IconName>('cart');
+  const [icon, setIcon] = useState<string>('cart');
   const [hue, setHue] = useState(162);
   const [busy, setBusy] = useState(false);
 
   const iconChoices = kind === 'income' ? INCOME_ICONS : EXPENSE_ICONS;
+
+  const pickCustomIcon = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return;
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      base64: true,
+      quality: 0.5,
+    });
+    if (!res.canceled && res.assets?.length) {
+      const a = res.assets[0];
+      const dataUri = a.base64 ? `data:${a.mimeType ?? 'image/jpeg'};base64,${a.base64}` : a.uri;
+      setIcon(dataUri);
+    }
+  };
 
   useEffect(() => {
     if (visible) {
@@ -89,6 +105,21 @@ export function AddCategoryModal({
                 </Pressable>
               );
             })}
+            <Pressable
+              onPress={pickCustomIcon}
+              style={[
+                styles.iconChoice,
+                (icon.startsWith('data:') || icon.startsWith('file:') || icon.startsWith('content:') || icon.startsWith('http') || icon.startsWith('/')) && styles.iconChoiceOn,
+                { minWidth: 68, flexDirection: 'row', gap: 4, paddingHorizontal: 6 }
+              ]}
+            >
+              {(icon.startsWith('data:') || icon.startsWith('file:') || icon.startsWith('content:') || icon.startsWith('http') || icon.startsWith('/')) ? (
+                <Image source={{ uri: icon }} style={{ width: 22, height: 22, borderRadius: 4 }} resizeMode="cover" />
+              ) : (
+                <Icon name="image" size={17} color={colors.accent} stroke={2.0} />
+              )}
+              <Text style={{ fontSize: 10, fontFamily: uiFont(700), color: colors.accent }}>Gallery</Text>
+            </Pressable>
           </View>
 
           <Text style={[styles.pickLabel, { marginTop: 14 }]}>Color</Text>

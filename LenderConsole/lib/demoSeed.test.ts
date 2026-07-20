@@ -11,7 +11,8 @@ import { parsePassportCode } from './passport';
 import { buildPortfolio, bookToPool } from './portfolio';
 import { structurePool } from './securitization';
 import { DEMO_APPLICANTS } from '../app/demoApplicants';
-import { buildPerformance } from './performance';
+import { buildPerformance, settledSummary } from './performance';
+import { orderServicingSections } from './servicing';
 
 const NOW = new Date('2026-07-14T12:00:00.000Z');
 
@@ -130,6 +131,36 @@ describe('seedApplications', () => {
       const dash = buildPerformance(apps, NOW);
       // Portfolio-wide realized loss stays at 0: nothing was missed, Siti is merely behind schedule.
       expect(dash.realizedLossRate).toBe(0);
+    });
+  });
+
+  // ── Settled loans (2026-07-18 stats/advisor design) ───────────────────────────
+  describe('settled loans seed', () => {
+    it('at least one loan has fully repaid on first seed', () => {
+      const { apps } = seed();
+      const summary = settledSummary(apps);
+      expect(summary.count).toBeGreaterThanOrEqual(1);
+      expect(summary.principalReturned).toBeGreaterThan(0);
+      expect(summary.realizedLossRate).toBe(0);
+    });
+
+    it("Lim Poh Choo's loan is the one that settles, and it leaves live exposure", () => {
+      const { apps } = seed();
+      const lim = apps.find((a) => a.applicantLabel === 'Lim Poh Choo')!;
+      expect(lim.status).toBe('approved');
+      const sections = orderServicingSections(apps);
+      expect(sections.settled.map((a) => a.id)).toContain(lim.id);
+      expect(sections.active.map((a) => a.id)).not.toContain(lim.id);
+      expect(bookToPool(apps).map((l) => l.id)).not.toContain(lim.subject);
+    });
+
+    it('Portfolio and Capital-Markets assertions (§F4) still hold with a settled loan in the mix', () => {
+      const { apps } = seed();
+      const portfolio = buildPortfolio(apps);
+      expect(portfolio.bandBreakdown.filter((b) => b.count > 0).length).toBeGreaterThanOrEqual(3);
+      expect(portfolio.concentrations).toHaveLength(0);
+      const { tranches } = structurePool(bookToPool(apps));
+      for (const t of tranches) expect(t.thicknessRM).toBeGreaterThanOrEqual(5000);
     });
   });
 });

@@ -15,7 +15,7 @@ export type TourActionScreen = TourScreen | 'attacks';
 /** Semantic events the app emits while the tour listens (see `lib/tourSignals.ts`). The
  *  union lives here so the registry  the source of truth for what the tour understands
  *  has no import in the signals direction. */
-export type TourSignalName = 'scan-extracted' | 'scan-saved' | 'coach-chip-tapped' | 'kyc-verified' | 'passport-minted';
+export type TourSignalName = 'scan-extracted' | 'scan-saved' | 'coach-chip-tapped' | 'kyc-verified' | 'kyc-occupation-saved' | 'passport-minted';
 
 /** What completes a do-step or a mission phase: the judge arriving on a screen, or a
  *  semantic signal firing. */
@@ -173,6 +173,22 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     celebrate: 'That ran the real engines.',
   },
   {
+    // Deliberately its own step, not folded into 'whatif': the first tap only PROVES the
+    // judge engaged. It must not also whisk them straight to Act 5  they need to actually
+    // see the before/after result and be free to try other chips before moving on. Same
+    // screen, same anchor (the chip row stays spotlit and tappable); an explain step (not a
+    // do) so it renders a real Next button and the judge decides when they're done exploring.
+    id: 'whatif-explore',
+    kind: 'explain',
+    screen: 'coach',
+    act: 4,
+    actLabel: 'Get the plan',
+    pip: 'happy',
+    title: 'See it land',
+    body: 'Try more chips if you like. The result updates live. Next when ready.',
+    anchorId: 'whatif-chips',
+  },
+  {
     id: 'kyc-verify',
     kind: 'do',
     screen: 'kyc',
@@ -180,12 +196,13 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     actLabel: 'Mint the passport',
     pip: 'curious',
     // Deliberately no anchor: this step's action spans the whole KYC form (prefill button
-    // at the top, Verify at the bottom), and a cutout around either control walls the
-    // other off behind the dim. The screen itself is the focus; KycScreen adds tour-time
-    // bottom padding so both controls can scroll clear of the card.
+    // at the top, Verify at the bottom, then the work & income fields and Done further
+    // down), and a cutout around any one control walls the others off behind the dim. The
+    // screen itself is the focus; KycScreen adds tour-time bottom padding so every control
+    // can scroll clear of the card.
     title: 'Verify her identity',
-    body: 'Use the sample identity, then verify. This unlocks borrowing.',
-    advanceOn: { signal: 'kyc-verified' },
+    body: 'Use the sample identity, verify, then add her work & income and tap Done.',
+    advanceOn: { signal: 'kyc-occupation-saved' },
     celebrate: 'Identity verified.',
   },
   {

@@ -16,6 +16,10 @@ const app = (over: Partial<LoanApplication> = {}): LoanApplication => ({
   createdAt: '2026-07-01T00:00:00.000Z',
   lenderLabel: 'TEKUN',
   liabilityAccountId: 'acc1',
+  lenderId: null,
+  defaultedAt: null,
+  defaultedSource: null,
+  purpose: null,
   ...over,
 });
 

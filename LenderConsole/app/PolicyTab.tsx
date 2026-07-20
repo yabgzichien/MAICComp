@@ -13,6 +13,8 @@ import { TourAnchor } from './TourAnchor';
 import { DEFAULT_POLICY, DEFAULT_PRODUCTS, type LenderPolicy, type LoanProduct } from '../lib/loans';
 import { aprWarnings, CANONICAL_TIER_IDS, validateStoredPolicy, type StoredPolicy } from '../lib/policyStore';
 import { findLender, type LenderProfile } from '../lib/lenderRegistry';
+import type { ApplicationRecord } from '../lib/applications';
+import AdvisorCard from './AdvisorCard';
 
 /** Form state keeps every field as a string so partial typing never crashes;
  *  numbers are parsed at validation time. Ratios are edited as percentages. */
@@ -116,12 +118,14 @@ export default function PolicyTab({
   onSaved,
   lenderId,
   lenderName,
+  apps,
 }: {
   p: Palette;
   stored: StoredPolicy;
   onSaved: (s: StoredPolicy) => void;
   lenderId: string;
   lenderName: string;
+  apps: ApplicationRecord[];
 }) {
   const [thresholds, setThresholds] = useState<ThresholdForm>(() => toThresholdForm(stored.policy));
   const [rows, setRows] = useState<LadderRow[]>(() => toLadderRows(stored.products));
@@ -243,6 +247,9 @@ export default function PolicyTab({
           </div>
         </div>
         </TourAnchor>
+
+        {/* ── Advisor (2026-07-18 stats/advisor design) ── */}
+        <AdvisorCard p={p} apps={apps} />
 
         {/* ── Pricing (risk-based assistant, Brief R) ── */}
         <div style={{ background: p.surface, borderRadius: 12, padding: '14px 18px', boxShadow: p.shadow }}>

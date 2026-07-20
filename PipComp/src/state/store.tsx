@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { addCategory as dbAddCategory, deleteCategory as dbDeleteCategory, listCategories } from '../db/categoriesRepo';
 import { DEFAULT_EXPENSE_ID, DEFAULT_INCOME_ID } from '../data/categories';
 import { getMemoryMap, upsertMemory } from '../db/memoryRepo';
@@ -47,7 +47,8 @@ import {
   setLoanLiabilityAccount as dbSetLoanLiabilityAccount,
   markRepaymentPaid as dbMarkRepaymentPaid,
   markRepaymentMissed as dbMarkRepaymentMissed,
-  markApplicationStatus as dbMarkApplicationStatus,
+  markApplicationDefaulted as dbMarkApplicationDefaulted,
+  setRepaymentOutcome as dbSetRepaymentOutcome,
   listRepayments as dbListRepayments,
   repaymentSummary as dbRepaymentSummary,
   type LoanApplication,
@@ -57,6 +58,12 @@ import {
 import { DEFAULT_PRODUCTS, decideLoan, type LoanDecision, type LoanProduct } from '../lib/loans';
 import { buildBookedLoan, outstandingAfter } from '../lib/acceptOffer';
 import type { DirectApplyDecision } from '../lib/directApply';
+import { fetchLenderDirectory, LENDER_API_BASE } from '../lib/lenderDirectory';
+import { offerToDecision, parseOffer, pendingOffers, type Offer } from '../lib/offers';
+import type { DeclaredPurpose } from '../lib/loanPurpose';
+import { mergeLoanWithServicing, servicingWritePayload } from '../lib/servicingSync';
+import type { ServicingRecord } from '../lib/mergeServicing';
+import { getOrCreateKeypair } from '../crypto/keys';
 import type { CreditBand } from '../lib/creditScore';
 import { budgetHash, monthKey } from '../lib/budget';
 import { computeCoverage, type Coverage } from '../lib/coverage';
@@ -71,6 +78,10 @@ import { emitTourSignal } from '../lib/tourSignals';
 const ONBOARDING_KEY = 'onboarding_complete';
 const TOUR_ACTIVE_KEY = 'tour_active';
 const TOUR_STEP_KEY = 'tour_step_index';
+// Count of loans auto-booked from a console approval that the borrower hasn't seen yet
+// (approval-notify, 2026-07-19). Drives the red badge on the Loan tab; cleared when the
+// borrower opens My Financing. Persisted so the badge survives a reload.
+const UNSEEN_FINANCING_KEY = 'unseen_financing_count';
 import { applyEffect, currentValue, type LinkEffect } from '../lib/networth';
 import { holdingValue, isHolding, mergeAccountValues } from '../lib/prices';
 import { merchantKey } from '../lib/normalize';
@@ -164,12 +175,12 @@ interface AppData {
   /** Wipe all data AND reset onboarding so the setup wizard re-appears. */
   resetToOnboarding: () => Promise<void>;
   loadDemoData: (profile?: DemoProfileId) => Promise<void>;
-  addAccount: (name: string, kind: AccountKind, cls: string, openingValue: number, asOf: string) => Promise<void>;
-  updateAccount: (id: string, fields: { name: string; cls: string }) => Promise<void>;
+  addAccount: (name: string, kind: AccountKind, cls: string, openingValue: number, asOf: string, icon?: string | null) => Promise<void>;
+  updateAccount: (id: string, fields: { name: string; cls: string; icon?: string | null }) => Promise<void>;
   deleteAccount: (id: string) => Promise<void>;
   setBalance: (accountId: string, value: number, asOf: string) => Promise<void>;
   recordBalanceLink: (accountId: string, amount: number, effect: LinkEffect, asOf: string) => Promise<void>;
-  addHolding: (name: string, sub: string, symbol: string, ticker: string, quantity: number, cost: number | null) => Promise<void>;
+  addHolding: (name: string, sub: string, symbol: string, ticker: string, quantity: number, cost: number | null, icon?: string | null) => Promise<void>;
   updateHoldingQuantity: (id: string, quantity: number) => Promise<void>;
   setHoldingCost: (id: string, cost: number | null) => Promise<void>;
   refreshPrices: () => Promise<void>;
@@ -198,9 +209,23 @@ interface AppData {
    *  isn't bookable (not an approval, non-positive amount, or no matching product). */
   acceptLenderOffer: (
     offer: DirectApplyDecision,
-    lender: { products: LoanProduct[]; name: string },
-    scoreAt: number
+    lender: { id?: string; products: LoanProduct[]; name: string },
+    scoreAt: number,
+    purpose?: DeclaredPurpose
   ) => Promise<LoanApplication | null>;
+  /** Pull every lender-routed loan's shared servicing record and merge server-side
+   *  repayment/default events into the local schedule (Bidirectional Servicing Sync,
+   *  2026-07-18 design)  called on My Financing focus. Best-effort: an unreachable console
+   *  degrades silently, same posture as direct-apply. */
+  pullServicing: () => Promise<void>;
+  /** Count of loans auto-booked from a console approval the borrower hasn't opened yet
+   *  (approval-notify, 2026-07-19)  drives the red badge on the Loan tab. */
+  unseenFinancingCount: number;
+  /** Poll the approved-offer back-channel and auto-book any newly-approved financing. Called
+   *  on Home and My Financing focus. `currentScore` is the score the loan is recorded against. */
+  adoptApprovedOffers: (currentScore: number) => Promise<void>;
+  /** Clear the unseen-financing badge (borrower has now opened My Financing). */
+  markFinancingSeen: () => Promise<void>;
 }
 
 const Ctx = createContext<AppData | null>(null);
@@ -224,6 +249,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     total: 0,
     missed: 0,
   });
+  // Loans auto-booked from a console approval the borrower hasn't opened yet (approval-notify).
+  const [unseenFinancingCount, setUnseenFinancingCount] = useState(0);
   const [kyc, setKycState] = useState<KycIdentity | null>(null);
   const [occupation, setOccupationState] = useState<Occupation | null>(null);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
@@ -231,7 +258,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [tourStepIndex, setTourStepIndexState] = useState(0);
 
   const refreshAll = useCallback(async () => {
-    const [cats, txns, mem, income, alloc, snaps, accts, entries, cache, products, applications, allRepayments, repSummary, kycRow, onboardingFlag, tourActiveFlag, tourStepRaw] =
+    const [cats, txns, mem, income, alloc, snaps, accts, entries, cache, products, applications, allRepayments, repSummary, kycRow, onboardingFlag, tourActiveFlag, tourStepRaw, unseenFinancingRaw] =
       await Promise.all([
         listCategories(),
         listTransactions(),
@@ -250,12 +277,14 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         getMeta(ONBOARDING_KEY),
         getMeta(TOUR_ACTIVE_KEY),
         getMeta(TOUR_STEP_KEY),
+        getMeta(UNSEEN_FINANCING_KEY),
       ]);
     setOccupationState(await getOccupation());
     setKycState(kycRow);
     setOnboardingComplete(onboardingFlag === 'true');
     setTourActive(tourActiveFlag === 'true');
     setTourStepIndexState(clampTourStep(tourStepRaw ? Number(tourStepRaw) || 0 : 0, BORROWER_TOUR_STEPS.length));
+    setUnseenFinancingCount(Math.max(0, Number(unseenFinancingRaw) || 0));
     setCategories(cats);
     setTransactions(txns);
     setMemory(mem);
@@ -429,6 +458,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const resetToOnboarding = useCallback(async () => {
     await dbResetAllData();
     await setMeta(ONBOARDING_KEY, 'false');
+    // dbResetAllData now also clears the kyc/occupation rows; mirror that in memory so the
+    // wizard re-appears with a clean identity rather than a stale one from the prior session.
+    setKycState(null);
+    setOccupationState(null);
     setOnboardingComplete(false);
   }, []);
 
@@ -438,8 +471,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, [refreshAll]);
 
   const addAccount = useCallback(
-    async (name: string, kind: AccountKind, cls: string, openingValue: number, asOf: string) => {
-      await dbAddAccount(name, kind, cls, openingValue, asOf);
+    async (name: string, kind: AccountKind, cls: string, openingValue: number, asOf: string, icon?: string | null) => {
+      await dbAddAccount(name, kind, cls, openingValue, asOf, icon);
       const [accts, entries] = await Promise.all([listAccounts(), listBalanceEntries()]);
       setAccounts(accts);
       setBalanceEntries(entries);
@@ -447,7 +480,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
-  const updateAccount = useCallback(async (id: string, fields: { name: string; cls: string }) => {
+  const updateAccount = useCallback(async (id: string, fields: { name: string; cls: string; icon?: string | null }) => {
     await dbUpdateAccount(id, fields);
     setAccounts(await listAccounts());
   }, []);
@@ -476,8 +509,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   );
 
   const addHolding = useCallback(
-    async (name: string, sub: string, symbol: string, ticker: string, quantity: number, cost: number | null) => {
-      await dbAddHolding(name, sub, symbol, ticker, quantity, cost);
+    async (name: string, sub: string, symbol: string, ticker: string, quantity: number, cost: number | null, icon?: string | null) => {
+      await dbAddHolding(name, sub, symbol, ticker, quantity, cost, icon);
       setAccounts(await listAccounts());
     },
     []
@@ -583,12 +616,13 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const acceptLenderOffer = useCallback(
     async (
       offer: DirectApplyDecision,
-      lender: { products: LoanProduct[]; name: string },
-      scoreAt: number
+      lender: { id?: string; products: LoanProduct[]; name: string },
+      scoreAt: number,
+      purpose?: DeclaredPurpose
     ): Promise<LoanApplication | null> => {
       const booked = buildBookedLoan(offer, lender.products, new Date());
       if (!booked) return null;
-      const application = await dbCreateApplication(booked.productId, booked.principal, offer, scoreAt, lender.name);
+      const application = await dbCreateApplication(booked.productId, booked.principal, offer, scoreAt, lender.name, lender.id ?? null, purpose ?? null);
       await dbInsertSchedule(application.id, booked.schedule);
       // Represent the loan as a declining liability on the Net Worth screen (same convention the
       // demo seed uses for its motor loan). Opening balance = principal; each repayment pays it
@@ -657,6 +691,28 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setOccupationState(o);
   }, []);
 
+  // The borrower's own subject id (Bidirectional Servicing Sync, 2026-07-18 design): the
+  // same Ed25519 public key the passport is signed under, stable across app restarts. Never
+  // cached here  getOrCreateKeypair() already memoizes its own init promise, so repeated
+  // calls are cheap.
+  const getSubject = useCallback(async (): Promise<string> => (await getOrCreateKeypair()).publicKeyHex, []);
+
+  /** Write-through one repayment/default action to the shared servicing ledger, best-effort:
+   *  fire-and-forget, never blocks or reverts the local update already applied  offline
+   *  degrades silently, same posture as direct-apply. A no-op for a self-decided application
+   *  with no lenderId (servicingWritePayload returns null). */
+  const writeThroughServicing = useCallback(
+    async (application: LoanApplication, loanRepayments: Repayment[], write: { event: { instalmentSeq: number; outcome: 'on-time' | 'late' | 'missed' } } | { default: true }) => {
+      const subject = await getSubject();
+      const tenorMonths = loanRepayments.length;
+      const installment = loanRepayments[0]?.amount ?? 0;
+      const payload = servicingWritePayload(subject, application, tenorMonths, installment, write);
+      if (!payload) return;
+      fetch(`${LENDER_API_BASE}/api/servicing`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {});
+    },
+    [getSubject]
+  );
+
   const recordRepayment = useCallback(
     async (repaymentId: string, onTime: boolean) => {
       await dbMarkRepaymentPaid(repaymentId, onTime);
@@ -666,14 +722,17 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       // installments plus this one gives how many are now paid.
       const repayment = repayments.find((r) => r.id === repaymentId);
       const application = repayment ? loanApplications.find((a) => a.id === repayment.applicationId) : undefined;
+      const loanRepayments = application ? repayments.filter((r) => r.applicationId === application.id) : [];
       if (application?.liabilityAccountId) {
         const productList = loanProducts.length > 0 ? loanProducts : DEFAULT_PRODUCTS;
         const tenor = productList.find((p) => p.id === application.productId)?.tenorMonths ?? 0;
-        const paidBefore = repayments.filter(
-          (r) => r.applicationId === application.id && (r.status === 'paid' || r.status === 'late')
-        ).length;
+        const paidBefore = loanRepayments.filter((r) => r.status === 'paid' || r.status === 'late').length;
         const outstanding = outstandingAfter(application.requestedAmount, tenor, paidBefore + 1);
         await upsertDailyBalanceEntry(application.liabilityAccountId, outstanding, todayKey());
+      }
+      if (application && repayment) {
+        const instalmentSeq = loanRepayments.findIndex((r) => r.id === repaymentId) + 1;
+        if (instalmentSeq > 0) writeThroughServicing(application, loanRepayments, { event: { instalmentSeq, outcome: onTime ? 'on-time' : 'late' } });
       }
 
       await refreshLoanState();
@@ -681,7 +740,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       setAccounts(accts);
       setBalanceEntries(entries);
     },
-    [refreshLoanState, repayments, loanApplications, loanProducts]
+    [refreshLoanState, repayments, loanApplications, loanProducts, writeThroughServicing]
   );
 
   // Skip an installment: a track-record negative (the score reads it via repaymentSummary),
@@ -689,19 +748,126 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const missRepayment = useCallback(
     async (repaymentId: string) => {
       await dbMarkRepaymentMissed(repaymentId);
+      const repayment = repayments.find((r) => r.id === repaymentId);
+      const application = repayment ? loanApplications.find((a) => a.id === repayment.applicationId) : undefined;
+      if (application && repayment) {
+        const loanRepayments = repayments.filter((r) => r.applicationId === application.id);
+        const instalmentSeq = loanRepayments.findIndex((r) => r.id === repaymentId) + 1;
+        if (instalmentSeq > 0) writeThroughServicing(application, loanRepayments, { event: { instalmentSeq, outcome: 'missed' } });
+      }
       await refreshLoanState();
     },
-    [refreshLoanState]
+    [refreshLoanState, repayments, loanApplications, writeThroughServicing]
   );
 
   const reportDefault = useCallback(
     async (applicationId: string) => {
-      await dbMarkApplicationStatus(applicationId, 'defaulted');
+      const now = new Date().toISOString();
+      await dbMarkApplicationDefaulted(applicationId, 'borrower', now);
       // TODO(Phase 2+): also notify the CTOS mock connector once it lands.
+      const application = loanApplications.find((a) => a.id === applicationId);
+      if (application) {
+        const loanRepayments = repayments.filter((r) => r.applicationId === applicationId);
+        writeThroughServicing(application, loanRepayments, { default: true });
+      }
       await refreshLoanState();
     },
-    [refreshLoanState]
+    [refreshLoanState, loanApplications, repayments, writeThroughServicing]
   );
+
+  /** Poll-on-focus (2026-07-18 design): pull every lender-routed loan's shared servicing
+   *  record and merge server-side events/default into the local schedule  a lender-recorded
+   *  miss or default now surfaces here. Best-effort per loan; one unreachable/malformed GET
+   *  never blocks the rest. */
+  const pullServicing = useCallback(async () => {
+    const lenderRouted = loanApplications.filter((a) => a.lenderId);
+    if (lenderRouted.length === 0) return;
+    const subject = await getSubject();
+
+    let anyChanged = false;
+    for (const application of lenderRouted) {
+      try {
+        const res = await fetch(`${LENDER_API_BASE}/api/servicing?subject=${encodeURIComponent(subject)}&lender=${encodeURIComponent(application.lenderId!)}`);
+        if (!res.ok) continue;
+        const record: ServicingRecord | null = await res.json();
+        if (!record) continue;
+        const loanRepayments = repayments.filter((r) => r.applicationId === application.id);
+        const result = mergeLoanWithServicing(subject, application, loanRepayments, record);
+        if (!result.changed) continue;
+        anyChanged = true;
+        for (const u of result.repaymentUpdates) await dbSetRepaymentOutcome(u.repaymentId, u.outcome, u.at);
+        if (result.newDefault) await dbMarkApplicationDefaulted(application.id, result.newDefault.source, result.newDefault.at);
+      } catch {
+        // offline/malformed  this loan's servicing state just stays whatever it was locally.
+      }
+    }
+    if (anyChanged) await refreshLoanState();
+  }, [loanApplications, repayments, getSubject, refreshLoanState]);
+
+  // Guards adoptApprovedOffers against re-entrancy: a fast Home→Loan navigation could fire two
+  // adopts before the first's booked application lands in state, double-booking the same offer.
+  const adoptingRef = useRef(false);
+
+  /**
+   * Poll the approved-offer back-channel and auto-book any new financing (approval-notify,
+   * 2026-07-19). When an officer approves a REFERRED application in the console, the borrower
+   * app has no way to accept it (it only ever saw the "refer" verdict); this closes that gap so
+   * the loan appears in My Financing on the next Home/Loan focus. Polls every directory lender
+   * for this subject, books each pending offer through the same `acceptLenderOffer` path an
+   * accepted offer uses, and bumps the unseen-financing badge. Best-effort: an unreachable
+   * console degrades silently. Dedupe reads applications fresh from the DB (not the React
+   * closure) so a just-booked offer is never booked twice. `currentScore` snapshots the score
+   * the loan is recorded against, same as the manual accept flow.
+   */
+  const adoptApprovedOffers = useCallback(async (currentScore: number) => {
+    if (adoptingRef.current) return;
+    adoptingRef.current = true;
+    try {
+      const dir = await fetchLenderDirectory();
+      const realLenders = dir.lenders.filter((l) => l.id !== 'offline');
+      if (realLenders.length === 0) return;
+      const subject = await getSubject();
+
+      const offers: Offer[] = [];
+      for (const lender of realLenders) {
+        try {
+          const res = await fetch(`${LENDER_API_BASE}/api/offers?subject=${encodeURIComponent(subject)}&lender=${encodeURIComponent(lender.id)}`);
+          if (!res.ok) continue;
+          const offer = parseOffer(await res.json());
+          if (offer) offers.push(offer);
+        } catch {
+          // offline/malformed for this lender  just skip it.
+        }
+      }
+
+      const existing = await dbListApplications();
+      const toBook = pendingOffers(offers, existing);
+      if (toBook.length === 0) return;
+
+      let booked = 0;
+      for (const offer of toBook) {
+        const lender = realLenders.find((l) => l.id === offer.lenderId);
+        if (!lender) continue;
+        const app = await acceptLenderOffer(offerToDecision(offer), { id: lender.id, products: lender.products, name: lender.name }, currentScore, offer.purpose);
+        if (app) booked += 1;
+      }
+
+      if (booked > 0) {
+        const next = (Number(await getMeta(UNSEEN_FINANCING_KEY)) || 0) + booked;
+        await setMeta(UNSEEN_FINANCING_KEY, String(next));
+        setUnseenFinancingCount(next);
+      }
+    } finally {
+      adoptingRef.current = false;
+    }
+  }, [getSubject, acceptLenderOffer]);
+
+  /** Clear the unseen-financing badge  called when the borrower opens My Financing, so a
+   *  loan they've now seen stops badging the Loan tab. */
+  const markFinancingSeen = useCallback(async () => {
+    await setMeta(UNSEEN_FINANCING_KEY, '0');
+    setUnseenFinancingCount(0);
+  }, []);
 
   const coverage = useMemo(() => computeCoverage(transactions), [transactions]);
 
@@ -765,6 +931,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     missRepayment,
     reportDefault,
     acceptLenderOffer,
+    pullServicing,
+    unseenFinancingCount,
+    adoptApprovedOffers,
+    markFinancingSeen,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

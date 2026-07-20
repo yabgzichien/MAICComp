@@ -4,7 +4,7 @@
 // reuse securitization.ts; this module only maps and aggregates.
 import { describe, expect, it } from 'vitest';
 import { buildPortfolio, bookToPool, CONCENTRATION_THRESHOLD } from './portfolio';
-import type { ApplicationRecord, DeclaredPurpose } from './applications';
+import type { ApplicationRecord, DeclaredPurpose, RepaymentEvent } from './applications';
 import { summarizePool } from './securitization';
 
 /** Minimal signed-shape passport code — parsePassportCode only JSON-parses + checks
@@ -90,6 +90,19 @@ describe('bookToPool', () => {
     expect(pool[0].apr).toBe(0.16);
     expect(pool[0].tenorMonths).toBe(24);
   });
+
+  // ── settled-loan exclusion (2026-07-18 stats/advisor design) ────────────────────
+  // A loan that has finished its schedule has its money back  it must not keep
+  // inflating live exposure forever. Good band -> 18-month tenor (BAND_TERMS).
+  it('excludes a fully-repaid (settled) loan from the live book', () => {
+    const paid = (n: number): RepaymentEvent[] =>
+      Array.from({ length: n }, (_, i) => ({ at: '2026-01-01T00:00:00.000Z', instalmentSeq: i + 1, amount: 300, outcome: 'on-time' as const }));
+    const apps = [
+      approved({ subject: 'settled', band: 'Good', repayments: paid(18) }),
+      approved({ subject: 'active', band: 'Good', repayments: paid(5) }),
+    ];
+    expect(bookToPool(apps).map((l) => l.id)).toEqual(['active']);
+  });
 });
 
 // ── buildPortfolio ─────────────────────────────────────────────────────────────
@@ -113,6 +126,15 @@ describe('buildPortfolio', () => {
     expect(p.weightedAvgScore).toBeCloseTo(expectedSummary.weightedAvgScore, 9);
     expect(p.weightedAvgPD).toBeCloseTo(expectedSummary.weightedAvgPD, 9);
     expect(p.expectedLossRate).toBeCloseTo(expectedSummary.expectedLossRate, 9);
+  });
+
+  it('a settled loan drops out of exposure/loanCount/breakdowns, not just bookToPool', () => {
+    const paid = (n: number): RepaymentEvent[] =>
+      Array.from({ length: n }, (_, i) => ({ at: '2026-01-01T00:00:00.000Z', instalmentSeq: i + 1, amount: 300, outcome: 'on-time' as const }));
+    const settledOnly = buildPortfolio([approved({ subject: 'settled', band: 'Good', offeredAmount: 5000, repayments: paid(18) })]);
+    expect(settledOnly.totalExposure).toBe(0);
+    expect(settledOnly.loanCount).toBe(0);
+    expect(settledOnly.bandBreakdown).toEqual([]);
   });
 
   it('weightedAvgConfidence is principal-weighted across the book', () => {

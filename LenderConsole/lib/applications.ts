@@ -9,6 +9,7 @@
 
 import type { Decision } from './loans';
 import type { EarlyWarningFlag } from './earlyWarning';
+import type { ServicingDefault } from './mergeServicing';
 
 export type ApplicationStatus = 'new' | 'referred' | 'approved' | 'declined';
 
@@ -75,6 +76,11 @@ export interface ApplicationRecord {
   /** Repayment ledger (portfolio performance), oldest first. Absent/empty on applications
    *  that predate the feature or have not yet had an instalment come due. */
   repayments?: RepaymentEvent[];
+  /** Loan-level terminal default flag (Bidirectional Servicing Sync, 2026-07-18 design),
+   *  distinct from a missed instalment. A monotonic latch  once true, never unset locally
+   *  (curing a default is roadmap, not this pass). `source` records which side first raised
+   *  it: this console's officer, or the borrower app (synced in via mergeServicing). */
+  defaulted?: ServicingDefault;
   source?: 'direct' | 'officer';
 }
 
@@ -267,6 +273,29 @@ export function recordRepayment(
       ? { ...a, repayments: [...(a.repayments ?? []), repayment], audit: [...a.audit, { at, action: 'repayment', detail }] }
       : a,
   );
+}
+
+/**
+ * Mark a loan defaulted (Bidirectional Servicing Sync, 2026-07-18 design): a loan-level
+ * terminal flag, audit-trailed. A monotonic latch  a loan already defaulted is left
+ * untouched (no new audit line, no timestamp/source overwrite) rather than re-raised, so the
+ * `at`/`source` always reflect who first raised it, matching mergeServicing's own latch rule.
+ * Never changes `status`/`resolution`  a default informs performance reporting and
+ * servicing, it never re-decides the loan. `source` defaults to 'lender' (an officer's own
+ * action); the sync path passes 'borrower' when adopting a server-reported default.
+ */
+export function markDefault(
+  apps: ApplicationRecord[],
+  id: string,
+  source: 'lender' | 'borrower' = 'lender',
+  now: Date = new Date(),
+): ApplicationRecord[] {
+  const at = now.toISOString();
+  return apps.map((a) => {
+    if (a.id !== id || a.defaulted?.value) return a;
+    const detail = source === 'lender' ? 'Marked defaulted by this console. Loan written off.' : 'Reported defaulted by the borrower app. Loan written off.';
+    return { ...a, defaulted: { value: true, at, source }, audit: [...a.audit, { at, action: 'defaulted', detail }] };
+  });
 }
 
 /** Record that an adverse-action letter was generated for this application (Brief J stretch),

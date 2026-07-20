@@ -23,7 +23,7 @@ import { SAMPLE_POOL } from '../lib/samplePool';
 import { poolStatCells, trancheViews } from '../lib/poolView';
 import { bookToPool, mapBook } from '../lib/portfolio';
 import { loanPerformance, type LoanPerformance } from '../lib/performance';
-import { chipKindFor, orderServicingList } from '../lib/servicing';
+import { chipKindFor, orderServicingSections, type ServicingSections } from '../lib/servicing';
 import PolicyTab from './PolicyTab';
 import PortfolioTab from './PortfolioTab';
 import { buildDecisionFile, decisionFileName } from '../lib/decisionFile';
@@ -43,6 +43,7 @@ import { clearPresentmentLog, readPresentmentLog, recordPresentment } from '../l
 import { deriveTrustRows, type TrustRowState } from '../lib/trustPanel';
 import {
   fileApplication,
+  markDefault,
   mergeServerApplications,
   readApplications,
   recordCheckIn,
@@ -57,6 +58,8 @@ import {
   type PurposeCategory,
   type RepaymentOutcome,
 } from '../lib/applications';
+import { mergeAppWithServicing, servicingWritePayload } from '../lib/servicingSync';
+import type { ServicingRecord } from '../lib/mergeServicing';
 import { diffCheckIn, monitoringStatus, type EarlyWarningFlag, type MonitoringStatus } from '../lib/earlyWarning';
 import { seedApplications } from '../lib/demoSeed';
 import { DEMO_APPLICANTS } from './demoApplicants';
@@ -939,7 +942,33 @@ function RecordRepaymentForm({ p, app, onRecord }: { p: Palette; app: Applicatio
   );
 }
 
-function ApplicationCard({ p, app, passport, onResolve, onRecordRepayment }: { p: Palette; app: ApplicationRecord; passport?: CreditPassport | null; onResolve: (outcome: 'approved' | 'declined', rationale: string) => void; onRecordRepayment?: (instalmentSeq: number, amount: number, outcome: RepaymentOutcome) => void }) {
+/** Officer "mark defaulted" action (Bidirectional Servicing Sync, 2026-07-18 design): a
+ *  terminal, written-off state  irreversible in this console (curing a default is
+ *  roadmap), so it's gated behind a confirm like the decline-overturn actions above. Renders
+ *  nothing once the loan is already defaulted (the banner below carries that state instead). */
+function MarkDefaultAction({ p, app, onMarkDefault }: { p: Palette; app: ApplicationRecord; onMarkDefault: () => void }) {
+  if (app.defaulted?.value) return null;
+  return (
+    <div style={{ marginTop: 8, borderTop: `1px solid ${p.hairline}`, paddingTop: 8 }}>
+      <button
+        onClick={() => {
+          if (
+            window.confirm(
+              'Mark this loan defaulted?\n\nThis is a terminal, written-off state: it counts as a realized loss on Portfolio and cannot be undone in this console. Recorded in the audit trail and synced to the borrower app.',
+            )
+          ) {
+            onMarkDefault();
+          }
+        }}
+        style={{ width: '100%', padding: '7px 0', borderRadius: 7, border: '1.5px solid #8a1f14', cursor: 'pointer', background: 'transparent', color: '#8a1f14', fontFamily: FONT.ui, fontSize: 12, fontWeight: 700 }}
+      >
+        Mark defaulted
+      </button>
+    </div>
+  );
+}
+
+function ApplicationCard({ p, app, passport, onResolve, onRecordRepayment, onMarkDefault }: { p: Palette; app: ApplicationRecord; passport?: CreditPassport | null; onResolve: (outcome: 'approved' | 'declined', rationale: string) => void; onRecordRepayment?: (instalmentSeq: number, amount: number, outcome: RepaymentOutcome) => void; onMarkDefault?: () => void }) {
   const [rationale, setRationale] = useState('');
   const s = APP_STATUS_STYLE[app.status];
   const canResolve = rationale.trim().length > 0;
@@ -1008,9 +1037,16 @@ function ApplicationCard({ p, app, passport, onResolve, onRecordRepayment }: { p
         </p>
       )}
 
+      {app.defaulted?.value && (
+        <p style={{ fontFamily: FONT.ui, fontSize: 12, color: '#8a1f14', background: '#f5d4cf', borderRadius: 7, padding: '7px 9px', lineHeight: 1.5, marginTop: 8 }}>
+          <strong>Defaulted</strong> {formatAgo(app.defaulted.at)} ({app.defaulted.source === 'lender' ? 'marked by this console' : 'reported by the borrower app'}). Written off — counted as a realized loss on Portfolio.
+        </p>
+      )}
+
       {app.status === 'approved' && <MonitoringSection p={p} app={app} passport={passport ?? null} />}
       {app.status === 'approved' && <ScheduleStrip p={p} app={app} />}
       {app.status === 'approved' && onRecordRepayment && <RecordRepaymentForm p={p} app={app} onRecord={onRecordRepayment} />}
+      {app.status === 'approved' && onMarkDefault && <MarkDefaultAction p={p} app={app} onMarkDefault={onMarkDefault} />}
 
       <div style={{ marginTop: 8, borderTop: `1px solid ${p.hairline}`, paddingTop: 6 }}>
         {app.audit.map((e, i) => (
@@ -1588,16 +1624,18 @@ function PersonaPicker({ onSelect }: { onSelect: (id: string) => void }) {
 // stack  read-and-service only, no re-assess amount field (that stays a Verify-tab job).
 
 const CHIP_STYLE: Record<import('../lib/servicing').ChipKind, { label: string; color: string; bg: string }> = {
+  defaulted: { label: 'Defaulted', color: '#8a1f14', bg: '#f5d4cf' },
   watchlist: { label: 'Watchlist', color: '#c0392b', bg: '#fde8e8' },
+  settled: { label: 'Settled', color: '#1f8a5b', bg: '#e7f4ec' },
   delinquent: { label: 'Delinquent', color: '#c0392b', bg: '#fde8e8' },
   late: { label: 'Late', color: '#a3791f', bg: '#fdf3dc' },
   direct: { label: 'Direct', color: '#2b8a3e', bg: '#d3f9d8' },
 };
 
-function ServicingChip({ app, isWatchlisted }: { app: ApplicationRecord; isWatchlisted: boolean }) {
+function ServicingChip({ app, isWatchlisted, settled }: { app: ApplicationRecord; isWatchlisted: boolean; settled: boolean }) {
   const book = mapBook([app]);
   const perfStatus = book.length > 0 ? loanPerformance(book[0]).status : null;
-  const kind = chipKindFor(app, isWatchlisted, perfStatus);
+  const kind = chipKindFor(app, isWatchlisted, perfStatus, settled);
   if (!kind) return null;
   const s = CHIP_STYLE[kind];
   return (
@@ -1609,46 +1647,62 @@ function ServicingChip({ app, isWatchlisted }: { app: ApplicationRecord; isWatch
 
 const rmShort = (n: number): string => `RM${Math.round(n).toLocaleString('en-MY')}`;
 
-function ServicingList({ p, apps, ordered, watchlistIds, selectedId, onSelect }: { p: Palette; apps: ApplicationRecord[]; ordered: ApplicationRecord[]; watchlistIds: Set<string>; selectedId: string | null; onSelect: (app: ApplicationRecord) => void }) {
+function ServicingCard({ p, a, selected, isWatchlisted, settled, onSelect }: { p: Palette; a: ApplicationRecord; selected: boolean; isWatchlisted: boolean; settled: boolean; onSelect: () => void }) {
+  return (
+    <button
+      onClick={onSelect}
+      style={{
+        display: 'block',
+        width: '100%',
+        textAlign: 'left',
+        padding: '7px 9px',
+        marginBottom: 4,
+        borderRadius: 8,
+        cursor: 'pointer',
+        border: selected ? (isWatchlisted ? '1.5px solid #c0392b' : `1.5px solid ${p.primary}`) : isWatchlisted ? '1px solid #f0c4bd' : `1px solid ${p.hairline}`,
+        background: selected ? (isWatchlisted ? '#fdecea' : p.accentTint) : isWatchlisted ? '#fff8f7' : p.surface,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+        <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{a.applicantLabel}</span>
+        <ServicingChip app={a} isWatchlisted={isWatchlisted} settled={settled} />
+      </div>
+      <p style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink2, marginTop: 2 }}>
+        {rmShort(a.offeredAmount)} · disbursed {formatAgo(a.resolvedAt ?? a.filedAt)}
+      </p>
+    </button>
+  );
+}
+
+function ServicingSectionBlock({ p, label, dotColor, apps, isWatchlisted, settled, selectedId, onSelect }: { p: Palette; label: string; dotColor: string; apps: ApplicationRecord[]; isWatchlisted: boolean; settled: boolean; selectedId: string | null; onSelect: (a: ApplicationRecord) => void }) {
+  if (apps.length === 0) return null;
+  return (
+    <div style={{ padding: '10px 8px 4px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px', marginBottom: 5 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink2, letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: dotColor, display: 'inline-block' }} />
+          {label}
+        </span>
+        <span style={{ fontFamily: FONT.num, fontSize: 12, fontWeight: 700, color: p.ink1 }}>{apps.length}</span>
+      </div>
+      {apps.map((a) => (
+        <ServicingCard key={a.id} p={p} a={a} selected={a.id === selectedId} isWatchlisted={isWatchlisted} settled={settled} onSelect={() => onSelect(a)} />
+      ))}
+    </div>
+  );
+}
+
+function ServicingList({ p, apps, sections, selectedId, onSelect }: { p: Palette; apps: ApplicationRecord[]; sections: ServicingSections; selectedId: string | null; onSelect: (app: ApplicationRecord) => void }) {
   return (
     <nav aria-label="Serviced loans" style={{ width: 260, background: p.surface2, borderRight: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto' }}>
       <div style={{ padding: '14px 12px 10px', borderBottom: `1px solid ${p.hairline}` }}>
         <p role="heading" aria-level={2} style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink2, letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: 4 }}>Servicing · Approved Book</p>
         <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5 }}>{apps.filter((a) => a.status === 'approved').length} loan(s) disbursed</p>
       </div>
-      {ordered.length > 0 && (
-        <div style={{ padding: '10px 8px 4px' }}>
-          {ordered.map((a) => {
-            const selected = a.id === selectedId;
-            const isWatchlisted = watchlistIds.has(a.id);
-            return (
-              <button
-                key={a.id}
-                onClick={() => onSelect(a)}
-                style={{
-                  display: 'block',
-                  width: '100%',
-                  textAlign: 'left',
-                  padding: '7px 9px',
-                  marginBottom: 4,
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  border: selected ? (isWatchlisted ? '1.5px solid #c0392b' : `1.5px solid ${p.primary}`) : isWatchlisted ? '1px solid #f0c4bd' : `1px solid ${p.hairline}`,
-                  background: selected ? (isWatchlisted ? '#fdecea' : p.accentTint) : isWatchlisted ? '#fff8f7' : p.surface,
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                  <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{a.applicantLabel}</span>
-                  <ServicingChip app={a} isWatchlisted={isWatchlisted} />
-                </div>
-                <p style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink2, marginTop: 2 }}>
-                  {rmShort(a.offeredAmount)} · disbursed {formatAgo(a.resolvedAt ?? a.filedAt)}
-                </p>
-              </button>
-            );
-          })}
-        </div>
-      )}
+      <ServicingSectionBlock p={p} label="Defaulted" dotColor="#8a1f14" apps={sections.defaulted} isWatchlisted={false} settled={false} selectedId={selectedId} onSelect={onSelect} />
+      <ServicingSectionBlock p={p} label="Watchlist" dotColor="#c0392b" apps={sections.watchlist} isWatchlisted settled={false} selectedId={selectedId} onSelect={onSelect} />
+      <ServicingSectionBlock p={p} label="Active" dotColor="#3b5bdb" apps={sections.active} isWatchlisted={false} settled={false} selectedId={selectedId} onSelect={onSelect} />
+      <ServicingSectionBlock p={p} label="Settled" dotColor="#1f8a5b" apps={sections.settled} isWatchlisted={false} settled selectedId={selectedId} onSelect={onSelect} />
     </nav>
   );
 }
@@ -1663,10 +1717,10 @@ function ServicingEmpty({ p, text }: { p: Palette; text: string }) {
   );
 }
 
-function ServicingDetail({ p, app, passport, onResolve, onRecordRepayment }: { p: Palette; app: ApplicationRecord; passport: CreditPassport | null; onResolve: (outcome: 'approved' | 'declined', rationale: string) => void; onRecordRepayment: (instalmentSeq: number, amount: number, outcome: RepaymentOutcome) => void }) {
+function ServicingDetail({ p, app, passport, onResolve, onRecordRepayment, onMarkDefault }: { p: Palette; app: ApplicationRecord; passport: CreditPassport | null; onResolve: (outcome: 'approved' | 'declined', rationale: string) => void; onRecordRepayment: (instalmentSeq: number, amount: number, outcome: RepaymentOutcome) => void; onMarkDefault: () => void }) {
   return (
     <div style={{ width: 340, background: p.surface, borderLeft: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto', padding: '14px 0' }}>
-      <ApplicationCard p={p} app={app} passport={passport} onResolve={onResolve} onRecordRepayment={onRecordRepayment} />
+      <ApplicationCard p={p} app={app} passport={passport} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onMarkDefault={onMarkDefault} />
     </div>
   );
 }
@@ -1733,7 +1787,12 @@ export default function Console() {
           setApps(merged.apps);
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      // Servicing sync (2026-07-18 design) runs after the direct-apply adoption above so it
+      // sees any just-adopted approved loans too, not just the ones already in the pipeline.
+      .finally(() => {
+        pullServicing(lenderId).catch(() => {});
+      });
     fetch(`/api/policy?lender=${lenderId}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((sp: StoredPolicy | null) => {
@@ -1854,6 +1913,73 @@ export default function Console() {
     setApps(next);
     writeApplications(next, undefined, activeLenderId);
   };
+
+  /** Write-through one repayment/default action to the shared servicing ledger (Bidirectional
+   *  Servicing Sync, 2026-07-18 design), best-effort: fire-and-forget, never blocks or
+   *  reverts the local update already applied by syncApps  offline degrades silently, same
+   *  posture as direct-apply. */
+  const writeThroughServicing = (app: ApplicationRecord, lenderId: string, write: { event: { instalmentSeq: number; outcome: RepaymentOutcome } } | { default: true }) => {
+    const payload = servicingWritePayload(app, lenderId, write);
+    if (!payload) return;
+    fetch('/api/servicing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {});
+  };
+
+  /** Publish an approved offer to the borrower back-channel (approval-notify, 2026-07-19):
+   *  when an officer approves a referred application, the borrower app has no way to accept it
+   *  (it only ever saw the "refer" verdict). Publishing the decided terms lets the borrower app
+   *  auto-book the financing on its next poll. Best-effort, fire-and-forget  a network failure
+   *  never blocks the officer's local resolution. Only meaningful for an approved loan with a
+   *  positive offer; a zero-offer or subject-less record publishes nothing. */
+  const publishOffer = (app: ApplicationRecord, lenderId: string) => {
+    if (!app.subject || !(app.offeredAmount > 0)) return;
+    fetch('/api/offers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subject: app.subject, lenderId, maxAmount: app.offeredAmount, installment: app.installment, ...(app.purpose ? { purpose: app.purpose } : {}) }),
+    }).catch(() => {});
+  };
+
+  /** Pull every approved loan's shared servicing record for `lenderId` and merge server
+   *  events/defaults into the local pipeline (poll-on-focus, 2026-07-18 design): a
+   *  borrower-recorded repayment, miss, or default now surfaces in the console. Re-reads
+   *  applications fresh from storage rather than trusting a possibly-stale `apps` closure, so
+   *  it composes safely after the direct-apply merge in loadForLender. Best-effort per loan
+   *  one unreachable/malformed GET never blocks the rest of the book. */
+  const pullServicing = async (lenderId: string) => {
+    const current = readApplications(undefined, lenderId);
+    const approvedApps = current.filter((a) => a.status === 'approved');
+    if (approvedApps.length === 0) return;
+
+    let next = current;
+    let anyChanged = false;
+    for (const app of approvedApps) {
+      try {
+        const res = await fetch(`/api/servicing?subject=${encodeURIComponent(app.subject)}&lender=${encodeURIComponent(lenderId)}`);
+        if (!res.ok) continue;
+        const record: ServicingRecord | null = await res.json();
+        if (!record) continue;
+        const result = mergeAppWithServicing(app, lenderId, record);
+        if (result.changed) {
+          next = next.map((a) => (a.id === app.id ? result.app : a));
+          anyChanged = true;
+        }
+      } catch {
+        // offline/malformed  this loan's servicing state just stays whatever it was locally.
+      }
+    }
+    if (anyChanged) {
+      writeApplications(next, undefined, lenderId);
+      if (lenderId === activeLenderId) setApps(next);
+    }
+  };
+
+  // Poll-on-focus (2026-07-18 design): every time the officer switches onto the Servicing
+  // tab, re-pull the shared ledger so a borrower-recorded repayment/miss/default made since
+  // the last load or tab switch shows up without a manual refresh.
+  useEffect(() => {
+    if (tab === 'servicing') pullServicing(activeLenderId).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, activeLenderId]);
 
   /** Log an explicit verification as a presentment; priors exclude the one being recorded. */
   const logPresentment = (passport: CreditPassport) => {
@@ -2000,14 +2126,34 @@ export default function Console() {
 
   const onResolve = (outcome: 'approved' | 'declined', rationale: string) => {
     if (!selectedAppId) return;
+    const app = apps.find((a) => a.id === selectedAppId);
     syncApps(resolveApplication(apps, selectedAppId, outcome, rationale, new Date(), activeLender.officer));
+    // Approving a referred application is the one transition the borrower app can't reach on
+    // its own (it only ever saw the "refer" verdict), so publish the offer back-channel so the
+    // borrower auto-books it. Declines aren't published (the borrower simply gets no offer).
+    if (outcome === 'approved' && app) publishOffer(app, activeLenderId);
   };
 
   /** Officer-recorded repayment (portfolio performance): appends one instalment outcome to
-   *  the selected loan's ledger, audit-trailed. Never touches status/resolution. */
+   *  the selected loan's ledger, audit-trailed. Never touches status/resolution. Writes
+   *  through to the shared servicing ledger (2026-07-18 design) in addition to the local
+   *  update, best-effort  the local record is never blocked or reverted by a network failure. */
   const onRecordRepayment = (instalmentSeq: number, amt: number, outcome: RepaymentOutcome) => {
     if (!selectedAppId) return;
+    const app = apps.find((a) => a.id === selectedAppId);
     syncApps(recordRepayment(apps, selectedAppId, { instalmentSeq, amount: amt, outcome }, new Date()));
+    if (app) writeThroughServicing(app, activeLenderId, { event: { instalmentSeq, outcome } });
+  };
+
+  /** Officer "mark defaulted" action (Bidirectional Servicing Sync, 2026-07-18 design): a
+   *  loan-level terminal flag, audit-trailed, write-through to the shared servicing ledger.
+   *  A monotonic latch  markDefault itself is a no-op on an already-defaulted loan. */
+  const onMarkDefault = () => {
+    if (!selectedAppId) return;
+    const app = apps.find((a) => a.id === selectedAppId);
+    if (!app || app.defaulted?.value) return;
+    syncApps(markDefault(apps, selectedAppId, 'lender', new Date()));
+    writeThroughServicing(app, activeLenderId, { default: true });
   };
 
   /** Records that an adverse-action letter was generated (Brief J stretch), audit-trailed 
@@ -2033,8 +2179,10 @@ export default function Console() {
   const selectedApp = apps.find((a) => a.id === selectedAppId) ?? null;
   // The live approved book (Brief Q)  maps approved applications into the pool shape.
   const book = useMemo(() => bookToPool(apps), [apps]);
-  // Servicing tab (console IA split, 2026-07-18): the approved book, watchlist-first.
-  const servicingList = useMemo(() => orderServicingList(apps), [apps]);
+  // Servicing tab (console IA split, 2026-07-18; settled loans, 2026-07-18 stats/advisor
+  // design): the approved book split into watchlist / active / settled sections.
+  const servicingSections = useMemo(() => orderServicingSections(apps), [apps]);
+  const servicingCount = servicingSections.defaulted.length + servicingSections.watchlist.length + servicingSections.active.length + servicingSections.settled.length;
   const servicingWatchlistIds = useMemo(() => new Set(watchlistApplications(apps).map((a) => a.id)), [apps]);
 
   // Risk-based pricing suggestion (Brief R) for the current offer  computed from the
@@ -2084,13 +2232,13 @@ export default function Console() {
           </>
         ) : tab === 'servicing' ? (
           <>
-            <ServicingList p={p} apps={apps} ordered={servicingList} watchlistIds={servicingWatchlistIds} selectedId={selectedAppId} onSelect={onSelectApp} />
-            {servicingList.length === 0 ? (
+            <ServicingList p={p} apps={apps} sections={servicingSections} selectedId={selectedAppId} onSelect={onSelectApp} />
+            {servicingCount === 0 ? (
               <ServicingEmpty p={p} text="No approved loans yet. Approve applications on the Verify tab (or seed the pipeline) and they appear here for servicing." />
             ) : selectedApp && selectedApp.status === 'approved' && state.status === 'valid' ? (
               <>
                 <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} lapsedTiers={state.credential.verification.lapsedTiers} />
-                <ServicingDetail p={p} app={selectedApp} passport={state.passport} onResolve={onResolve} onRecordRepayment={onRecordRepayment} />
+                <ServicingDetail p={p} app={selectedApp} passport={state.passport} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onMarkDefault={onMarkDefault} />
               </>
             ) : (
               <ServicingEmpty p={p} text="Select a loan from the list to service it: repayment status, monitoring check-ins, and audit trail." />
@@ -2101,7 +2249,7 @@ export default function Console() {
         ) : tab === 'capital' ? (
           <CapitalMarkets p={palette(false)} book={book} source={poolSource} setSource={setPoolSource} />
         ) : (
-          <PolicyTab key={`${activeLenderId}:${storedPolicy.updatedAt ?? 'defaults'}`} p={palette(false)} stored={storedPolicy} onSaved={onPolicySaved} lenderId={activeLenderId} lenderName={activeLender.name} />
+          <PolicyTab key={`${activeLenderId}:${storedPolicy.updatedAt ?? 'defaults'}`} p={palette(false)} stored={storedPolicy} onSaved={onPolicySaved} lenderId={activeLenderId} lenderName={activeLender.name} apps={apps} />
         )}
       </main>
     </div>

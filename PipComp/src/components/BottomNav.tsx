@@ -35,8 +35,9 @@ const TABS: { key: NavTab; label: string }[] = [
   { key: 'profile', label: 'Profile' },
 ];
 
-/** Persistent bottom tab bar for the borrower app. */
-export function BottomNav({ active, onNavigate }: { active: NavTab; onNavigate: (tab: NavTab) => void }) {
+/** Persistent bottom tab bar for the borrower app. `badges` shows an unread count over a
+ *  tab's icon (e.g. loans just approved from the console the borrower hasn't opened yet). */
+export function BottomNav({ active, onNavigate, badges }: { active: NavTab; onNavigate: (tab: NavTab) => void; badges?: Partial<Record<NavTab, number>> }) {
   const insets = useSafeAreaInsets();
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 10) + 8 }]}>
@@ -46,6 +47,7 @@ export function BottomNav({ active, onNavigate }: { active: NavTab; onNavigate: 
         // ink3 measures ~2.2-2.5:1 contrast, below what body/label text needs.
         const tint = on ? colors.accent : colors.ink3;
         const labelColor = on ? colors.accent : colors.ink2;
+        const badge = badges?.[key] ?? 0;
         return (
           <Pressable
             key={key}
@@ -53,12 +55,19 @@ export function BottomNav({ active, onNavigate }: { active: NavTab; onNavigate: 
             style={styles.tab}
             hitSlop={6}
             accessibilityRole="tab"
-            accessibilityLabel={label}
+            accessibilityLabel={badge > 0 ? `${label}, ${badge} new` : label}
             accessibilityState={{ selected: on }}
           >
-            <Svg width={22} height={22} viewBox="0 0 24 24">
-              {ICONS[key](tint, key === 'home' && on ? colors.accent : 'none')}
-            </Svg>
+            <View>
+              <Svg width={22} height={22} viewBox="0 0 24 24">
+                {ICONS[key](tint, key === 'home' && on ? colors.accent : 'none')}
+              </Svg>
+              {badge > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{badge > 9 ? '9+' : badge}</Text>
+                </View>
+              )}
+            </View>
             <Text style={[styles.label, { color: labelColor, fontFamily: uiFont(on ? 700 : 500) }]}>{label}</Text>
           </Pressable>
         );
@@ -78,4 +87,20 @@ const styles = StyleSheet.create({
   },
   tab: { flex: 1, alignItems: 'center', gap: 3, paddingVertical: 2 },
   label: { fontSize: 11 },
+  // Red count bubble pinned to the top-right of the tab icon.
+  badge: {
+    position: 'absolute',
+    top: -5,
+    right: -9,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    backgroundColor: colors.red,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.surface,
+  },
+  badgeText: { color: '#fff', fontSize: 9.5, fontFamily: uiFont(800), lineHeight: 12 },
 });

@@ -14,6 +14,7 @@ interface AccountRow {
   ticker: string | null;
   quantity: number | null;
   cost: number | null;
+  icon: string | null;
 }
 interface EntryRow {
   id: string;
@@ -42,6 +43,7 @@ function toAccount(r: AccountRow): Account {
     ticker: r.ticker ?? null,
     quantity: r.quantity ?? null,
     cost: r.cost ?? null,
+    icon: r.icon ?? null,
   };
 }
 function toEntry(r: EntryRow): BalanceEntry {
@@ -66,19 +68,21 @@ export async function addAccount(
   kind: AccountKind,
   cls: string,
   openingValue: number,
-  asOf: string
+  asOf: string,
+  icon?: string | null
 ): Promise<Account> {
   const db = await getDb();
   const id = genId();
   const now = new Date().toISOString();
   await db.withTransactionAsync(async () => {
     await db.runAsync(
-      'INSERT INTO accounts (id, name, kind, cls, archived, created_at) VALUES (?, ?, ?, ?, 0, ?)',
+      'INSERT INTO accounts (id, name, kind, cls, archived, created_at, icon) VALUES (?, ?, ?, ?, 0, ?, ?)',
       id,
       name,
       kind,
       cls,
-      now
+      now,
+      icon ?? null
     );
     await db.runAsync(
       'INSERT INTO balance_entries (id, account_id, value, as_of, created_at) VALUES (?, ?, ?, ?, ?)',
@@ -89,12 +93,16 @@ export async function addAccount(
       now
     );
   });
-  return { id, name, kind, cls, archived: false, createdAt: now, sub: null, symbol: null, ticker: null, quantity: null, cost: null };
+  return { id, name, kind, cls, archived: false, createdAt: now, sub: null, symbol: null, ticker: null, quantity: null, cost: null, icon: icon ?? null };
 }
 
-export async function updateAccount(id: string, fields: { name: string; cls: string }): Promise<void> {
+export async function updateAccount(id: string, fields: { name: string; cls: string; icon?: string | null }): Promise<void> {
   const db = await getDb();
-  await db.runAsync('UPDATE accounts SET name = ?, cls = ? WHERE id = ?', fields.name, fields.cls, id);
+  if (fields.icon !== undefined) {
+    await db.runAsync('UPDATE accounts SET name = ?, cls = ?, icon = ? WHERE id = ?', fields.name, fields.cls, fields.icon, id);
+  } else {
+    await db.runAsync('UPDATE accounts SET name = ?, cls = ? WHERE id = ?', fields.name, fields.cls, id);
+  }
 }
 
 /** Delete an account and all of its balance history. */
@@ -144,24 +152,28 @@ export async function addHolding(
   symbol: string,
   ticker: string,
   quantity: number,
-  cost: number | null
+  cost: number | null,
+  icon?: string | null
 ): Promise<Account> {
   const db = await getDb();
   const id = genId();
   const now = new Date().toISOString();
-  await db.runAsync(
-    `INSERT INTO accounts (id, name, kind, cls, archived, created_at, sub, symbol, ticker, quantity, cost)
-     VALUES (?, ?, 'asset', 'investments', 0, ?, ?, ?, ?, ?, ?)`,
-    id,
-    name,
-    now,
-    sub,
-    symbol,
-    ticker,
-    quantity,
-    cost
-  );
-  return { id, name, kind: 'asset', cls: 'investments', archived: false, createdAt: now, sub, symbol, ticker, quantity, cost };
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `INSERT INTO accounts (id, name, kind, cls, archived, created_at, sub, symbol, ticker, quantity, cost, icon)
+       VALUES (?, ?, 'asset', 'investments', 0, ?, ?, ?, ?, ?, ?, ?)`,
+      id,
+      name,
+      now,
+      sub,
+      symbol,
+      ticker,
+      quantity,
+      cost,
+      icon ?? null
+    );
+  });
+  return { id, name, kind: 'asset', cls: 'investments', archived: false, createdAt: now, sub, symbol, ticker, quantity, cost, icon: icon ?? null };
 }
 
 /** Update a holding's quantity (e.g. after buying/selling more). */

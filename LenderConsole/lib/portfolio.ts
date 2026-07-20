@@ -111,9 +111,27 @@ export function mapBook(apps: ApplicationRecord[]): BookLoan[] {
   return out;
 }
 
-/** The approved book as a securitization pool (the input to structurePool). */
+/**
+ * A loan is settled once its recorded paid instalments (any non-missed repayment event)
+ * reach the loan's full tenor  the money is back, so it must not keep inflating live
+ * exposure forever. Duplicated (not imported) from lib/servicing.ts's isSettled/
+ * lib/performance.ts's paidCount definition deliberately: both of those modules already
+ * depend on mapBook, so importing either back into this file would create an import
+ * cycle. This one-line predicate is the cost of keeping portfolio.ts a dependency leaf;
+ * lib/performance.ts's buildPerformance intentionally does NOT apply this filter  a
+ * settled loan's realized performance is exactly the evidence the validation loop needs.
+ */
+function isSettledLoan(b: BookLoan): boolean {
+  const paidCount = (b.app.repayments ?? []).filter((e) => e.outcome !== 'missed').length;
+  return b.loan.tenorMonths > 0 && paidCount >= b.loan.tenorMonths;
+}
+
+/** The approved book as a securitization pool (the input to structurePool), excluding
+ *  settled loans  they've been fully repaid and no longer represent live exposure. */
 export function bookToPool(apps: ApplicationRecord[]): PoolLoan[] {
-  return mapBook(apps).map((b) => b.loan);
+  return mapBook(apps)
+    .filter((b) => !isSettledLoan(b))
+    .map((b) => b.loan);
 }
 
 function breakdown(entries: { label: string; exposure: number }[], total: number, order?: string[]): BreakdownRow[] {
@@ -144,7 +162,7 @@ export function buildPortfolio(
   opts: { concentrationThreshold?: number } = {},
 ): Portfolio {
   const threshold = opts.concentrationThreshold ?? CONCENTRATION_THRESHOLD;
-  const book = mapBook(apps);
+  const book = mapBook(apps).filter((b) => !isSettledLoan(b));
   const pool = book.map((b) => b.loan);
   const summary = summarizePool(pool);
   const total = summary.totalPrincipal;

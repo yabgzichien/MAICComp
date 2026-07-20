@@ -30,6 +30,13 @@ export async function getOccupation(): Promise<Occupation | null> {
   };
 }
 
+/** Clear the self-declared occupation so a fresh persona/session doesn't inherit a prior
+ *  one (identity-bleed fix). Called on persona-load and every full data reset. */
+export async function clearOccupation(): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM occupation WHERE id = 1');
+}
+
 export async function setOccupation(o: Occupation): Promise<void> {
   const db = await getDb();
   await db.runAsync(

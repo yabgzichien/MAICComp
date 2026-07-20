@@ -29,6 +29,7 @@ describe('BORROWER_TOUR_STEPS (the approved 5-act script)', () => {
       'open-coach',
       'coach-plan',
       'whatif',
+      'whatif-explore',
       'kyc-verify',
       'mint-passport',
       'passport',

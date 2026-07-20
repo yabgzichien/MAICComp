@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { catColorsForHue } from '../lib/catColors';
 import { fmt } from '../lib/format';
 import type { Category, CategorySuggestion } from '../lib/types';
@@ -55,6 +55,13 @@ export function CatBadge({
   rad?: number;
 }) {
   const col = catColorsForHue(category.hue);
+  const isCustomImage = category.icon && (
+    category.icon.startsWith('data:') ||
+    category.icon.startsWith('file:') ||
+    category.icon.startsWith('content:') ||
+    category.icon.startsWith('http') ||
+    category.icon.startsWith('/')
+  );
   return (
     <View
       style={{
@@ -64,9 +71,14 @@ export function CatBadge({
         backgroundColor: col.bg,
         alignItems: 'center',
         justifyContent: 'center',
+        overflow: 'hidden',
       }}
     >
-      <Icon name={category.icon as IconName} size={size * 0.52} color={col.fg} stroke={1.9} />
+      {isCustomImage ? (
+        <Image source={{ uri: category.icon }} style={{ width: size, height: size }} resizeMode="cover" />
+      ) : (
+        <Icon name={category.icon as IconName} size={size * 0.52} color={col.fg} stroke={1.9} />
+      )}
     </View>
   );
 }

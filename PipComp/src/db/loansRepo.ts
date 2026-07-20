@@ -2,6 +2,7 @@
 import { genId, getDb } from './db';
 import { installmentFor } from '../lib/loans';
 import type { Decision, LoanDecision, LoanProduct } from '../lib/loans';
+import type { DeclaredPurpose, PurposeCategory } from '../lib/loanPurpose';
 
 // --- Status enums --------------------------------------------------------
 // loan_applications.status: lifecycle of an application after a decision is recorded.
@@ -40,6 +41,11 @@ interface ApplicationRow {
   created_at: string;
   lender_label: string | null;
   liability_account_id: string | null;
+  lender_id: string | null;
+  defaulted_at: string | null;
+  defaulted_source: string | null;
+  purpose_category: string | null;
+  purpose_note: string | null;
 }
 
 interface RepaymentRow {
@@ -64,6 +70,18 @@ export interface LoanApplication {
   /** The Net-worth liability account created when this loan was booked, so repayments can
    *  pay it down. Null for referred/declined applications and legacy rows. */
   liabilityAccountId: string | null;
+  /** The registry lender id (Bidirectional Servicing Sync, 2026-07-18 design)  the id
+   *  /api/servicing expects, distinct from lenderLabel's display name. Null for a
+   *  self-decided (non-lender-routed) application, which never syncs. */
+  lenderId: string | null;
+  /** When/who raised the default flag, so a lender-reported default synced in from the
+   *  console can be told apart from a locally-simulated one. Both null until defaulted. */
+  defaultedAt: string | null;
+  defaultedSource: 'lender' | 'borrower' | null;
+  /** Why this loan was requested (My Financing polish, 2026-07-19)  the same declared
+   *  purpose sent to the lender at apply time, now also kept locally so the loan list can
+   *  show it. Null for loans booked before this shipped, or a self-decided application. */
+  purpose: DeclaredPurpose | null;
 }
 
 export interface Repayment {
@@ -108,6 +126,17 @@ function toRepaymentStatus(value: string): RepaymentStatus {
   return value === 'paid' || value === 'late' || value === 'missed' || value === 'defaulted' ? value : 'scheduled';
 }
 
+function toDefaultedSource(value: string | null): 'lender' | 'borrower' | null {
+  return value === 'lender' || value === 'borrower' ? value : null;
+}
+
+const PURPOSE_CATEGORIES_SET: ReadonlySet<string> = new Set(['stock', 'equipment', 'working-capital', 'emergency', 'education', 'other']);
+
+function toPurpose(category: string | null, note: string | null): DeclaredPurpose | null {
+  if (!category || !PURPOSE_CATEGORIES_SET.has(category)) return null;
+  return { category: category as PurposeCategory, ...(note ? { note } : {}) };
+}
+
 function toApplication(r: ApplicationRow): LoanApplication {
   return {
     id: r.id,
@@ -119,6 +148,10 @@ function toApplication(r: ApplicationRow): LoanApplication {
     createdAt: r.created_at,
     lenderLabel: r.lender_label ?? null,
     liabilityAccountId: r.liability_account_id ?? null,
+    lenderId: r.lender_id ?? null,
+    defaultedAt: r.defaulted_at ?? null,
+    defaultedSource: toDefaultedSource(r.defaulted_source ?? null),
+    purpose: toPurpose(r.purpose_category ?? null, r.purpose_note ?? null),
   };
 }
 
@@ -158,14 +191,16 @@ export async function createApplication(
   requestedAmount: number,
   decision: LoanDecision,
   scoreAt: number,
-  lenderLabel: string | null = null
+  lenderLabel: string | null = null,
+  lenderId: string | null = null,
+  purpose: DeclaredPurpose | null = null
 ): Promise<LoanApplication> {
   const db = await getDb();
   const id = genId();
   const createdAt = new Date().toISOString();
   await db.runAsync(
-    `INSERT INTO loan_applications (id, product_id, requested_amount, decision, score_at, status, created_at, lender_label)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO loan_applications (id, product_id, requested_amount, decision, score_at, status, created_at, lender_label, lender_id, purpose_category, purpose_note)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     productId,
     requestedAmount,
@@ -173,7 +208,10 @@ export async function createApplication(
     scoreAt,
     'active',
     createdAt,
-    lenderLabel
+    lenderLabel,
+    lenderId,
+    purpose?.category ?? null,
+    purpose?.note ?? null
   );
   return {
     id,
@@ -185,6 +223,10 @@ export async function createApplication(
     createdAt,
     lenderLabel,
     liabilityAccountId: null,
+    lenderId,
+    defaultedAt: null,
+    defaultedSource: null,
+    purpose,
   };
 }
 
@@ -196,18 +238,57 @@ export async function setLoanLiabilityAccount(applicationId: string, accountId: 
 }
 
 /**
- * Update an application's lifecycle status (e.g. when a default is reported).
- * Mirrors `markRepaymentPaid`'s thin-update idiom  the caller decides the new status.
+ * Update an application's lifecycle status. Mirrors `markRepaymentPaid`'s thin-update idiom
+ *  the caller decides the new status. Not used for 'defaulted'  see markApplicationDefaulted,
+ * which also records provenance and gives the score its terminal hit.
  */
 export async function markApplicationStatus(applicationId: string, status: ApplicationStatus): Promise<void> {
   const db = await getDb();
   await db.runAsync('UPDATE loan_applications SET status = ? WHERE id = ?', status, applicationId);
 }
 
+/**
+ * Mark a loan defaulted (Bidirectional Servicing Sync, 2026-07-18 design): a loan-level
+ * terminal flag with provenance (`source`  who first raised it: this borrower's own
+ * simulate-default beat, or a lender-reported default synced in from the console). A
+ * monotonic latch at the DB layer too: the `AND defaulted_at IS NULL` guard makes a second
+ * call a no-op, so the original `at`/`source` are never overwritten (mirrors the console's
+ * own markDefault and mergeServicing's own latch rule).
+ *
+ * Every remaining 'scheduled' installment is marked 'missed' in the same transaction  a
+ * defaulted loan will never collect them, so the score's track-record factor (which reads
+ * every non-scheduled repayment via `repaymentSummary`) takes its honest terminal hit
+ * immediately rather than waiting on installments that will never come due naturally.
+ */
+export async function markApplicationDefaulted(applicationId: string, source: 'lender' | 'borrower', at: string = new Date().toISOString()): Promise<void> {
+  const db = await getDb();
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      "UPDATE loan_applications SET status = 'defaulted', defaulted_at = ?, defaulted_source = ? WHERE id = ? AND defaulted_at IS NULL",
+      at,
+      source,
+      applicationId
+    );
+    await db.runAsync("UPDATE repayments SET status = 'missed', paid_on = NULL WHERE application_id = ? AND status = 'scheduled'", applicationId);
+  });
+}
+
+/**
+ * Set one repayment's outcome directly, keyed by outcome rather than a boolean (unlike
+ * `markRepaymentPaid`/`markRepaymentMissed`)  used to apply a server-merged servicing event
+ * verbatim (Bidirectional Servicing Sync, 2026-07-18 design), where the outcome (and its
+ * timestamp) come from whichever side's write won the merge, not from "now".
+ */
+export async function setRepaymentOutcome(repaymentId: string, outcome: 'on-time' | 'late' | 'missed', at: string): Promise<void> {
+  const db = await getDb();
+  const status: RepaymentStatus = outcome === 'on-time' ? 'paid' : outcome === 'late' ? 'late' : 'missed';
+  await db.runAsync('UPDATE repayments SET paid_on = ?, status = ? WHERE id = ?', outcome === 'missed' ? null : at, status, repaymentId);
+}
+
 export async function listApplications(): Promise<LoanApplication[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<ApplicationRow>(
-    'SELECT id, product_id, requested_amount, decision, score_at, status, created_at, lender_label, liability_account_id FROM loan_applications ORDER BY created_at DESC'
+    'SELECT id, product_id, requested_amount, decision, score_at, status, created_at, lender_label, liability_account_id, lender_id, defaulted_at, defaulted_source, purpose_category, purpose_note FROM loan_applications ORDER BY created_at DESC'
   );
   return rows.map(toApplication);
 }

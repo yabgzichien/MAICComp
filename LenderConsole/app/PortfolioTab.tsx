@@ -10,7 +10,8 @@ import { FONT, type Palette } from './tokens';
 import { InfoButton, InfoModal, MiniBar, SectionLabel } from './shared';
 import { TourAnchor } from './TourAnchor';
 import { buildPortfolio, type BreakdownRow } from '../lib/portfolio';
-import { buildPerformance, type CohortRow } from '../lib/performance';
+import { buildPerformance, settledSummary, type CohortRow } from '../lib/performance';
+import { buildBookStats, type StatSummary } from '../lib/bookStats';
 import { formatPoolMoney } from '../lib/poolView';
 import type { ApplicationRecord } from '../lib/applications';
 
@@ -95,6 +96,26 @@ function PerformanceTable({ p, rows, onInfo }: { p: Palette; rows: CohortRow[]; 
   );
 }
 
+/** The validation loop's strongest line: loans that finished their whole schedule, the
+ *  principal that came back, and the realized loss on that closed cohort (structurally
+ *  always 0  a missed instalment can never let a loan reach settled). Renders nothing
+ *  until at least one loan has actually settled  never a zeroed "0 loans" card. */
+function FullyRepaidStat({ p, apps, onInfo }: { p: Palette; apps: ApplicationRecord[]; onInfo: (entry: string) => void }) {
+  const settled = useMemo(() => settledSummary(apps), [apps]);
+  if (settled.count === 0) return null;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderRadius: 12, background: p.accentTint, border: `1.5px solid ${p.accentSoft}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+        <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.accentInk, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Fully Repaid</span>
+        <InfoButton entry="fully_repaid" onOpen={onInfo} />
+      </div>
+      <span style={{ fontFamily: FONT.num, fontSize: 18, fontWeight: 700, color: p.ink1 }}>{settled.count} loan{settled.count === 1 ? '' : 's'}</span>
+      <span style={{ fontFamily: FONT.num, fontSize: 13, color: p.ink2 }}>{rm(settled.principalReturned)} returned</span>
+      <span style={{ fontFamily: FONT.num, fontSize: 13, color: p.primary, marginLeft: 'auto' }}>{pct2(settled.realizedLossRate)} realized loss</span>
+    </div>
+  );
+}
+
 function PerformanceSection({ p, apps }: { p: Palette; apps: ApplicationRecord[] }) {
   const perf = useMemo(() => buildPerformance(apps), [apps]);
   const [info, setInfo] = useState<string | null>(null);
@@ -121,9 +142,74 @@ function PerformanceSection({ p, apps }: { p: Palette; apps: ApplicationRecord[]
             <PerformanceStat label="Realized vs Expected Loss" value={`${pct2(perf.realizedLossRate)} / ${pct2(perf.expectedLossRate)}`} info="realized_loss" onInfo={setInfo} />
             <PerformanceStat label="Interest Collected" value={rm(perf.interestCollected)} info="interest_collected" onInfo={setInfo} />
           </div>
+          <FullyRepaidStat p={p} apps={apps} onInfo={setInfo} />
           <PerformanceTable p={p} rows={perf.bands} onInfo={setInfo} />
         </>
       )}
+    </div>
+  );
+}
+
+/** Compact min–median–max strip with a mean marker (filled dot) and a median tick (bar),
+ *  so the two central tendencies are visually distinguishable rather than collapsed into
+ *  one number. Purely presentational  the numbers are printed alongside it too. */
+function DistributionStrip({ p, stat, accent }: { p: Palette; stat: StatSummary; accent: string }) {
+  const range = stat.max - stat.min || 1;
+  const pctOf = (v: number) => Math.max(0, Math.min(100, ((v - stat.min) / range) * 100));
+  return (
+    <div style={{ position: 'relative', height: 16, flex: 1, minWidth: 90 }}>
+      <div style={{ position: 'absolute', top: 6, left: 0, right: 0, height: 4, borderRadius: 2, background: p.hairline }} />
+      <div title={`Median`} style={{ position: 'absolute', top: 2, left: `${pctOf(stat.median)}%`, width: 2, height: 12, background: p.ink2, transform: 'translateX(-1px)' }} />
+      <div title={`Mean`} style={{ position: 'absolute', top: 3, left: `${pctOf(stat.mean)}%`, width: 8, height: 8, borderRadius: '50%', background: accent, transform: 'translate(-4px, 0)', boxShadow: `0 0 0 2px ${p.surface}` }} />
+    </div>
+  );
+}
+
+function StatRow({ p, label, stat, format, info, accent, onInfo }: { p: Palette; label: string; stat: StatSummary; format: (n: number) => string; info: string; accent: string; onInfo: (entry: string) => void }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '150px 60px 1fr 60px 130px', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: `1px solid ${p.hairline}` }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink1 }}>
+        {label}
+        <InfoButton entry={info} onOpen={onInfo} />
+      </span>
+      {stat.n === 0 ? (
+        <span style={{ gridColumn: '2 / span 4', fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>No data yet</span>
+      ) : (
+        <>
+          <span style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink3, textAlign: 'right' }}>{format(stat.min)}</span>
+          <DistributionStrip p={p} stat={stat} accent={accent} />
+          <span style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink3 }}>{format(stat.max)}</span>
+          <span style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink2 }}>
+            μ {format(stat.mean)} · σ {format(stat.stdDev)}
+            {stat.smallSample && <span style={{ marginLeft: 5, color: p.amber }}>· small sample</span>}
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Book Statistics: mean/median/standard-deviation for credit score, offered amount, and
+ *  per-loan collection rate  the book's distribution, not just its aggregate risk. Mode
+ *  is deliberately omitted (meaningless on continuous values at this book size) and the
+ *  spread is standard deviation, never raw variance (squared units nobody reads). */
+function BookStatisticsCard({ p, apps }: { p: Palette; apps: ApplicationRecord[] }) {
+  const stats = useMemo(() => buildBookStats(apps), [apps]);
+  const [info, setInfo] = useState<string | null>(null);
+  if (stats.score.n === 0) return null;
+  const scoreFmt = (n: number) => String(Math.round(n));
+  return (
+    <div style={{ padding: '4px 40px 8px', flexShrink: 0 }}>
+      <InfoModal entry={info} onClose={() => setInfo(null)} p={p} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        <SectionLabel color={p.ink2}>Book Statistics</SectionLabel>
+        <InfoButton entry="distribution_strip" onOpen={setInfo} />
+      </div>
+      <div style={{ background: p.surface, borderRadius: 12, padding: '4px 16px', boxShadow: p.shadow }}>
+        <StatRow p={p} label="Credit Score" stat={stats.score} format={scoreFmt} info="median" accent={p.primary} onInfo={setInfo} />
+        <StatRow p={p} label="Offered Amount" stat={stats.amount} format={rm} info="standard_deviation" accent="#3b5bdb" onInfo={setInfo} />
+        <StatRow p={p} label="Collection Rate" stat={stats.collectionRate} format={pct1} info="collection_rate" accent={p.amber} onInfo={setInfo} />
+      </div>
     </div>
   );
 }
@@ -215,6 +301,8 @@ export default function PortfolioTab({ p, apps, onStructure }: { p: Palette; app
           <TourAnchor id="portfolio-performance">
             <PerformanceSection p={p} apps={apps} />
           </TourAnchor>
+
+          <BookStatisticsCard p={p} apps={apps} />
 
           <div style={{ padding: '4px 40px 24px', marginTop: 'auto' }}>
             <div style={{ padding: '11px 18px', borderRadius: 10, background: p.surface, border: `1px solid ${p.hairline}`, boxShadow: p.shadow }}>

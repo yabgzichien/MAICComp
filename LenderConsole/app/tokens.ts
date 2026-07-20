@@ -240,4 +240,24 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     short: 'How far behind schedule a loan is, if at all.',
     body: 'Current: paid up to date. Late: exactly one instalment behind. Delinquent: two or more instalments behind, or any instalment missed outright — a missed payment marks a loan delinquent even if the borrower later catches up on later instalments, since a default event does not un-happen.',
   },
+  fully_repaid: {
+    term: 'Fully Repaid',
+    short: 'Loans that finished their entire repayment schedule, and what came back.',
+    body: 'A loan settles once every instalment on its schedule has been paid. Because a single missed instalment permanently blocks a loan from ever reaching that state, a settled loan’s realized loss is always zero — this is the strongest evidence the validation loop can offer: not a prediction, but principal that has actually come home. Settled loans stop counting toward live exposure elsewhere on this tab (the money is no longer at risk) but stay in this figure, since it is exactly where they matter most.',
+  },
+  median: {
+    term: 'Median',
+    short: 'The middle value once every loan is sorted low to high.',
+    body: "Unlike the mean, the median is not pulled around by one or two outlier loans — a single RM20,000 Scale-tier loan barely moves it, but can drag the mean well above what a typical borrower actually received. Reporting both side by side (with the gap between them) is itself informative: mean far above median means a few large loans, not the book's typical borrower, are driving the average.",
+  },
+  standard_deviation: {
+    term: 'Standard Deviation (σ)',
+    short: 'How spread out the values are around the mean, in the same units as the figure itself.',
+    body: "A small σ means the book is homogeneous (every borrower looks similar); a large σ means the book spans very different borrowers. Reported here rather than variance (which squares the units — RM² for loan amounts is not a readable number) so the spread can be compared directly against the mean it sits beside.",
+  },
+  distribution_strip: {
+    term: 'Distribution Strip',
+    short: "A compact min-to-max bar for each figure, marking where the median and mean fall.",
+    body: 'The bar itself spans the smallest to the largest value in the book. The thin tick marks the median; the filled dot marks the mean. When the two markers sit close together the book is evenly spread; when they diverge, a few loans at one end are pulling the mean away from what is typical.',
+  },
 };
