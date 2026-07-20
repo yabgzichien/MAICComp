@@ -22,7 +22,7 @@ import {
   upsertSnapshot,
 } from '../db/budgetRepo';
 import { resetAllData as dbResetAllData } from '../db/db';
-import { loadDemoProfile, type DemoProfileId } from '../data/demoProfile';
+import { DEMO_PROFILES, loadDemoProfile, type DemoProfileId } from '../data/demoProfile';
 import {
   addAccount as dbAddAccount,
   addBalanceEntry as dbAddBalanceEntry,
@@ -78,6 +78,9 @@ import { emitTourSignal } from '../lib/tourSignals';
 const ONBOARDING_KEY = 'onboarding_complete';
 const TOUR_ACTIVE_KEY = 'tour_active';
 const TOUR_STEP_KEY = 'tour_step_index';
+// Which demo persona (if any) is currently loaded — lets the KYC screen prefill identity +
+// work & income for a zero-typing demo run (see loadDemoData below). Null for a real user.
+const ACTIVE_DEMO_PROFILE_KEY = 'active_demo_profile';
 // Count of loans auto-booked from a console approval that the borrower hasn't seen yet
 // (approval-notify, 2026-07-19). Drives the red badge on the Loan tab; cleared when the
 // borrower opens My Financing. Persisted so the badge survives a reload.
@@ -175,6 +178,9 @@ interface AppData {
   /** Wipe all data AND reset onboarding so the setup wizard re-appears. */
   resetToOnboarding: () => Promise<void>;
   loadDemoData: (profile?: DemoProfileId) => Promise<void>;
+  /** Which demo persona is currently loaded (null for a real user's own data). Drives the KYC
+   *  screen's identity + work & income prefill so a demo run needs zero typing. */
+  activeDemoProfile: DemoProfileId | null;
   addAccount: (name: string, kind: AccountKind, cls: string, openingValue: number, asOf: string, icon?: string | null) => Promise<void>;
   updateAccount: (id: string, fields: { name: string; cls: string; icon?: string | null }) => Promise<void>;
   deleteAccount: (id: string) => Promise<void>;
@@ -254,11 +260,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [kyc, setKycState] = useState<KycIdentity | null>(null);
   const [occupation, setOccupationState] = useState<Occupation | null>(null);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
+  const [activeDemoProfile, setActiveDemoProfileState] = useState<DemoProfileId | null>(null);
   const [tourActive, setTourActive] = useState(false);
   const [tourStepIndex, setTourStepIndexState] = useState(0);
 
   const refreshAll = useCallback(async () => {
-    const [cats, txns, mem, income, alloc, snaps, accts, entries, cache, products, applications, allRepayments, repSummary, kycRow, onboardingFlag, tourActiveFlag, tourStepRaw, unseenFinancingRaw] =
+    const [cats, txns, mem, income, alloc, snaps, accts, entries, cache, products, applications, allRepayments, repSummary, kycRow, onboardingFlag, tourActiveFlag, tourStepRaw, unseenFinancingRaw, activeDemoProfileRaw] =
       await Promise.all([
         listCategories(),
         listTransactions(),
@@ -278,10 +285,14 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         getMeta(TOUR_ACTIVE_KEY),
         getMeta(TOUR_STEP_KEY),
         getMeta(UNSEEN_FINANCING_KEY),
+        getMeta(ACTIVE_DEMO_PROFILE_KEY),
       ]);
     setOccupationState(await getOccupation());
     setKycState(kycRow);
     setOnboardingComplete(onboardingFlag === 'true');
+    setActiveDemoProfileState(
+      DEMO_PROFILES.some((p) => p.id === activeDemoProfileRaw) ? (activeDemoProfileRaw as DemoProfileId) : null
+    );
     setTourActive(tourActiveFlag === 'true');
     setTourStepIndexState(clampTourStep(tourStepRaw ? Number(tourStepRaw) || 0 : 0, BORROWER_TOUR_STEPS.length));
     setUnseenFinancingCount(Math.max(0, Number(unseenFinancingRaw) || 0));
@@ -452,21 +463,30 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
   const resetAllData = useCallback(async () => {
     await dbResetAllData();
+    // No demo persona's data survives a wipe — clear the flag so the KYC screen doesn't
+    // prefill a stale persona's identity over whatever the user enters next.
+    await setMeta(ACTIVE_DEMO_PROFILE_KEY, '');
+    setActiveDemoProfileState(null);
     await refreshAll();
   }, [refreshAll]);
 
   const resetToOnboarding = useCallback(async () => {
     await dbResetAllData();
     await setMeta(ONBOARDING_KEY, 'false');
+    await setMeta(ACTIVE_DEMO_PROFILE_KEY, '');
     // dbResetAllData now also clears the kyc/occupation rows; mirror that in memory so the
     // wizard re-appears with a clean identity rather than a stale one from the prior session.
     setKycState(null);
     setOccupationState(null);
+    setActiveDemoProfileState(null);
     setOnboardingComplete(false);
   }, []);
 
   const loadDemoData = useCallback(async (profile?: DemoProfileId) => {
-    await loadDemoProfile(profile);
+    const id = profile ?? 'aina';
+    await loadDemoProfile(id);
+    await setMeta(ACTIVE_DEMO_PROFILE_KEY, id);
+    setActiveDemoProfileState(id);
     await refreshAll();
   }, [refreshAll]);
 
@@ -915,6 +935,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     resetAllData,
     resetToOnboarding,
     loadDemoData,
+    activeDemoProfile,
     addAccount,
     updateAccount,
     deleteAccount,

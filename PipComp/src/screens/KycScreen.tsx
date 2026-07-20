@@ -12,7 +12,7 @@ import { parseNric, validateNric } from '../lib/ekyc';
 import { llmErrorMessage } from '../llm';
 import type { IdentityExtraction } from '../llm/ekycPrompt';
 import { scanIdentityImage } from '../ekyc/scan';
-import { SAMPLE_IDENTITY } from '../data/sampleIdentity';
+import { DEMO_PROFILES } from '../data/demoProfile';
 import { emitTourSignal } from '../lib/tourSignals';
 import { useAppData } from '../state/store';
 import type { EmploymentType } from '../db/occupationRepo';
@@ -28,36 +28,53 @@ const EMPLOYMENT_OPTIONS: { value: EmploymentType; label: string }[] = [
 
 export function KycScreen({ onBack, onDone }: { onBack: () => void; onDone?: () => void }) {
   const insets = useSafeAreaInsets();
-  const { kyc, verifyIdentity, occupation, saveOccupation, tourActive } = useAppData();
+  const { kyc, verifyIdentity, occupation, saveOccupation, tourActive, activeDemoProfile } = useAppData();
   const finish = onDone ?? onBack;
 
-  // Self-declared occupation (Brief P)  captured once identity is verified, pre-filled if set.
-  const [occ, setOcc] = useState(occupation?.occupation ?? '');
-  const [sector, setSector] = useState(occupation?.sector ?? '');
-  const [employmentType, setEmploymentType] = useState<EmploymentType | null>(occupation?.employmentType ?? null);
-  const [tenure, setTenure] = useState(occupation?.tenureMonths != null ? String(occupation.tenureMonths) : '');
+  // A loaded demo persona (aina/ravi/faizal) supplies its own identity + work & income so a
+  // judge/demo run needs zero typing — just Verify identity, then Done. Null for a real user.
+  const demoMeta = useMemo(
+    () => (activeDemoProfile ? DEMO_PROFILES.find((p) => p.id === activeDemoProfile) ?? null : null),
+    [activeDemoProfile]
+  );
+
+  // Self-declared occupation (Brief P)  captured once identity is verified. Pre-filled from
+  // whatever's already saved, else from the demo persona, else blank for a real user.
+  const [occ, setOcc] = useState(occupation?.occupation ?? demoMeta?.occupation.occupation ?? '');
+  const [sector, setSector] = useState(occupation?.sector ?? demoMeta?.occupation.sector ?? '');
+  const [employmentType, setEmploymentType] = useState<EmploymentType | null>(
+    occupation?.employmentType ?? demoMeta?.occupation.employmentType ?? null
+  );
+  const [tenure, setTenure] = useState(
+    occupation?.tenureMonths != null
+      ? String(occupation.tenureMonths)
+      : demoMeta
+        ? String(demoMeta.occupation.tenureMonths)
+        : ''
+  );
   const [savingOcc, setSavingOcc] = useState(false);
 
+  // Work & income is mandatory  every borrower must declare it to finish verification.
+  const canFinish = occ.trim().length > 0 && sector.trim().length > 0 && employmentType != null && tenure.trim().length > 0;
+
   async function handleFinish() {
+    if (!canFinish || savingOcc) return;
     const tenureMonths = Math.max(0, Math.round(Number(tenure) || 0));
-    // Save only a complete declaration; a blank form just proceeds (occupation is optional, Tier 1).
-    if (occ.trim() && sector.trim() && employmentType) {
-      setSavingOcc(true);
-      try {
-        await saveOccupation({ occupation: occ.trim(), sector: sector.trim(), employmentType, tenureMonths });
-      } finally {
-        setSavingOcc(false);
-      }
+    setSavingOcc(true);
+    try {
+      await saveOccupation({ occupation: occ.trim(), sector: sector.trim(), employmentType: employmentType!, tenureMonths });
+    } finally {
+      setSavingOcc(false);
     }
     // Fired before navigating away (harmless, unconditional  see tourSignals.ts) so the
-    // guided tour's kyc-verify step, which now waits for the work & income section too (not
+    // guided tour's kyc-verify step, which waits for the work & income section too (not
     // just identity), completes right here instead of skipping straight past it.
     emitTourSignal('kyc-occupation-saved');
     finish();
   }
 
-  const [name, setName] = useState('');
-  const [nric, setNric] = useState('');
+  const [name, setName] = useState(demoMeta?.identity.fullName ?? '');
+  const [nric, setNric] = useState(demoMeta?.identity.nric ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(kyc != null);
@@ -142,10 +159,11 @@ export function KycScreen({ onBack, onDone }: { onBack: () => void; onDone?: () 
               <Text style={styles.successSub}>{kyc.nricMasked} · {kyc.provider}</Text>
             </Card>
 
-            <Eyebrow style={{ marginTop: 22, marginBottom: 6 }}>Work & income (optional)</Eyebrow>
+            <Eyebrow style={{ marginTop: 22, marginBottom: 6 }}>Work & income</Eyebrow>
             <Text style={styles.occLede}>
-              Self-declared context a lender sees alongside your verified figures. Shared only under a
-              Tier 1 grant, and always labelled &ldquo;self-declared&rdquo;. Never presented as verified.
+              Self-declared context a lender sees alongside your verified figures. Required to finish
+              verification. Shared only under a Tier 1 grant, and always labelled &ldquo;self-declared&rdquo;.
+              Never presented as verified.
             </Text>
 
             <TextInput
@@ -190,25 +208,29 @@ export function KycScreen({ onBack, onDone }: { onBack: () => void; onDone?: () 
               onChangeText={setTenure}
             />
 
-            <Pressable style={styles.doneBtn} onPress={handleFinish} disabled={savingOcc}>
+            <Pressable
+              style={[styles.doneBtn, !canFinish && styles.verifyBtnDisabled]}
+              onPress={handleFinish}
+              disabled={!canFinish || savingOcc}
+            >
               {savingOcc ? <ActivityIndicator color={colors.onAccent} /> : <Text style={styles.doneBtnText}>Done</Text>}
             </Pressable>
           </>
         ) : (
           <>
-            {tourActive && (
+            {demoMeta && (
               <Pressable
                 style={styles.sampleBtn}
                 onPress={() => {
                   setError('');
-                  setName(SAMPLE_IDENTITY.fullName);
-                  setNric(SAMPLE_IDENTITY.nric);
+                  setName(demoMeta.identity.fullName);
+                  setNric(demoMeta.identity.nric);
                 }}
                 accessibilityRole="button"
-                accessibilityLabel="Use the sample identity"
+                accessibilityLabel={`Use ${demoMeta.name}'s demo identity`}
               >
                 <Icon name="check" size={16} color={colors.accentInk} stroke={2.4} />
-                <Text style={styles.sampleBtnText}>Use sample identity (demo)</Text>
+                <Text style={styles.sampleBtnText}>Use {demoMeta.name}&rsquo;s demo identity</Text>
               </Pressable>
             )}
             <View style={styles.scanRow}>

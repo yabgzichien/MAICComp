@@ -201,7 +201,7 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     // screen itself is the focus; KycScreen adds tour-time bottom padding so every control
     // can scroll clear of the card.
     title: 'Verify her identity',
-    body: 'Use the sample identity, verify, then add her work & income and tap Done.',
+    body: 'Her identity and work & income are already filled in. Tap Verify, then Done.',
     advanceOn: { signal: 'kyc-occupation-saved' },
     celebrate: 'Identity verified.',
   },
