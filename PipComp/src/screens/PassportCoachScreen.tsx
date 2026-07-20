@@ -11,12 +11,11 @@ import { Icon } from '../components/Icon';
 import { TourAnchor } from '../components/TourAnchor';
 import { emitTourSignal } from '../lib/tourSignals';
 import { Card, TopBar } from '../components/ui';
-import { getProvider } from '../llm';
+import { getLLM } from '../llm';
 import { buildCoachPrompt, COACH_SYSTEM_PROMPT, coachPlanFallback } from '../llm/coachPrompt';
 import { baseline, buildCoachPlan, type CoachAction, type CoachLever, type CoachSim } from '../lib/coachPlan';
 import { fetchLenderDirectory, type LenderDirectory } from '../lib/lenderDirectory';
 import { BORROWER_TOUR_STEPS, clampTourStep } from '../lib/tourSteps';
-import { configFor, loadSettings } from '../settings/settingsStore';
 import { useAppData } from '../state/store';
 import { useCreditProfile } from '../state/useCreditProfile';
 import { colors, numFont, uiFont } from '../theme';
@@ -179,11 +178,9 @@ export function PassportCoachScreen({
   const runCoach = async () => {
     setBusy(true);
     try {
-      const c = configFor(await loadSettings(), 'general');
+      const llm = await getLLM();
       const text = await withTimeout(
-        getProvider(c.provider).coach({
-          apiKey: c.apiKey,
-          model: c.model,
+        llm.coach({
           system: COACH_SYSTEM_PROMPT,
           prompt: buildCoachPrompt(plan),
         }),

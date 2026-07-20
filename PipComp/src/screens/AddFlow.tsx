@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { BubbleText, PipSays } from '../components/ui';
-import { getProvider } from '../llm';
+import { getLLM } from '../llm';
 import { suggestForMerchant } from '../lib/recommend';
 import type { CategorySuggestion, ExtractedTxn, Transaction } from '../lib/types';
-import { configFor, loadSettings } from '../settings/settingsStore';
 import { emitTourSignal } from '../lib/tourSignals';
 import { useAppData, type NewLearned } from '../state/store';
 import { colors } from '../theme';
@@ -50,7 +49,7 @@ export function AddFlow({
   const [hasKey, setHasKey] = useState(true);
 
   useEffect(() => {
-    loadSettings().then((s) => setHasKey(!!configFor(s, 'general').apiKey));
+    getLLM().then((llm) => setHasKey(llm.can('extract')));
   }, []);
 
   const onPicked = (img: PickedImage) => {
@@ -79,10 +78,8 @@ export function AddFlow({
     }
 
     setPhase('guessing');
-    const settings = await loadSettings();
-    const config = configFor(settings, 'general');
-    const provider = getProvider(config.provider);
-    if (!config.apiKey || !provider.guessCategories) {
+    const llm = await getLLM();
+    if (!llm.can('guessCategories')) {
       setSuggestions(learned);
       setPhase('categorize');
       return;
@@ -90,9 +87,7 @@ export function AddFlow({
 
     try {
       const guessed = await withTimeout(
-        provider.guessCategories({
-          apiKey: config.apiKey,
-          model: config.model,
+        llm.guessCategories({
           items: missing.map((i) => ({ index: i, merchant: items[i].merchant, amount: items[i].amount, method: items[i].method, kind: items[i].type })),
           categories: categories.map((c) => ({ id: c.id, label: c.label, kind: c.kind })),
         }),

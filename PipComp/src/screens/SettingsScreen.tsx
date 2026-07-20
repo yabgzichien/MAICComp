@@ -117,8 +117,8 @@ export function SettingsScreen({ onBack, onMigrate, onAdvancedImport, onOpenLend
               settings={settings}
               role="general"
               icon="sparkles"
-              name="Groq · general"
-              sub="Reads screenshots and writes budget tips."
+              name="Groq · primary"
+              sub="Primary for every task: screenshots, documents, and tips."
               model={settings.groqModel}
               apiKey={settings.groqKey}
             />
@@ -129,8 +129,8 @@ export function SettingsScreen({ onBack, onMigrate, onAdvancedImport, onOpenLend
               settings={settings}
               role="docs"
               icon="receipt"
-              name="Gemini · documents"
-              sub="Extracts transactions from imported PDFs, images, and files."
+              name="Gemini · fallback"
+              sub="Used only if Groq fails — and for PDFs Groq can't read."
               model={settings.geminiModel}
               apiKey={settings.geminiKey}
             />
