@@ -175,7 +175,7 @@ describe('computeRepaymentStanding', () => {
     const loans = [
       {
         applicationId: 'a',
-        repayments: [repayment({ id: 'r1', dueDate: '2026-05-01', paidOn: '2026-07-10', status: 'late', amount: 300 })],
+        repayments: [repayment({ id: 'r1', dueDate: '2026-05-01', paidOn: '2026-06-10', status: 'late', amount: 300 })],
         defaulted: false,
       },
     ];
