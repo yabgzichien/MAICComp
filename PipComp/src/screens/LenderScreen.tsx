@@ -127,7 +127,7 @@ export function LenderScreen({ onBack }: { onBack: () => void }) {
       avgIncome,
       requestedAmount: requested,
       products: DEFAULT_PRODUCTS,
-      adverseRecord: 'none',
+      adverseRecord: passport.standing?.current.adverseRecord ?? 'none',
       coverageRatio: a?.coverageRatio,
       coverageDaysCovered: a?.coverageDays,
     });
