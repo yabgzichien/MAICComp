@@ -30,6 +30,14 @@ export async function getKyc(): Promise<KycIdentity | null> {
   };
 }
 
+/** Clear the verified identity so a fresh persona/session doesn't inherit a prior one
+ *  (identity-bleed fix): a stale KYC name would otherwise bake into the next minted passport
+ *  as `holder.name`. Called on persona-load and every full data reset. */
+export async function clearKyc(): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM kyc WHERE id = 1');
+}
+
 export async function setKyc(identity: Omit<KycIdentity, 'status'>): Promise<void> {
   const db = await getDb();
   await db.runAsync(

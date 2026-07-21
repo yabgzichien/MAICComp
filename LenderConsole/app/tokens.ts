@@ -208,4 +208,56 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     short: 'Compares the leading digits of reported amounts to the distribution real transaction data naturally follows.',
     body: "Genuine transaction amounts follow a predictable curve of leading digits (about 30% start with 1, only ~5% with 9). Fabricated figures, typed or rounded by a person, don't. They cluster unnaturally. The chart runs on the passport's signed aggregate digit counts, never raw transactions.",
   },
+
+  // ── Portfolio repayment performance (2026-07-18 design) ─────────────────────
+  collection_rate: {
+    term: 'Collection Rate',
+    short: 'Of everything due so far, the share actually collected.',
+    body: "Collection rate = amount collected ÷ amount due to date, across every instalment that has come due on the approved book. It is the closest thing to ground truth on whether the score's affordability call was right: a score that only looks good on paper but collects poorly would show up here first.",
+  },
+  on_time_rate: {
+    term: 'On-Time Rate',
+    short: 'Of instalments actually paid, the share paid on their due date.',
+    body: 'On-time rate looks only at recorded repayment events (not instalments still pending), so it measures payment behaviour directly rather than mixing in loans that simply have not come due yet. A band with a high score but a low on-time rate is an early signal the score is not weighting something it should.',
+  },
+  realized_loss: {
+    term: 'Realized Loss (vs Expected)',
+    short: 'What has actually been missed so far, compared with what the risk model predicted upfront.',
+    body: "Expected loss (PD × loss-given-default) is a prediction made at underwriting. Realized loss is what has actually failed to collect since. Comparing the two, band by band, is the validation loop: it is how a lender checks whether the credit score is honestly predictive rather than just a plausible-sounding number.",
+  },
+  interest_collected: {
+    term: 'Interest Collected',
+    short: 'Of everything collected so far, the portion that is profit rather than principal returning.',
+    body: 'Each instalment repays a slice of principal and a slice of interest. This figure nets out the principal share (assumed to reduce in a straight line with instalments paid) from total collections, leaving the interest actually earned to date — the portfolio economics behind the risk numbers.',
+  },
+  cohort: {
+    term: 'Cohort (by Credit Band)',
+    short: 'Every approved loan in the same credit band, grouped for comparison.',
+    body: "Performance is reported per band, not per borrower: a single borrower's repayment story says little, but a band-level pattern across many loans is statistically meaningful and is the honest unit for judging whether the score is calibrated. A cohort under 3 loans is marked as a small sample rather than shown as an authoritative rate.",
+  },
+  delinquent: {
+    term: 'Current / Late / Delinquent',
+    short: 'How far behind schedule a loan is, if at all.',
+    body: 'Current: paid up to date. Late: exactly one instalment behind. Delinquent: two or more instalments behind, or any instalment missed outright — a missed payment marks a loan delinquent even if the borrower later catches up on later instalments, since a default event does not un-happen.',
+  },
+  fully_repaid: {
+    term: 'Fully Repaid',
+    short: 'Loans that finished their entire repayment schedule, and what came back.',
+    body: 'A loan settles once every instalment on its schedule has been paid. Because a single missed instalment permanently blocks a loan from ever reaching that state, a settled loan’s realized loss is always zero — this is the strongest evidence the validation loop can offer: not a prediction, but principal that has actually come home. Settled loans stop counting toward live exposure elsewhere on this tab (the money is no longer at risk) but stay in this figure, since it is exactly where they matter most.',
+  },
+  median: {
+    term: 'Median',
+    short: 'The middle value once every loan is sorted low to high.',
+    body: "Unlike the mean, the median is not pulled around by one or two outlier loans — a single RM20,000 Scale-tier loan barely moves it, but can drag the mean well above what a typical borrower actually received. Reporting both side by side (with the gap between them) is itself informative: mean far above median means a few large loans, not the book's typical borrower, are driving the average.",
+  },
+  standard_deviation: {
+    term: 'Standard Deviation (σ)',
+    short: 'How spread out the values are around the mean, in the same units as the figure itself.',
+    body: "A small σ means the book is homogeneous (every borrower looks similar); a large σ means the book spans very different borrowers. Reported here rather than variance (which squares the units — RM² for loan amounts is not a readable number) so the spread can be compared directly against the mean it sits beside.",
+  },
+  distribution_strip: {
+    term: 'Distribution Strip',
+    short: "A compact min-to-max bar for each figure, marking where the median and mean fall.",
+    body: 'The bar itself spans the smallest to the largest value in the book. The thin tick marks the median; the filled dot marks the mean. When the two markers sit close together the book is evenly spread; when they diverge, a few loans at one end are pulling the mean away from what is typical.',
+  },
 };

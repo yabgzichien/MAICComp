@@ -7,7 +7,7 @@ import { Icon, type IconName } from '../components/Icon';
 import { InstitutionBadge } from '../components/InstitutionBadge';
 import { TickerSearchModal } from '../components/TickerSearchModal';
 import { B, BtnLabel, BubbleText, Card, PipSays, PrimaryButton, TopBar } from '../components/ui';
-import { getProvider, llmErrorMessage } from '../llm';
+import { getLLM, llmErrorMessage } from '../llm';
 import { fmt } from '../lib/format';
 import { todayISO } from '../lib/duplicates';
 import { findMatchingAccounts, matchInstitution, type Institution } from '../lib/institutions';
@@ -15,7 +15,6 @@ import { classesFor } from '../lib/networth';
 import { notify } from '../lib/platformAlert';
 import { searchCrypto, resolveCryptoTickers } from '../prices';
 import type { TickerResult } from '../lib/prices';
-import { configFor, loadSettings } from '../settings/settingsStore';
 import type { Account, AccountKind } from '../lib/types';
 import { useAppData } from '../state/store';
 import { colors, numFont, radius, uiFont } from '../theme';
@@ -88,10 +87,9 @@ export function BalanceScanScreen({ onClose }: { onClose: () => void }) {
     setError('');
     resetBalanceState();
     try {
-      const c = configFor(await loadSettings(), 'docs');
-      const provider = getProvider(c.provider);
-      if (!c.apiKey || !provider.extractSnapshot) { setPhase('needprovider'); return; }
-      const snap = await provider.extractSnapshot({ apiKey: c.apiKey, model: c.model, parts: [{ kind: 'binary', base64, mimeType: mime }] });
+      const llm = await getLLM();
+      if (!llm.can('extractSnapshot')) { setPhase('needprovider'); return; }
+      const snap = await llm.extractSnapshot({ parts: [{ kind: 'binary', base64, mimeType: mime }] });
 
       if (snap.kind === 'unknown') {
         setError("I couldn't tell what this screenshot shows. Try a clearer screenshot of a bank/e-wallet balance, a loan statement, or a crypto wallet.");

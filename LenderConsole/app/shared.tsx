@@ -184,6 +184,189 @@ export function InfoModal({ entry, onClose, p }: { entry: string | null; onClose
   );
 }
 
+/**
+ * Custom-styled confirmation dialog, replacing a bare `window.confirm(...)` (2026-07-20
+ * follow-up): the native browser dialog can't carry the console's own typography/palette and
+ * reads as a generic OS prompt rather than a considered warning. Same modal shell as
+ * InfoModal (centered card, backdrop dismiss, Esc-to-close) but with an explicit
+ * Cancel/Confirm action pair instead of a single "OK, got it" close button. `danger` reddens
+ * the confirm button for an irreversible/destructive action (this console's only caller so
+ * far: resetting a lender to defaults).
+ */
+export function ConfirmModal({
+  open,
+  title,
+  body,
+  confirmLabel,
+  onConfirm,
+  onCancel,
+  danger,
+  p,
+}: {
+  open: boolean;
+  title: string;
+  body: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  danger?: boolean;
+  p: Palette;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onCancel]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      onClick={onCancel}
+      role="presentation"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 200,
+        background: 'rgba(14,24,18,0.46)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 20,
+        animation: 'fade-in-up 0.16s ease-out',
+      }}
+    >
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirm-modal-title"
+        onClick={(ev) => ev.stopPropagation()}
+        style={{
+          background: p.surface,
+          borderRadius: 16,
+          width: '100%',
+          maxWidth: 420,
+          overflow: 'hidden',
+          boxShadow: '0 24px 64px rgba(14,24,18,0.34)',
+        }}
+      >
+        <div style={{ padding: '22px 24px 6px' }}>
+          <h3 id="confirm-modal-title" style={{ fontFamily: FONT.ui, fontSize: 17, fontWeight: 800, color: p.ink1, letterSpacing: '-0.2px', marginBottom: 8 }}>
+            {title}
+          </h3>
+          <p style={{ fontFamily: FONT.ui, fontSize: 13, color: p.ink2, lineHeight: 1.6 }}>{body}</p>
+        </div>
+        <div style={{ padding: '18px 24px 22px', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button
+            type="button"
+            onClick={onCancel}
+            style={{
+              fontFamily: FONT.ui,
+              fontSize: 13,
+              fontWeight: 700,
+              color: p.ink2,
+              background: p.surface2,
+              border: `1px solid ${p.hairline}`,
+              borderRadius: 9,
+              padding: '9px 16px',
+              cursor: 'pointer',
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            style={{
+              fontFamily: FONT.ui,
+              fontSize: 13,
+              fontWeight: 700,
+              color: 'white',
+              background: danger ? p.red : p.primary,
+              border: 'none',
+              borderRadius: 9,
+              padding: '9px 16px',
+              cursor: 'pointer',
+            }}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A dismissible top-of-screen notice for the result of an action the officer just took
+ * (2026-07-20 follow-up: the reset-to-defaults success confirmation). Auto-dismisses after a
+ * few seconds; the officer can also close it early. Not a modal  never blocks interaction
+ * with the console underneath.
+ */
+export function Toast({ message, onClose, p }: { message: string | null; onClose: () => void; p: Palette }) {
+  useEffect(() => {
+    if (!message) return;
+    const t = setTimeout(onClose, 5000);
+    return () => clearTimeout(t);
+  }, [message, onClose]);
+
+  if (!message) return null;
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      style={{
+        position: 'fixed',
+        top: 16,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 150,
+        maxWidth: 480,
+        width: 'calc(100% - 32px)',
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 10,
+        background: p.ink1,
+        color: 'white',
+        borderRadius: 12,
+        padding: '13px 14px',
+        boxShadow: '0 12px 32px rgba(14,24,18,0.28)',
+        animation: 'fade-in-up 0.18s ease-out',
+      }}
+    >
+      <div
+        style={{
+          width: 20,
+          height: 20,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.16)',
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 12,
+          fontWeight: 800,
+        }}
+      >
+        ✓
+      </div>
+      <p style={{ flex: 1, fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 600, lineHeight: 1.5, margin: 0 }}>{message}</p>
+      <button
+        type="button"
+        aria-label="Dismiss"
+        onClick={onClose}
+        style={{ border: 'none', background: 'transparent', color: 'rgba(255,255,255,0.7)', fontSize: 14, lineHeight: 1, cursor: 'pointer', padding: 2, flexShrink: 0 }}
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
 export function MiniBar({ pct, color, track }: { pct: number; color: string; track: string }) {
   return (
     <div style={{ height: 5, borderRadius: 3, background: track, overflow: 'hidden', flex: 1 }}>

@@ -16,6 +16,7 @@ import { buildConsentReceipts, buildPassportDraft, monitoringScopeRow, tier0Scop
 import { useCreditProfile } from '../state/useCreditProfile';
 import { useAppData } from '../state/store';
 import { decideLoan, DEFAULT_PRODUCTS, type Decision } from '../lib/loans';
+import { computeBorrowingLimit, outstandingExposure } from '../lib/borrowingLimit';
 import { submitApplication, type DirectApplyResult } from '../lib/directApply';
 import { fetchLenderDirectory, LENDER_API_BASE, type LenderProfile } from '../lib/lenderDirectory';
 import { PURPOSE_CATEGORIES, PURPOSE_LABELS, type PurposeCategory } from '../lib/loanPurpose';
@@ -51,10 +52,10 @@ function decisionLabel(d: Decision): string {
   return 'Likely declined';
 }
 
-export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () => void; onOpenKyc?: () => void }) {
+export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () => {} }: { onBack: () => void; onOpenKyc?: () => void; onOpenLoans?: () => void }) {
   const insets = useSafeAreaInsets();
   const { profile, score, dataConfidence, coverage, momentum, coachInput, incomeQuality, spendingProfile, obligations } = useCreditProfile();
-  const { kyc, occupation, loanApplications, loanProducts, tourActive, tourStepIndex } = useAppData();
+  const { kyc, occupation, loanApplications, loanProducts, repaymentSummary, accountValues, tourActive, tourStepIndex, acceptLenderOffer } = useAppData();
   const activeTourAnchor = tourActive ? BORROWER_TOUR_STEPS[clampTourStep(tourStepIndex, BORROWER_TOUR_STEPS.length)].anchorId ?? null : null;
 
   const [phase, setPhase] = useState<'consent' | 'minted'>('consent');
@@ -88,6 +89,17 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
   const [purpose, setPurpose] = useState<PurposeCategory>('working-capital');
   const [sendBusy, setSendBusy] = useState(false);
   const [sendResult, setSendResult] = useState<DirectApplyResult | null>(null);
+  // Bumped on every send attempt so the result card's entrance animation replays even when
+  // the new result is the same status as the last one (e.g. tapping "Send" twice in a row).
+  const [sendSeq, setSendSeq] = useState(0);
+  const [booked, setBooked] = useState(false);
+  const [bookingBusy, setBookingBusy] = useState(false);
+  // Synchronous in-flight latches for the two irreversible actions on this screen (filing an
+  // application, booking a loan). The `sendBusy`/`bookingBusy` state drives the UI; these drive
+  // the guard, because state doesn't update until the next render and a burst of taps all land
+  // in the same tick.
+  const sendingRef = useRef(false);
+  const bookingRef = useRef(false);
 
   // Published lender directory (GET /api/lenders). Fetched once on mount; a transport failure
   // leaves it empty and the send flow falls back to the built-in ladder (routes to TEKUN).
@@ -134,7 +146,28 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
       }).maxAmount,
     [score, profile, sendProducts, sendPolicy, coverage, dataConfidence, ladderMax]
   );
-  const defaultAmount = supportable > 0 ? supportable : ladderMin;
+  // Graduated borrowing limit: the affordability max (supportable) composed with a repayment-driven
+  // progression cap, minus what's already outstanding on active loans. The amount the borrower can
+  // request is capped at `available`, so a thin repayment record or existing exposure genuinely
+  // limits how much they can ask for  not just what the engine would counter.
+  const outstandingPrincipal = useMemo(
+    () => outstandingExposure(loanApplications, accountValues),
+    [loanApplications, accountValues]
+  );
+  const borrowing = useMemo(
+    () =>
+      computeBorrowingLimit({
+        engineMax: supportable,
+        ladderMax,
+        repaymentOnTime: repaymentSummary.onTime,
+        repaymentMissed: repaymentSummary.missed,
+        outstandingPrincipal,
+      }),
+    [supportable, ladderMax, repaymentSummary, outstandingPrincipal]
+  );
+  const requestCeiling = Math.max(0, Math.min(ladderMax, borrowing.available));
+  const requestFloor = Math.min(ladderMin, requestCeiling);
+  const defaultAmount = Math.min(supportable > 0 ? supportable : ladderMin, requestCeiling);
   const effectiveAmount = amount ?? defaultAmount;
 
   // Switching lenders re-defaults the amount to the new lender's supportable figure and clears
@@ -143,6 +176,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
     setSelectedLenderId(id);
     setAmount(null);
     setSendResult(null);
+    setBooked(false);
   };
 
   const sharedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -251,20 +285,37 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
 
   const stepAmount = (delta: number) => {
     setSendResult(null);
+    setBooked(false);
     setAmount((cur) => {
       const base = cur ?? defaultAmount;
       const next = Math.round(base + delta);
-      return Math.max(ladderMin, Math.min(ladderMax, next));
+      return Math.max(requestFloor, Math.min(requestCeiling, next));
     });
   };
+
+  // One send per request: once this passport is sitting in the lender's queue at this amount,
+  // sending again just files duplicates (or spams the lender with near-identical applications
+  // if the amount is nudged between taps). Changing the lender, amount, or purpose clears
+  // `sendResult` — which is exactly when a second send is a genuinely different request — so
+  // this locks on a landed result rather than on a timer, and unlocks the moment the borrower
+  // actually changes what they're asking for. `offline`/`rejected` stay unlocked: nothing was
+  // filed, so retrying is the correct action.
+  const sendLocked = sendResult !== null && (sendResult.status === 'filed' || sendResult.status === 'duplicate');
 
   // Send the signed passport code to the console. submitApplication never throws  every
   // failure resolves to a typed result (offline / rejected / duplicate), so the card always
   // lands in a well-defined state and can nudge the borrower to the offline fallback below.
   const sendToLender = async () => {
-    if (!pasteCode) return;
+    // Re-entrancy guard as well as a disabled button. It must be a REF, not the `sendBusy`
+    // state: several taps dispatched in one tick all run before React re-renders, so every one
+    // of them would read `sendBusy === false` and fire its own POST (measured: 5 taps → 5
+    // applications). A ref flips synchronously, so only the first tap gets through.
+    if (!pasteCode || sendingRef.current || sendLocked) return;
+    sendingRef.current = true;
     setSendBusy(true);
     setSendResult(null);
+    setBooked(false);
+    setSendSeq((n) => n + 1);
     try {
       const result = await submitApplication(LENDER_API_BASE, {
         passportCode: pasteCode,
@@ -275,10 +326,36 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
         ...(selectedLender && selectedLender.id !== 'offline' ? { lenderId: selectedLender.id } : {}),
       });
       setSendResult(result);
+      setBooked(false);
     } catch {
       setSendResult({ status: 'offline' });
+      setBooked(false);
     } finally {
+      sendingRef.current = false;
       setSendBusy(false);
+    }
+  };
+
+  // Accept the lender's approved offer  books it locally into "My Financing" via the store's
+  // acceptLenderOffer action (Task 3). Only reachable when the last decision was an approve
+  // with a positive amount; see the FILED result block below.
+  const acceptOffer = async () => {
+    // Same synchronous double-fire guard as sendToLender  booking twice would create two real
+    // loans, which is worse than a duplicate application.
+    if (!sendResult || sendResult.status !== 'filed' || bookingRef.current || booked) return;
+    bookingRef.current = true;
+    setBookingBusy(true);
+    try {
+      const app = await acceptLenderOffer(
+        sendResult.decision,
+        { id: selectedLender && selectedLender.id !== 'offline' ? selectedLender.id : undefined, products: sendProducts, name: selectedLender?.name ?? 'Lender' },
+        score.score,
+        { category: purpose }
+      );
+      if (app) setBooked(true);
+    } finally {
+      bookingRef.current = false;
+      setBookingBusy(false);
     }
   };
 
@@ -453,14 +530,26 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
             </>
           )}
 
-          <Text style={[styles.reqLabel, lenders.length > 0 && { marginTop: 16 }]}>Amount</Text>
+          {/* Borrowing power  the graduated limit (repayment record + affordability, minus exposure). */}
+          <View style={[styles.powerBox, lenders.length > 0 && { marginTop: 16 }]}>
+            <View style={styles.powerHeader}>
+              <Text style={styles.powerLabel}>Borrowing power</Text>
+              <Text style={styles.powerAmount}>
+                RM{borrowing.available.toLocaleString('en-MY')}
+                <Text style={styles.powerOf}> of RM{borrowing.limit.toLocaleString('en-MY')}</Text>
+              </Text>
+            </View>
+            <Text style={styles.powerReason}>{borrowing.reason}</Text>
+          </View>
+
+          <Text style={[styles.reqLabel, { marginTop: 16 }]}>Amount</Text>
           <View style={styles.stepperRow}>
             <Pressable onPress={() => stepAmount(-500)} style={({ pressed }) => [styles.stepperBtn, pressed && styles.stepperPressed]}>
               <Icon name="chevronLeft" size={18} color={colors.accent} />
             </Pressable>
             <View style={{ flex: 1, alignItems: 'center' }}>
               <Amount value={effectiveAmount} size={22} />
-              <Text style={styles.stepperHint}>RM{ladderMin.toLocaleString('en-MY')}–{ladderMax.toLocaleString('en-MY')}</Text>
+              <Text style={styles.stepperHint}>RM{requestFloor.toLocaleString('en-MY')}–{requestCeiling.toLocaleString('en-MY')}</Text>
             </View>
             <Pressable onPress={() => stepAmount(500)} style={({ pressed }) => [styles.stepperBtn, pressed && styles.stepperPressed]}>
               <Icon name="chevronRight" size={18} color={colors.accent} />
@@ -474,7 +563,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
               return (
                 <Pressable
                   key={c}
-                  onPress={() => { setPurpose(c); setSendResult(null); }}
+                  onPress={() => { setPurpose(c); setSendResult(null); setBooked(false); }}
                   style={[styles.purposeChip, on && styles.purposeChipOn]}
                   accessibilityRole="radio"
                   accessibilityState={{ selected: on }}
@@ -487,12 +576,18 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
 
           <Pressable
             onPress={sendToLender}
-            disabled={sendBusy}
-            style={({ pressed }) => [styles.sendBtn, (sendBusy || pressed) && { opacity: 0.92 }]}
+            disabled={sendBusy || sendLocked}
+            style={({ pressed }) => [styles.sendBtn, sendLocked && styles.sendBtnLocked, (sendBusy || pressed) && { opacity: 0.92 }]}
             accessibilityRole="button"
+            accessibilityState={{ disabled: sendBusy || sendLocked }}
           >
             {sendBusy ? (
               <ActivityIndicator size="small" color={colors.onAccent} />
+            ) : sendLocked ? (
+              <>
+                <Icon name="check" size={15} color={colors.ink3} stroke={2.6} />
+                <Text style={[styles.sendBtnText, { color: colors.ink3 }]}>Request sent</Text>
+              </>
             ) : (
               <>
                 <Text style={styles.sendBtnText}>
@@ -502,9 +597,18 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
               </>
             )}
           </Pressable>
+          {sendLocked && (
+            <Text style={styles.sendLockedHint}>Change the amount, purpose, or lender to send another request.</Text>
+          )}
 
           {sendResult && sendResult.status === 'filed' && (
-            <View style={styles.resultBox}>
+            <FadeIn key={sendSeq} style={styles.resultBox}>
+              <View style={styles.sentBadgeRow}>
+                <View style={styles.sentCheckCircle}>
+                  <Icon name="check" size={11} color="#fff" stroke={3} />
+                </View>
+                <Text style={styles.sentBadgeText}>Sent successfully</Text>
+              </View>
               <View style={styles.resultHeader}>
                 <Text style={styles.resultTitle} numberOfLines={1}>
                   {selectedLender && selectedLender.id !== 'offline' ? `Sent to ${selectedLender.name}` : 'Sent to lender'}
@@ -538,13 +642,47 @@ export function PassportScreen({ onBack, onOpenKyc = () => {} }: { onBack: () =>
                 </View>
               )}
               <Text style={styles.resultFoot}>Filed in the lender's queue for review.</Text>
-            </View>
+
+              {sendResult.decision.decision === 'approve' && sendResult.decision.maxAmount > 0 && (
+                booked ? (
+                  <View style={styles.bookedRow}>
+                    <Icon name="check" size={14} color={DEC_GREEN} stroke={2.6} />
+                    <Text style={styles.bookedText}>Booked — track it in My Financing.</Text>
+                    <Pressable onPress={onOpenLoans} style={styles.bookedBtn} accessibilityRole="button">
+                      <Text style={styles.bookedBtnText}>Go to My Financing</Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <Pressable
+                    onPress={acceptOffer}
+                    disabled={bookingBusy}
+                    style={({ pressed }) => [styles.acceptBtn, (bookingBusy || pressed) && { opacity: 0.92 }]}
+                    accessibilityRole="button"
+                  >
+                    {bookingBusy ? (
+                      <ActivityIndicator size="small" color={colors.onAccent} />
+                    ) : (
+                      <Text style={styles.acceptBtnText}>Accept this offer</Text>
+                    )}
+                  </Pressable>
+                )
+              )}
+            </FadeIn>
           )}
 
           {sendResult && sendResult.status === 'duplicate' && (
-            <View style={styles.noticeBox}>
-              <Text style={styles.noticeText}>You've already sent this passport to this lender — it's in their queue.</Text>
-            </View>
+            <FadeIn key={sendSeq} style={styles.resultBox}>
+              <View style={styles.sentBadgeRow}>
+                <View style={styles.sentCheckCircle}>
+                  <Icon name="check" size={11} color="#fff" stroke={3} />
+                </View>
+                <Text style={styles.sentBadgeText}>Already sent</Text>
+              </View>
+              <Text style={styles.resultTitle}>
+                {selectedLender && selectedLender.id !== 'offline' ? `Waiting in ${selectedLender.name}'s queue` : "Waiting in the lender's queue"}
+              </Text>
+              <Text style={[styles.resultFoot, { marginTop: 6 }]}>This passport is already filed at this amount — no need to send it again.</Text>
+            </FadeIn>
           )}
 
           {sendResult && sendResult.status === 'rejected' && (
@@ -657,15 +795,33 @@ const styles = StyleSheet.create({
   stepperBtn: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentTint, borderWidth: 1, borderColor: colors.accentSoft },
   stepperPressed: { transform: [{ scale: 0.92 }] },
   stepperHint: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink3, marginTop: 3 },
+  powerBox: { backgroundColor: colors.accentTint, borderRadius: 12, borderWidth: 1, borderColor: colors.accentSoft, padding: 12 },
+  powerHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 },
+  powerLabel: { fontFamily: uiFont(700), fontSize: 11, color: colors.ink2, letterSpacing: 0.8, textTransform: 'uppercase' },
+  powerAmount: { fontFamily: uiFont(800), fontSize: 15, color: colors.accentInk },
+  powerOf: { fontFamily: uiFont(600), fontSize: 12, color: colors.ink2 },
+  powerReason: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, lineHeight: 16, marginTop: 6 },
   purposeWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   purposeChip: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 999, backgroundColor: colors.surface2, borderWidth: 1.5, borderColor: colors.line },
   purposeChipOn: { backgroundColor: colors.accentTint, borderColor: colors.accent },
   purposeChipText: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink2 },
   purposeChipTextOn: { color: colors.accentInk },
   sendBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 52, borderRadius: 999, backgroundColor: colors.accentInk, marginTop: 18 },
+  sendBtnLocked: { backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line },
   sendBtnText: { fontFamily: uiFont(700), fontSize: 15, color: colors.onAccent },
+  sendLockedHint: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, textAlign: 'center', marginTop: 8, lineHeight: 16 },
 
-  resultBox: { marginTop: 16, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 14 },
+  resultBox: {
+    marginTop: 16,
+    backgroundColor: DEC_GREEN + '0d',
+    borderWidth: 1,
+    borderColor: DEC_GREEN + '33',
+    borderRadius: 14,
+    padding: 14,
+  },
+  sentBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 10 },
+  sentCheckCircle: { width: 18, height: 18, borderRadius: 9, backgroundColor: DEC_GREEN, alignItems: 'center', justifyContent: 'center' },
+  sentBadgeText: { fontFamily: uiFont(700), fontSize: 11.5, color: DEC_GREEN, letterSpacing: 0.2, textTransform: 'uppercase' },
   resultHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   resultTitle: { flex: 1, marginRight: 8, fontFamily: uiFont(700), fontSize: 13.5, color: colors.ink },
   decisionPill: { borderRadius: 999, paddingHorizontal: 11, paddingVertical: 4 },
@@ -676,6 +832,12 @@ const styles = StyleSheet.create({
   reasonRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 7 },
   reasonText: { flex: 1, fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, lineHeight: 18 },
   resultFoot: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, marginTop: 12 },
+  acceptBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: 999, backgroundColor: DEC_GREEN, marginTop: 14 },
+  acceptBtnText: { fontFamily: uiFont(700), fontSize: 14.5, color: colors.onAccent },
+  bookedRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 14, flexWrap: 'wrap' },
+  bookedText: { flex: 1, fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink },
+  bookedBtn: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: DEC_GREEN },
+  bookedBtnText: { fontFamily: uiFont(700), fontSize: 12.5, color: colors.onAccent },
   noticeBox: { marginTop: 14, backgroundColor: colors.surface2, borderRadius: 12, padding: 12, gap: 4 },
   noticeError: { backgroundColor: '#c5402f14' },
   noticeText: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, lineHeight: 18 },

@@ -95,3 +95,40 @@ textarea {
     transform: translateY(0);
   }
 }
+
+/* Guided-tour spotlight halo: a gentle pulse around the cutout, disabled under
+   prefers-reduced-motion (the ring stays, only the animation stops). */
+@keyframes tour-halo-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+.tour-halo {
+  animation: tour-halo-pulse 1.8s ease-in-out infinite;
+}
+@keyframes tour-celebrate-pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.tour-celebrate {
+  animation: tour-celebrate-pop 0.4s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-halo,
+  .tour-celebrate {
+    animation: none;
+  }
+}

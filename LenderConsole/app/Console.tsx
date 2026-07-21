@@ -15,31 +15,40 @@ import {
   type Palette,
 } from './tokens';
 import { type CreditPassport, type VerifyResult, parsePassportCode, verifyPassport } from '../lib/passport';
-import { REASON_CATEGORY_LABELS, decideLoan, type LenderPolicy, type LoanDecision, type LoanProduct } from '../lib/loans';
+import { DEFAULT_POLICY, REASON_CATEGORY_LABELS, decideLoan, type LenderPolicy, type LoanDecision, type LoanProduct } from '../lib/loans';
 import { DEFAULT_STORED_POLICY, type StoredPolicy } from '../lib/policyStore';
 import { priceLoan, repriceProducts, type PricingSuggestion } from '../lib/pricing';
 import { structurePool, type CreditBand, type PoolLoan } from '../lib/securitization';
 import { SAMPLE_POOL } from '../lib/samplePool';
 import { poolStatCells, trancheViews } from '../lib/poolView';
-import { bookToPool } from '../lib/portfolio';
+import { bookToPool, mapBook } from '../lib/portfolio';
+import { loanPerformance, type LoanPerformance } from '../lib/performance';
+import { chipKindFor, orderServicingSections, type ServicingSections } from '../lib/servicing';
 import PolicyTab from './PolicyTab';
 import PortfolioTab from './PortfolioTab';
 import { buildDecisionFile, decisionFileName } from '../lib/decisionFile';
 import { caseIdFor, flagTimeLabel } from '../lib/caseRef';
 import { runAgentPanel, type StackingSignal } from '../lib/agents';
-import { CONSOLE_TOUR_STEPS, clampConsoleTourStep, type ConsoleTourTab } from '../lib/tourSteps';
+import { useConsoleTour } from './useConsoleTour';
+import { TourCard } from './TourCard';
+import { TourSpotlight } from './TourSpotlight';
+import { TourAnchor } from './TourAnchor';
+import { TourActiveAnchorContext } from './tourContext';
+import { emitTourSignal } from '../lib/tourSignals';
 import { LENDER_REGISTRY, type LenderProfile } from '../lib/lenderRegistry';
 import { buildCreditMemo } from '../lib/creditMemo';
 import { counterOfferFor } from '../lib/counterOffer';
 import { findRecentPresentments, formatAgo, presentmentKey, type Presentment } from '../lib/presentment';
-import { readPresentmentLog, recordPresentment } from '../lib/presentmentStore';
+import { clearPresentmentLog, readPresentmentLog, recordPresentment } from '../lib/presentmentStore';
 import { deriveTrustRows, type TrustRowState } from '../lib/trustPanel';
 import {
   fileApplication,
+  markDefault,
   mergeServerApplications,
   readApplications,
   recordCheckIn,
   recordLetterGenerated,
+  recordRepayment,
   resolveApplication,
   watchlistApplications,
   writeApplications,
@@ -47,19 +56,22 @@ import {
   type DeclaredPurpose,
   type FileApplicationInput,
   type PurposeCategory,
+  type RepaymentOutcome,
 } from '../lib/applications';
+import { mergeAppWithServicing, servicingWritePayload } from '../lib/servicingSync';
+import type { ServicingRecord } from '../lib/mergeServicing';
 import { diffCheckIn, monitoringStatus, type EarlyWarningFlag, type MonitoringStatus } from '../lib/earlyWarning';
 import { seedApplications } from '../lib/demoSeed';
 import { DEMO_APPLICANTS } from './demoApplicants';
 import QueueRail from './QueueRail';
-import { InfoButton, InfoModal, MiniBar, SectionLabel } from './shared';
+import { ConfirmModal, InfoButton, InfoModal, MiniBar, SectionLabel, Toast } from './shared';
 import AgentPanel from './AgentPanel';
 import CreditMemoModal from './CreditMemo';
 import AdverseActionLetterModal from './AdverseActionLetter';
 import { buildAdverseActionLetter } from '../lib/adverseAction';
 import { BenfordChart, ConfidenceCeilingTick, CoverageStrip, DecisionWaterfall, HeadroomBar, MomentumSpark } from './DecisionViz';
 
-type Tab = 'verify' | 'portfolio' | 'capital' | 'policy';
+type Tab = 'verify' | 'servicing' | 'portfolio' | 'capital' | 'policy';
 /** Which pool the Capital Markets tab structures (Brief Q): the synthetic sample or the live approved book. */
 type PoolSource = 'sample' | 'live';
 const BAND_SEGMENTS = ['#c0392b', '#d98a00', '#3ab07a', '#1f8a5b', '#145c3d'];
@@ -167,18 +179,23 @@ function DemoModeChip({ p }: { p: Palette }) {
   );
 }
 
-function Header({ p, tab, setTab, alert, onRestartTour, activeLender, onSwitchLender }: { p: Palette; tab: Tab; setTab: (t: Tab) => void; alert: boolean; onRestartTour: () => void; activeLender: LenderProfile; onSwitchLender: (id: string) => void }) {
+function Header({ p, tab, setTab, alert, onRestartTour, onResetToDefaults, resettingDefaults, activeLender, onSwitchLender, watchlistCount }: { p: Palette; tab: Tab; setTab: (t: Tab) => void; alert: boolean; onRestartTour: () => void; onResetToDefaults: () => void; resettingDefaults: boolean; activeLender: LenderProfile; onSwitchLender: (id: string) => void; watchlistCount: number }) {
   const [menuOpen, setMenuOpen] = useState(false);
   return (
     <header style={{ height: 50, background: p.surface, borderBottom: alert ? `2px solid ${p.primary}` : `1px solid ${p.hairline}`, display: 'flex', alignItems: 'center', padding: '0 22px', flexShrink: 0, position: 'relative' }}>
       <BrandMark p={p} onRestartTour={onRestartTour} activeLender={activeLender} />
       <nav aria-label="Console sections" style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
         <div style={{ display: 'flex', background: p.surface2, borderRadius: 10, padding: 3, gap: 2, border: `1px solid ${p.hairline}` }}>
-          {([['verify', 'Verify Passport'], ['portfolio', 'Portfolio'], ['capital', 'Capital Markets'], ['policy', 'Policy']] as [Tab, string][]).map(([key, label]) => {
+          {([['verify', 'Verify Passport'], ['servicing', 'Servicing'], ['portfolio', 'Portfolio'], ['capital', 'Capital Markets'], ['policy', 'Policy']] as [Tab, string][]).map(([key, label]) => {
             const active = key === tab;
             return (
-              <button key={key} onClick={() => setTab(key)} aria-current={active ? 'page' : undefined} style={{ padding: '6px 22px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: FONT.ui, fontSize: 12.5, fontWeight: active ? 700 : 500, background: active ? p.accentInk : 'transparent', color: active ? 'white' : p.ink2, whiteSpace: 'nowrap' }}>
+              <button key={key} onClick={() => setTab(key)} aria-current={active ? 'page' : undefined} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 22px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: FONT.ui, fontSize: 12.5, fontWeight: active ? 700 : 500, background: active ? p.accentInk : 'transparent', color: active ? 'white' : p.ink2, whiteSpace: 'nowrap' }}>
                 {label}
+                {key === 'servicing' && watchlistCount > 0 && (
+                  <span aria-label={`${watchlistCount} loan(s) on the watchlist`} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 16, height: 16, padding: '0 4px', borderRadius: 8, background: active ? 'white' : '#c0392b', color: active ? p.accentInk : 'white', fontFamily: FONT.num, fontSize: 11, fontWeight: 800 }}>
+                    {watchlistCount}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -190,6 +207,14 @@ function Header({ p, tab, setTab, alert, onRestartTour, activeLender, onSwitchLe
           style={{ fontFamily: FONT.ui, fontSize: 11, fontWeight: 700, color: p.ink2, background: p.surface2, border: `1px solid ${p.hairline}`, borderRadius: 6, padding: '3px 9px', cursor: 'pointer' }}
         >
           Restart tour
+        </button>
+        <button
+          onClick={onResetToDefaults}
+          disabled={resettingDefaults}
+          title={`Clear ${activeLender.name}'s applications, presentment log, and any saved policy edits`}
+          style={{ fontFamily: FONT.ui, fontSize: 11, fontWeight: 700, color: p.red, background: p.surface2, border: `1px solid ${p.hairline}`, borderRadius: 6, padding: '3px 9px', cursor: resettingDefaults ? 'default' : 'pointer', opacity: resettingDefaults ? 0.6 : 1 }}
+        >
+          {resettingDefaults ? 'Resetting…' : 'Reset to defaults'}
         </button>
         <DemoModeChip p={p} />
         <div style={{ position: 'relative' }}>
@@ -275,8 +300,6 @@ function LeftPanel({
   code,
   setCode,
   onVerify,
-  onLoadSample,
-  onLoadFlagged,
 }: {
   p: Palette;
   flagged: boolean;
@@ -284,8 +307,6 @@ function LeftPanel({
   code: string;
   setCode: (s: string) => void;
   onVerify: () => void;
-  onLoadSample: () => void;
-  onLoadFlagged: () => void;
 }) {
   const red = flagged || statusValid === false;
   return (
@@ -326,17 +347,6 @@ function LeftPanel({
         </svg>
         {flagged ? 'Re-Verify' : 'Verify'}
       </button>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ flex: 1, height: 1, background: p.hairline }} />
-        <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>or</span>
-        <div style={{ flex: 1, height: 1, background: p.hairline }} />
-      </div>
-
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button onClick={onLoadSample} style={{ flex: 1, padding: '9px 0', borderRadius: 10, cursor: 'pointer', border: `1.5px solid ${p.hairline}`, background: 'transparent', fontFamily: FONT.ui, fontSize: 12, fontWeight: 600, color: p.ink2 }}>Load sample</button>
-        <button onClick={onLoadFlagged} style={{ flex: 1, padding: '9px 0', borderRadius: 10, cursor: 'pointer', border: `1.5px solid ${p.red}33`, background: '#fff6f5', fontFamily: FONT.ui, fontSize: 12, fontWeight: 600, color: p.red }}>Load flagged</button>
-      </div>
 
     </div>
   );
@@ -405,6 +415,7 @@ function VerifiedCenter({ p, passport, decision, priors, issuerVerified, stackin
         </div>
 
         {/* Trust panel (Brief G): five checks answering "can I trust this file?" */}
+        <TourAnchor id="trust-panel">
         <div style={{ marginBottom: 12 }}>
           {trustRows.map((r, i) => (
             <div key={r.key} style={{ display: 'grid', gridTemplateColumns: '15px 118px 1fr', alignItems: 'start', gap: 8, padding: '6px 0', borderTop: i === 0 ? `1px solid ${p.hairline}` : 'none', borderBottom: `1px solid ${p.hairline}` }}>
@@ -417,6 +428,7 @@ function VerifiedCenter({ p, passport, decision, priors, issuerVerified, stackin
             The stacking check uses this console&apos;s own presentment log; a production deployment shares it across lenders via a registry.
           </p>
         </div>
+        </TourAnchor>
         <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0 }}>
             <span style={{ fontFamily: FONT.num, fontSize: 56, fontWeight: 700, color: p.ink1, lineHeight: 1, letterSpacing: '-2px' }}>{passport.score}</span>
@@ -660,7 +672,7 @@ function InvalidCenter({ p, reasons }: { p: Palette; reasons: string[] }) {
           <p key={i} style={{ fontFamily: FONT.ui, fontSize: 12.5, color: p.ink2, lineHeight: 1.55, marginBottom: 4 }}>• {r}</p>
         ))}
         <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.55, marginTop: 10 }}>
-          Make sure you pasted the <strong>entire</strong> code copied from the borrower&apos;s Pip Credit app (Credit Passport → Share). Or click <strong>Load sample</strong> to see a valid passport.
+          Make sure you pasted the <strong>entire</strong> code copied from the borrower&apos;s Pip Credit app (Credit Passport → Share).
         </p>
       </div>
     </div>
@@ -712,6 +724,7 @@ function CenterAlert({ p, flagTime }: { p: Palette; flagTime: string }) {
         </div>
       </div>
 
+      <TourAnchor id="fraud-signals">
       <div style={{ background: p.surface, borderRadius: 12, overflow: 'hidden', border: `2px solid ${p.primary}`, boxShadow: '0 4px 22px rgba(192,57,43,0.20)' }}>
         <div style={{ padding: '9px 16px', background: 'linear-gradient(90deg, #922b21 0%, #c0392b 100%)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -752,6 +765,7 @@ function CenterAlert({ p, flagTime }: { p: Palette; flagTime: string }) {
           <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5 }}>Analysis ran on submitted aggregates, <strong style={{ color: p.accentInk }}>not raw transactions</strong>. Statistical patterns suggest manual fabrication of income figures.</p>
         </div>
       </div>
+      </TourAnchor>
 
       <div style={{ background: p.surface, borderRadius: 12, overflow: 'hidden', boxShadow: p.shadow, opacity: 0.55 }}>
         <div style={{ padding: '7px 16px', background: p.surface2, borderBottom: `1px solid ${p.hairline}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -844,7 +858,117 @@ function MonitoringSection({ p, app, passport }: { p: Palette; app: ApplicationR
   );
 }
 
-function ApplicationCard({ p, app, passport, onResolve }: { p: Palette; app: ApplicationRecord; passport?: CreditPassport | null; onResolve: (outcome: 'approved' | 'declined', rationale: string) => void }) {
+type ScheduleDot = 'paid-on-time' | 'paid-late' | 'missed' | 'overdue' | 'upcoming';
+
+function scheduleDots(app: ApplicationRecord, perf: LoanPerformance): ScheduleDot[] {
+  const events = app.repayments ?? [];
+  return Array.from({ length: perf.tenorMonths }, (_, i) => {
+    const seq = i + 1;
+    const ev = events.find((e) => e.instalmentSeq === seq);
+    if (ev) return ev.outcome === 'missed' ? 'missed' : ev.outcome === 'late' ? 'paid-late' : 'paid-on-time';
+    return seq <= perf.dueCount ? 'overdue' : 'upcoming';
+  });
+}
+
+/** Per-instalment repayment schedule strip (portfolio performance): one dot per instalment,
+ *  with an aria-label carrying the same summary in words  the dots are presentation, never
+ *  the only carrier of the information. */
+function ScheduleStrip({ p, app }: { p: Palette; app: ApplicationRecord }) {
+  const book = mapBook([app]);
+  if (book.length === 0) return null;
+  const perf = loanPerformance(book[0]);
+  if (perf.tenorMonths <= 0) return null;
+  const dots = scheduleDots(app, perf);
+  const dotColor = (d: ScheduleDot): string => {
+    if (d === 'paid-on-time') return p.primary;
+    if (d === 'paid-late') return p.amber;
+    if (d === 'missed') return p.red;
+    if (d === 'overdue') return perf.status === 'delinquent' ? p.red : p.amber;
+    return p.hairline;
+  };
+  const behindNote =
+    perf.status === 'late'
+      ? ', one instalment behind'
+      : perf.status === 'delinquent'
+        ? perf.missedCount > 0
+          ? `, ${perf.missedCount} missed`
+          : ', two or more instalments behind'
+        : '';
+  const label = `Repayment schedule: paid ${perf.paidCount} of ${perf.tenorMonths} instalments${behindNote}.`;
+  return (
+    <div style={{ marginTop: 8, borderTop: `1px solid ${p.hairline}`, paddingTop: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink2 }}>Repayment schedule</span>
+        <span style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink3 }}>{perf.paidCount}/{perf.tenorMonths}</span>
+      </div>
+      <div role="img" aria-label={label} title={label} style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+        {dots.map((d, i) => (
+          <span key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor(d), flexShrink: 0 }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Officer-facing "record a repayment" mini-form (portfolio performance): appends the next
+ *  scheduled instalment's outcome to the loan's ledger, audit-trailed. Hides itself once every
+ *  instalment on the loan's tenor has been recorded  there is nothing left to record. */
+function RecordRepaymentForm({ p, app, onRecord }: { p: Palette; app: ApplicationRecord; onRecord: (instalmentSeq: number, amount: number, outcome: RepaymentOutcome) => void }) {
+  const [outcome, setOutcome] = useState<RepaymentOutcome>('on-time');
+  const book = mapBook([app]);
+  if (book.length === 0) return null;
+  const tenorMonths = book[0].loan.tenorMonths;
+  const nextSeq = (app.repayments?.length ?? 0) + 1;
+  if (nextSeq > tenorMonths) return null;
+  return (
+    <div style={{ marginTop: 8, borderTop: `1px solid ${p.hairline}`, paddingTop: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+      <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>Record instalment {nextSeq}:</span>
+      <select
+        value={outcome}
+        onChange={(e) => setOutcome(e.target.value as RepaymentOutcome)}
+        style={{ padding: '4px 6px', borderRadius: 6, border: `1.5px solid ${p.hairline}`, fontSize: 12, color: p.ink1, background: p.surface, fontFamily: FONT.ui, outline: 'none' }}
+      >
+        <option value="on-time">On-time</option>
+        <option value="late">Late</option>
+        <option value="missed">Missed</option>
+      </select>
+      <button
+        onClick={() => onRecord(nextSeq, outcome === 'missed' ? 0 : app.installment, outcome)}
+        style={{ padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: p.accentInk, color: 'white', fontFamily: FONT.ui, fontSize: 12, fontWeight: 700 }}
+      >
+        Record
+      </button>
+    </div>
+  );
+}
+
+/** Officer "mark defaulted" action (Bidirectional Servicing Sync, 2026-07-18 design): a
+ *  terminal, written-off state  irreversible in this console (curing a default is
+ *  roadmap), so it's gated behind a confirm like the decline-overturn actions above. Renders
+ *  nothing once the loan is already defaulted (the banner below carries that state instead). */
+function MarkDefaultAction({ p, app, onMarkDefault }: { p: Palette; app: ApplicationRecord; onMarkDefault: () => void }) {
+  if (app.defaulted?.value) return null;
+  return (
+    <div style={{ marginTop: 8, borderTop: `1px solid ${p.hairline}`, paddingTop: 8 }}>
+      <button
+        onClick={() => {
+          if (
+            window.confirm(
+              'Mark this loan defaulted?\n\nThis is a terminal, written-off state: it counts as a realized loss on Portfolio and cannot be undone in this console. Recorded in the audit trail and synced to the borrower app.',
+            )
+          ) {
+            onMarkDefault();
+          }
+        }}
+        style={{ width: '100%', padding: '7px 0', borderRadius: 7, border: '1.5px solid #8a1f14', cursor: 'pointer', background: 'transparent', color: '#8a1f14', fontFamily: FONT.ui, fontSize: 12, fontWeight: 700 }}
+      >
+        Mark defaulted
+      </button>
+    </div>
+  );
+}
+
+function ApplicationCard({ p, app, passport, onResolve, onRecordRepayment, onMarkDefault }: { p: Palette; app: ApplicationRecord; passport?: CreditPassport | null; onResolve: (outcome: 'approved' | 'declined', rationale: string) => void; onRecordRepayment?: (instalmentSeq: number, amount: number, outcome: RepaymentOutcome) => void; onMarkDefault?: () => void }) {
   const [rationale, setRationale] = useState('');
   const s = APP_STATUS_STYLE[app.status];
   const canResolve = rationale.trim().length > 0;
@@ -913,7 +1037,16 @@ function ApplicationCard({ p, app, passport, onResolve }: { p: Palette; app: App
         </p>
       )}
 
+      {app.defaulted?.value && (
+        <p style={{ fontFamily: FONT.ui, fontSize: 12, color: '#8a1f14', background: '#f5d4cf', borderRadius: 7, padding: '7px 9px', lineHeight: 1.5, marginTop: 8 }}>
+          <strong>Defaulted</strong> {formatAgo(app.defaulted.at)} ({app.defaulted.source === 'lender' ? 'marked by this console' : 'reported by the borrower app'}). Written off — counted as a realized loss on Portfolio.
+        </p>
+      )}
+
       {app.status === 'approved' && <MonitoringSection p={p} app={app} passport={passport ?? null} />}
+      {app.status === 'approved' && <ScheduleStrip p={p} app={app} />}
+      {app.status === 'approved' && onRecordRepayment && <RecordRepaymentForm p={p} app={app} onRecord={onRecordRepayment} />}
+      {app.status === 'approved' && onMarkDefault && <MarkDefaultAction p={p} app={app} onMarkDefault={onMarkDefault} />}
 
       <div style={{ marginTop: 8, borderTop: `1px solid ${p.hairline}`, paddingTop: 6 }}>
         {app.audit.map((e, i) => (
@@ -963,7 +1096,7 @@ function PricingStrip({ p, pricing, adopted, onAdopt }: { p: Palette; pricing: P
   );
 }
 
-function RightDecision({ p, passport, decision, credential, amount, setAmount, onAssess, onCounterOffer, isCounterOffer, stacking, selectedApp, onResolve, onGenerateLetter, purpose, setPurpose, policy, policyUpdatedAt, pricing, adoptedRate, onAdoptRate, lenderName }: { p: Palette; passport: CreditPassport | null; decision: LoanDecision | null; credential: Credential | null; amount: string; setAmount: (s: string) => void; onAssess: () => void; onCounterOffer?: (counterAmount: number) => void; isCounterOffer?: boolean; stacking?: StackingSignal; selectedApp?: ApplicationRecord | null; onResolve?: (outcome: 'approved' | 'declined', rationale: string) => void; onGenerateLetter?: () => void; purpose?: DeclaredPurpose | null; setPurpose?: (p: DeclaredPurpose | null) => void; policy?: LenderPolicy; policyUpdatedAt?: string; pricing?: PricingSuggestion | null; adoptedRate?: number | null; onAdoptRate?: (rate: number) => void; lenderName: string }) {
+function RightDecision({ p, passport, decision, credential, amount, setAmount, onAssess, onCounterOffer, isCounterOffer, stacking, selectedApp, onResolve, onRecordRepayment, onGenerateLetter, purpose, setPurpose, policy, policyUpdatedAt, pricing, adoptedRate, onAdoptRate, lenderName }: { p: Palette; passport: CreditPassport | null; decision: LoanDecision | null; credential: Credential | null; amount: string; setAmount: (s: string) => void; onAssess: () => void; onCounterOffer?: (counterAmount: number) => void; isCounterOffer?: boolean; stacking?: StackingSignal; selectedApp?: ApplicationRecord | null; onResolve?: (outcome: 'approved' | 'declined', rationale: string) => void; onRecordRepayment?: (instalmentSeq: number, amount: number, outcome: RepaymentOutcome) => void; onGenerateLetter?: () => void; purpose?: DeclaredPurpose | null; setPurpose?: (p: DeclaredPurpose | null) => void; policy?: LenderPolicy; policyUpdatedAt?: string; pricing?: PricingSuggestion | null; adoptedRate?: number | null; onAdoptRate?: (rate: number) => void; lenderName: string }) {
   const [memoOpen, setMemoOpen] = useState(false);
   const [letterOpen, setLetterOpen] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
@@ -1021,7 +1154,7 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
             <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', fontFamily: FONT.num, fontSize: 12, fontWeight: 600, color: p.ink3, pointerEvents: 'none' }}>RM</span>
             <input type="text" value={amount} onChange={(e) => setAmount(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAssess()} style={{ width: '100%', padding: '9px 12px 9px 33px', borderRadius: 8, border: `1.5px solid ${p.hairline}`, fontSize: 14.5, fontWeight: 700, color: p.ink1, background: p.surface2, outline: 'none', fontFamily: FONT.num }} />
           </div>
-          <button onClick={handleAssess} style={{ padding: '9px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', background: p.accentInk, color: 'white', fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, flexShrink: 0 }}>Assess</button>
+          <TourAnchor id="assess-button"><button onClick={handleAssess} style={{ padding: '9px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', background: p.accentInk, color: 'white', fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, flexShrink: 0 }}>Assess</button></TourAnchor>
         </div>
         {setPurpose && (
           <div style={{ marginTop: 8 }}>
@@ -1054,10 +1187,11 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
         )}
       </div>
 
-      {selectedApp && onResolve && <ApplicationCard p={p} app={selectedApp} passport={passport} onResolve={onResolve} />}
+      {selectedApp && onResolve && <ApplicationCard p={p} app={selectedApp} passport={passport} onResolve={onResolve} onRecordRepayment={onRecordRepayment} />}
 
       {decision ? (
         <>
+          <TourAnchor id="decision-card">
           <div key={decision.decision} style={{ margin: '14px 20px 0', borderRadius: 14, background: VERDICT[decision.decision].grad, padding: '16px 18px', boxShadow: `0 8px 28px ${VERDICT[decision.decision].shadow}`, position: 'relative', overflow: 'hidden', animation: 'fade-in-up 0.35s ease-out both', flexShrink: 0 }}>
             <div style={{ position: 'absolute', top: -24, right: -20, width: 90, height: 90, borderRadius: '50%', background: 'rgba(255,255,255,0.06)' }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, position: 'relative' }}>
@@ -1081,6 +1215,7 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
               <p style={{ fontFamily: FONT.ui, fontSize: 18, fontWeight: 800, color: 'white', lineHeight: 1.25, position: 'relative' }}>No offer at this amount</p>
             )}
           </div>
+          </TourAnchor>
 
           {/* Counter-offer strip (Brief L): show when the engine found a positive supportable amount below the request. */}
           {(() => {
@@ -1179,14 +1314,19 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
           </div>
 
           {passport && (
-            <div style={{ padding: '12px 20px 0', flexShrink: 0 }}>
-              <button
-                onClick={() => setMemoOpen(true)}
-                style={{ width: '100%', padding: '10px 0', borderRadius: 9, border: `1.5px solid ${p.primary}`, cursor: 'pointer', background: 'transparent', color: p.accentInk, fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700 }}
-              >
-                Generate audit memo
-              </button>
-            </div>
+            <TourAnchor id="memo-button">
+              <div style={{ padding: '12px 20px 0', flexShrink: 0 }}>
+                <button
+                  onClick={() => {
+                    emitTourSignal('memo-opened');
+                    setMemoOpen(true);
+                  }}
+                  style={{ width: '100%', padding: '10px 0', borderRadius: 9, border: `1.5px solid ${p.primary}`, cursor: 'pointer', background: 'transparent', color: p.accentInk, fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700 }}
+                >
+                  Generate audit memo
+                </button>
+              </div>
+            </TourAnchor>
           )}
 
           {passport && credential && (
@@ -1202,18 +1342,21 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
           )}
 
           {letterAvailable && (
-            <div style={{ padding: '8px 20px 0', flexShrink: 0 }}>
-              <button
-                onClick={() => {
-                  onGenerateLetter?.();
-                  setLetterOpen(true);
-                }}
-                title="Borrower-facing adverse-action letter: decision, reasons in plain language, data relied on, and how to strengthen a future application."
-                style={{ width: '100%', padding: '10px 0', borderRadius: 9, border: `1.5px solid ${p.hairline}`, cursor: 'pointer', background: 'transparent', color: p.ink2, fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700 }}
-              >
-                Generate adverse-action letter
-              </button>
-            </div>
+            <TourAnchor id="letter-button">
+              <div style={{ padding: '8px 20px 0', flexShrink: 0 }}>
+                <button
+                  onClick={() => {
+                    emitTourSignal('letter-generated');
+                    onGenerateLetter?.();
+                    setLetterOpen(true);
+                  }}
+                  title="Borrower-facing adverse-action letter: decision, reasons in plain language, data relied on, and how to strengthen a future application."
+                  style={{ width: '100%', padding: '10px 0', borderRadius: 9, border: `1.5px solid ${p.hairline}`, cursor: 'pointer', background: 'transparent', color: p.ink2, fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700 }}
+                >
+                  Generate adverse-action letter
+                </button>
+              </div>
+            </TourAnchor>
           )}
         </>
       ) : (
@@ -1377,6 +1520,7 @@ function CapitalMarkets({ p, book, source, setSource }: { p: Palette; book: Pool
         </div>
       </div>
 
+      <TourAnchor id="capital-tranches">
       <div style={{ padding: '18px 40px 0', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, flexShrink: 0 }}>
         {tranches.map((tr, i) => (
           <div key={tr.seat} style={{ background: tr.tint, borderRadius: 14, border: `1.5px solid ${tr.border}`, padding: '18px 20px', boxShadow: p.shadow, display: 'flex', flexDirection: 'column', gap: 12, animation: 'fade-in-up 0.4s ease-out both', animationDelay: `${i * 70}ms` }}>
@@ -1419,6 +1563,7 @@ function CapitalMarkets({ p, book, source, setSource }: { p: Palette; book: Pool
           </div>
         ))}
       </div>
+      </TourAnchor>
 
       <div style={{ padding: '16px 40px 24px', marginTop: 'auto' }}>
         <div style={{ padding: '11px 18px', borderRadius: 10, background: p.surface, border: `1px solid ${p.hairline}`, boxShadow: p.shadow }}>
@@ -1429,95 +1574,11 @@ function CapitalMarkets({ p, book, source, setSource }: { p: Palette; book: Pool
   );
 }
 
-// ── Judge tour card (Brief M) ───────────────────────────────────────────────
-// A small dismissible guided orientation on load. Boot stays pre-verified on the
-// sample (the ideal first minute)  this card just narrates what's already on screen.
-const TOUR_DISMISSED_KEY = 'pip-console-tour-dismissed';
-const TOUR_STEP_KEY = 'pip-console-tour-step';
 // Active lender persona (Lender Tenancy spec, 2026-07-12): persisted so a refresh stays
-// "signed in" as the chosen lender, same storage pattern as the tour dismissal above.
+// "signed in" as the chosen lender. The interactive judge tour (v2) lives in `TourCard.tsx`
+// + `useConsoleTour.ts`; its own localStorage keys are owned by that hook.
 const ACTIVE_LENDER_KEY = 'pip-console-active-lender';
 const DEFAULT_LENDER_ID = 'tekun';
-/** Console judge tour (Judge Tour spec, 2026-07-12)  the Brief-M static tip list upgraded
- *  to the same step-card wizard as the borrower app. Non-modal: it never traps focus or
- *  blocks the console underneath. `onTab` switches the console's real tab state; the wizard
- *  drives navigation, it never performs the officer's actions (assess, load flagged, open
- *  memo) on their behalf. */
-function TourCard({
-  p,
-  stepIndex,
-  onTab,
-  onNext,
-  onBack,
-  onExit,
-}: {
-  p: Palette;
-  stepIndex: number;
-  onTab: (tab: ConsoleTourTab) => void;
-  onNext: () => void;
-  onBack: () => void;
-  onExit: () => void;
-}) {
-  const index = clampConsoleTourStep(stepIndex, CONSOLE_TOUR_STEPS.length);
-  const step = CONSOLE_TOUR_STEPS[index];
-  const total = CONSOLE_TOUR_STEPS.length;
-
-  useEffect(() => {
-    onTab(step.tab);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index]);
-
-  return (
-    <div
-      role="dialog"
-      aria-label="Console tour"
-      style={{
-        position: 'fixed',
-        bottom: 20,
-        right: 20,
-        width: 300,
-        zIndex: 50,
-        background: p.surface,
-        borderRadius: 14,
-        border: `1.5px solid ${p.accentSoft}`,
-        boxShadow: '0 10px 34px rgba(0,0,0,0.22)',
-        padding: '15px 17px',
-        animation: 'fade-in-up 0.4s ease-out both',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 800, color: p.ink1, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Console tour</span>
-        <button
-          onClick={onExit}
-          aria-label="Exit tour"
-          style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: p.ink3, fontSize: 15, lineHeight: 1, padding: 4 }}
-        >
-          ×
-        </button>
-      </div>
-      <div style={{ display: 'flex', gap: 5, marginBottom: 10 }}>
-        {Array.from({ length: total }).map((_, i) => (
-          <span key={i} style={{ height: 6, width: i === index ? 16 : 6, borderRadius: 3, background: i === index ? p.primary : p.hairline }} />
-        ))}
-      </div>
-      <p style={{ fontFamily: FONT.ui, fontSize: 13.5, fontWeight: 700, color: p.ink1, marginBottom: 4 }}>{step.title}</p>
-      <p style={{ fontFamily: FONT.ui, fontSize: 12.5, color: p.ink2, lineHeight: 1.5 }}>{step.body}</p>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
-        <button onClick={onExit} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: p.ink3, fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 600, padding: 0 }}>Exit</button>
-        <div style={{ flex: 1 }} />
-        {index > 0 && (
-          <button onClick={onBack} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: p.ink2, fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, padding: '7px 4px' }}>Back</button>
-        )}
-        <button
-          onClick={onNext}
-          style={{ padding: '7px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', background: p.accentInk, color: 'white', fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700 }}
-        >
-          {index === total - 1 ? 'Done' : 'Next'}
-        </button>
-      </div>
-    </div>
-  );
-}
 
 /** Persona picker (Lender Tenancy spec, 2026-07-12): the console's entry screen. One click
  *  scopes the entire workbench to a registry lender  tenancy, not authentication, so there
@@ -1556,9 +1617,120 @@ function PersonaPicker({ onSelect }: { onSelect: (id: string) => void }) {
   );
 }
 
+// ── Servicing tab (console IA split, 2026-07-18) ────────────────────────────────
+// The approved book's operational home: watchlist pinned first, a performance/watchlist
+// status chip per card (never more than one, per lib/servicing.ts's priority rule), and a
+// detail pane that reuses ApplicationCard's resolve/monitoring/schedule/record-repayment
+// stack  read-and-service only, no re-assess amount field (that stays a Verify-tab job).
+
+const CHIP_STYLE: Record<import('../lib/servicing').ChipKind, { label: string; color: string; bg: string }> = {
+  defaulted: { label: 'Defaulted', color: '#8a1f14', bg: '#f5d4cf' },
+  watchlist: { label: 'Watchlist', color: '#c0392b', bg: '#fde8e8' },
+  settled: { label: 'Settled', color: '#1f8a5b', bg: '#e7f4ec' },
+  delinquent: { label: 'Delinquent', color: '#c0392b', bg: '#fde8e8' },
+  late: { label: 'Late', color: '#a3791f', bg: '#fdf3dc' },
+  direct: { label: 'Direct', color: '#2b8a3e', bg: '#d3f9d8' },
+};
+
+function ServicingChip({ app, isWatchlisted, settled }: { app: ApplicationRecord; isWatchlisted: boolean; settled: boolean }) {
+  const book = mapBook([app]);
+  const perfStatus = book.length > 0 ? loanPerformance(book[0]).status : null;
+  const kind = chipKindFor(app, isWatchlisted, perfStatus, settled);
+  if (!kind) return null;
+  const s = CHIP_STYLE[kind];
+  return (
+    <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: s.color, background: s.bg, borderRadius: 5, padding: '1px 6px', marginLeft: 4, flexShrink: 0 }}>
+      {s.label}
+    </span>
+  );
+}
+
+const rmShort = (n: number): string => `RM${Math.round(n).toLocaleString('en-MY')}`;
+
+function ServicingCard({ p, a, selected, isWatchlisted, settled, onSelect }: { p: Palette; a: ApplicationRecord; selected: boolean; isWatchlisted: boolean; settled: boolean; onSelect: () => void }) {
+  return (
+    <button
+      onClick={onSelect}
+      style={{
+        display: 'block',
+        width: '100%',
+        textAlign: 'left',
+        padding: '7px 9px',
+        marginBottom: 4,
+        borderRadius: 8,
+        cursor: 'pointer',
+        border: selected ? (isWatchlisted ? '1.5px solid #c0392b' : `1.5px solid ${p.primary}`) : isWatchlisted ? '1px solid #f0c4bd' : `1px solid ${p.hairline}`,
+        background: selected ? (isWatchlisted ? '#fdecea' : p.accentTint) : isWatchlisted ? '#fff8f7' : p.surface,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+        <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{a.applicantLabel}</span>
+        <ServicingChip app={a} isWatchlisted={isWatchlisted} settled={settled} />
+      </div>
+      <p style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink2, marginTop: 2 }}>
+        {rmShort(a.offeredAmount)} · disbursed {formatAgo(a.resolvedAt ?? a.filedAt)}
+      </p>
+    </button>
+  );
+}
+
+function ServicingSectionBlock({ p, label, dotColor, apps, isWatchlisted, settled, selectedId, onSelect }: { p: Palette; label: string; dotColor: string; apps: ApplicationRecord[]; isWatchlisted: boolean; settled: boolean; selectedId: string | null; onSelect: (a: ApplicationRecord) => void }) {
+  if (apps.length === 0) return null;
+  return (
+    <div style={{ padding: '10px 8px 4px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px', marginBottom: 5 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink2, letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: dotColor, display: 'inline-block' }} />
+          {label}
+        </span>
+        <span style={{ fontFamily: FONT.num, fontSize: 12, fontWeight: 700, color: p.ink1 }}>{apps.length}</span>
+      </div>
+      {apps.map((a) => (
+        <ServicingCard key={a.id} p={p} a={a} selected={a.id === selectedId} isWatchlisted={isWatchlisted} settled={settled} onSelect={() => onSelect(a)} />
+      ))}
+    </div>
+  );
+}
+
+function ServicingList({ p, apps, sections, selectedId, onSelect }: { p: Palette; apps: ApplicationRecord[]; sections: ServicingSections; selectedId: string | null; onSelect: (app: ApplicationRecord) => void }) {
+  return (
+    <nav aria-label="Serviced loans" style={{ width: 260, background: p.surface2, borderRight: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto' }}>
+      <div style={{ padding: '14px 12px 10px', borderBottom: `1px solid ${p.hairline}` }}>
+        <p role="heading" aria-level={2} style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink2, letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: 4 }}>Servicing · Approved Book</p>
+        <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5 }}>{apps.filter((a) => a.status === 'approved').length} loan(s) disbursed</p>
+      </div>
+      <ServicingSectionBlock p={p} label="Defaulted" dotColor="#8a1f14" apps={sections.defaulted} isWatchlisted={false} settled={false} selectedId={selectedId} onSelect={onSelect} />
+      <ServicingSectionBlock p={p} label="Watchlist" dotColor="#c0392b" apps={sections.watchlist} isWatchlisted settled={false} selectedId={selectedId} onSelect={onSelect} />
+      <ServicingSectionBlock p={p} label="Active" dotColor="#3b5bdb" apps={sections.active} isWatchlisted={false} settled={false} selectedId={selectedId} onSelect={onSelect} />
+      <ServicingSectionBlock p={p} label="Settled" dotColor="#1f8a5b" apps={sections.settled} isWatchlisted={false} settled selectedId={selectedId} onSelect={onSelect} />
+    </nav>
+  );
+}
+
+function ServicingEmpty({ p, text }: { p: Palette; text: string }) {
+  return (
+    <div style={{ flex: 1, background: p.bg, overflowY: 'auto', padding: '40px', minWidth: 360 }}>
+      <div style={{ maxWidth: 480, padding: '18px 20px', borderRadius: 12, background: p.surface, border: `1px solid ${p.hairline}`, boxShadow: p.shadow }}>
+        <p style={{ fontFamily: FONT.ui, fontSize: 12.5, color: p.ink2, lineHeight: 1.6 }}>{text}</p>
+      </div>
+    </div>
+  );
+}
+
+function ServicingDetail({ p, app, passport, onResolve, onRecordRepayment, onMarkDefault }: { p: Palette; app: ApplicationRecord; passport: CreditPassport | null; onResolve: (outcome: 'approved' | 'declined', rationale: string) => void; onRecordRepayment: (instalmentSeq: number, amount: number, outcome: RepaymentOutcome) => void; onMarkDefault: () => void }) {
+  return (
+    <div style={{ width: 340, background: p.surface, borderLeft: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto', padding: '14px 0' }}>
+      <ApplicationCard p={p} app={app} passport={passport} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onMarkDefault={onMarkDefault} />
+    </div>
+  );
+}
+
 export default function Console() {
   const [tab, setTab] = useState<Tab>('verify');
   const [code, setCode] = useState(SAMPLE_CODE);
+  // Controls whether the passport input panel is visible. Starts hidden (the pipeline has
+  // real applicants); shown only when the officer clicks "Paste new application".
+  const [showPassportInput, setShowPassportInput] = useState(false);
   const [amount, setAmount] = useState('10,000');
   const [flagged, setFlagged] = useState(false);
   // Real timestamp captured the moment the flag was raised  the alert's flag time
@@ -1582,60 +1754,45 @@ export default function Console() {
   const [poolSource, setPoolSource] = useState<PoolSource>('live');
   // Adopted risk-based rate (Brief R): null = ladder rate in force; a number = custom-priced.
   const [adoptedRate, setAdoptedRate] = useState<number | null>(null);
-  // Judge tour wizard (Judge Tour spec, 2026-07-12; upgraded from the Brief-M static card):
-  // defaults hidden (SSR-safe) and only shown once the mount effect confirms localStorage
-  // doesn't already record it as seen. Step index persists too, so a reload resumes mid-tour.
-  const [showTour, setShowTour] = useState(false);
-  const [tourStepIndex, setTourStepIndexState] = useState(0);
-  useEffect(() => {
-    try {
-      if (window.localStorage.getItem(TOUR_DISMISSED_KEY) !== 'true') setShowTour(true);
-      const savedStep = Number(window.localStorage.getItem(TOUR_STEP_KEY) ?? '0');
-      setTourStepIndexState(clampConsoleTourStep(Number.isFinite(savedStep) ? savedStep : 0, CONSOLE_TOUR_STEPS.length));
-    } catch {
-      // localStorage unavailable (private mode / disabled)  skip the tour rather than crash.
-    }
-  }, []);
-  const persistTourStep = (index: number) => {
-    setTourStepIndexState(index);
-    try {
-      window.localStorage.setItem(TOUR_STEP_KEY, String(index));
-    } catch {
-      // Best-effort persistence.
-    }
-  };
-  const tourNext = () => {
-    if (tourStepIndex >= CONSOLE_TOUR_STEPS.length - 1) {
-      dismissTour();
-      return;
-    }
-    persistTourStep(tourStepIndex + 1);
-  };
-  const tourBack = () => persistTourStep(Math.max(0, tourStepIndex - 1));
-  const dismissTour = () => {
-    setShowTour(false);
-    try {
-      window.localStorage.setItem(TOUR_DISMISSED_KEY, 'true');
-    } catch {
-      // Best-effort persistence; a session that can't write localStorage just re-shows next load.
-    }
-  };
-  const restartTour = () => {
-    persistTourStep(0);
-    setShowTour(true);
-    try {
-      window.localStorage.setItem(TOUR_DISMISSED_KEY, 'false');
-    } catch {
-      // Best-effort persistence.
-    }
-  };
+  // Interactive judge tour (v2): the driver hook owns visibility, the resumable step index,
+  // tab-driving, the spotlight anchor, and the semantic-signal subscription. It only observes
+  // and advances  it never performs the officer's actions (assess, load flagged, seed, open
+  // memo, issue a letter); those stay the officer's own taps, which the tour detects.
+  const tour = useConsoleTour({ tab, setTab });
 
   // Active lender persona (Lender Tenancy spec): scopes policy, pipeline, and book to
   // one of the three registry lenders. Tenancy, not authentication  no credentials, no
   // session, just a stored id (same pattern as the tour dismissal above).
   const [activeLenderId, setActiveLenderIdState] = useState(DEFAULT_LENDER_ID);
   const [showPersonaPicker, setShowPersonaPicker] = useState(false);
+  const [resettingDefaults, setResettingDefaults] = useState(false);
+  // Custom reset-confirmation modal + post-reset success toast (2026-07-20 follow-up),
+  // replacing a bare window.confirm/none at all.
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [resetToast, setResetToast] = useState<string | null>(null);
   const activeLender: LenderProfile = LENDER_REGISTRY.find((l) => l.id === activeLenderId) ?? LENDER_REGISTRY[0];
+
+  /** Pull `lenderId`'s server-side direct-apply mailbox and merge any new borrower
+   *  submissions into the local pipeline (poll-on-focus, mirrors pullServicing below): a
+   *  borrower who sends a passport while the officer already has the console open now
+   *  shows up without a manual reload. Deduped by fileApplication's subject+amount identity,
+   *  then persisted so an adopted submission behaves exactly like an officer-filed one on
+   *  every later load. */
+  const pullDirectApply = async (lenderId: string) => {
+    try {
+      const res = await fetch(`/api/apply?lender=${lenderId}`);
+      if (!res.ok) return;
+      const server: unknown = await res.json();
+      if (!Array.isArray(server) || server.length === 0) return;
+      const merged = mergeServerApplications(readApplications(undefined, lenderId), server);
+      if (merged.changed) {
+        writeApplications(merged.apps, undefined, lenderId);
+        if (lenderId === activeLenderId) setApps(merged.apps);
+      }
+    } catch {
+      // offline/malformed  the pipeline just stays whatever it was locally.
+    }
+  };
 
   /** Loads everything scoped to `lenderId`: its stored policy (which re-evaluates
    *  whatever passport code/amount are currently on screen), its own applications
@@ -1643,20 +1800,11 @@ export default function Console() {
    *  presentment log. Used on boot and on every lender switch. */
   const loadForLender = (lenderId: string, codeUsed: string, amountUsed: string) => {
     setApps(readApplications(undefined, lenderId));
-    // Merge this lender's direct-apply submissions (borrowers who sent from the Pip app) into
-    // its own pipeline. Deduped by fileApplication's subject+amount identity, then persisted so
-    // an adopted submission behaves exactly like an officer-filed one on every later load.
-    fetch(`/api/apply?lender=${lenderId}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((server: unknown) => {
-        if (!Array.isArray(server) || server.length === 0) return;
-        const merged = mergeServerApplications(readApplications(undefined, lenderId), server);
-        if (merged.changed) {
-          writeApplications(merged.apps, undefined, lenderId);
-          setApps(merged.apps);
-        }
-      })
-      .catch(() => {});
+    // Servicing sync (2026-07-18 design) runs after the direct-apply adoption above so it
+    // sees any just-adopted approved loans too, not just the ones already in the pipeline.
+    pullDirectApply(lenderId).finally(() => {
+      pullServicing(lenderId).catch(() => {});
+    });
     fetch(`/api/policy?lender=${lenderId}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((sp: StoredPolicy | null) => {
@@ -1712,6 +1860,65 @@ export default function Console() {
     loadForLender(lenderId, SAMPLE_CODE, '10,000');
   };
 
+  /** Opens the custom reset-confirmation modal (2026-07-20 follow-up: replaces a bare
+   *  `window.confirm`, which can't carry the console's own styling or explain the borrower-app
+   *  consequence as clearly as a real dialog). The actual reset only runs from the modal's
+   *  Confirm button, in `performReset` below. */
+  const onResetToDefaults = () => setResetConfirmOpen(true);
+
+  /** Reset-to-defaults: wipes this lender's own mutations  its application pipeline (both the
+   *  console's own filings and the server-side direct-apply mailbox, so a reset genuinely
+   *  empties the queue rather than having it silently repopulate on the next load), its
+   *  presentment log, saved policy edits (reverting to that lender's registry package, not the
+   *  generic ladder), its servicing ledger, and its published offer book  then stamps a reset
+   *  marker (data-consistency follow-up, 2026-07-20) so the borrower app can find out and clear
+   *  its own now-orphaned copy of any loan routed to this lender, and reloads a clean
+   *  workbench. Scoped to the active lender only, mirroring every other lender-scoped store
+   *  here; switching lenders still sees that lender's own untouched state. Does not touch the
+   *  tour (Restart tour is a separate, deliberate action). This is a demo console with no
+   *  authentication (spec: "no credentials"), so the mailbox holds only test submissions from
+   *  the paired borrower app, never a real lender's live pipeline  wiping it here is safe by
+   *  design, not an oversight. */
+  const performReset = async () => {
+    setResetConfirmOpen(false);
+    setResettingDefaults(true);
+    try {
+      writeApplications([], undefined, activeLenderId);
+      clearPresentmentLog(undefined, activeLenderId);
+      try {
+        await Promise.all([
+          fetch(`/api/policy?lender=${activeLenderId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ policy: activeLender.policy ?? DEFAULT_POLICY, products: activeLender.products }),
+          }),
+          fetch(`/api/apply?lender=${activeLenderId}`, { method: 'DELETE' }),
+          fetch(`/api/servicing?lender=${activeLenderId}`, { method: 'DELETE' }),
+          fetch(`/api/offers?lender=${activeLenderId}`, { method: 'DELETE' }),
+          fetch(`/api/reset?lender=${activeLenderId}`, { method: 'POST' }),
+        ]);
+      } catch {
+        // Best-effort; loadForLender below still re-reads whatever the server ends up with.
+      }
+      setTab('verify');
+      setFlagged(false);
+      setFlaggedAt(null);
+      setIsCounterOffer(false);
+      setAdoptedRate(null);
+      setSelectedAppId(null);
+      setPurpose(null);
+      setShowPassportInput(false);
+      setCode(SAMPLE_CODE);
+      setAmount('10,000');
+      setApps([]);
+      setPriors([]);
+      loadForLender(activeLenderId, SAMPLE_CODE, '10,000');
+      setResetToast(`${activeLender.name}'s console was reset to defaults. Any matching loan on the borrower app's side will clear on its next sync.`);
+    } finally {
+      setResettingDefaults(false);
+    }
+  };
+
   /** A saved policy takes effect immediately: keep it in state and re-evaluate whatever
    *  is currently loaded so the Verify tab can never show a verdict from a stale policy. */
   const onPolicySaved = (sp: StoredPolicy) => {
@@ -1725,6 +1932,104 @@ export default function Console() {
     setApps(next);
     writeApplications(next, undefined, activeLenderId);
   };
+
+  /** Write-through one repayment/default action to the shared servicing ledger (Bidirectional
+   *  Servicing Sync, 2026-07-18 design), best-effort: fire-and-forget, never blocks or
+   *  reverts the local update already applied by syncApps  offline degrades silently, same
+   *  posture as direct-apply. */
+  const writeThroughServicing = (app: ApplicationRecord, lenderId: string, write: { event: { instalmentSeq: number; outcome: RepaymentOutcome } } | { default: true }) => {
+    const payload = servicingWritePayload(app, lenderId, write);
+    if (!payload) return;
+    fetch('/api/servicing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {});
+  };
+
+  /** Publish an approved offer to the borrower back-channel (approval-notify, 2026-07-19):
+   *  when an officer approves a referred application, the borrower app has no way to accept it
+   *  (it only ever saw the "refer" verdict). Publishing the decided terms lets the borrower app
+   *  auto-book the financing on its next poll. Best-effort, fire-and-forget  a network failure
+   *  never blocks the officer's local resolution. Only meaningful for an approved loan with a
+   *  positive offer; a zero-offer or subject-less record publishes nothing. */
+  const publishOffer = (app: ApplicationRecord, lenderId: string) => {
+    if (!app.subject || !(app.offeredAmount > 0)) return;
+    fetch('/api/offers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subject: app.subject, lenderId, maxAmount: app.offeredAmount, installment: app.installment, ...(app.purpose ? { purpose: app.purpose } : {}) }),
+    }).catch(() => {});
+  };
+
+  /** Pull every approved loan's shared servicing record for `lenderId` and merge server
+   *  events/defaults into the local pipeline (poll-on-focus, 2026-07-18 design): a
+   *  borrower-recorded repayment, miss, or default now surfaces in the console. Re-reads
+   *  applications fresh from storage rather than trusting a possibly-stale `apps` closure, so
+   *  it composes safely after the direct-apply merge in loadForLender. Best-effort per loan
+   *  one unreachable/malformed GET never blocks the rest of the book. */
+  const pullServicing = async (lenderId: string) => {
+    const current = readApplications(undefined, lenderId);
+    const approvedApps = current.filter((a) => a.status === 'approved');
+    if (approvedApps.length === 0) return;
+
+    let next = current;
+    let anyChanged = false;
+    for (const app of approvedApps) {
+      try {
+        const res = await fetch(`/api/servicing?subject=${encodeURIComponent(app.subject)}&lender=${encodeURIComponent(lenderId)}`);
+        if (!res.ok) continue;
+        const record: ServicingRecord | null = await res.json();
+        if (!record) continue;
+        const result = mergeAppWithServicing(app, lenderId, record);
+        if (result.changed) {
+          next = next.map((a) => (a.id === app.id ? result.app : a));
+          anyChanged = true;
+        }
+      } catch {
+        // offline/malformed  this loan's servicing state just stays whatever it was locally.
+      }
+    }
+    if (anyChanged) {
+      writeApplications(next, undefined, lenderId);
+      if (lenderId === activeLenderId) setApps(next);
+    }
+  };
+
+  // Poll-on-focus (2026-07-18 design): every time the officer switches onto the Servicing
+  // tab, re-pull the shared ledger so a borrower-recorded repayment/miss/default made since
+  // the last load or tab switch shows up without a manual refresh.
+  useEffect(() => {
+    if (tab === 'servicing') pullServicing(activeLenderId).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, activeLenderId]);
+
+  // Poll-on-focus, same pattern, for the pipeline: the officer typically leaves the console
+  // open on the Verify tab (where QueueRail lives) while a borrower sends a passport from the
+  // Pip app. Without this, a direct-apply submission only ever adopted on mount/lender-switch,
+  // so it silently sat in the server mailbox until the next reload. Also re-checks on window
+  // focus (tab-switch back to the console, not just in-app tab switch) for the same reason.
+  useEffect(() => {
+    if (tab === 'verify') pullDirectApply(activeLenderId).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, activeLenderId]);
+
+  useEffect(() => {
+    const onFocus = () => {
+      if (tab === 'verify') pullDirectApply(activeLenderId).catch(() => {});
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, activeLenderId]);
+
+  // A live demo typically runs the borrower phone and this console side by side, so the
+  // window never actually loses/regains focus  a light interval poll while parked on the
+  // Verify tab covers that case too.
+  useEffect(() => {
+    if (tab !== 'verify') return;
+    const id = setInterval(() => {
+      pullDirectApply(activeLenderId).catch(() => {});
+    }, 5_000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, activeLenderId]);
 
   /** Log an explicit verification as a presentment; priors exclude the one being recorded. */
   const logPresentment = (passport: CreditPassport) => {
@@ -1805,9 +2110,11 @@ export default function Console() {
     setFlagged(true);
     setFlaggedAt(new Date());
     setCode(SUSPECT_CODE);
+    emitTourSignal('flagged-loaded');
   };
   const onAssess = () => {
     if (state.status !== 'valid') return;
+    emitTourSignal('assessed');
     setIsCounterOffer(false);
     setAdoptedRate(null);
     const decision = decisionFor(state.passport, amount, storedPolicy);
@@ -1856,6 +2163,7 @@ export default function Console() {
     setState(next);
     setSelectedAppId(app.id);
     setPurpose(app.purpose ?? null);
+    setShowPassportInput(false);
     if (next.status === 'valid') setPriors(findRecentPresentments(readPresentmentLog(undefined, activeLenderId), presentmentKey(next.passport)));
   };
 
@@ -1863,11 +2171,39 @@ export default function Console() {
     setSelectedAppId(null);
     setPurpose(null);
     setCode('');
+    setShowPassportInput(true);
   };
 
   const onResolve = (outcome: 'approved' | 'declined', rationale: string) => {
     if (!selectedAppId) return;
+    const app = apps.find((a) => a.id === selectedAppId);
     syncApps(resolveApplication(apps, selectedAppId, outcome, rationale, new Date(), activeLender.officer));
+    // Approving a referred application is the one transition the borrower app can't reach on
+    // its own (it only ever saw the "refer" verdict), so publish the offer back-channel so the
+    // borrower auto-books it. Declines aren't published (the borrower simply gets no offer).
+    if (outcome === 'approved' && app) publishOffer(app, activeLenderId);
+  };
+
+  /** Officer-recorded repayment (portfolio performance): appends one instalment outcome to
+   *  the selected loan's ledger, audit-trailed. Never touches status/resolution. Writes
+   *  through to the shared servicing ledger (2026-07-18 design) in addition to the local
+   *  update, best-effort  the local record is never blocked or reverted by a network failure. */
+  const onRecordRepayment = (instalmentSeq: number, amt: number, outcome: RepaymentOutcome) => {
+    if (!selectedAppId) return;
+    const app = apps.find((a) => a.id === selectedAppId);
+    syncApps(recordRepayment(apps, selectedAppId, { instalmentSeq, amount: amt, outcome }, new Date()));
+    if (app) writeThroughServicing(app, activeLenderId, { event: { instalmentSeq, outcome } });
+  };
+
+  /** Officer "mark defaulted" action (Bidirectional Servicing Sync, 2026-07-18 design): a
+   *  loan-level terminal flag, audit-trailed, write-through to the shared servicing ledger.
+   *  A monotonic latch  markDefault itself is a no-op on an already-defaulted loan. */
+  const onMarkDefault = () => {
+    if (!selectedAppId) return;
+    const app = apps.find((a) => a.id === selectedAppId);
+    if (!app || app.defaulted?.value) return;
+    syncApps(markDefault(apps, selectedAppId, 'lender', new Date()));
+    writeThroughServicing(app, activeLenderId, { default: true });
   };
 
   /** Records that an adverse-action letter was generated (Brief J stretch), audit-trailed 
@@ -1887,11 +2223,17 @@ export default function Console() {
     const { apps: next, presentments } = seedApplications(readApplications(undefined, activeLenderId), storedPolicy.products, storedPolicy.policy, activeLender.name);
     syncApps(next);
     presentments.forEach((p) => recordPresentment(p, undefined, activeLenderId));
+    emitTourSignal('pipeline-seeded');
   };
 
   const selectedApp = apps.find((a) => a.id === selectedAppId) ?? null;
   // The live approved book (Brief Q)  maps approved applications into the pool shape.
   const book = useMemo(() => bookToPool(apps), [apps]);
+  // Servicing tab (console IA split, 2026-07-18; settled loans, 2026-07-18 stats/advisor
+  // design): the approved book split into watchlist / active / settled sections.
+  const servicingSections = useMemo(() => orderServicingSections(apps), [apps]);
+  const servicingCount = servicingSections.defaulted.length + servicingSections.watchlist.length + servicingSections.active.length + servicingSections.settled.length;
+  const servicingWatchlistIds = useMemo(() => new Set(watchlistApplications(apps).map((a) => a.id)), [apps]);
 
   // Risk-based pricing suggestion (Brief R) for the current offer  computed from the
   // ORIGINAL ladder rate (not the adopted one) so the strip always shows ladder vs suggested.
@@ -1918,34 +2260,60 @@ export default function Console() {
 
   if (showPersonaPicker) return <PersonaPicker onSelect={switchLender} />;
 
-  const TAB_LABELS: Record<Tab, string> = { verify: 'Verify Passport', portfolio: 'Portfolio', capital: 'Capital Markets', policy: 'Policy' };
+  const TAB_LABELS: Record<Tab, string> = { verify: 'Verify Passport', servicing: 'Servicing', portfolio: 'Portfolio', capital: 'Capital Markets', policy: 'Policy' };
 
   return (
+    <TourActiveAnchorContext.Provider value={tour.activeAnchorId}>
     <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: p.bg }}>
       <h1 style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}>
         Pip Credit Lender Console: {activeLender.name}
       </h1>
-      <Header p={p} tab={tab} setTab={setTab} alert={showAlert} onRestartTour={restartTour} activeLender={activeLender} onSwitchLender={switchLender} />
+      <Header p={p} tab={tab} setTab={setTab} alert={showAlert} onRestartTour={tour.restart} onResetToDefaults={onResetToDefaults} resettingDefaults={resettingDefaults} activeLender={activeLender} onSwitchLender={switchLender} watchlistCount={servicingWatchlistIds.size} />
+      <ConfirmModal
+        open={resetConfirmOpen}
+        title={`Reset ${activeLender.name} to defaults?`}
+        body={`This clears the applications queue (including any direct applications from the borrower app), presentment log, servicing ledger, published offers, and any saved policy edits. The borrower app will clear its matching loan record on its next sync. Can't be undone.`}
+        confirmLabel="Reset console"
+        danger
+        onConfirm={performReset}
+        onCancel={() => setResetConfirmOpen(false)}
+        p={p}
+      />
+      <Toast message={resetToast} onClose={() => setResetToast(null)} p={p} />
       {showAlert && <AlertBanner caseId={flagCaseId} flagTime={flagTime} />}
-      {showTour && (
-        <TourCard p={p} stepIndex={tourStepIndex} onTab={setTab} onNext={tourNext} onBack={tourBack} onExit={dismissTour} />
-      )}
+      {tour.visible && !tour.paused && <TourSpotlight onDimPress={tour.pause} />}
+      {tour.visible && <TourCard p={p} c={tour} officer={activeLender.officer} lender={activeLender.name} />}
       <main aria-label={TAB_LABELS[tab]} style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
         {tab === 'verify' ? (
           <>
-            <QueueRail p={p} apps={apps} selectedId={selectedAppId} onSelect={onSelectApp} onSeed={onSeed} onPasteNew={onPasteNew} />
-            <LeftPanel p={p} flagged={flagged} statusValid={flagged ? false : statusValid} code={code} setCode={setCode} onVerify={onVerify} onLoadSample={onLoadSample} onLoadFlagged={onLoadFlagged} />
+            <QueueRail p={p} apps={apps} selectedId={selectedAppId} onSelect={onSelectApp} onSeed={onSeed} onPasteNew={onPasteNew} forceSeedButton={tour.forceSeedButton} />
+            {showPassportInput && <LeftPanel p={p} flagged={flagged} statusValid={flagged ? false : statusValid} code={code} setCode={setCode} onVerify={onVerify} />}
             {showAlert ? <CenterAlert p={p} flagTime={flagTime} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} lapsedTiers={state.credential.verification.lapsedTiers} /> : <InvalidCenter p={p} reasons={state.reasons} />}
-            {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} onCounterOffer={onCounterOffer} isCounterOffer={isCounterOffer} stacking={stackingSignal} selectedApp={selectedApp} onResolve={onResolve} onGenerateLetter={onGenerateLetter} purpose={purpose} setPurpose={setPurpose} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} pricing={pricing} adoptedRate={adoptedRate} onAdoptRate={onAdoptRate} lenderName={activeLender.name} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} lenderName={activeLender.name} />}
+            {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} onCounterOffer={onCounterOffer} isCounterOffer={isCounterOffer} stacking={stackingSignal} selectedApp={selectedApp} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onGenerateLetter={onGenerateLetter} purpose={purpose} setPurpose={setPurpose} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} pricing={pricing} adoptedRate={adoptedRate} onAdoptRate={onAdoptRate} lenderName={activeLender.name} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} lenderName={activeLender.name} />}
+          </>
+        ) : tab === 'servicing' ? (
+          <>
+            <ServicingList p={p} apps={apps} sections={servicingSections} selectedId={selectedAppId} onSelect={onSelectApp} />
+            {servicingCount === 0 ? (
+              <ServicingEmpty p={p} text="No approved loans yet. Approve applications on the Verify tab (or seed the pipeline) and they appear here for servicing." />
+            ) : selectedApp && selectedApp.status === 'approved' && state.status === 'valid' ? (
+              <>
+                <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} lapsedTiers={state.credential.verification.lapsedTiers} />
+                <ServicingDetail p={p} app={selectedApp} passport={state.passport} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onMarkDefault={onMarkDefault} />
+              </>
+            ) : (
+              <ServicingEmpty p={p} text="Select a loan from the list to service it: repayment status, monitoring check-ins, and audit trail." />
+            )}
           </>
         ) : tab === 'portfolio' ? (
           <PortfolioTab p={palette(false)} apps={apps} onStructure={() => { setPoolSource('live'); setTab('capital'); }} />
         ) : tab === 'capital' ? (
           <CapitalMarkets p={palette(false)} book={book} source={poolSource} setSource={setPoolSource} />
         ) : (
-          <PolicyTab key={`${activeLenderId}:${storedPolicy.updatedAt ?? 'defaults'}`} p={palette(false)} stored={storedPolicy} onSaved={onPolicySaved} lenderId={activeLenderId} lenderName={activeLender.name} />
+          <PolicyTab key={`${activeLenderId}:${storedPolicy.updatedAt ?? 'defaults'}`} p={palette(false)} stored={storedPolicy} onSaved={onPolicySaved} lenderId={activeLenderId} lenderName={activeLender.name} apps={apps} />
         )}
       </main>
     </div>
+    </TourActiveAnchorContext.Provider>
   );
 }

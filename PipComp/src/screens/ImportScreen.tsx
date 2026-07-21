@@ -6,8 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../components/Icon';
 import { B, BtnLabel, BubbleText, Card, PipSays, PrimaryButton, TopBar } from '../components/ui';
 import { readDocumentParts } from '../lib/fileRead';
-import { getProvider, llmErrorMessage } from '../llm';
-import { configFor, loadSettings } from '../settings/settingsStore';
+import { getLLM, llmErrorMessage } from '../llm';
 import { useAppData } from '../state/store';
 import { DROP, type ExtractedTxn } from '../lib/types';
 import { colors, uiFont } from '../theme';
@@ -59,9 +58,8 @@ export function ImportScreen({ onClose }: { onClose: () => void }) {
     setPhase('reading');
     setError('');
     try {
-      const c = configFor(await loadSettings(), 'docs');
-      const provider = getProvider(c.provider);
-      if (!c.apiKey || !provider.extractDocument) {
+      const llm = await getLLM();
+      if (!llm.can('extractDocument')) {
         setPhase('needprovider');
         return;
       }
@@ -74,7 +72,7 @@ export function ImportScreen({ onClose }: { onClose: () => void }) {
       }
 
       setPhase('extracting');
-      const items = await provider.extractDocument({ apiKey: c.apiKey, model: c.model, parts });
+      const items = await llm.extractDocument({ parts });
       if (items.length === 0) {
         // The file was read fine  it just has no transactions (e.g. a statement
         // for a period with no account activity). Not an error.

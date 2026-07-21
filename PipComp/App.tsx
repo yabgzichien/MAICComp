@@ -17,6 +17,7 @@ import { Platform, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomNav, type NavTab } from './src/components/BottomNav';
+import { ClearedLoanBanner } from './src/components/ClearedLoanBanner';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { Pip } from './src/components/Pip';
 import { MissionBanner, TourCard, TourResumeChip, type TourRecapItem } from './src/components/TourCard';
@@ -42,14 +43,17 @@ import { NetWorthScreen } from './src/screens/NetWorthScreen';
 import { RecapScreen } from './src/screens/RecapScreen';
 import { CalendarScreen } from './src/screens/CalendarScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { AdvancedImportScreen } from './src/screens/AdvancedImportScreen';
 import { GlossaryModal } from './src/components/InfoButton';
+import { AppAlertModal } from './src/components/AppAlertModal';
 import { AccentProvider } from './src/state/accent';
+import { AlertHostProvider } from './src/state/alertHost';
 import { GlossaryProvider } from './src/state/glossary';
 import { AppDataProvider, useAppData } from './src/state/store';
 import { useNow } from './src/state/useNow';
 import { colors, platformShadow, uiFont } from './src/theme';
 
-type Screen = 'home' | 'add' | 'settings' | 'categories' | 'transactions' | 'breakdown' | 'budget' | 'recap' | 'networth' | 'credit' | 'loans' | 'passport' | 'coach' | 'lender' | 'attacks' | 'kyc' | 'calendar';
+type Screen = 'home' | 'add' | 'settings' | 'categories' | 'transactions' | 'breakdown' | 'budget' | 'recap' | 'networth' | 'credit' | 'loans' | 'passport' | 'coach' | 'lender' | 'attacks' | 'kyc' | 'calendar' | 'advancedImport';
 
 /**
  * Web-only: a global :focus-visible outline so keyboard users get a visible focus indicator
@@ -89,9 +93,11 @@ export default function App() {
         <AppDataProvider>
           <AccentProvider>
             <GlossaryProvider>
-              <ErrorBoundary>
-                <Root fontsLoaded={fontsLoaded} />
-              </ErrorBoundary>
+              <AlertHostProvider>
+                <ErrorBoundary>
+                  <Root fontsLoaded={fontsLoaded} />
+                </ErrorBoundary>
+              </AlertHostProvider>
             </GlossaryProvider>
           </AccentProvider>
         </AppDataProvider>
@@ -161,7 +167,7 @@ const TOUR_RECAP_LABELS: Record<string, string> = {
 };
 
 function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
-  const { ready, onboardingComplete, tourActive, tourStepIndex, setTourStep, pauseTour, exitTour, startTour, coverage } = useAppData();
+  const { ready, onboardingComplete, tourActive, tourStepIndex, setTourStep, pauseTour, exitTour, startTour, coverage, unseenFinancingCount, clearedByLenderNotice, dismissClearedByLenderNotice } = useAppData();
   const insets = useSafeAreaInsets();
   const [screen, setScreen] = useState<Screen>('home');
   const [txnFilter, setTxnFilter] = useState<string | null>(null);
@@ -333,11 +339,21 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
   // card covering the very button it was pointing at). A do-step whose target sits in the
   // scrollable body (all our anchored do-steps: the credit card, Build-my-score, the what-if
   // chips) puts the card at the TOP so the bottom stays clear; the anchor scrolls itself into
-  // view below it. Everything else keeps the card at its home at the bottom  explain-step
-  // anchors are always upper-content, and the no-anchor do-steps (KYC, mint) put their
-  // action at the foot of a scroll that gains tour-time bottom padding so it clears the card.
+  // view below it. 'coach-plan' and 'whatif-explore' are the two EXPLAIN steps that need the
+  // same treatment: both anchor the same below-the-fold "next steps"/what-if result card the
+  // 'whatif' do-step also anchors, right before and right after it on the same screen (found
+  // live: the bottom card covered the bottom of that card, including its resilience line;
+  // 'whatif-explore' specifically exists so the judge can see the simulation result and try
+  // more chips, which a bottom card sitting over the result would defeat). Everything else
+  // keeps the card at its home at the bottom  explain-step anchors are otherwise upper-content,
+  // and the no-anchor do-steps (KYC, mint) put their action at the foot of a scroll that gains
+  // tour-time bottom padding so it clears the card.
   const tourCardPlacement: 'bottom' | 'top' =
-    currentTourStep && currentTourStep.kind === 'do' && currentTourStep.anchorId ? 'top' : 'bottom';
+    currentTourStep &&
+    currentTourStep.anchorId &&
+    (currentTourStep.kind === 'do' || currentTourStep.id === 'coach-plan' || currentTourStep.id === 'whatif-explore')
+      ? 'top'
+      : 'bottom';
 
   // Persistent bottom nav appears only on the four primary destinations.
   const navTab: NavTab | null =
@@ -408,12 +424,14 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
             setAddInitial('import');
             setScreen('add');
           }}
+          onAdvancedImport={() => setScreen('advancedImport')}
           onOpenLender={() => setScreen('lender')}
           onOpenAttacks={() => setScreen('attacks')}
           onResetToOnboarding={() => setScreen('home')}
         />
       )}
       {screen === 'attacks' && <AttackGalleryScreen onBack={() => setScreen('settings')} />}
+      {screen === 'advancedImport' && <AdvancedImportScreen onClose={() => setScreen('settings')} />}
       {screen === 'categories' && <CategoriesScreen onBack={() => setScreen('home')} />}
       {screen === 'transactions' && (
         <AllTransactionsScreen
@@ -455,10 +473,11 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
           onBack={() => setScreen('credit')}
           onOpenKyc={() => openKyc('loans')}
           onOpenPassport={() => setScreen('passport')}
+          onOpenCoach={() => setScreen('coach')}
         />
       )}
       {screen === 'passport' && (
-        <PassportScreen onBack={() => setScreen('credit')} onOpenKyc={() => openKyc('passport')} />
+        <PassportScreen onBack={() => setScreen('credit')} onOpenKyc={() => openKyc('passport')} onOpenLoans={() => setScreen('loans')} />
       )}
       {screen === 'coach' && (
         <PassportCoachScreen
@@ -480,7 +499,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
         />
       )}
       </View>
-      {navTab && <BottomNav active={navTab} onNavigate={goTab} />}
+      {navTab && <BottomNav active={navTab} onNavigate={goTab} badges={{ loan: unseenFinancingCount }} />}
       {tourActive && currentTourStep && !tourPaused && (
         <TourSpotlight
           onDimPress={() => {
@@ -522,7 +541,11 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
       {tourPaused && !tourActive && (
         <TourResumeChip bottomInset={navTab ? 0 : insets.bottom} progress={tourProgress} onResume={tourResume} />
       )}
+      {clearedByLenderNotice && (
+        <ClearedLoanBanner message={clearedByLenderNotice} topInset={insets.top} onDismiss={dismissClearedByLenderNotice} />
+      )}
       <GlossaryModal />
+      <AppAlertModal />
     </View>
   );
 }

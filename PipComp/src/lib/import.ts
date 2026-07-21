@@ -45,7 +45,34 @@ export function docxXmlToText(xml: string): string {
     .join('\n');
 }
 
-/** Map a source-document category label to an app category id of the same kind. */
+/**
+ * Keyword synonyms for each category id. Used to fuzzy-match free-form
+ * LLM descriptions back to app categories. Checked as whole-word substrings
+ * (case-insensitive) against the hint string.
+ */
+const CATEGORY_KEYWORDS: Record<string, string[]> = {
+  // expense
+  fuel:      ['fuel', 'petrol', 'gas', 'diesel', 'petronas', 'shell', 'caltex', 'bhp'],
+  groceries: ['groceries', 'grocery', 'supermarket', 'hypermarket', 'market', 'aeon', 'tesco', 'mydin', 'jaya', 'lotus', 'cold storage'],
+  dining:    ['dining', 'restaurant', 'food', 'meal', 'lunch', 'dinner', 'breakfast', 'mamak', 'hawker', 'bistro', 'eatery', 'cafe', 'pizza', 'burger', 'mcd', 'kfc', 'domino', 'subway'],
+  coffee:    ['coffee', 'café', 'cafe', 'teh', 'kopitiam', 'starbucks', 'zus', 'oldtown', 'brew', 'boba', 'bubble tea', 'milk tea'],
+  transport: ['transport', 'grab', 'uber', 'lyft', 'taxi', 'bus', 'train', 'lrt', 'mrt', 'ktm', 'toll', 'parking', 'transit', 'ride', 'commute'],
+  shopping:  ['shopping', 'shop', 'retail', 'store', 'fashion', 'clothing', 'apparel', 'lazada', 'shopee', 'amazon', 'zalora', 'ikea', 'h&m', 'uniqlo'],
+  health:    ['health', 'medical', 'hospital', 'clinic', 'pharmacy', 'doctor', 'dentist', 'medicine', 'guardian', 'watson', 'lab', 'optical'],
+  bills:     ['bills', 'bill', 'utility', 'utilities', 'electricity', 'water', 'internet', 'phone', 'telco', 'subscription', 'insurance', 'rent', 'maintenance', 'indah water', 'unifi', 'maxis', 'celcom', 'digi', 'tnb', 'syabas'],
+  fun:       ['fun', 'entertainment', 'movie', 'cinema', 'game', 'gaming', 'sport', 'gym', 'fitness', 'concert', 'event', 'recreation', 'hobby', 'netflix', 'spotify'],
+  other:     ['other', 'miscellaneous', 'misc', 'unknown'],
+  // income
+  income:    ['income', 'salary', 'wage', 'payroll', 'gaji', 'pay', 'employment', 'remuneration'],
+  allowance: ['allowance', 'elaun', 'stipend', 'subsidy', 'subsistence', 'travel allowance'],
+  bonus:     ['bonus', 'incentive', 'reward', 'commission', 'performance'],
+  'borrowers-return': ['return', 'repayment', 'loan repayment', 'debt repayment', 'collect debt', 'borrow'],
+  dividend:  ['dividend', 'dividen', 'div'],
+  interest:  ['interest', 'faedah', 'yield', 'coupon', 'profit distribution', 'hibah'],
+};
+
+/** Map a free-form LLM category description to an app category id of matching kind.
+ *  Tries exact label match first, then keyword scan, then returns null. */
 export function matchSourceCategory(
   hint: string | null | undefined,
   categories: Category[],
@@ -54,8 +81,19 @@ export function matchSourceCategory(
   if (!hint) return null;
   const needle = hint.trim().toLowerCase();
   if (!needle) return null;
-  const found = categories.find((c) => c.kind === type && c.label.trim().toLowerCase() === needle);
-  return found ? found.id : null;
+
+  // 1. Exact label match (fast path, original behaviour).
+  const exact = categories.find((c) => c.kind === type && c.label.trim().toLowerCase() === needle);
+  if (exact) return exact.id;
+
+  // 2. Fuzzy keyword scan: check if any keyword appears in the hint as a substring.
+  const sameKind = categories.filter((c) => c.kind === type);
+  for (const cat of sameKind) {
+    const kws = CATEGORY_KEYWORDS[cat.id] ?? [];
+    if (kws.some((kw) => needle.includes(kw))) return cat.id;
+  }
+
+  return null;
 }
 
 /**

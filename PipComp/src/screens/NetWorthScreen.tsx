@@ -1,6 +1,7 @@
 // src/screens/NetWorthScreen.tsx
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, type IconName } from '../components/Icon';
@@ -165,6 +166,7 @@ export function NetWorthScreen({ onBack }: { onBack: () => void }) {
                 name={row.account.name}
                 cls={row.clsLabel}
                 value={row.value}
+                customIcon={row.account.icon}
                 isLast={i === arr.length - 1}
                 onPress={() => setEditingId(row.account.id)}
               />
@@ -411,19 +413,30 @@ function AssetClassCard({
           );
         })}
         {manual.map(({ account, value }, i) => (
-          <ManualRowD key={account.id} icon={icon} name={account.name} sub={g.label} value={value} isLast={i === manual.length - 1} onPress={() => onTapManual(account.id)} />
+          <ManualRowD key={account.id} icon={icon} customIcon={account.icon} name={account.name} sub={g.label} value={value} isLast={i === manual.length - 1} onPress={() => onTapManual(account.id)} />
         ))}
       </View>
     </>
   );
 }
 
-function ManualRowD({ icon, name, sub, value, isLast, onPress }: { icon: IconName; name: string; sub: string; value: number; isLast: boolean; onPress: () => void }) {
+function ManualRowD({ icon, name, sub, value, isLast, onPress, customIcon }: { icon: IconName; name: string; sub: string; value: number; isLast: boolean; onPress: () => void; customIcon?: string | null }) {
   const inst = matchInstitution(name);
+  const isCustomImage = customIcon && (
+    customIcon.startsWith('data:') ||
+    customIcon.startsWith('file:') ||
+    customIcon.startsWith('content:') ||
+    customIcon.startsWith('http') ||
+    customIcon.startsWith('/')
+  );
   return (
     <Pressable onPress={onPress} style={[styles.row, !isLast && styles.rowDivider]}>
       {inst ? (
         <InstitutionBadge inst={inst} size={36} />
+      ) : isCustomImage ? (
+        <View style={[styles.rowTile, { overflow: 'hidden' }]}>
+          <Image source={{ uri: customIcon }} style={{ width: 36, height: 36 }} resizeMode="cover" />
+        </View>
       ) : (
         <View style={styles.rowTile}>
           <Icon name={icon} size={16} color={colors.accent} />
@@ -492,12 +505,23 @@ function HoldingRowD({
   );
 }
 
-function LiabilityRowD({ name, cls, value, isLast, onPress }: { name: string; cls: string; value: number; isLast: boolean; onPress: () => void }) {
+function LiabilityRowD({ name, cls, value, isLast, onPress, customIcon }: { name: string; cls: string; value: number; isLast: boolean; onPress: () => void; customIcon?: string | null }) {
   const inst = matchInstitution(name);
+  const isCustomImage = customIcon && (
+    customIcon.startsWith('data:') ||
+    customIcon.startsWith('file:') ||
+    customIcon.startsWith('content:') ||
+    customIcon.startsWith('http') ||
+    customIcon.startsWith('/')
+  );
   return (
     <Pressable onPress={onPress} style={[styles.row, !isLast && styles.rowDivider]}>
       {inst ? (
         <InstitutionBadge inst={inst} size={36} />
+      ) : isCustomImage ? (
+        <View style={[styles.rowTile, { overflow: 'hidden' }]}>
+          <Image source={{ uri: customIcon }} style={{ width: 36, height: 36 }} resizeMode="cover" />
+        </View>
       ) : (
         <View style={[styles.rowTile, { backgroundColor: '#fff0ef' }]}>
           <Icon name="scale" size={16} color={colors.red} />
@@ -572,10 +596,12 @@ function AddAccountModal({ visible, preset, onClose }: { visible: boolean; prese
   const [qtyText, setQtyText] = useState('');
   const [costText, setCostText] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [customIcon, setCustomIcon] = useState<string | null>(null);
 
   const reset = () => {
     setKind('asset'); setCls('cash'); setName(''); setValueText('');
     setHoldingMode(false); setCoin(null); setQtyText(''); setCostText('');
+    setCustomIcon(null);
   };
   const close = () => { reset(); onClose(); };
 
@@ -584,7 +610,7 @@ function AddAccountModal({ visible, preset, onClose }: { visible: boolean; prese
     if (!visible) return;
     if (preset) {
       setKind('asset'); setCls('investments'); setHoldingMode(true);
-      setCoin(preset); setName(''); setValueText(''); setQtyText(''); setCostText('');
+      setCoin(preset); setName(''); setValueText(''); setQtyText(''); setCostText(''); setCustomIcon(null);
     } else {
       reset();
     }
@@ -611,15 +637,30 @@ function AddAccountModal({ visible, preset, onClose }: { visible: boolean; prese
     setSearchOpen(false);
   };
 
+  const pickCustomIcon = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return;
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      base64: true,
+      quality: 0.5,
+    });
+    if (!res.canceled && res.assets?.length) {
+      const a = res.assets[0];
+      const dataUri = a.base64 ? `data:${a.mimeType ?? 'image/jpeg'};base64,${a.base64}` : a.uri;
+      setCustomIcon(dataUri);
+    }
+  };
+
   const save = async () => {
     if (!canSave) return;
     if (isHoldingType && coin) {
       const sub = subFromType(coin.type);
       const ticker = sub === 'commodity' ? 'g' : coin.ticker; // gold/silver measured in grams
       const cost = costText.trim() ? Math.round((parseFloat(costText.replace(/[^0-9.]/g, '')) || 0) * 100) / 100 : null;
-      await addHolding(name.trim() || coin.name, sub, coin.id, ticker, Math.round(quantity * 1e8) / 1e8, cost);
+      await addHolding(name.trim() || coin.name, sub, coin.id, ticker, Math.round(quantity * 1e8) / 1e8, cost, customIcon);
     } else {
-      await addAccount(name.trim(), kind, cls, Math.round(value * 100) / 100, todayISO());
+      await addAccount(name.trim(), kind, cls, Math.round(value * 100) / 100, todayISO(), customIcon);
     }
     close();
   };
@@ -716,6 +757,46 @@ function AddAccountModal({ visible, preset, onClose }: { visible: boolean; prese
               </View>
             </>
           )}
+
+          {/* Custom icon picker */}
+          <Text style={[styles.fieldLabel, { marginTop: 18 }]}>Custom Icon (Optional)</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6 }}>
+            <Pressable
+              onPress={pickCustomIcon}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                backgroundColor: colors.surface2,
+                borderWidth: 1.5,
+                borderColor: customIcon ? colors.accent : colors.line,
+                borderRadius: radius.sm,
+                paddingVertical: 10,
+                paddingHorizontal: 16,
+              }}
+            >
+              {customIcon ? (
+                <Image source={{ uri: customIcon }} style={{ width: 20, height: 20, borderRadius: 4 }} />
+              ) : (
+                <Icon name="image" size={18} color={colors.accent} />
+              )}
+              <Text style={{ fontSize: 13, fontFamily: uiFont(700), color: colors.accent }}>
+                {customIcon ? 'Change icon' : 'Choose from gallery'}
+              </Text>
+            </Pressable>
+            {customIcon && (
+              <Pressable
+                onPress={() => setCustomIcon(null)}
+                style={{
+                  padding: 8,
+                  borderRadius: 8,
+                  backgroundColor: '#fff0ef',
+                }}
+              >
+                <Icon name="trash" size={16} color={colors.red} />
+              </Pressable>
+            )}
+          </View>
 
           <View style={{ marginTop: 22 }}>
             <PrimaryButton onPress={save} disabled={!canSave} height={52}>
@@ -834,6 +915,7 @@ function AccountSheet({ account, onClose }: { account: Account | null; onClose: 
   const [valueText, setValueText] = useState('');
   const [qtyText, setQtyText] = useState('');
   const [costText, setCostText] = useState('');
+  const [customIcon, setCustomIcon] = useState<string | null>(null);
 
   const holding = account ? isHolding(account) : false;
 
@@ -845,6 +927,7 @@ function AccountSheet({ account, onClose }: { account: Account | null; onClose: 
       setValueText(String(accountValues[account.id] ?? 0));
       setQtyText(account.quantity != null ? String(account.quantity) : '');
       setCostText(account.cost != null ? String(account.cost) : '');
+      setCustomIcon(account.icon ?? null);
     }
   }, [openId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -853,12 +936,29 @@ function AccountSheet({ account, onClose }: { account: Account | null; onClose: 
     [account, balanceEntries]
   );
 
+  const pickCustomIcon = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return;
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      base64: true,
+      quality: 0.5,
+    });
+    if (!res.canceled && res.assets?.length) {
+      const a = res.assets[0];
+      const dataUri = a.base64 ? `data:${a.mimeType ?? 'image/jpeg'};base64,${a.base64}` : a.uri;
+      setCustomIcon(dataUri);
+    }
+  };
+
   if (!account) return <Modal visible={false} transparent />;
 
   const save = async () => {
     const newName = name.trim() || account.name;
     if (holding) {
-      if (newName !== account.name) await updateAccount(account.id, { name: newName, cls: account.cls });
+      if (newName !== account.name || customIcon !== account.icon) {
+        await updateAccount(account.id, { name: newName, cls: account.cls, icon: customIcon });
+      }
       const q = parseFloat(qtyText.replace(/[^0-9.]/g, ''));
       if (Number.isFinite(q) && q >= 0 && q !== account.quantity) {
         await updateHoldingQuantity(account.id, Math.round(q * 1e8) / 1e8);
@@ -868,8 +968,8 @@ function AccountSheet({ account, onClose }: { account: Account | null; onClose: 
       onClose();
       return;
     }
-    if (newName !== account.name || cls !== account.cls) {
-      await updateAccount(account.id, { name: newName, cls });
+    if (newName !== account.name || cls !== account.cls || customIcon !== account.icon) {
+      await updateAccount(account.id, { name: newName, cls, icon: customIcon });
     }
     const v = parseFloat(valueText.replace(/[^0-9.]/g, ''));
     const value = Number.isFinite(v) && v >= 0 ? Math.round(v * 100) / 100 : null;
@@ -981,6 +1081,46 @@ function AccountSheet({ account, onClose }: { account: Account | null; onClose: 
               </Card>
             </>
           )}
+
+          {/* Custom icon picker */}
+          <Text style={[styles.fieldLabel, { marginTop: 18 }]}>Custom Icon (Optional)</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6 }}>
+            <Pressable
+              onPress={pickCustomIcon}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                backgroundColor: colors.surface2,
+                borderWidth: 1.5,
+                borderColor: customIcon ? colors.accent : colors.line,
+                borderRadius: radius.sm,
+                paddingVertical: 10,
+                paddingHorizontal: 16,
+              }}
+            >
+              {customIcon ? (
+                <Image source={{ uri: customIcon }} style={{ width: 20, height: 20, borderRadius: 4 }} />
+              ) : (
+                <Icon name="image" size={18} color={colors.accent} />
+              )}
+              <Text style={{ fontSize: 13, fontFamily: uiFont(700), color: colors.accent }}>
+                {customIcon ? 'Change icon' : 'Choose from gallery'}
+              </Text>
+            </Pressable>
+            {customIcon && (
+              <Pressable
+                onPress={() => setCustomIcon(null)}
+                style={{
+                  padding: 8,
+                  borderRadius: 8,
+                  backgroundColor: '#fff0ef',
+                }}
+              >
+                <Icon name="trash" size={16} color={colors.red} />
+              </Pressable>
+            )}
+          </View>
 
           <View style={{ marginTop: 20 }}>
             <PrimaryButton onPress={save} height={52}>

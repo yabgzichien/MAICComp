@@ -6,8 +6,7 @@ import { Amount, B, BtnLabel, BubbleText, Card, Eyebrow, PipSays, PrimaryButton,
 import { fmt } from '../lib/format';
 import { suggestForMerchant } from '../lib/recommend';
 import type { ExtractedTxn } from '../lib/types';
-import { getProvider, llmErrorMessage } from '../llm';
-import { configFor, loadSettings } from '../settings/settingsStore';
+import { getLLM, llmErrorMessage } from '../llm';
 import { useAppData } from '../state/store';
 import { colors, uiFont } from '../theme';
 import type { PickedImage } from './AttachScreen';
@@ -56,11 +55,8 @@ export function ExtractScreen({
     let alive = true;
     (async () => {
       try {
-        const c = configFor(await loadSettings(), 'general');
-        const provider = getProvider(c.provider);
-        const rows = await provider.extract({
-          apiKey: c.apiKey,
-          model: c.model,
+        const llm = await getLLM();
+        const rows = await llm.extract({
           imageBase64: image.base64,
           mimeType: image.mime,
         });

@@ -21,4 +21,5 @@ export const PROVIDER_OPTIONS = Object.values(PROVIDERS).map((p) => ({
   defaultModel: p.defaultModel,
 }));
 
+export { FallbackProvider, getLLM, type Capability } from './fallback';
 export * from './types';

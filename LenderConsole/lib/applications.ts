@@ -9,6 +9,7 @@
 
 import type { Decision } from './loans';
 import type { EarlyWarningFlag } from './earlyWarning';
+import type { ServicingDefault } from './mergeServicing';
 
 export type ApplicationStatus = 'new' | 'referred' | 'approved' | 'declined';
 
@@ -31,6 +32,17 @@ export interface CheckIn {
   at: string;
   passportCode: string;
   flags: EarlyWarningFlag[];
+}
+
+/** One repayment event on a disbursed loan (portfolio performance): the console's own
+ *  ledger of what was actually collected, independent of the passport's self-reported
+ *  repaymentRecord. `amount` is what was actually collected (0 on a missed instalment). */
+export type RepaymentOutcome = 'on-time' | 'late' | 'missed';
+export interface RepaymentEvent {
+  at: string;
+  instalmentSeq: number;
+  amount: number;
+  outcome: RepaymentOutcome;
 }
 
 export interface ApplicationRecord {
@@ -61,6 +73,14 @@ export interface ApplicationRecord {
   /** Post-disbursement check-ins (Brief S), oldest first. Absent/empty on applications that
    *  predate monitoring or have never been re-verified. */
   checkIns?: CheckIn[];
+  /** Repayment ledger (portfolio performance), oldest first. Absent/empty on applications
+   *  that predate the feature or have not yet had an instalment come due. */
+  repayments?: RepaymentEvent[];
+  /** Loan-level terminal default flag (Bidirectional Servicing Sync, 2026-07-18 design),
+   *  distinct from a missed instalment. A monotonic latch  once true, never unset locally
+   *  (curing a default is roadmap, not this pass). `source` records which side first raised
+   *  it: this console's officer, or the borrower app (synced in via mergeServicing). */
+  defaulted?: ServicingDefault;
   source?: 'direct' | 'officer';
 }
 
@@ -232,6 +252,50 @@ export function recordCheckIn(
       ? { ...a, checkIns: [...(a.checkIns ?? []), checkIn], audit: [...a.audit, { at, action: 'check-in', detail }] }
       : a,
   );
+}
+
+/**
+ * Record one repayment event (portfolio performance): appends it to the application's
+ * repayment ledger, audit-trailed. Never changes `status` or `resolution`  a repayment
+ * informs performance reporting, it never re-decides the loan.
+ */
+export function recordRepayment(
+  apps: ApplicationRecord[],
+  id: string,
+  event: { instalmentSeq: number; amount: number; outcome: RepaymentOutcome },
+  now: Date = new Date(),
+): ApplicationRecord[] {
+  const at = now.toISOString();
+  const repayment: RepaymentEvent = { at, ...event };
+  const detail = `instalment ${event.instalmentSeq}: ${event.outcome}${event.amount > 0 ? ` (RM${Math.round(event.amount).toLocaleString('en-MY')})` : ''}`;
+  return apps.map((a) =>
+    a.id === id
+      ? { ...a, repayments: [...(a.repayments ?? []), repayment], audit: [...a.audit, { at, action: 'repayment', detail }] }
+      : a,
+  );
+}
+
+/**
+ * Mark a loan defaulted (Bidirectional Servicing Sync, 2026-07-18 design): a loan-level
+ * terminal flag, audit-trailed. A monotonic latch  a loan already defaulted is left
+ * untouched (no new audit line, no timestamp/source overwrite) rather than re-raised, so the
+ * `at`/`source` always reflect who first raised it, matching mergeServicing's own latch rule.
+ * Never changes `status`/`resolution`  a default informs performance reporting and
+ * servicing, it never re-decides the loan. `source` defaults to 'lender' (an officer's own
+ * action); the sync path passes 'borrower' when adopting a server-reported default.
+ */
+export function markDefault(
+  apps: ApplicationRecord[],
+  id: string,
+  source: 'lender' | 'borrower' = 'lender',
+  now: Date = new Date(),
+): ApplicationRecord[] {
+  const at = now.toISOString();
+  return apps.map((a) => {
+    if (a.id !== id || a.defaulted?.value) return a;
+    const detail = source === 'lender' ? 'Marked defaulted by this console. Loan written off.' : 'Reported defaulted by the borrower app. Loan written off.';
+    return { ...a, defaulted: { value: true, at, source }, audit: [...a.audit, { at, action: 'defaulted', detail }] };
+  });
 }
 
 /** Record that an adverse-action letter was generated for this application (Brief J stretch),

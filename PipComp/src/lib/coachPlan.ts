@@ -34,7 +34,7 @@ export interface CoachSim {
   maxAmountTo: number;
 }
 
-export type CoachLever = 'coverage' | 'surplus' | 'track';
+export type CoachLever = 'coverage' | 'surplus' | 'track' | 'stress';
 
 export interface CoachAction {
   lever: CoachLever;
@@ -232,6 +232,54 @@ export function survivesDipPct(points: StressPoint[]): number {
     if (p.decision !== 'decline' && p.maxAmount > 0) best = Math.max(best, p.dipPct);
   }
   return best;
+}
+
+/** Income-dip magnitudes offered as protective "what if my income drops?" chips. Two points give
+ *  a meaningful spread without crowding the row; the −20% mark is the CCA-2025 resilience threshold. */
+const STRESS_WHATIF_DIPS = [0.2, 0.3];
+
+/**
+ * Simulate a single downward income shock of `dipPct` (0–1): income and surplus both fall by the
+ * same ringgit amount (spending unchanged), then the real decision engine re-runs. Coverage and
+ * confidence are held  this is purely an affordability stress. A protective what-if: it can only
+ * hold or weaken the offer, never improve it.
+ */
+export function simulateStress(input: CoachPlanInput, dipPct: number): CoachSim {
+  const cut = input.profile.avgIncome * dipPct;
+  const to = evaluate(input, {
+    coverageRatio: input.coverage.ratio,
+    coverageDays: input.coverage.daysCovered,
+    avgIncome: input.profile.avgIncome * (1 - dipPct),
+    avgSurplus: input.profile.avgSurplus - cut,
+  });
+  return simOf(baseline(input), to);
+}
+
+/**
+ * A protective what-if chip: how the current offer holds up if income dips. Never ranked in "your
+ * next steps" (a downturn is not an improvement)  it lives only in the explorable chips, carrying an
+ * honest note about what the borrower would still qualify for under the shock.
+ */
+function stressAction(input: CoachPlanInput, dipPct: number): CoachAction {
+  const sim = simulateStress(input, dipPct);
+  const pctDrop = Math.round(dipPct * 100);
+  let note: string;
+  if (sim.decisionTo === 'decline' || sim.maxAmountTo <= 0) {
+    note = `A ${pctDrop}% income drop would push you below an approvable offer for now.`;
+  } else if (sim.maxAmountTo < sim.maxAmountFrom) {
+    note = `Your offer holds, easing to ${rm(sim.maxAmountTo)} at ${pctDrop}% lower income.`;
+  } else {
+    note = `Your offer holds steady even with income ${pctDrop}% lower.`;
+  }
+  return {
+    lever: 'stress',
+    label: `If your income dips ${pctDrop}%`,
+    magnitude: `−${pctDrop}% income`,
+    sim,
+    impact: impactOf(sim),
+    changed: false, // a downside probe is never framed as an improvement
+    note,
+  };
 }
 
 // ── C: binding-constraint diagnosis ───────────────────────────────────────────
@@ -469,6 +517,10 @@ export function buildCoachPlan(input: CoachPlanInput): CoachPlan {
   const track = trackRecordAction(input);
   const bestSurplus = surpluses.reduce((best, s) => (s.impact > best.impact ? s : best));
 
+  // Protective income-dip chips  only when there is a real offer to stress-test. On a declined
+  // baseline (RM0) there is nothing to protect, so they'd be noise.
+  const stresses = b.loan.maxAmount > 0 ? STRESS_WHATIF_DIPS.map((d) => stressAction(input, d)) : [];
+
   // The ranked plan surfaces only levers that move the *offer* (decision or amount)  the nearest
   // coverage milestone, the best surplus step, a repayment record  most-valuable first. Levers that
   // only nudge the score (e.g. an early repayment record while coverage still gates the tier) stay in
@@ -489,6 +541,6 @@ export function buildCoachPlan(input: CoachPlanInput): CoachPlan {
     },
     diagnosis: diagnoseConstraint(input),
     actions,
-    whatIfs: [...coverageActions, ...surpluses, ...(track ? [track] : [])],
+    whatIfs: [...coverageActions, ...surpluses, ...(track ? [track] : []), ...stresses],
   };
 }

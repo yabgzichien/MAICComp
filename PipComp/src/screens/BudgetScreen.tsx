@@ -11,9 +11,8 @@ import { allocatedTotal, averageMonthlySpend, budgetHash, categoryStatus, curren
 import { monthName } from '../lib/dates';
 import { fmt } from '../lib/format';
 import type { Category } from '../lib/types';
-import { getProvider, llmErrorMessage } from '../llm';
+import { getLLM, llmErrorMessage } from '../llm';
 import { buildBudgetPrompt, COACH_SYSTEM_PROMPT } from '../llm/budgetPrompt';
-import { configFor, loadSettings } from '../settings/settingsStore';
 import { useAppData } from '../state/store';
 import { colors, uiFont } from '../theme';
 import { BudgetWizard } from './BudgetWizard';
@@ -61,16 +60,14 @@ export function BudgetScreen({ onBack, onOpenRecap = () => {} }: { onBack: () =>
     }
     setAdviceBusy(true);
     try {
-      const c = configFor(await loadSettings(), 'general');
+      const llm = await getLLM();
       const avg = averageMonthlySpend(transactions, new Date(), 3);
       const lines = budgetedIds.map((id) => ({
         label: (catById[id] ?? fallback).label,
         allocated: allocations[id],
         recentAverage: avg[id] ?? 0,
       }));
-      const text = await getProvider(c.provider).coach({
-        apiKey: c.apiKey,
-        model: c.model,
+      const text = await llm.coach({
         system: COACH_SYSTEM_PROMPT,
         prompt: buildBudgetPrompt(expectedIncome, left, lines),
       });

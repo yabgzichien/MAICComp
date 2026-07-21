@@ -23,7 +23,7 @@ function mockFetchOnce(opts: {
 
 const input = {
   apiKey: 'gsk_test',
-  model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+  model: 'qwen/qwen3.6-27b',
   imageBase64: 'AAAA',
   mimeType: 'image/png',
 };

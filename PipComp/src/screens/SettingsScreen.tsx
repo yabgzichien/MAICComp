@@ -15,7 +15,7 @@ type TestState = { status: 'idle' | 'busy' | 'ok' | 'fail'; message?: string };
 
 
 
-export function SettingsScreen({ onBack, onMigrate, onOpenLender = () => {}, onOpenAttacks = () => {}, onResetToOnboarding }: { onBack: () => void; onMigrate?: () => void; onOpenLender?: () => void; onOpenAttacks?: () => void; onResetToOnboarding?: () => void }) {
+export function SettingsScreen({ onBack, onMigrate, onAdvancedImport, onOpenLender = () => {}, onOpenAttacks = () => {}, onResetToOnboarding }: { onBack: () => void; onMigrate?: () => void; onAdvancedImport?: () => void; onOpenLender?: () => void; onOpenAttacks?: () => void; onResetToOnboarding?: () => void }) {
   const insets = useSafeAreaInsets();
   const { memory, refreshAll, expectedIncome, allocations, hasBudget, resetBudget, resetAllData, resetToOnboarding, loadDemoData, startTour } = useAppData();
   const [settings, setSettings] = useState<LLMSettings | null>(null);
@@ -117,8 +117,8 @@ export function SettingsScreen({ onBack, onMigrate, onOpenLender = () => {}, onO
               settings={settings}
               role="general"
               icon="sparkles"
-              name="Groq · general"
-              sub="Reads screenshots and writes budget tips."
+              name="Groq · primary"
+              sub="Primary for every task: screenshots, documents, and tips."
               model={settings.groqModel}
               apiKey={settings.groqKey}
             />
@@ -129,8 +129,8 @@ export function SettingsScreen({ onBack, onMigrate, onOpenLender = () => {}, onO
               settings={settings}
               role="docs"
               icon="receipt"
-              name="Gemini · documents"
-              sub="Extracts transactions from imported PDFs, images, and files."
+              name="Gemini · fallback"
+              sub="Used only if Groq fails — and for PDFs Groq can't read."
               model={settings.geminiModel}
               apiKey={settings.geminiKey}
             />
@@ -181,6 +181,22 @@ export function SettingsScreen({ onBack, onMigrate, onOpenLender = () => {}, onO
             <View style={{ flex: 1 }}>
               <Text style={styles.providerName}>Import / migrate data</Text>
               <Text style={styles.providerSub}>Read past transactions from a PDF, image, CSV, Excel, or Word file.</Text>
+            </View>
+            <Icon name="chevronRight" size={18} color={colors.ink3} />
+          </Pressable>
+        )}
+
+        {onAdvancedImport && (
+          <Pressable
+            onPress={onAdvancedImport}
+            style={({ pressed }) => [styles.providerRow, styles.migrateRow, { marginTop: 12, opacity: pressed ? 0.9 : 1 }]}
+          >
+            <View style={styles.providerBadge}>
+              <Icon name="sparkles" size={16} color={colors.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.providerName}>Advanced import</Text>
+              <Text style={styles.providerSub}>Copy a prompt, use any AI (Claude, ChatGPT, Gemini…) to extract your statements, then paste the JSON here.</Text>
             </View>
             <Icon name="chevronRight" size={18} color={colors.ink3} />
           </Pressable>

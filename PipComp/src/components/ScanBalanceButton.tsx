@@ -2,13 +2,12 @@
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text } from 'react-native';
-import { getProvider, llmErrorMessage } from '../llm';
+import { getLLM, llmErrorMessage } from '../llm';
 import { notify } from '../lib/platformAlert';
-import { configFor, loadSettings } from '../settings/settingsStore';
 import { colors, uiFont } from '../theme';
 import { Icon } from './Icon';
 
-/** Snap or pick a screenshot of a balance; Gemini reads the amount and reports it back. */
+/** Snap or pick a screenshot of a balance; the vision model reads the amount and reports it back. */
 export function ScanBalanceButton({ onResult }: { onResult: (amount: number) => void }) {
   const [busy, setBusy] = useState(false);
 
@@ -18,15 +17,12 @@ export function ScanBalanceButton({ onResult }: { onResult: (amount: number) => 
     if (!a.base64) { notify('Hmm', "That image couldn't be read."); return; }
     setBusy(true);
     try {
-      const c = configFor(await loadSettings(), 'docs');
-      const provider = getProvider(c.provider);
-      if (!c.apiKey || !provider.extractBalance) {
-        notify('Add your Gemini key', 'Scanning needs your Google Gemini key in Settings → Document import.');
+      const llm = await getLLM();
+      if (!llm.can('extractBalance')) {
+        notify('Scanning unavailable', "Balance scanning isn't available right now. You can type the amount in instead.");
         return;
       }
-      const amount = await provider.extractBalance({
-        apiKey: c.apiKey,
-        model: c.model,
+      const amount = await llm.extractBalance({
         parts: [{ kind: 'binary', base64: a.base64, mimeType: a.mimeType ?? 'image/jpeg' }],
       });
       if (amount == null) notify('Hmm', "I couldn't read a clear amount. Try a clearer screenshot or type it in.");

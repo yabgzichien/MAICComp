@@ -19,6 +19,7 @@ import { computeStreak } from '../lib/streak';
 import { BORROWER_TOUR_STEPS, clampTourStep } from '../lib/tourSteps';
 import type { Category } from '../lib/types';
 import { useAppData } from '../state/store';
+import { useLenderSyncPoll } from '../state/useLenderSyncPoll';
 import { useCreditProfile } from '../state/useCreditProfile';
 import { useNow } from '../state/useNow';
 import { colors, numFont, platformShadow, shadowCard, uiFont } from '../theme';
@@ -61,6 +62,13 @@ export function DashboardScreen({
   const { transactions, catById, allocations, hasBudget, coverage, tourActive, tourStepIndex, startTour } = useAppData();
   const { score, dataConfidence } = useCreditProfile();
   const activeTourAnchor = tourActive ? BORROWER_TOUR_STEPS[clampTourStep(tourStepIndex, BORROWER_TOUR_STEPS.length)].anchorId ?? null : null;
+
+  // Keep in sync with every lender console while Home is open (approval-notify, 2026-07-19;
+  // kept live + broadened to reset-sync, 2026-07-20): auto-books a newly-approved referred
+  // application (bumping the unseen badge on the Loan tab) and clears any loan a lender's
+  // console reset has orphaned  both without the borrower needing to navigate away and back.
+  // Best-effort; an unreachable console degrades silently.
+  useLenderSyncPoll(score.score);
 
   const monthTxns = useMemo(() => {
     const cur = currentMonthKey();

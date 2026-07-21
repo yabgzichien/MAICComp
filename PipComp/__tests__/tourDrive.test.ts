@@ -56,13 +56,17 @@ describe('classifyScreenChange', () => {
 describe('classifySignal', () => {
   it('advances a signal-gated do step on its signal', () => {
     expect(classifySignal(byId('whatif'), 0, 'coach-chip-tapped')).toBe('advance');
-    expect(classifySignal(byId('kyc-verify'), 0, 'kyc-verified')).toBe('advance');
+    expect(classifySignal(byId('kyc-verify'), 0, 'kyc-occupation-saved')).toBe('advance');
   });
 
   it('ignores a non-matching signal', () => {
     expect(classifySignal(byId('whatif'), 0, 'scan-saved')).toBe('ignore');
     expect(classifySignal(byId('welcome'), 0, 'scan-saved')).toBe('ignore');
     expect(classifySignal(null, 0, 'scan-saved')).toBe('ignore');
+  });
+
+  it('the kyc step waits for work & income too  a bare identity verification does not advance it', () => {
+    expect(classifySignal(byId('kyc-verify'), 0, 'kyc-verified')).toBe('ignore');
   });
 
   it('steps the mission phase on the matching phase signal', () => {

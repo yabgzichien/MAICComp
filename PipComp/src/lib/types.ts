@@ -68,6 +68,7 @@ export interface Account {
   ticker: string | null; // display ticker, e.g. 'BTC'
   quantity: number | null; // units held
   cost: number | null; // total invested amount in MYR (cost basis), for profit
+  icon?: string | null; // custom gallery image URI or null
 }
 
 /** A cached market price in MYR for a holding symbol. */

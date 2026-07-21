@@ -8,10 +8,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FadeIn } from '../components/Motion';
 import { Icon } from '../components/Icon';
 import { Card, TopBar } from '../components/ui';
-import { getProvider } from '../llm';
+import { getLLM } from '../llm';
 import { ATTACK_SYSTEM_PROMPT, attackFallback, buildAttackPrompt } from '../llm/attackPrompt';
 import { runGallery, type AttackResult, type AttackVerdict } from '../lib/attackGallery';
-import { configFor, loadSettings } from '../settings/settingsStore';
 import { colors, numFont, uiFont } from '../theme';
 
 const NARRATE_TIMEOUT_MS = 12_000;
@@ -38,11 +37,9 @@ function AttackCard({ result }: { result: AttackResult }) {
   const narrate = async () => {
     setBusy(true);
     try {
-      const c = configFor(await loadSettings(), 'general');
+      const llm = await getLLM();
       const text = await withTimeout(
-        getProvider(c.provider).coach({
-          apiKey: c.apiKey,
-          model: c.model,
+        llm.coach({
           system: ATTACK_SYSTEM_PROMPT,
           prompt: buildAttackPrompt(result),
         }),

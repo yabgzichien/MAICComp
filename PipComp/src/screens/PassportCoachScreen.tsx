@@ -11,12 +11,11 @@ import { Icon } from '../components/Icon';
 import { TourAnchor } from '../components/TourAnchor';
 import { emitTourSignal } from '../lib/tourSignals';
 import { Card, TopBar } from '../components/ui';
-import { getProvider } from '../llm';
+import { getLLM } from '../llm';
 import { buildCoachPrompt, COACH_SYSTEM_PROMPT, coachPlanFallback } from '../llm/coachPrompt';
 import { baseline, buildCoachPlan, type CoachAction, type CoachLever, type CoachSim } from '../lib/coachPlan';
 import { fetchLenderDirectory, type LenderDirectory } from '../lib/lenderDirectory';
 import { BORROWER_TOUR_STEPS, clampTourStep } from '../lib/tourSteps';
-import { configFor, loadSettings } from '../settings/settingsStore';
 import { useAppData } from '../state/store';
 import { useCreditProfile } from '../state/useCreditProfile';
 import { colors, numFont, uiFont } from '../theme';
@@ -54,6 +53,9 @@ const START_LABEL: Record<CoachLever, string> = {
   coverage: 'Scan more history',
   surplus: 'Set a budget',
   track: 'See loan offers',
+  // Stress probes never appear as a ranked "next step" (they aren't an improvement), so this
+  // deep-link label is never rendered  present only to satisfy the exhaustive lever map.
+  stress: 'See loan offers',
 };
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
@@ -176,11 +178,9 @@ export function PassportCoachScreen({
   const runCoach = async () => {
     setBusy(true);
     try {
-      const c = configFor(await loadSettings(), 'general');
+      const llm = await getLLM();
       const text = await withTimeout(
-        getProvider(c.provider).coach({
-          apiKey: c.apiKey,
-          model: c.model,
+        llm.coach({
           system: COACH_SYSTEM_PROMPT,
           prompt: buildCoachPrompt(plan),
         }),
@@ -332,24 +332,32 @@ export function PassportCoachScreen({
         {plan.whatIfs.length > 0 && (
           <>
             <Text style={styles.sectionLabel}>TRY A WHAT-IF</Text>
-            <TourAnchor id="whatif-chips" activeId={activeTourAnchor}>
-              <View style={styles.chipRow}>
-                {chips.map(({ w, i }) => (
-                  <Pressable
-                    key={`${w.lever}-${w.magnitude}`}
-                    onPress={() => {
-                      setSelected(selected === i ? null : i);
-                      emitTourSignal('coach-chip-tapped');
-                    }}
-                    style={[styles.chip, selected === i && styles.chipActive]}
-                  >
-                    <Text style={[styles.chipText, selected === i && styles.chipTextActive]}>{w.magnitude}</Text>
-                  </Pressable>
-                ))}
-              </View>
+            {/* Two nested anchors, one per tour step. 'whatif-chips' frames just the chip row
+                while the step is still asking for a tap; once a chip has been tapped the tour
+                moves to 'whatif-result', which spans the chips AND the simulation card so the
+                spotlight lands on the thing the step is talking about ("see it land"). The
+                chips stay inside that cutout deliberately  they must remain tappable, since
+                tapping the dimmed area pauses the tour. */}
+            <TourAnchor id="whatif-result" activeId={activeTourAnchor} remeasureKey={selected}>
+              <TourAnchor id="whatif-chips" activeId={activeTourAnchor}>
+                <View style={styles.chipRow}>
+                  {chips.map(({ w, i }) => (
+                    <Pressable
+                      key={`${w.lever}-${w.magnitude}`}
+                      onPress={() => {
+                        setSelected(selected === i ? null : i);
+                        emitTourSignal('coach-chip-tapped');
+                      }}
+                      style={[styles.chip, selected === i && styles.chipActive]}
+                    >
+                      <Text style={[styles.chipText, selected === i && styles.chipTextActive]}>{w.magnitude}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </TourAnchor>
+              {surplusAllFlat && <Text style={styles.blockedNote}>{surplusWhatIfs[0].note}</Text>}
+              {activeWhatIf && <SimCard action={activeWhatIf} tone="whatif" />}
             </TourAnchor>
-            {surplusAllFlat && <Text style={styles.blockedNote}>{surplusWhatIfs[0].note}</Text>}
-            {activeWhatIf && <SimCard action={activeWhatIf} tone="whatif" />}
           </>
         )}
       </ScrollView>

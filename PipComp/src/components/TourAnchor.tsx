@@ -11,7 +11,20 @@ import { clearTourAnchor, reportTourAnchor } from '../lib/tourAnchorRect';
 
 const SETTLE_RETRIES_MS = [50, 250, 600, 1100];
 
-export function TourAnchor({ id, activeId, children }: { id: string; activeId: string | null; children: React.ReactNode }) {
+/** `remeasureKey`: pass any value that changes when the wrapped content resizes (e.g. the
+ *  selected what-if, which swaps in a taller/shorter result card). The cutout is re-measured
+ *  whenever it changes, so the spotlight can't keep framing the old layout. */
+export function TourAnchor({
+  id,
+  activeId,
+  children,
+  remeasureKey,
+}: {
+  id: string;
+  activeId: string | null;
+  children: React.ReactNode;
+  remeasureKey?: string | number | null;
+}) {
   const ref = useRef<View>(null);
   const active = id === activeId;
 
@@ -39,7 +52,7 @@ export function TourAnchor({ id, activeId, children }: { id: string; activeId: s
       for (const t of timers) clearTimeout(t);
       clearTourAnchor(id);
     };
-  }, [active, id]);
+  }, [active, id, remeasureKey]);
 
   if (!active) return <>{children}</>;
   return (

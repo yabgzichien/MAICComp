@@ -161,8 +161,17 @@ const FACTORS: FactorDef[] = [
     weight: 0.1,
     compute: (p) => {
       const tenure = clamp(p.months / 6, 0, 1) * 100;
+      // With repayments, the factor blends three signals: tenure (0.35), the on-time RATIO
+      // (0.50 — a missed installment counts in the total but not the on-time count, so it drags
+      // this down), and repayment VOLUME (0.15, ramping over the first 6 on-time payments) — so
+      // each on-time payment visibly moves the score, not just the first. Weights sum to 1, and
+      // every term maxes at 100, so the subScore stays within 0..100. The zero-repayment branch
+      // is unchanged (tenure only) — a borrower who has never taken a loan is not penalised.
+      const volume = clamp(p.repaymentOnTime / 6, 0, 1) * 100;
       const subScore =
-        p.repaymentTotal > 0 ? tenure * 0.4 + (p.repaymentOnTime / p.repaymentTotal) * 100 * 0.6 : tenure;
+        p.repaymentTotal > 0
+          ? tenure * 0.35 + (p.repaymentOnTime / p.repaymentTotal) * 100 * 0.5 + volume * 0.15
+          : tenure;
       return {
         subScore,
         evidence:
