@@ -57,7 +57,7 @@ import {
   type RepaymentSummary,
 } from '../db/loansRepo';
 import { DEFAULT_PRODUCTS, decideLoan, type LoanDecision, type LoanProduct } from '../lib/loans';
-import { computeRepaymentStanding } from '../lib/repaymentStanding';
+import { computeRepaymentStanding, overdueRowsFor } from '../lib/repaymentStanding';
 import { buildBookedLoan, outstandingAfter } from '../lib/acceptOffer';
 import type { DirectApplyDecision } from '../lib/directApply';
 import { fetchLenderDirectory, LENDER_API_BASE } from '../lib/lenderDirectory';
@@ -213,6 +213,10 @@ interface AppData {
    *  loan liability. Distinct from `reportDefault` (whole-loan). */
   missRepayment: (repaymentId: string) => Promise<void>;
   reportDefault: (applicationId: string) => Promise<void>;
+  /** Pay off every currently-overdue instalment on one loan in one step (2026-07-21 design):
+   *  restores standing to clean immediately, though the cure stays visible as a scar for 12
+   *  months. Distinct from `recordRepayment` (one row)  this settles every overdue row at once. */
+  clearArrears: (applicationId: string) => Promise<void>;
   /** Book an approved lender offer locally: create an application + schedule (using the
    *  lender's decided installment) attributed to the lender. Returns null if the offer
    *  isn't bookable (not an approval, non-positive amount, or no matching product). */
@@ -790,6 +794,44 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     [refreshLoanState, repayments, loanApplications, loanProducts, writeThroughServicing]
   );
 
+  /** Pay off every currently-overdue instalment on one loan in a single tap (2026-07-21 design),
+   *  reusing `recordRepayment`'s liability-paydown + servicing write-through pattern batched over
+   *  every overdue row. Each row is marked `onTime: false` since it's after the due date, so it
+   *  resolves to `status: 'late'`  not a new outcome, just the existing recordRepayment path
+   *  applied to every overdue row on this loan at once. */
+  const clearArrears = useCallback(
+    async (applicationId: string) => {
+      const application = loanApplications.find((a) => a.id === applicationId);
+      if (!application) return;
+      const loanRepayments = repayments.filter((r) => r.applicationId === applicationId);
+      const overdue = overdueRowsFor(loanRepayments, new Date());
+      if (overdue.length === 0) return;
+
+      for (const row of overdue) {
+        await dbMarkRepaymentPaid(row.id, false); // after due date -> 'late', not 'paid'
+      }
+
+      if (application.liabilityAccountId) {
+        const productList = loanProducts.length > 0 ? loanProducts : DEFAULT_PRODUCTS;
+        const tenor = productList.find((p) => p.id === application.productId)?.tenorMonths ?? 0;
+        const paidBefore = loanRepayments.filter((r) => r.status === 'paid' || r.status === 'late').length;
+        const outstanding = outstandingAfter(application.requestedAmount, tenor, paidBefore + overdue.length);
+        await upsertDailyBalanceEntry(application.liabilityAccountId, outstanding, todayKey());
+      }
+
+      for (const row of overdue) {
+        const instalmentSeq = loanRepayments.findIndex((r) => r.id === row.id) + 1;
+        if (instalmentSeq > 0) writeThroughServicing(application, loanRepayments, { event: { instalmentSeq, outcome: 'late' } });
+      }
+
+      await refreshLoanState();
+      const [accts, entries] = await Promise.all([listAccounts(), listBalanceEntries()]);
+      setAccounts(accts);
+      setBalanceEntries(entries);
+    },
+    [refreshLoanState, repayments, loanApplications, loanProducts, writeThroughServicing]
+  );
+
   // Skip an installment: a track-record negative (the score reads it via repaymentSummary),
   // but it does NOT pay down the liability  the borrower didn't pay.
   const missRepayment = useCallback(
@@ -1031,6 +1073,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     recordRepayment,
     missRepayment,
     reportDefault,
+    clearArrears,
     acceptLenderOffer,
     pullServicing,
     unseenFinancingCount,

@@ -8,6 +8,7 @@ import { Amount, Card, Eyebrow, ProgressTrack, TopBar } from '../components/ui';
 import { shortDate } from '../lib/dates';
 import { DEFAULT_PRODUCTS } from '../lib/loans';
 import { buildLoanPackages, financingTotals, type LoanPackage } from '../lib/loanSummary';
+import { overdueRowsFor } from '../lib/repaymentStanding';
 import type { Repayment, RepaymentStatus } from '../db/loansRepo';
 import { useAppData } from '../state/store';
 import { useLenderSyncPoll } from '../state/useLenderSyncPoll';
@@ -102,7 +103,7 @@ export function LoansScreen({
   onOpenCoach?: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const { kyc, loanProducts, loanApplications, repayments, recordRepayment, missRepayment, reportDefault, pullServicing, adoptApprovedOffers, syncLenderResets, markFinancingSeen } =
+  const { kyc, loanProducts, loanApplications, repayments, recordRepayment, missRepayment, reportDefault, clearArrears, pullServicing, adoptApprovedOffers, syncLenderResets, markFinancingSeen } =
     useAppData();
   const { score } = useCreditProfile();
 
@@ -120,6 +121,8 @@ export function LoansScreen({
   const [missError, setMissError] = useState('');
   const [defaultBusy, setDefaultBusy] = useState<string | null>(null);
   const [defaultError, setDefaultError] = useState('');
+  const [clearBusy, setClearBusy] = useState(false);
+  const [clearMsg, setClearMsg] = useState('');
 
   // Poll-on-focus (Bidirectional Servicing Sync, 2026-07-18 + approval-notify, 2026-07-19 +
   // reset-sync, 2026-07-20): this screen only ever mounts while the borrower is actually on it
@@ -197,6 +200,17 @@ export function LoansScreen({
     }
   };
 
+  const handleClearArrears = async (applicationId: string) => {
+    setClearBusy(true);
+    setClearMsg('');
+    try {
+      await clearArrears(applicationId);
+      setClearMsg('Arrears cleared — your access and rate discount are restored.');
+    } finally {
+      setClearBusy(false);
+    }
+  };
+
   // eKYC gate: applying for financing requires a verified identity.
   if (!kyc) {
     return (
@@ -271,6 +285,34 @@ export function LoansScreen({
               </Text>
             </Card>
           )}
+
+          {(() => {
+            const pkgOverdue = overdueRowsFor(pkg.repayments, new Date());
+            if (pkgOverdue.length === 0) return null;
+            const amountOverdue = pkgOverdue.reduce((s, r) => s + r.amount, 0);
+            return (
+              <Card style={[styles.standingBanner, { borderColor: RED }]}>
+                <Text style={[styles.standingTitle, { color: RED }]}>
+                  {pkgOverdue.length} month{pkgOverdue.length > 1 ? 's' : ''} behind — RM{Math.round(amountOverdue).toLocaleString('en-MY')} overdue
+                </Text>
+                <Text style={styles.standingBody}>
+                  Paying this off restores your loan access and rate discount today. This event stays on
+                  your record for 12 months even after it's cleared.
+                </Text>
+                {clearMsg ? (
+                  <Text style={[styles.standingBody, { color: GREEN, fontWeight: '700' }]}>{clearMsg}</Text>
+                ) : (
+                  <Pressable
+                    onPress={() => handleClearArrears(pkg.application.id)}
+                    disabled={clearBusy}
+                    style={[styles.clearBtn, { backgroundColor: RED }]}
+                  >
+                    {clearBusy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.clearBtnText}>Pay off arrears</Text>}
+                  </Pressable>
+                )}
+              </Card>
+            );
+          })()}
 
           {pkg.repayments.length > 0 && (
             <>
@@ -568,4 +610,11 @@ const styles = StyleSheet.create({
   pkgMuted: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, marginTop: 6 },
   statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
   statusPillText: { fontFamily: uiFont(700), fontSize: 11.5 },
+
+  // ── Standing banner / pay-off-arrears (repayment standing, 2026-07-21) ──
+  standingBanner: { borderWidth: 1.5, borderRadius: 14, padding: 14, marginBottom: 14, backgroundColor: '#fdecea' },
+  standingTitle: { fontFamily: uiFont(700), fontSize: 14, marginBottom: 4 },
+  standingBody: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, lineHeight: 18, marginBottom: 8 },
+  clearBtn: { borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
+  clearBtnText: { fontFamily: uiFont(700), fontSize: 13.5, color: '#fff' },
 });
