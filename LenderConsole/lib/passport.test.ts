@@ -130,6 +130,54 @@ describe('validatePassportShape', () => {
     expect(validatePassportShape(p)).toContain('momentum');
   });
 
+  it('accepts a well-formed standing block with a non-null scar', () => {
+    const p = {
+      ...basePassport(),
+      standing: {
+        current: { bucket: 'arrears', adverseRecord: 'soft', monthsInArrears: 2, amountOverdue: 640 },
+        scar: { bucket: 'impaired', reachedMonthsAgo: 5 },
+        discountEligible: false,
+      },
+    };
+    expect(validatePassportShape(p)).toEqual([]);
+  });
+
+  it('accepts a well-formed standing block with scar: null', () => {
+    const p = {
+      ...basePassport(),
+      standing: {
+        current: { bucket: 'clean', adverseRecord: 'none', monthsInArrears: 0, amountOverdue: 0 },
+        scar: null,
+        discountEligible: true,
+      },
+    };
+    expect(validatePassportShape(p)).toEqual([]);
+  });
+
+  it('rejects a standing block missing current.adverseRecord', () => {
+    const p = {
+      ...basePassport(),
+      standing: {
+        current: { bucket: 'arrears', monthsInArrears: 2, amountOverdue: 640 }, // missing adverseRecord
+        scar: null,
+        discountEligible: false,
+      },
+    };
+    expect(validatePassportShape(p)).toContain('standing');
+  });
+
+  it('rejects a standing block with an invalid bucket enum value', () => {
+    const p = {
+      ...basePassport(),
+      standing: {
+        current: { bucket: 'overdue', adverseRecord: 'soft', monthsInArrears: 2, amountOverdue: 640 }, // invalid bucket
+        scar: null,
+        discountEligible: false,
+      },
+    };
+    expect(validatePassportShape(p)).toContain('standing');
+  });
+
   it('rejects a digitHistogram that is not exactly 9 non-negative numbers', () => {
     expect(validatePassportShape({ ...basePassport(), digitHistogram: [1, 2, 3] })).toContain('digitHistogram');
     expect(validatePassportShape({ ...basePassport(), digitHistogram: Array(9).fill(-1) })).toContain('digitHistogram');

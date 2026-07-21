@@ -37,6 +37,25 @@ export interface PassportMomentum {
   direction: 'rising' | 'flat' | 'falling';
 }
 
+export type StandingBucket = 'clean' | 'slipping' | 'arrears' | 'impaired';
+export type StandingAdverseRecord = 'none' | 'soft' | 'hard';
+
+/**
+ * Signed repayment-standing block (2026-07-21 design): current arrears state and a decaying
+ * historical scar, both re-derived from the repayment ledger — never a self-asserted claim.
+ * Verbatim port of PipComp/src/lib/passport.ts's PassportStanding (shared wire format).
+ */
+export interface PassportStanding {
+  current: {
+    bucket: StandingBucket;
+    adverseRecord: StandingAdverseRecord;
+    monthsInArrears: number;
+    amountOverdue: number;
+  };
+  scar: { bucket: StandingBucket; reachedMonthsAgo: number } | null;
+  discountEligible: boolean;
+}
+
 /** Version stamps of the logic that produced this passport (engine / policy / model). */
 export interface PassportProvenanceMeta {
   engineVersion: string;
@@ -97,6 +116,9 @@ export interface CreditPassport {
   assessment?: PassportAssessment;
   holder?: PassportHolder;
   momentum?: PassportMomentum;
+  /** Signed repayment standing (2026-07-21 design). Optional; absent on older passports or a
+   *  borrower with no loans. */
+  standing?: PassportStanding;
   /** Version stamps of the producing logic (optional; absent on pre-v2 passports). */
   provenanceMeta?: PassportProvenanceMeta;
   /** Leading-digit counts 1–9 (index 0 = digit 1) of the amounts behind the score 
@@ -186,6 +208,25 @@ export function validatePassportShape(p: unknown): string[] {
     const nums = ['lookbackDays', 'scoreFrom', 'scoreTo', 'coverageDaysFrom', 'coverageDaysTo'];
     const okDir = m && typeof m.direction === 'string' && ['rising', 'flat', 'falling'].includes(m.direction as string);
     if (!m || typeof m !== 'object' || !nums.every((k) => isFiniteNum(m[k])) || !okDir) problems.push('momentum');
+  }
+  if (o.standing !== undefined) {
+    const s = o.standing as Record<string, unknown>;
+    const cur = s?.current as Record<string, unknown> | undefined;
+    const curOk =
+      cur &&
+      typeof cur === 'object' &&
+      ['clean', 'slipping', 'arrears', 'impaired'].includes(cur.bucket as string) &&
+      ['none', 'soft', 'hard'].includes(cur.adverseRecord as string) &&
+      isFiniteNum(cur.monthsInArrears) &&
+      isFiniteNum(cur.amountOverdue);
+    const scar = s?.scar as Record<string, unknown> | null | undefined;
+    const scarOk =
+      scar === null ||
+      (scar &&
+        typeof scar === 'object' &&
+        ['clean', 'slipping', 'arrears', 'impaired'].includes(scar.bucket as string) &&
+        isFiniteNum(scar.reachedMonthsAgo));
+    if (!s || typeof s !== 'object' || !curOk || !scarOk || typeof s.discountEligible !== 'boolean') problems.push('standing');
   }
   if (o.provenanceMeta !== undefined) {
     const v = o.provenanceMeta as Record<string, unknown>;
