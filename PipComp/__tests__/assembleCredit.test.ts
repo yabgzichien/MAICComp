@@ -91,6 +91,7 @@ describe('assembleCredit', () => {
         spendingProfile: { essentialsRatio: 0, expenseVolatility: 0, bufferDays: 0, savingsRate: 0 },
         occupation: null,
         includeSpending: false,
+        standing: { current: { bucket: 'clean', adverseRecord: 'none', monthsInArrears: 0, amountOverdue: 0 }, scar: null, discountEligible: true },
       });
 
       expect(draft.assessment).toBeDefined();

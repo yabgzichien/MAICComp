@@ -54,7 +54,7 @@ function decisionLabel(d: Decision): string {
 
 export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () => {} }: { onBack: () => void; onOpenKyc?: () => void; onOpenLoans?: () => void }) {
   const insets = useSafeAreaInsets();
-  const { profile, score, dataConfidence, coverage, momentum, coachInput, incomeQuality, spendingProfile, obligations } = useCreditProfile();
+  const { profile, score, dataConfidence, coverage, momentum, coachInput, incomeQuality, spendingProfile, obligations, standing } = useCreditProfile();
   const { kyc, occupation, loanApplications, loanProducts, repaymentSummary, accountValues, tourActive, tourStepIndex, acceptLenderOffer } = useAppData();
   const activeTourAnchor = tourActive ? BORROWER_TOUR_STEPS[clampTourStep(tourStepIndex, BORROWER_TOUR_STEPS.length)].anchorId ?? null : null;
 
@@ -202,8 +202,9 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
       occupation: occupation
         ? { occupation: occupation.occupation, sector: occupation.sector, employmentType: occupation.employmentType, tenureMonths: occupation.tenureMonths }
         : null,
+      standing,
     }),
-    [profile, score, dataConfidence, coverage, momentum, coachInput, kyc, incomeQuality, obligations, spendingProfile, occupation]
+    [profile, score, dataConfidence, coverage, momentum, coachInput, kyc, incomeQuality, obligations, spendingProfile, occupation, standing]
   );
   // Preview shows every attachable row (both grants on); the mint step honours the actual toggles.
   const previewDraft = useMemo(() => buildPassportDraft({ ...draftArgs, includeIdentity: true, includeSpending: true }), [draftArgs]);

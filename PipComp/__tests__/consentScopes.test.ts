@@ -21,6 +21,7 @@ import {
 import type { IncomeQuality } from '../src/lib/incomeQuality';
 import type { SpendingProfile } from '../src/lib/spendingProfile';
 import type { ObligationSummary } from '../src/lib/obligations';
+import type { RepaymentStanding } from '../src/lib/repaymentStanding';
 import { buildPassport, verifyPassport } from '../src/lib/passport';
 import { leadingDigitHistogram } from '../src/lib/dataConfidence';
 import type { DataConfidence } from '../src/lib/dataConfidence';
@@ -102,6 +103,11 @@ const incomeQuality: IncomeQuality = { variationCoefficient: 0.12, sourceCount: 
 const spendingProfile: SpendingProfile = { essentialsRatio: 0.62, expenseVolatility: 0.18, bufferDays: 12, savingsRate: 0.14 };
 const noObligations: ObligationSummary = { obligations: [], evidencedMonthlyDebtService: 0 };
 const occupation = { occupation: 'Ride-hailing driver', sector: 'Transport', employmentType: 'gig' as const, tenureMonths: 18 };
+const SAMPLE_STANDING: RepaymentStanding = {
+  current: { bucket: 'clean', adverseRecord: 'none', monthsInArrears: 0, amountOverdue: 0 },
+  scar: null,
+  discountEligible: true,
+};
 
 const baseArgs: PassportDraftArgs = {
   profile,
@@ -117,6 +123,7 @@ const baseArgs: PassportDraftArgs = {
   spendingProfile,
   occupation: null,
   includeSpending: false,
+  standing: SAMPLE_STANDING,
 };
 
 // ── buildPassportDraft ───────────────────────────────────────────────────────
@@ -248,6 +255,7 @@ describe('tier0ScopeRows', () => {
       'surplus',
       'debtService',
       'repayment',
+      'standing',
       'momentum',
       'digitHistogram',
       'provenance',
@@ -350,6 +358,26 @@ describe('income-quality block (Tier 0)', () => {
     const draft = buildPassportDraft({ ...baseArgs, includeIdentity: false });
     expect(draft.incomeQuality).toEqual(incomeQuality);
     expect(tier0ScopeRows(draft).map((r) => r.key)).toContain('incomeQuality');
+  });
+});
+
+describe('standing block (Tier 0)', () => {
+  it('is always carried and disclosed as a Tier 0 row', () => {
+    const draft = buildPassportDraft({ ...baseArgs, includeIdentity: false });
+    expect(draft.standing).toEqual(SAMPLE_STANDING);
+    expect(tier0ScopeRows(draft).map((r) => r.key)).toContain('standing');
+  });
+
+  it('discloses a plain-language bucket description matching the standing value', () => {
+    const arrears: RepaymentStanding = {
+      current: { bucket: 'arrears', adverseRecord: 'soft', monthsInArrears: 2, amountOverdue: 700 },
+      scar: null,
+      discountEligible: false,
+    };
+    const draft = buildPassportDraft({ ...baseArgs, standing: arrears });
+    const row = tier0ScopeRows(draft).find((r) => r.key === 'standing');
+    expect(row?.detail).toContain('2 months behind');
+    expect(row?.detail).toContain('RM700');
   });
 });
 

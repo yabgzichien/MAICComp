@@ -19,6 +19,7 @@ import type { Momentum } from './momentum';
 import type { IncomeQuality } from './incomeQuality';
 import type { SpendingProfile } from './spendingProfile';
 import type { ObligationSummary } from './obligations';
+import type { RepaymentStanding } from './repaymentStanding';
 import { ENGINE_VERSION, MODEL_WEIGHTS_VERSION, POLICY_VERSION } from './versions';
 
 /** Everything of the signed passport input except the subject key (mint-time only). */
@@ -54,6 +55,8 @@ export interface PassportDraftArgs {
   includeIdentity: boolean;
   /** Income-quality evidence (Brief P, Tier 0)  always carried; aggregate and non-identifying. */
   incomeQuality: IncomeQuality;
+  /** Current repayment standing + decaying scar (2026-07-21 design)  always carried, Tier 0. */
+  standing: RepaymentStanding;
   /** Detected recurring obligations (Brief P): their sum evidences the assessment's monthly debt
    *  service (Tier 0), and the itemised list rides inside the Tier 2 spending block. */
   obligations: ObligationSummary;
@@ -82,7 +85,7 @@ function rm(n: number): string {
 /** Assemble the passport input a confirmed ceremony will sign. Pure  deterministic given args. */
 export function buildPassportDraft(args: PassportDraftArgs): PassportDraft {
   const { profile, score, dataConfidence, coverage, momentum, amounts, identity, includeIdentity } = args;
-  const { incomeQuality, obligations, spendingProfile, occupation, includeSpending } = args;
+  const { incomeQuality, obligations, spendingProfile, occupation, includeSpending, standing } = args;
 
   const provenanceSummary =
     dataConfidence.reasons.length > 0
@@ -127,6 +130,8 @@ export function buildPassportDraft(args: PassportDraftArgs): PassportDraft {
       regularityRatio: incomeQuality.regularityRatio,
       seasonal: incomeQuality.seasonal,
     },
+    // Repayment standing (Tier 0): the borrower's own account status  always carried.
+    standing,
     ...(identity && includeIdentity
       ? {
           holder: {
@@ -190,13 +195,11 @@ type RowBuilder = (d: PassportDraft) => ConsentScopeRow[];
  * aggregate  it records the very grants this ceremony produces. The Tier 1/2 Brief P
  * blocks (occupation/spendingProfile) are also excluded here: they are disclosed by their
  * own tiered ceremony sections when attached (see buildConsentReceipts and the ceremony's
- * Tier 1/2 rows). incomeQuality IS a Tier 0 aggregate, so it carries a builder below. `standing`
- * is excluded too: buildPassportDraft doesn't populate it yet (repayment standing isn't wired
- * into the ceremony as of this change)  once a later change adds it to PassportDraftArgs and
- * assembles it below, this exclusion should be removed so the drift guard covers it. Every
- * other field stays covered by the drift guard (adding one breaks the build until disclosed).
+ * Tier 1/2 rows). incomeQuality and standing ARE Tier 0 aggregates, so they carry builders
+ * below. Every other field stays covered by the drift guard (adding one breaks the build
+ * until disclosed).
  */
-const TIER0_DISCLOSURE: { [K in keyof Omit<PassportDraft, 'consent' | 'occupation' | 'spendingProfile' | 'standing'>]-?: RowBuilder | 'mergedIntoScore' | 'tier1' } = {
+const TIER0_DISCLOSURE: { [K in keyof Omit<PassportDraft, 'consent' | 'occupation' | 'spendingProfile'>]-?: RowBuilder | 'mergedIntoScore' | 'tier1' } = {
   score: (d) => [{ key: 'score', label: 'Credit score & band', detail: `${Math.round(d.score)} · ${d.band}` }],
   band: 'mergedIntoScore',
   factorSummary: (d) => [
@@ -223,6 +226,19 @@ const TIER0_DISCLOSURE: { [K in keyof Omit<PassportDraft, 'consent' | 'occupatio
       detail: `${d.repaymentRecord.onTime} of ${d.repaymentRecord.total} on time`,
     },
   ],
+  standing: (d) =>
+    d.standing
+      ? [
+          {
+            key: 'standing',
+            label: 'Repayment standing',
+            detail:
+              d.standing.current.bucket === 'clean'
+                ? 'Clean — no arrears on file'
+                : `${d.standing.current.monthsInArrears} month${d.standing.current.monthsInArrears > 1 ? 's' : ''} behind, ${rm(d.standing.current.amountOverdue)} overdue`,
+          },
+        ]
+      : [],
   momentum: (d) =>
     d.momentum
       ? [
@@ -276,7 +292,7 @@ const TIER0_DISCLOSURE: { [K in keyof Omit<PassportDraft, 'consent' | 'occupatio
 
 /** Tier 0  the aggregate fields every passport carries, with their real values. */
 export function tier0ScopeRows(draft: PassportDraft): ConsentScopeRow[] {
-  return (Object.keys(TIER0_DISCLOSURE) as (keyof Omit<PassportDraft, 'consent' | 'occupation' | 'spendingProfile' | 'standing'>)[]).flatMap((k) => {
+  return (Object.keys(TIER0_DISCLOSURE) as (keyof Omit<PassportDraft, 'consent' | 'occupation' | 'spendingProfile'>)[]).flatMap((k) => {
     const builder = TIER0_DISCLOSURE[k];
     return typeof builder === 'function' ? builder(draft) : [];
   });
