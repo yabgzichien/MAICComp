@@ -318,13 +318,13 @@ export function validatePassportShape(p: unknown): string[] {
       ['none', 'soft', 'hard'].includes(cur.adverseRecord as string) &&
       isFiniteNum(cur.monthsInArrears) &&
       isFiniteNum(cur.amountOverdue);
-    const scar = s?.scar;
+    const scar = s?.scar as Record<string, unknown> | null | undefined;
     const scarOk =
       scar === null ||
       (scar &&
         typeof scar === 'object' &&
-        ['clean', 'slipping', 'arrears', 'impaired'].includes((scar as Record<string, unknown>).bucket as string) &&
-        isFiniteNum((scar as Record<string, unknown>).reachedMonthsAgo));
+        ['clean', 'slipping', 'arrears', 'impaired'].includes(scar.bucket as string) &&
+        isFiniteNum(scar.reachedMonthsAgo));
     if (!s || typeof s !== 'object' || !curOk || !scarOk || typeof s.discountEligible !== 'boolean') problems.push('standing');
   }
   if (o.provenanceMeta !== undefined) {

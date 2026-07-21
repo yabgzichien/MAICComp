@@ -293,6 +293,16 @@ describe('standing block (repayment arrears)', () => {
     expect(validatePassportShape(bad)).toContain('standing');
   });
 
+  it('accepts a well-formed standing block, with either a null or a real scar', async () => {
+    const { sign } = makeTestKeypair();
+    const withScar = await buildPassport(withStanding, sign);
+    expect(validatePassportShape(withScar.passport)).not.toContain('standing');
+
+    const clean = { ...SAMPLE_STANDING, current: { ...SAMPLE_STANDING.current, bucket: 'clean' as const, adverseRecord: 'none' as const }, scar: null };
+    const withoutScar = await buildPassport({ ...baseInput, standing: clean }, sign);
+    expect(validatePassportShape(withoutScar.passport)).not.toContain('standing');
+  });
+
   it('standing is absent (back-compat) when omitted', async () => {
     const { sign } = makeTestKeypair();
     const { passport } = await buildPassport(baseInput, sign);
