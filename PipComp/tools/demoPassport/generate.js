@@ -86,6 +86,11 @@ const passport = {
   evidenceHash:
     'abc123def456abc123def456abc123def456abc123def456abc123def456ab12',
   repaymentRecord: { onTime: 0, total: 0 },
+  standing: {
+    current: { bucket: 'clean', adverseRecord: 'none', monthsInArrears: 0, amountOverdue: 0 },
+    scar: null,
+    discountEligible: true,
+  },
   issuedAt,
   validUntil,
   assessment: {
@@ -147,7 +152,7 @@ const passport = {
   consent: [
     {
       tier: 0,
-      scope: ['score', 'factors', 'confidence', 'coverage', 'income', 'surplus', 'debtService', 'repayment', 'momentum', 'digitHistogram', 'provenance', 'evidence', 'versions', 'incomeQuality'],
+      scope: ['score', 'factors', 'confidence', 'coverage', 'income', 'surplus', 'debtService', 'repayment', 'standing', 'momentum', 'digitHistogram', 'provenance', 'evidence', 'versions', 'incomeQuality'],
       grantedAt: issuedAt,
       expiresAt: validUntil,
     },
