@@ -285,6 +285,20 @@ export async function setRepaymentOutcome(repaymentId: string, outcome: 'on-time
   await db.runAsync('UPDATE repayments SET paid_on = ?, status = ? WHERE id = ?', outcome === 'missed' ? null : at, status, repaymentId);
 }
 
+/** Delete an application and every repayment row that belongs to it (lender-reset sync,
+ *  2026-07-20): when the console this loan is routed to gets reset, the record disappears on
+ *  that side, so the borrower's own copy has to go too or the two apps permanently disagree
+ *  about whether the loan exists. Does NOT touch the linked liability account  the caller
+ *  (which already owns accountsRepo) deletes that separately, the same separation of concerns
+ *  `setLoanLiabilityAccount` draws between the two repos. */
+export async function deleteApplication(applicationId: string): Promise<void> {
+  const db = await getDb();
+  await db.withTransactionAsync(async () => {
+    await db.runAsync('DELETE FROM repayments WHERE application_id = ?', applicationId);
+    await db.runAsync('DELETE FROM loan_applications WHERE id = ?', applicationId);
+  });
+}
+
 export async function listApplications(): Promise<LoanApplication[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<ApplicationRow>(

@@ -10,6 +10,7 @@ import { DEFAULT_PRODUCTS } from '../lib/loans';
 import { buildLoanPackages, financingTotals, type LoanPackage } from '../lib/loanSummary';
 import type { Repayment, RepaymentStatus } from '../db/loansRepo';
 import { useAppData } from '../state/store';
+import { useLenderSyncPoll } from '../state/useLenderSyncPoll';
 import { useCreditProfile } from '../state/useCreditProfile';
 import { colors, uiFont } from '../theme';
 
@@ -101,7 +102,7 @@ export function LoansScreen({
   onOpenCoach?: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const { kyc, loanProducts, loanApplications, repayments, recordRepayment, missRepayment, reportDefault, pullServicing, adoptApprovedOffers, markFinancingSeen } =
+  const { kyc, loanProducts, loanApplications, repayments, recordRepayment, missRepayment, reportDefault, pullServicing, adoptApprovedOffers, syncLenderResets, markFinancingSeen } =
     useAppData();
   const { score } = useCreditProfile();
 
@@ -120,20 +121,28 @@ export function LoansScreen({
   const [defaultBusy, setDefaultBusy] = useState<string | null>(null);
   const [defaultError, setDefaultError] = useState('');
 
-  // Poll-on-focus (Bidirectional Servicing Sync, 2026-07-18 + approval-notify, 2026-07-19):
-  // this screen only ever mounts while the borrower is actually on it (App.tsx swaps screens by
-  // conditional render, not a persistent navigator), so a mount effect IS the focus signal.
-  // Order matters: adopt any newly-approved financing so it appears, pull servicing events,
-  // then clear the unseen badge  the borrower is now looking at My Financing, so nothing here
-  // is "unseen" anymore (a loan approved later, while they're elsewhere, re-badges via Home).
+  // Poll-on-focus (Bidirectional Servicing Sync, 2026-07-18 + approval-notify, 2026-07-19 +
+  // reset-sync, 2026-07-20): this screen only ever mounts while the borrower is actually on it
+  // (App.tsx swaps screens by conditional render, not a persistent navigator), so a mount
+  // effect IS the focus signal. Order matters: clear any loan a lender reset has orphaned
+  // FIRST (so a stale balance never flashes), then adopt any newly-approved financing, then
+  // pull servicing events for what remains, then clear the unseen badge  the borrower is now
+  // looking at My Financing, so nothing here is "unseen" anymore. `adoptApprovedOffers`
+  // coalesces with the live poll below rather than no-op'ing, so the badge is never cleared
+  // ahead of financing that is still being booked.
   useEffect(() => {
     (async () => {
+      await syncLenderResets();
       await adoptApprovedOffers(score.score);
       await pullServicing();
       await markFinancingSeen();
     })().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ...and keep checking while the borrower waits here: an officer approving or resetting
+  // mid-demo should land in this list without needing to navigate away and back.
+  useLenderSyncPoll(score.score);
 
   // One package per loan (My Financing polish, 2026-07-19): groups the flat, cross-lender
   // repayments list back into "TEKUN · Emergency", "Naga · Working capital", etc.

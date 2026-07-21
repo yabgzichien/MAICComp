@@ -89,8 +89,17 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
   const [purpose, setPurpose] = useState<PurposeCategory>('working-capital');
   const [sendBusy, setSendBusy] = useState(false);
   const [sendResult, setSendResult] = useState<DirectApplyResult | null>(null);
+  // Bumped on every send attempt so the result card's entrance animation replays even when
+  // the new result is the same status as the last one (e.g. tapping "Send" twice in a row).
+  const [sendSeq, setSendSeq] = useState(0);
   const [booked, setBooked] = useState(false);
   const [bookingBusy, setBookingBusy] = useState(false);
+  // Synchronous in-flight latches for the two irreversible actions on this screen (filing an
+  // application, booking a loan). The `sendBusy`/`bookingBusy` state drives the UI; these drive
+  // the guard, because state doesn't update until the next render and a burst of taps all land
+  // in the same tick.
+  const sendingRef = useRef(false);
+  const bookingRef = useRef(false);
 
   // Published lender directory (GET /api/lenders). Fetched once on mount; a transport failure
   // leaves it empty and the send flow falls back to the built-in ladder (routes to TEKUN).
@@ -284,14 +293,29 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
     });
   };
 
+  // One send per request: once this passport is sitting in the lender's queue at this amount,
+  // sending again just files duplicates (or spams the lender with near-identical applications
+  // if the amount is nudged between taps). Changing the lender, amount, or purpose clears
+  // `sendResult` — which is exactly when a second send is a genuinely different request — so
+  // this locks on a landed result rather than on a timer, and unlocks the moment the borrower
+  // actually changes what they're asking for. `offline`/`rejected` stay unlocked: nothing was
+  // filed, so retrying is the correct action.
+  const sendLocked = sendResult !== null && (sendResult.status === 'filed' || sendResult.status === 'duplicate');
+
   // Send the signed passport code to the console. submitApplication never throws  every
   // failure resolves to a typed result (offline / rejected / duplicate), so the card always
   // lands in a well-defined state and can nudge the borrower to the offline fallback below.
   const sendToLender = async () => {
-    if (!pasteCode) return;
+    // Re-entrancy guard as well as a disabled button. It must be a REF, not the `sendBusy`
+    // state: several taps dispatched in one tick all run before React re-renders, so every one
+    // of them would read `sendBusy === false` and fire its own POST (measured: 5 taps → 5
+    // applications). A ref flips synchronously, so only the first tap gets through.
+    if (!pasteCode || sendingRef.current || sendLocked) return;
+    sendingRef.current = true;
     setSendBusy(true);
     setSendResult(null);
     setBooked(false);
+    setSendSeq((n) => n + 1);
     try {
       const result = await submitApplication(LENDER_API_BASE, {
         passportCode: pasteCode,
@@ -307,6 +331,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
       setSendResult({ status: 'offline' });
       setBooked(false);
     } finally {
+      sendingRef.current = false;
       setSendBusy(false);
     }
   };
@@ -315,7 +340,10 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
   // acceptLenderOffer action (Task 3). Only reachable when the last decision was an approve
   // with a positive amount; see the FILED result block below.
   const acceptOffer = async () => {
-    if (!sendResult || sendResult.status !== 'filed') return;
+    // Same synchronous double-fire guard as sendToLender  booking twice would create two real
+    // loans, which is worse than a duplicate application.
+    if (!sendResult || sendResult.status !== 'filed' || bookingRef.current || booked) return;
+    bookingRef.current = true;
     setBookingBusy(true);
     try {
       const app = await acceptLenderOffer(
@@ -326,6 +354,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
       );
       if (app) setBooked(true);
     } finally {
+      bookingRef.current = false;
       setBookingBusy(false);
     }
   };
@@ -547,12 +576,18 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
 
           <Pressable
             onPress={sendToLender}
-            disabled={sendBusy}
-            style={({ pressed }) => [styles.sendBtn, (sendBusy || pressed) && { opacity: 0.92 }]}
+            disabled={sendBusy || sendLocked}
+            style={({ pressed }) => [styles.sendBtn, sendLocked && styles.sendBtnLocked, (sendBusy || pressed) && { opacity: 0.92 }]}
             accessibilityRole="button"
+            accessibilityState={{ disabled: sendBusy || sendLocked }}
           >
             {sendBusy ? (
               <ActivityIndicator size="small" color={colors.onAccent} />
+            ) : sendLocked ? (
+              <>
+                <Icon name="check" size={15} color={colors.ink3} stroke={2.6} />
+                <Text style={[styles.sendBtnText, { color: colors.ink3 }]}>Request sent</Text>
+              </>
             ) : (
               <>
                 <Text style={styles.sendBtnText}>
@@ -562,9 +597,18 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
               </>
             )}
           </Pressable>
+          {sendLocked && (
+            <Text style={styles.sendLockedHint}>Change the amount, purpose, or lender to send another request.</Text>
+          )}
 
           {sendResult && sendResult.status === 'filed' && (
-            <View style={styles.resultBox}>
+            <FadeIn key={sendSeq} style={styles.resultBox}>
+              <View style={styles.sentBadgeRow}>
+                <View style={styles.sentCheckCircle}>
+                  <Icon name="check" size={11} color="#fff" stroke={3} />
+                </View>
+                <Text style={styles.sentBadgeText}>Sent successfully</Text>
+              </View>
               <View style={styles.resultHeader}>
                 <Text style={styles.resultTitle} numberOfLines={1}>
                   {selectedLender && selectedLender.id !== 'offline' ? `Sent to ${selectedLender.name}` : 'Sent to lender'}
@@ -623,13 +667,22 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
                   </Pressable>
                 )
               )}
-            </View>
+            </FadeIn>
           )}
 
           {sendResult && sendResult.status === 'duplicate' && (
-            <View style={styles.noticeBox}>
-              <Text style={styles.noticeText}>You've already sent this passport to this lender — it's in their queue.</Text>
-            </View>
+            <FadeIn key={sendSeq} style={styles.resultBox}>
+              <View style={styles.sentBadgeRow}>
+                <View style={styles.sentCheckCircle}>
+                  <Icon name="check" size={11} color="#fff" stroke={3} />
+                </View>
+                <Text style={styles.sentBadgeText}>Already sent</Text>
+              </View>
+              <Text style={styles.resultTitle}>
+                {selectedLender && selectedLender.id !== 'offline' ? `Waiting in ${selectedLender.name}'s queue` : "Waiting in the lender's queue"}
+              </Text>
+              <Text style={[styles.resultFoot, { marginTop: 6 }]}>This passport is already filed at this amount — no need to send it again.</Text>
+            </FadeIn>
           )}
 
           {sendResult && sendResult.status === 'rejected' && (
@@ -754,9 +807,21 @@ const styles = StyleSheet.create({
   purposeChipText: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink2 },
   purposeChipTextOn: { color: colors.accentInk },
   sendBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 52, borderRadius: 999, backgroundColor: colors.accentInk, marginTop: 18 },
+  sendBtnLocked: { backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line },
   sendBtnText: { fontFamily: uiFont(700), fontSize: 15, color: colors.onAccent },
+  sendLockedHint: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, textAlign: 'center', marginTop: 8, lineHeight: 16 },
 
-  resultBox: { marginTop: 16, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 14 },
+  resultBox: {
+    marginTop: 16,
+    backgroundColor: DEC_GREEN + '0d',
+    borderWidth: 1,
+    borderColor: DEC_GREEN + '33',
+    borderRadius: 14,
+    padding: 14,
+  },
+  sentBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 10 },
+  sentCheckCircle: { width: 18, height: 18, borderRadius: 9, backgroundColor: DEC_GREEN, alignItems: 'center', justifyContent: 'center' },
+  sentBadgeText: { fontFamily: uiFont(700), fontSize: 11.5, color: DEC_GREEN, letterSpacing: 0.2, textTransform: 'uppercase' },
   resultHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   resultTitle: { flex: 1, marginRight: 8, fontFamily: uiFont(700), fontSize: 13.5, color: colors.ink },
   decisionPill: { borderRadius: 999, paddingHorizontal: 11, paddingVertical: 4 },

@@ -175,9 +175,12 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
   {
     // Deliberately its own step, not folded into 'whatif': the first tap only PROVES the
     // judge engaged. It must not also whisk them straight to Act 5  they need to actually
-    // see the before/after result and be free to try other chips before moving on. Same
-    // screen, same anchor (the chip row stays spotlit and tappable); an explain step (not a
-    // do) so it renders a real Next button and the judge decides when they're done exploring.
+    // see the before/after result and be free to try other chips before moving on. An explain
+    // step (not a do) so it renders a real Next button and the judge decides when they're done.
+    // The anchor widens from the chip row to 'whatif-result', which spans the chips AND the
+    // simulation card: this step is about the RESULT, so spotlighting the chips alone left the
+    // judge staring at the control they'd already used instead of the outcome it produced. The
+    // chips stay inside the cutout so they remain tappable (tapping the dim pauses the tour).
     id: 'whatif-explore',
     kind: 'explain',
     screen: 'coach',
@@ -186,7 +189,7 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     pip: 'happy',
     title: 'See it land',
     body: 'Try more chips if you like. The result updates live. Next when ready.',
-    anchorId: 'whatif-chips',
+    anchorId: 'whatif-result',
   },
   {
     id: 'kyc-verify',

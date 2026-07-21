@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { readOffer, readOfferBook, writeOffer } from './offersStore';
+import { clearOfferBook, readOffer, readOfferBook, writeOffer } from './offersStore';
 
 const NOW = new Date('2026-07-19T12:00:00.000Z');
 const SUBJECT = 'a'.repeat(64);
@@ -75,5 +75,12 @@ describe('offersStore — approved-offer back-channel', () => {
       JSON.stringify({ [SUBJECT]: { subject: SUBJECT, lenderId: 'tekun', decision: 'approve', maxAmount: 5000, installment: 482.53, decidedAt: NOW.toISOString(), purpose: { category: 'not-a-real-category' } } })
     );
     expect(await readOffer(SUBJECT, tmp)).toBeNull();
+  });
+
+  it('clearOfferBook empties the book (lender-reset-to-defaults, 2026-07-20)', async () => {
+    await writeOffer(tmp, 'tekun', SUBJECT, { maxAmount: 5000, installment: 482.53 }, NOW);
+    await clearOfferBook(tmp, 'tekun');
+    expect(await readOffer(SUBJECT, tmp)).toBeNull();
+    expect(await readOfferBook(tmp)).toEqual({});
   });
 });

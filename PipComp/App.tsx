@@ -17,6 +17,7 @@ import { Platform, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomNav, type NavTab } from './src/components/BottomNav';
+import { ClearedLoanBanner } from './src/components/ClearedLoanBanner';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { Pip } from './src/components/Pip';
 import { MissionBanner, TourCard, TourResumeChip, type TourRecapItem } from './src/components/TourCard';
@@ -44,7 +45,9 @@ import { CalendarScreen } from './src/screens/CalendarScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { AdvancedImportScreen } from './src/screens/AdvancedImportScreen';
 import { GlossaryModal } from './src/components/InfoButton';
+import { AppAlertModal } from './src/components/AppAlertModal';
 import { AccentProvider } from './src/state/accent';
+import { AlertHostProvider } from './src/state/alertHost';
 import { GlossaryProvider } from './src/state/glossary';
 import { AppDataProvider, useAppData } from './src/state/store';
 import { useNow } from './src/state/useNow';
@@ -90,9 +93,11 @@ export default function App() {
         <AppDataProvider>
           <AccentProvider>
             <GlossaryProvider>
-              <ErrorBoundary>
-                <Root fontsLoaded={fontsLoaded} />
-              </ErrorBoundary>
+              <AlertHostProvider>
+                <ErrorBoundary>
+                  <Root fontsLoaded={fontsLoaded} />
+                </ErrorBoundary>
+              </AlertHostProvider>
             </GlossaryProvider>
           </AccentProvider>
         </AppDataProvider>
@@ -162,7 +167,7 @@ const TOUR_RECAP_LABELS: Record<string, string> = {
 };
 
 function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
-  const { ready, onboardingComplete, tourActive, tourStepIndex, setTourStep, pauseTour, exitTour, startTour, coverage, unseenFinancingCount } = useAppData();
+  const { ready, onboardingComplete, tourActive, tourStepIndex, setTourStep, pauseTour, exitTour, startTour, coverage, unseenFinancingCount, clearedByLenderNotice, dismissClearedByLenderNotice } = useAppData();
   const insets = useSafeAreaInsets();
   const [screen, setScreen] = useState<Screen>('home');
   const [txnFilter, setTxnFilter] = useState<string | null>(null);
@@ -536,7 +541,11 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
       {tourPaused && !tourActive && (
         <TourResumeChip bottomInset={navTab ? 0 : insets.bottom} progress={tourProgress} onResume={tourResume} />
       )}
+      {clearedByLenderNotice && (
+        <ClearedLoanBanner message={clearedByLenderNotice} topInset={insets.top} onDismiss={dismissClearedByLenderNotice} />
+      )}
       <GlossaryModal />
+      <AppAlertModal />
     </View>
   );
 }

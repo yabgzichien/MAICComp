@@ -332,24 +332,32 @@ export function PassportCoachScreen({
         {plan.whatIfs.length > 0 && (
           <>
             <Text style={styles.sectionLabel}>TRY A WHAT-IF</Text>
-            <TourAnchor id="whatif-chips" activeId={activeTourAnchor}>
-              <View style={styles.chipRow}>
-                {chips.map(({ w, i }) => (
-                  <Pressable
-                    key={`${w.lever}-${w.magnitude}`}
-                    onPress={() => {
-                      setSelected(selected === i ? null : i);
-                      emitTourSignal('coach-chip-tapped');
-                    }}
-                    style={[styles.chip, selected === i && styles.chipActive]}
-                  >
-                    <Text style={[styles.chipText, selected === i && styles.chipTextActive]}>{w.magnitude}</Text>
-                  </Pressable>
-                ))}
-              </View>
+            {/* Two nested anchors, one per tour step. 'whatif-chips' frames just the chip row
+                while the step is still asking for a tap; once a chip has been tapped the tour
+                moves to 'whatif-result', which spans the chips AND the simulation card so the
+                spotlight lands on the thing the step is talking about ("see it land"). The
+                chips stay inside that cutout deliberately  they must remain tappable, since
+                tapping the dimmed area pauses the tour. */}
+            <TourAnchor id="whatif-result" activeId={activeTourAnchor} remeasureKey={selected}>
+              <TourAnchor id="whatif-chips" activeId={activeTourAnchor}>
+                <View style={styles.chipRow}>
+                  {chips.map(({ w, i }) => (
+                    <Pressable
+                      key={`${w.lever}-${w.magnitude}`}
+                      onPress={() => {
+                        setSelected(selected === i ? null : i);
+                        emitTourSignal('coach-chip-tapped');
+                      }}
+                      style={[styles.chip, selected === i && styles.chipActive]}
+                    >
+                      <Text style={[styles.chipText, selected === i && styles.chipTextActive]}>{w.magnitude}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </TourAnchor>
+              {surplusAllFlat && <Text style={styles.blockedNote}>{surplusWhatIfs[0].note}</Text>}
+              {activeWhatIf && <SimCard action={activeWhatIf} tone="whatif" />}
             </TourAnchor>
-            {surplusAllFlat && <Text style={styles.blockedNote}>{surplusWhatIfs[0].note}</Text>}
-            {activeWhatIf && <SimCard action={activeWhatIf} tone="whatif" />}
           </>
         )}
       </ScrollView>

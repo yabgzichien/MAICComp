@@ -11,7 +11,7 @@
 // design (spec's "Sync trigger" section), not a production servicing registry.
 
 import { NextResponse } from 'next/server';
-import { readServicingRecord, writeServicingEvent } from '../../../lib/servicingStore';
+import { clearServicingBook, readServicingRecord, writeServicingEvent } from '../../../lib/servicingStore';
 import { LENDER_REGISTRY } from '../../../lib/lenderRegistry';
 import type { ServicingOutcome, ServicingSource } from '../../../lib/mergeServicing';
 
@@ -174,4 +174,16 @@ export async function GET(req: Request) {
 
 export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
+}
+
+// Same-origin only (no CORS headers), mirrors DELETE /api/apply: the console's own
+// "Reset to defaults" empties this lender's servicing ledger  a record for an application
+// the same reset just deleted is orphaned data with no reason to survive.
+export async function DELETE(req: Request) {
+  const lenderId = resolveLenderId(new URL(req.url).searchParams.get('lender'));
+  if (lenderId === null) {
+    return NextResponse.json({ cleared: false, errors: ['Unknown lender.'] }, { status: 400 });
+  }
+  await clearServicingBook(undefined, lenderId);
+  return NextResponse.json({ cleared: true });
 }

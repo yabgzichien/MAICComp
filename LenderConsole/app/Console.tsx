@@ -64,7 +64,7 @@ import { diffCheckIn, monitoringStatus, type EarlyWarningFlag, type MonitoringSt
 import { seedApplications } from '../lib/demoSeed';
 import { DEMO_APPLICANTS } from './demoApplicants';
 import QueueRail from './QueueRail';
-import { InfoButton, InfoModal, MiniBar, SectionLabel } from './shared';
+import { ConfirmModal, InfoButton, InfoModal, MiniBar, SectionLabel, Toast } from './shared';
 import AgentPanel from './AgentPanel';
 import CreditMemoModal from './CreditMemo';
 import AdverseActionLetterModal from './AdverseActionLetter';
@@ -1766,7 +1766,33 @@ export default function Console() {
   const [activeLenderId, setActiveLenderIdState] = useState(DEFAULT_LENDER_ID);
   const [showPersonaPicker, setShowPersonaPicker] = useState(false);
   const [resettingDefaults, setResettingDefaults] = useState(false);
+  // Custom reset-confirmation modal + post-reset success toast (2026-07-20 follow-up),
+  // replacing a bare window.confirm/none at all.
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [resetToast, setResetToast] = useState<string | null>(null);
   const activeLender: LenderProfile = LENDER_REGISTRY.find((l) => l.id === activeLenderId) ?? LENDER_REGISTRY[0];
+
+  /** Pull `lenderId`'s server-side direct-apply mailbox and merge any new borrower
+   *  submissions into the local pipeline (poll-on-focus, mirrors pullServicing below): a
+   *  borrower who sends a passport while the officer already has the console open now
+   *  shows up without a manual reload. Deduped by fileApplication's subject+amount identity,
+   *  then persisted so an adopted submission behaves exactly like an officer-filed one on
+   *  every later load. */
+  const pullDirectApply = async (lenderId: string) => {
+    try {
+      const res = await fetch(`/api/apply?lender=${lenderId}`);
+      if (!res.ok) return;
+      const server: unknown = await res.json();
+      if (!Array.isArray(server) || server.length === 0) return;
+      const merged = mergeServerApplications(readApplications(undefined, lenderId), server);
+      if (merged.changed) {
+        writeApplications(merged.apps, undefined, lenderId);
+        if (lenderId === activeLenderId) setApps(merged.apps);
+      }
+    } catch {
+      // offline/malformed  the pipeline just stays whatever it was locally.
+    }
+  };
 
   /** Loads everything scoped to `lenderId`: its stored policy (which re-evaluates
    *  whatever passport code/amount are currently on screen), its own applications
@@ -1774,25 +1800,11 @@ export default function Console() {
    *  presentment log. Used on boot and on every lender switch. */
   const loadForLender = (lenderId: string, codeUsed: string, amountUsed: string) => {
     setApps(readApplications(undefined, lenderId));
-    // Merge this lender's direct-apply submissions (borrowers who sent from the Pip app) into
-    // its own pipeline. Deduped by fileApplication's subject+amount identity, then persisted so
-    // an adopted submission behaves exactly like an officer-filed one on every later load.
-    fetch(`/api/apply?lender=${lenderId}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((server: unknown) => {
-        if (!Array.isArray(server) || server.length === 0) return;
-        const merged = mergeServerApplications(readApplications(undefined, lenderId), server);
-        if (merged.changed) {
-          writeApplications(merged.apps, undefined, lenderId);
-          setApps(merged.apps);
-        }
-      })
-      .catch(() => {})
-      // Servicing sync (2026-07-18 design) runs after the direct-apply adoption above so it
-      // sees any just-adopted approved loans too, not just the ones already in the pipeline.
-      .finally(() => {
-        pullServicing(lenderId).catch(() => {});
-      });
+    // Servicing sync (2026-07-18 design) runs after the direct-apply adoption above so it
+    // sees any just-adopted approved loans too, not just the ones already in the pipeline.
+    pullDirectApply(lenderId).finally(() => {
+      pullServicing(lenderId).catch(() => {});
+    });
     fetch(`/api/policy?lender=${lenderId}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((sp: StoredPolicy | null) => {
@@ -1848,24 +1860,27 @@ export default function Console() {
     loadForLender(lenderId, SAMPLE_CODE, '10,000');
   };
 
+  /** Opens the custom reset-confirmation modal (2026-07-20 follow-up: replaces a bare
+   *  `window.confirm`, which can't carry the console's own styling or explain the borrower-app
+   *  consequence as clearly as a real dialog). The actual reset only runs from the modal's
+   *  Confirm button, in `performReset` below. */
+  const onResetToDefaults = () => setResetConfirmOpen(true);
+
   /** Reset-to-defaults: wipes this lender's own mutations  its application pipeline (both the
    *  console's own filings and the server-side direct-apply mailbox, so a reset genuinely
    *  empties the queue rather than having it silently repopulate on the next load), its
-   *  presentment log, and any saved policy edits (reverting to that lender's registry package,
-   *  not the generic ladder)  then reloads a clean workbench. Scoped to the active lender
-   *  only, mirroring every other lender-scoped store here; switching lenders still sees that
-   *  lender's own untouched state. Does not touch the tour (Restart tour is a separate,
-   *  deliberate action). This is a demo console with no authentication (spec: "no
-   *  credentials"), so the mailbox holds only test submissions from the paired borrower app,
-   *  never a real lender's live pipeline  wiping it here is safe by design, not an oversight. */
-  const onResetToDefaults = async () => {
-    if (
-      !window.confirm(
-        `Reset ${activeLender.name}'s console to defaults? This clears the applications queue (including any direct applications from the borrower app), presentment log, and any saved policy edits. Can't be undone.`
-      )
-    ) {
-      return;
-    }
+   *  presentment log, saved policy edits (reverting to that lender's registry package, not the
+   *  generic ladder), its servicing ledger, and its published offer book  then stamps a reset
+   *  marker (data-consistency follow-up, 2026-07-20) so the borrower app can find out and clear
+   *  its own now-orphaned copy of any loan routed to this lender, and reloads a clean
+   *  workbench. Scoped to the active lender only, mirroring every other lender-scoped store
+   *  here; switching lenders still sees that lender's own untouched state. Does not touch the
+   *  tour (Restart tour is a separate, deliberate action). This is a demo console with no
+   *  authentication (spec: "no credentials"), so the mailbox holds only test submissions from
+   *  the paired borrower app, never a real lender's live pipeline  wiping it here is safe by
+   *  design, not an oversight. */
+  const performReset = async () => {
+    setResetConfirmOpen(false);
     setResettingDefaults(true);
     try {
       writeApplications([], undefined, activeLenderId);
@@ -1878,6 +1893,9 @@ export default function Console() {
             body: JSON.stringify({ policy: activeLender.policy ?? DEFAULT_POLICY, products: activeLender.products }),
           }),
           fetch(`/api/apply?lender=${activeLenderId}`, { method: 'DELETE' }),
+          fetch(`/api/servicing?lender=${activeLenderId}`, { method: 'DELETE' }),
+          fetch(`/api/offers?lender=${activeLenderId}`, { method: 'DELETE' }),
+          fetch(`/api/reset?lender=${activeLenderId}`, { method: 'POST' }),
         ]);
       } catch {
         // Best-effort; loadForLender below still re-reads whatever the server ends up with.
@@ -1895,6 +1913,7 @@ export default function Console() {
       setApps([]);
       setPriors([]);
       loadForLender(activeLenderId, SAMPLE_CODE, '10,000');
+      setResetToast(`${activeLender.name}'s console was reset to defaults. Any matching loan on the borrower app's side will clear on its next sync.`);
     } finally {
       setResettingDefaults(false);
     }
@@ -1978,6 +1997,37 @@ export default function Console() {
   // the last load or tab switch shows up without a manual refresh.
   useEffect(() => {
     if (tab === 'servicing') pullServicing(activeLenderId).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, activeLenderId]);
+
+  // Poll-on-focus, same pattern, for the pipeline: the officer typically leaves the console
+  // open on the Verify tab (where QueueRail lives) while a borrower sends a passport from the
+  // Pip app. Without this, a direct-apply submission only ever adopted on mount/lender-switch,
+  // so it silently sat in the server mailbox until the next reload. Also re-checks on window
+  // focus (tab-switch back to the console, not just in-app tab switch) for the same reason.
+  useEffect(() => {
+    if (tab === 'verify') pullDirectApply(activeLenderId).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, activeLenderId]);
+
+  useEffect(() => {
+    const onFocus = () => {
+      if (tab === 'verify') pullDirectApply(activeLenderId).catch(() => {});
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, activeLenderId]);
+
+  // A live demo typically runs the borrower phone and this console side by side, so the
+  // window never actually loses/regains focus  a light interval poll while parked on the
+  // Verify tab covers that case too.
+  useEffect(() => {
+    if (tab !== 'verify') return;
+    const id = setInterval(() => {
+      pullDirectApply(activeLenderId).catch(() => {});
+    }, 5_000);
+    return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, activeLenderId]);
 
@@ -2219,6 +2269,17 @@ export default function Console() {
         Pip Credit Lender Console: {activeLender.name}
       </h1>
       <Header p={p} tab={tab} setTab={setTab} alert={showAlert} onRestartTour={tour.restart} onResetToDefaults={onResetToDefaults} resettingDefaults={resettingDefaults} activeLender={activeLender} onSwitchLender={switchLender} watchlistCount={servicingWatchlistIds.size} />
+      <ConfirmModal
+        open={resetConfirmOpen}
+        title={`Reset ${activeLender.name} to defaults?`}
+        body={`This clears the applications queue (including any direct applications from the borrower app), presentment log, servicing ledger, published offers, and any saved policy edits. The borrower app will clear its matching loan record on its next sync. Can't be undone.`}
+        confirmLabel="Reset console"
+        danger
+        onConfirm={performReset}
+        onCancel={() => setResetConfirmOpen(false)}
+        p={p}
+      />
+      <Toast message={resetToast} onClose={() => setResetToast(null)} p={p} />
       {showAlert && <AlertBanner caseId={flagCaseId} flagTime={flagTime} />}
       {tour.visible && !tour.paused && <TourSpotlight onDimPress={tour.pause} />}
       {tour.visible && <TourCard p={p} c={tour} officer={activeLender.officer} lender={activeLender.name} />}

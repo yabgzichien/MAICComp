@@ -113,3 +113,11 @@ export async function writeOffer(
   await writeJson(keyFor(lenderId), defaultFilePathFor(lenderId), book, filePath);
   return record;
 }
+
+/** Empty `lenderId`'s whole offer book (lender-reset-to-defaults, 2026-07-20 follow-up): a
+ *  stale offer left behind after a reset would let a borrower's poll re-book a loan whose
+ *  application record the console just wiped, the moment its own (also-just-cleared) local
+ *  copy is removed  the reset has to take the offer with it, not just the application. */
+export async function clearOfferBook(filePath: string | undefined, lenderId: string = DEFAULT_LENDER_ID): Promise<void> {
+  await writeJson(keyFor(lenderId), defaultFilePathFor(lenderId), {}, filePath);
+}

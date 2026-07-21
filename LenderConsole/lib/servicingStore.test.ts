@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { readServicingBook, readServicingRecord, writeServicingEvent } from './servicingStore';
+import { clearServicingBook, readServicingBook, readServicingRecord, writeServicingEvent } from './servicingStore';
 
 const NOW = new Date('2026-07-18T12:00:00.000Z');
 const SUBJECT = 'a'.repeat(64);
@@ -84,5 +84,12 @@ describe('servicingStore — server-side shared servicing ledger', () => {
     const stored = await readServicingRecord(SUBJECT, tmp, 'koperasi-sejahtera');
     expect(stored?.lenderId).toBe('koperasi-sejahtera');
     expect(stored?.events).toHaveLength(1);
+  });
+
+  it('clearServicingBook empties the book (lender-reset-to-defaults, 2026-07-20)', async () => {
+    await writeServicingEvent(tmp, 'tekun', SUBJECT, { tenorMonths: 12, installment: 500, event: { instalmentSeq: 1, outcome: 'on-time' }, source: 'lender' }, NOW);
+    await clearServicingBook(tmp, 'tekun');
+    expect(await readServicingRecord(SUBJECT, tmp)).toBeNull();
+    expect(await readServicingBook(tmp)).toEqual({});
   });
 });

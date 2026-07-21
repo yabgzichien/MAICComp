@@ -42,6 +42,7 @@ import {
   listProducts as dbListProducts,
   createApplication as dbCreateApplication,
   listApplications as dbListApplications,
+  deleteApplication as dbDeleteApplication,
   scheduleRepayments as dbScheduleRepayments,
   insertSchedule as dbInsertSchedule,
   setLoanLiabilityAccount as dbSetLoanLiabilityAccount,
@@ -60,6 +61,7 @@ import { buildBookedLoan, outstandingAfter } from '../lib/acceptOffer';
 import type { DirectApplyDecision } from '../lib/directApply';
 import { fetchLenderDirectory, LENDER_API_BASE } from '../lib/lenderDirectory';
 import { offerToDecision, parseOffer, pendingOffers, type Offer } from '../lib/offers';
+import { applicationsClearedByReset, clearedLoanMessage, parseResetMarker } from '../lib/resetSync';
 import type { DeclaredPurpose } from '../lib/loanPurpose';
 import { mergeLoanWithServicing, servicingWritePayload } from '../lib/servicingSync';
 import type { ServicingRecord } from '../lib/mergeServicing';
@@ -232,6 +234,18 @@ interface AppData {
   adoptApprovedOffers: (currentScore: number) => Promise<void>;
   /** Clear the unseen-financing badge (borrower has now opened My Financing). */
   markFinancingSeen: () => Promise<void>;
+  /** Poll every lender this borrower has a loan with for a reset marker (data-consistency
+   *  follow-up, 2026-07-20): if that lender's console was reset since the loan was booked,
+   *  removes it locally (application, repayments, and its Net-worth liability account) so the
+   *  two apps can't drift into permanent disagreement about whether the loan exists. Sets
+   *  `clearedByLenderNotice` when anything was actually removed. Best-effort, same posture as
+   *  every other lender-facing poll here. */
+  syncLenderResets: () => Promise<void>;
+  /** Ready-to-display banner text for a just-detected lender-side reset that removed one or
+   *  more of this borrower's loans, or null when there's nothing to show. */
+  clearedByLenderNotice: string | null;
+  /** Dismiss the reset notice banner. */
+  dismissClearedByLenderNotice: () => void;
 }
 
 const Ctx = createContext<AppData | null>(null);
@@ -257,6 +271,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   });
   // Loans auto-booked from a console approval the borrower hasn't opened yet (approval-notify).
   const [unseenFinancingCount, setUnseenFinancingCount] = useState(0);
+  // Banner text for a just-detected lender-side reset that removed one or more local loans
+  // (data-consistency follow-up, 2026-07-20). In-memory only, not persisted: it's a live-event
+  // notice for whichever sync run just found it, not app state to restore across a reload.
+  const [clearedByLenderNotice, setClearedByLenderNotice] = useState<string | null>(null);
   const [kyc, setKycState] = useState<KycIdentity | null>(null);
   const [occupation, setOccupationState] = useState<Occupation | null>(null);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
@@ -824,9 +842,54 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     if (anyChanged) await refreshLoanState();
   }, [loanApplications, repayments, getSubject, refreshLoanState]);
 
+  /** Poll every lender this borrower has a loan with for a reset marker (data-consistency
+   *  follow-up, 2026-07-20): if that lender's console was reset since the loan was booked,
+   *  removes it locally  the application, its repayments, and the Net-worth liability account
+   *  it created  so the two apps can't drift into permanent disagreement about whether the
+   *  loan still exists. A fresh apply booked AFTER the reset (against the now-clean console)
+   *  is left alone; `applicationsClearedByReset` is what draws that line. Naturally idempotent
+   *  (deleting an already-deleted row/account is a harmless no-op), so unlike
+   *  `adoptApprovedOffers` this doesn't need a re-entrancy latch  there's no new resource a
+   *  duplicate run could double-create. Best-effort per lender, same degrade-silently posture
+   *  as `pullServicing`. */
+  const syncLenderResets = useCallback(async () => {
+    const lenderIds = Array.from(new Set(loanApplications.filter((a) => a.lenderId).map((a) => a.lenderId as string)));
+    if (lenderIds.length === 0) return;
+
+    const toDelete: LoanApplication[] = [];
+    for (const lenderId of lenderIds) {
+      try {
+        const res = await fetch(`${LENDER_API_BASE}/api/reset?lender=${encodeURIComponent(lenderId)}`);
+        if (!res.ok) continue;
+        const marker = parseResetMarker(await res.json());
+        if (!marker) continue;
+        toDelete.push(...applicationsClearedByReset(marker, lenderId, loanApplications));
+      } catch {
+        // offline/malformed  this lender's loans just stay as they are locally.
+      }
+    }
+    if (toDelete.length === 0) return;
+
+    for (const app of toDelete) {
+      await dbDeleteApplication(app.id);
+      if (app.liabilityAccountId) await dbDeleteAccount(app.liabilityAccountId);
+    }
+    await refreshLoanState();
+    const [accts, entries] = await Promise.all([listAccounts(), listBalanceEntries()]);
+    setAccounts(accts);
+    setBalanceEntries(entries);
+    setClearedByLenderNotice(clearedLoanMessage(toDelete.map((a) => a.lenderLabel ?? 'Your lender')));
+  }, [loanApplications, refreshLoanState]);
+
+  const dismissClearedByLenderNotice = useCallback(() => setClearedByLenderNotice(null), []);
+
   // Guards adoptApprovedOffers against re-entrancy: a fast Home→Loan navigation could fire two
   // adopts before the first's booked application lands in state, double-booking the same offer.
-  const adoptingRef = useRef(false);
+  // Holds the in-flight run so a concurrent caller AWAITS it rather than returning immediately:
+  // My Financing's mount effect does `await adoptApprovedOffers(...)` and then clears the unseen
+  // badge, so a no-op early return would let it mark "seen" financing that hadn't been booked
+  // yet — and render its empty state against the pre-adopt application list.
+  const adoptingRef = useRef<Promise<void> | null>(null);
 
   /**
    * Poll the approved-offer back-channel and auto-book any new financing (approval-notify,
@@ -840,9 +903,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
    * the loan is recorded against, same as the manual accept flow.
    */
   const adoptApprovedOffers = useCallback(async (currentScore: number) => {
-    if (adoptingRef.current) return;
-    adoptingRef.current = true;
-    try {
+    // Already running → join that run instead of starting a second one or returning early.
+    if (adoptingRef.current) return adoptingRef.current;
+    const run = (async () => {
       const dir = await fetchLenderDirectory();
       const realLenders = dir.lenders.filter((l) => l.id !== 'offline');
       if (realLenders.length === 0) return;
@@ -877,9 +940,17 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         await setMeta(UNSEEN_FINANCING_KEY, String(next));
         setUnseenFinancingCount(next);
       }
-    } finally {
-      adoptingRef.current = false;
-    }
+    })();
+    adoptingRef.current = run;
+    // Clear the latch on settle, identity-checked so a late finish can't clear a newer run.
+    // The trailing catch keeps this derived chain from surfacing as an unhandled rejection —
+    // `run` itself still rejects for the caller, who owns the error.
+    run
+      .finally(() => {
+        if (adoptingRef.current === run) adoptingRef.current = null;
+      })
+      .catch(() => {});
+    return run;
   }, [getSubject, acceptLenderOffer]);
 
   /** Clear the unseen-financing badge  called when the borrower opens My Financing, so a
@@ -956,6 +1027,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     unseenFinancingCount,
     adoptApprovedOffers,
     markFinancingSeen,
+    syncLenderResets,
+    clearedByLenderNotice,
+    dismissClearedByLenderNotice,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

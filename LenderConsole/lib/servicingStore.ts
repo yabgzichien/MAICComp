@@ -133,3 +133,10 @@ export async function writeServicingEvent(
   await writeJson(keyFor(lenderId), defaultFilePathFor(lenderId), book, filePath);
   return merged;
 }
+
+/** Empty `lenderId`'s whole servicing book (lender-reset-to-defaults, 2026-07-20 follow-up):
+ *  a servicing record for an application the reset just deleted is orphaned data with no
+ *  reason to survive the reset. */
+export async function clearServicingBook(filePath: string | undefined, lenderId: string = DEFAULT_LENDER_ID): Promise<void> {
+  await writeJson(keyFor(lenderId), defaultFilePathFor(lenderId), {}, filePath);
+}

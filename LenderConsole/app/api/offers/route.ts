@@ -11,7 +11,7 @@
 // allowed  the borrower never writes here.
 
 import { NextResponse } from 'next/server';
-import { readOffer, writeOffer } from '../../../lib/offersStore';
+import { clearOfferBook, readOffer, writeOffer } from '../../../lib/offersStore';
 import { LENDER_REGISTRY } from '../../../lib/lenderRegistry';
 import type { DeclaredPurpose, PurposeCategory } from '../../../lib/applications';
 
@@ -118,4 +118,16 @@ export async function POST(req: Request) {
 
 export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
+}
+
+// Same-origin only (no CORS headers), mirrors DELETE /api/apply: the console's own
+// "Reset to defaults" empties this lender's offer book so a stale offer can't re-book a loan
+// whose application the same reset just wiped.
+export async function DELETE(req: Request) {
+  const lenderId = resolveLenderId(new URL(req.url).searchParams.get('lender'));
+  if (lenderId === null) {
+    return NextResponse.json({ cleared: false, errors: ['Unknown lender.'] }, { status: 400 });
+  }
+  await clearOfferBook(undefined, lenderId);
+  return NextResponse.json({ cleared: true });
 }
