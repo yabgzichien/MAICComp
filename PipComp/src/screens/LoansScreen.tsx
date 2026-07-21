@@ -123,6 +123,7 @@ export function LoansScreen({
   const [defaultError, setDefaultError] = useState('');
   const [clearBusy, setClearBusy] = useState(false);
   const [clearMsg, setClearMsg] = useState('');
+  const [clearedForId, setClearedForId] = useState<string | null>(null);
 
   // Poll-on-focus (Bidirectional Servicing Sync, 2026-07-18 + approval-notify, 2026-07-19 +
   // reset-sync, 2026-07-20): this screen only ever mounts while the borrower is actually on it
@@ -206,6 +207,7 @@ export function LoansScreen({
     try {
       await clearArrears(applicationId);
       setClearMsg('Arrears cleared — your access and rate discount are restored.');
+      setClearedForId(applicationId);
     } finally {
       setClearBusy(false);
     }
@@ -288,27 +290,30 @@ export function LoansScreen({
 
           {(() => {
             const pkgOverdue = overdueRowsFor(pkg.repayments, new Date());
-            if (pkgOverdue.length === 0) return null;
+            const justCleared = clearedForId === pkg.application.id && !!clearMsg;
+            if (pkgOverdue.length === 0 && !justCleared) return null;
             const amountOverdue = pkgOverdue.reduce((s, r) => s + r.amount, 0);
             return (
-              <Card style={[styles.standingBanner, { borderColor: RED }]}>
-                <Text style={[styles.standingTitle, { color: RED }]}>
-                  {pkgOverdue.length} month{pkgOverdue.length > 1 ? 's' : ''} behind — RM{Math.round(amountOverdue).toLocaleString('en-MY')} overdue
-                </Text>
-                <Text style={styles.standingBody}>
-                  Paying this off restores your loan access and rate discount today. This event stays on
-                  your record for 12 months even after it's cleared.
-                </Text>
-                {clearMsg ? (
-                  <Text style={[styles.standingBody, { color: GREEN, fontWeight: '700' }]}>{clearMsg}</Text>
+              <Card style={[styles.standingBanner, { borderColor: justCleared ? GREEN : RED }]}>
+                {justCleared ? (
+                  <Text style={[styles.standingTitle, { color: GREEN }]}>{clearMsg}</Text>
                 ) : (
-                  <Pressable
-                    onPress={() => handleClearArrears(pkg.application.id)}
-                    disabled={clearBusy}
-                    style={[styles.clearBtn, { backgroundColor: RED }]}
-                  >
-                    {clearBusy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.clearBtnText}>Pay off arrears</Text>}
-                  </Pressable>
+                  <>
+                    <Text style={[styles.standingTitle, { color: RED }]}>
+                      {pkgOverdue.length} month{pkgOverdue.length > 1 ? 's' : ''} behind — RM{Math.round(amountOverdue).toLocaleString('en-MY')} overdue
+                    </Text>
+                    <Text style={styles.standingBody}>
+                      Paying this off restores your loan access and rate discount today. This event stays on
+                      your record for 12 months even after it's cleared.
+                    </Text>
+                    <Pressable
+                      onPress={() => handleClearArrears(pkg.application.id)}
+                      disabled={clearBusy}
+                      style={[styles.clearBtn, { backgroundColor: RED }]}
+                    >
+                      {clearBusy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.clearBtnText}>Pay off arrears</Text>}
+                    </Pressable>
+                  </>
                 )}
               </Card>
             );
