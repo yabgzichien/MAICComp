@@ -125,6 +125,49 @@ describe('scarAcross', () => {
     };
     expect(scarAcross([a], NOW)).toBeNull();
   });
+
+  it('does not double-count consecutive late payments into a worse bucket than either landed at', () => {
+    const a = {
+      app: app({
+        filedAt: '2026-01-21T00:00:00.000Z',
+        resolvedAt: '2026-01-21T00:00:00.000Z',
+        installment: 300,
+        repayments: [
+          ev({ instalmentSeq: 1, at: '2026-03-05T00:00:00.000Z', outcome: 'late' }), // 1 month behind at the moment it landed
+          ev({ instalmentSeq: 2, at: '2026-04-05T00:00:00.000Z', outcome: 'late' }), // still only 1 month behind, not 2
+        ],
+      }),
+      tenorMonths: 12,
+    };
+    const scar = scarAcross([a], NOW);
+    expect(scar).not.toBeNull();
+    expect(scar!.bucket).toBe('slipping');
+  });
+
+  it('picks the worst peak across multiple loans, regardless of which is more recent', () => {
+    const milder = {
+      app: app({
+        id: 'a',
+        filedAt: '2026-05-21T00:00:00.000Z',
+        resolvedAt: '2026-05-21T00:00:00.000Z',
+        installment: 300,
+        repayments: [ev({ instalmentSeq: 1, at: '2026-07-05T00:00:00.000Z', outcome: 'late' })], // slipping, 0 months ago
+      }),
+      tenorMonths: 12,
+    };
+    const worse = {
+      app: app({
+        id: 'b',
+        filedAt: '2026-01-21T00:00:00.000Z',
+        resolvedAt: '2026-01-21T00:00:00.000Z',
+        installment: 300,
+        repayments: [ev({ instalmentSeq: 1, at: '2026-06-05T00:00:00.000Z', outcome: 'late' })], // impaired, 1 month ago
+      }),
+      tenorMonths: 12,
+    };
+    const scar = scarAcross([milder, worse], NOW);
+    expect(scar).toEqual({ bucket: 'impaired', reachedMonthsAgo: 1 });
+  });
 });
 
 describe('computeRepaymentStanding', () => {
