@@ -260,4 +260,9 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     short: "A compact min-to-max bar for each figure, marking where the median and mean fall.",
     body: 'The bar itself spans the smallest to the largest value in the book. The thin tick marks the median; the filled dot marks the mean. When the two markers sit close together the book is evenly spread; when they diverge, a few loans at one end are pulling the mean away from what is typical.',
   },
+  repayment_standing: {
+    term: 'Repayment Standing',
+    short: "The applicant's current arrears state and repayment history, re-derived from the ledger.",
+    body: "Standing is not self-reported — it's computed from the same repayment schedule this console tracks for every disbursed loan. Access follows progressive-lending practice: one month behind still refers for review, two months loses the loyalty discount and caps the eligible tier, three or more declines new applications until cleared. Paying down arrears restores access the same day; the event itself stays visible for 12 months, mirroring how Malaysia's CCRIS (Bank Negara's credit reference system) reports a borrower's payment conduct — this console doesn't integrate with CCRIS, but a licensed lender using it in production would report through it, which is what CTOS-type scores actually read from.",
+  },
 };

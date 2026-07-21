@@ -1126,7 +1126,7 @@ function PricingStrip({ p, pricing, adopted, onAdopt }: { p: Palette; pricing: P
   );
 }
 
-function RightDecision({ p, passport, decision, credential, amount, setAmount, onAssess, onCounterOffer, isCounterOffer, stacking, selectedApp, onResolve, onRecordRepayment, onGenerateLetter, purpose, setPurpose, policy, policyUpdatedAt, pricing, adoptedRate, onAdoptRate, lenderName }: { p: Palette; passport: CreditPassport | null; decision: LoanDecision | null; credential: Credential | null; amount: string; setAmount: (s: string) => void; onAssess: () => void; onCounterOffer?: (counterAmount: number) => void; isCounterOffer?: boolean; stacking?: StackingSignal; selectedApp?: ApplicationRecord | null; onResolve?: (outcome: 'approved' | 'declined', rationale: string) => void; onRecordRepayment?: (instalmentSeq: number, amount: number, outcome: RepaymentOutcome) => void; onGenerateLetter?: () => void; purpose?: DeclaredPurpose | null; setPurpose?: (p: DeclaredPurpose | null) => void; policy?: LenderPolicy; policyUpdatedAt?: string; pricing?: PricingSuggestion | null; adoptedRate?: number | null; onAdoptRate?: (rate: number) => void; lenderName: string }) {
+function RightDecision({ p, passport, decision, credential, amount, setAmount, onAssess, onCounterOffer, isCounterOffer, stacking, selectedApp, onResolve, onRecordRepayment, onGenerateLetter, purpose, setPurpose, policy, policyUpdatedAt, pricing, adoptedRate, onAdoptRate, lenderName, ownApplications, storedPolicy }: { p: Palette; passport: CreditPassport | null; decision: LoanDecision | null; credential: Credential | null; amount: string; setAmount: (s: string) => void; onAssess: () => void; onCounterOffer?: (counterAmount: number) => void; isCounterOffer?: boolean; stacking?: StackingSignal; selectedApp?: ApplicationRecord | null; onResolve?: (outcome: 'approved' | 'declined', rationale: string) => void; onRecordRepayment?: (instalmentSeq: number, amount: number, outcome: RepaymentOutcome) => void; onGenerateLetter?: () => void; purpose?: DeclaredPurpose | null; setPurpose?: (p: DeclaredPurpose | null) => void; policy?: LenderPolicy; policyUpdatedAt?: string; pricing?: PricingSuggestion | null; adoptedRate?: number | null; onAdoptRate?: (rate: number) => void; lenderName: string; ownApplications: ApplicationRecord[]; storedPolicy: StoredPolicy }) {
   const [memoOpen, setMemoOpen] = useState(false);
   const [letterOpen, setLetterOpen] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
@@ -1246,6 +1246,29 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
             )}
           </div>
           </TourAnchor>
+
+          {/* Repayment-standing evidence (Task 11): shows the numbers behind decideLoan's adverseRecord reason. */}
+          {(() => {
+            if (!passport) return null;
+            const standing = mergedStanding(passport, ownApplications, storedPolicy);
+            if (standing.current.bucket === 'clean') return null;
+            const color = standing.current.bucket === 'impaired' ? '#c0392b' : '#a3791f'; // matches CHIP_STYLE.delinquent/late (Servicing tab), no new hex
+            return (
+              <div style={{ margin: '10px 20px 0', borderRadius: 10, border: `1.5px solid ${color}`, background: `${color}14`, padding: '10px 14px', flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color }}>
+                    {standing.current.monthsInArrears} month{standing.current.monthsInArrears > 1 ? 's' : ''} behind, RM{Math.round(standing.current.amountOverdue).toLocaleString('en-MY')} overdue
+                  </span>
+                  <InfoButton entry="repayment_standing" onOpen={setInfo} />
+                </div>
+                {standing.scar && (
+                  <p style={{ fontFamily: FONT.ui, fontSize: 11.5, color: p.ink3, margin: '4px 0 0' }}>
+                    Prior arrears event {standing.scar.reachedMonthsAgo} month{standing.scar.reachedMonthsAgo > 1 ? 's' : ''} ago, still on file (12-month window)
+                  </p>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Counter-offer strip (Brief L): show when the engine found a positive supportable amount below the request. */}
           {(() => {
@@ -2324,7 +2347,7 @@ export default function Console() {
             <QueueRail p={p} apps={apps} selectedId={selectedAppId} onSelect={onSelectApp} onSeed={onSeed} onPasteNew={onPasteNew} forceSeedButton={tour.forceSeedButton} />
             {showPassportInput && <LeftPanel p={p} flagged={flagged} statusValid={flagged ? false : statusValid} code={code} setCode={setCode} onVerify={onVerify} />}
             {showAlert ? <CenterAlert p={p} flagTime={flagTime} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} lapsedTiers={state.credential.verification.lapsedTiers} /> : <InvalidCenter p={p} reasons={state.reasons} />}
-            {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} onCounterOffer={onCounterOffer} isCounterOffer={isCounterOffer} stacking={stackingSignal} selectedApp={selectedApp} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onGenerateLetter={onGenerateLetter} purpose={purpose} setPurpose={setPurpose} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} pricing={pricing} adoptedRate={adoptedRate} onAdoptRate={onAdoptRate} lenderName={activeLender.name} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} lenderName={activeLender.name} />}
+            {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} onCounterOffer={onCounterOffer} isCounterOffer={isCounterOffer} stacking={stackingSignal} selectedApp={selectedApp} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onGenerateLetter={onGenerateLetter} purpose={purpose} setPurpose={setPurpose} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} pricing={pricing} adoptedRate={adoptedRate} onAdoptRate={onAdoptRate} lenderName={activeLender.name} ownApplications={apps} storedPolicy={storedPolicy} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} lenderName={activeLender.name} ownApplications={apps} storedPolicy={storedPolicy} />}
           </>
         ) : tab === 'servicing' ? (
           <>

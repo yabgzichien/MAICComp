@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { FONT, type Palette } from './tokens';
 import { orderQueue, type ApplicationRecord, type ApplicationStatus } from '../lib/applications';
 import { formatAgo } from '../lib/presentment';
+import { currentStandingAcross } from '../lib/repaymentStanding';
 import { TourAnchor } from './TourAnchor';
 
 const BAND_COLOR: Record<string, string> = {
@@ -19,6 +20,12 @@ const BAND_COLOR: Record<string, string> = {
   Strong: '#1f8a5b',
   Excellent: '#1f8a5b',
 };
+
+// Own-book repayment standing badge (Task 11): reuses this file's existing amber/red convention
+// (Building band's '#c0392b', Fair band's '#d98a00') rather than Console.tsx's Servicing-tab hex
+// set, since those are two separate local color maps for two separate files.
+const STANDING_COLOR: Record<string, string> = { slipping: '#d98a00', arrears: '#d98a00', impaired: '#c0392b' };
+const STANDING_LABEL: Record<string, string> = { slipping: '1 mo behind', arrears: '2 mo behind', impaired: 'Impaired' };
 
 /** Verdict-driving signal (P2.10): band + confidence, so an officer can triage a queue
  *  without opening every card. Triage-only cards (New/Referred)  archived/serviced
@@ -52,7 +59,7 @@ const STATUS_COLOR: Record<ApplicationStatus, string> = {
 
 const rm = (n: number): string => `RM${Math.round(n).toLocaleString('en-MY')}`;
 
-function QueueCard({ p, a, selected, onSelect }: { p: Palette; a: ApplicationRecord; selected: boolean; onSelect: () => void }) {
+function QueueCard({ p, a, selected, onSelect, standingBucket }: { p: Palette; a: ApplicationRecord; selected: boolean; onSelect: () => void; standingBucket?: 'slipping' | 'arrears' | 'impaired' }) {
   return (
     <button
       onClick={onSelect}
@@ -96,6 +103,11 @@ function QueueCard({ p, a, selected, onSelect }: { p: Palette; a: ApplicationRec
         {rm(a.requestedAmount)} · filed {formatAgo(a.filedAt)}
       </p>
       <VerdictChip p={p} app={a} />
+      {standingBucket && (
+        <span style={{ display: 'inline-block', marginTop: 3, fontFamily: FONT.ui, fontSize: 11, fontWeight: 700, color: STANDING_COLOR[standingBucket] }}>
+          {STANDING_LABEL[standingBucket]}
+        </span>
+      )}
     </button>
   );
 }
@@ -128,6 +140,19 @@ export default function QueueRail({
   const triageEmpty = triageQueues.every((t) => t.queue.length === 0);
   const archived = orderQueue(apps, 'declined').filter(matches);
   const servicedCount = apps.filter((a) => a.status === 'approved').length;
+
+  // Display-only per-card own-book standing estimate (Task 11). The real tenor-aware value is
+  // computed at assess time by Console.tsx's mergedStanding (Task 10); this is a queue-triage
+  // signal only, so a fixed 12-month tenor assumption is fine here.
+  const standingByApp: Map<string, 'slipping' | 'arrears' | 'impaired' | undefined> = new Map(
+    apps.map((a) => {
+      const siblings = apps
+        .filter((x) => x.subject === a.subject && x.status === 'approved')
+        .map((x) => ({ app: x, tenorMonths: 12 }));
+      const s = currentStandingAcross(siblings);
+      return [a.id, s.bucket === 'clean' ? undefined : s.bucket] as const;
+    })
+  );
 
   return (
     <TourAnchor id="queue-rail">
@@ -191,7 +216,7 @@ export default function QueueRail({
               <span style={{ fontFamily: FONT.num, fontSize: 12, fontWeight: 700, color: queue.length > 0 ? p.ink1 : p.ink3 }}>{queue.length}</span>
             </div>
             {queue.map((a) => (
-              <QueueCard key={a.id} p={p} a={a} selected={a.id === selectedId} onSelect={() => onSelect(a)} />
+              <QueueCard key={a.id} p={p} a={a} selected={a.id === selectedId} onSelect={() => onSelect(a)} standingBucket={standingByApp.get(a.id)} />
             ))}
           </div>
         );
@@ -216,7 +241,7 @@ export default function QueueRail({
               <span style={{ fontFamily: FONT.num, fontSize: 12, fontWeight: 700, color: p.ink3 }}>{archived.length}</span>
             </button>
             {expanded && archived.map((a) => (
-              <QueueCard key={a.id} p={p} a={a} selected={a.id === selectedId} onSelect={() => onSelect(a)} />
+              <QueueCard key={a.id} p={p} a={a} selected={a.id === selectedId} onSelect={() => onSelect(a)} standingBucket={standingByApp.get(a.id)} />
             ))}
           </div>
         );
