@@ -18,7 +18,7 @@ import { type CreditPassport, type VerifyResult, parsePassportCode, verifyPasspo
 import { DEFAULT_POLICY, REASON_CATEGORY_LABELS, decideLoan, type LenderPolicy, type LoanDecision, type LoanProduct } from '../lib/loans';
 import { DEFAULT_STORED_POLICY, type StoredPolicy } from '../lib/policyStore';
 import { priceLoan, repriceProducts, type PricingSuggestion } from '../lib/pricing';
-import { computeRepaymentStanding, type RepaymentStanding } from '../lib/repaymentStanding';
+import { computeRepaymentStanding, type RepaymentStanding, type StandingBucket } from '../lib/repaymentStanding';
 import { structurePool, type CreditBand, type PoolLoan } from '../lib/securitization';
 import { SAMPLE_POOL } from '../lib/samplePool';
 import { poolStatCells, trancheViews } from '../lib/poolView';
@@ -87,10 +87,10 @@ type ViewState =
 
 const parseAmount = (s: string): number => Number(s.replace(/[^0-9.]/g, '')) || 0;
 
-function decisionFor(passport: CreditPassport, amountStr: string, stored: StoredPolicy, ownBook: ApplicationRecord[], productsOverride?: LoanProduct[]): LoanDecision | null {
+function decisionFor(passport: CreditPassport, amountStr: string, stored: StoredPolicy, ownApplications: ApplicationRecord[], productsOverride?: LoanProduct[]): LoanDecision | null {
   const a = passport.assessment;
   if (!a) return null;
-  const standing = mergedStanding(passport, ownBook, stored);
+  const standing = mergedStanding(passport, ownApplications, stored);
   return decideLoan({
     score: passport.score,
     confidence: a.confidence,
@@ -107,19 +107,19 @@ function decisionFor(passport: CreditPassport, amountStr: string, stored: Stored
 }
 
 /** Worst-of the passport's own signed standing (arrears at other lenders) and this lender's
- *  own book (arrears at THIS lender, computed from ApplicationRecord.repayments — the
+ *  own applications (arrears at THIS lender, computed from ApplicationRecord.repayments — the
  *  console's own real ledger). Mirrors the anti-stacking presentment check's "prefer signed
  *  cross-party evidence, but also check local state" pattern. */
-function mergedStanding(passport: CreditPassport, ownBook: ApplicationRecord[], stored: StoredPolicy): RepaymentStanding {
-  const ownLoans = ownBook
+function mergedStanding(passport: CreditPassport, ownApplications: ApplicationRecord[], stored: StoredPolicy): RepaymentStanding {
+  const ownLoans = ownApplications
     .filter((a) => a.subject === passport.subject && a.status === 'approved')
     .map((a) => {
       const tenorMonths = stored.products.find((p) => p.label === a.tierLabel)?.tenorMonths ?? 12;
       return { app: a, tenorMonths };
     });
   const ownStanding = computeRepaymentStanding(ownLoans);
-  const BUCKET_RANK: Record<string, number> = { clean: 0, slipping: 1, arrears: 2, impaired: 3 };
-  const passportBucket = passport.standing?.current.bucket ?? 'clean';
+  const BUCKET_RANK: Record<StandingBucket, number> = { clean: 0, slipping: 1, arrears: 2, impaired: 3 };
+  const passportBucket: StandingBucket = passport.standing?.current.bucket ?? 'clean';
   if (BUCKET_RANK[ownStanding.current.bucket] >= BUCKET_RANK[passportBucket]) return ownStanding;
   return {
     current: {
@@ -135,7 +135,7 @@ function mergedStanding(passport: CreditPassport, ownBook: ApplicationRecord[], 
 
 /** Pure: parse + cryptographically verify a pasted code, then run the loan decision
  *  under the lender's stored policy (Brief N). */
-function evaluate(code: string, amountStr: string, stored: StoredPolicy, ownBook: ApplicationRecord[]): ViewState {
+function evaluate(code: string, amountStr: string, stored: StoredPolicy, ownApplications: ApplicationRecord[]): ViewState {
   try {
     const parsed = parsePassportCode(code);
     const res = verifyPassport(parsed.passport, parsed.signature, parsed.issuerSignature);
@@ -143,7 +143,7 @@ function evaluate(code: string, amountStr: string, stored: StoredPolicy, ownBook
     return {
       status: 'valid',
       passport: parsed.passport,
-      decision: decisionFor(parsed.passport, amountStr, stored, ownBook),
+      decision: decisionFor(parsed.passport, amountStr, stored, ownApplications),
       credential: { signature: parsed.signature, issuerSignature: parsed.issuerSignature, verification: res },
     };
   } catch (e) {
@@ -1829,8 +1829,11 @@ export default function Console() {
    *  pipeline, and  if that re-evaluation yields a valid passport  its own
    *  presentment log. Used on boot and on every lender switch. */
   const loadForLender = (lenderId: string, codeUsed: string, amountUsed: string) => {
-    const ownBook = readApplications(undefined, lenderId);
-    setApps(ownBook);
+    // Read into a local const rather than relying on the `apps` state var below: setApps is
+    // async, so the .then() callback's `apps` closure would still hold the PREVIOUS lender's
+    // applications at the moment evaluate() needs them for the standing merge.
+    const ownApplications = readApplications(undefined, lenderId);
+    setApps(ownApplications);
     // Servicing sync (2026-07-18 design) runs after the direct-apply adoption above so it
     // sees any just-adopted approved loans too, not just the ones already in the pipeline.
     pullDirectApply(lenderId).finally(() => {
@@ -1841,7 +1844,7 @@ export default function Console() {
       .then((sp: StoredPolicy | null) => {
         if (!sp) return;
         setStoredPolicy(sp);
-        const next = evaluate(codeUsed, amountUsed, sp, ownBook);
+        const next = evaluate(codeUsed, amountUsed, sp, ownApplications);
         setState(next);
         setPriors(next.status === 'valid' ? findRecentPresentments(readPresentmentLog(undefined, lenderId), presentmentKey(next.passport)) : []);
       })
