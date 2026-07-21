@@ -57,6 +57,7 @@ import {
   type RepaymentSummary,
 } from '../db/loansRepo';
 import { DEFAULT_PRODUCTS, decideLoan, type LoanDecision, type LoanProduct } from '../lib/loans';
+import { computeRepaymentStanding } from '../lib/repaymentStanding';
 import { buildBookedLoan, outstandingAfter } from '../lib/acceptOffer';
 import type { DirectApplyDecision } from '../lib/directApply';
 import { fetchLenderDirectory, LENDER_API_BASE } from '../lib/lenderDirectory';
@@ -620,6 +621,13 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       if (!product) throw new Error(`Unknown loan product: ${productId}`);
 
       const cov = computeCoverage(transactions);
+      const standing = computeRepaymentStanding(
+        loanApplications.map((a) => ({
+          applicationId: a.id,
+          repayments: repayments.filter((r) => r.applicationId === a.id),
+          defaulted: a.status === 'defaulted',
+        }))
+      );
       const decision = decideLoan({
         score: decisionInputs.score,
         band: decisionInputs.band,
@@ -632,6 +640,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         coverageRatio: cov.ratio,
         coverageDaysCovered: cov.daysCovered,
         integrityFloorBreached: decisionInputs.integrityFloorBreached,
+        adverseRecord: standing.current.adverseRecord,
       });
 
       const application = await dbCreateApplication(productId, requestedAmount, decision, decisionInputs.score);
@@ -644,7 +653,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       await refreshLoanState();
       return { application, decision };
     },
-    [loanProducts, refreshLoanState, transactions]
+    [loanProducts, refreshLoanState, transactions, loanApplications, repayments]
   );
 
   // Book an approved lender offer locally. The lender already decided the installment, so we

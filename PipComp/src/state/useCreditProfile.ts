@@ -10,6 +10,7 @@ import { computeMomentum, type Momentum } from '../lib/momentum';
 import { computeIncomeQuality, type IncomeQuality } from '../lib/incomeQuality';
 import { computeSpendingProfile, type SpendingProfile } from '../lib/spendingProfile';
 import { detectObligations, type ObligationSummary } from '../lib/obligations';
+import { computeRepaymentStanding, type RepaymentStanding } from '../lib/repaymentStanding';
 
 /** Assemble the CreditProfile from store state and compute the score. Deterministic given inputs. */
 export function useCreditProfile(): {
@@ -25,9 +26,20 @@ export function useCreditProfile(): {
   incomeQuality: IncomeQuality;
   spendingProfile: SpendingProfile;
   obligations: ObligationSummary;
+  /** Current arrears state + decaying scar across every loan (2026-07-21 design). */
+  standing: RepaymentStanding;
 } {
-  const { transactions, snapshots, allocations, accounts, balanceEntries, accountValues, repaymentSummary } =
-    useAppData();
+  const {
+    transactions,
+    snapshots,
+    allocations,
+    accounts,
+    balanceEntries,
+    accountValues,
+    repaymentSummary,
+    loanApplications,
+    repayments,
+  } = useAppData();
 
   return useMemo(() => {
     const inputs: CreditInputs = {
@@ -40,17 +52,46 @@ export function useCreditProfile(): {
       repaymentSummary,
     };
     const { profile, score, coverage, dataConfidence, confidenceTxns, expenseRatio } = assembleCredit(inputs);
+    const standing = computeRepaymentStanding(
+      loanApplications.map((a) => ({
+        applicationId: a.id,
+        repayments: repayments.filter((r) => r.applicationId === a.id),
+        defaulted: a.status === 'defaulted',
+      }))
+    );
     const coachInput: CoachPlanInput = {
       profile,
       coverage,
       confidenceTxns,
       expenseRatio,
       products: DEFAULT_PRODUCTS,
+      adverseRecord: standing.current.adverseRecord,
     };
     const momentum = computeMomentum(inputs);
     const incomeQuality = computeIncomeQuality(transactions);
     const spendingProfile = computeSpendingProfile(transactions);
     const obligations = detectObligations(transactions);
-    return { profile, score, dataConfidence, coverage, coachInput, momentum, incomeQuality, spendingProfile, obligations };
-  }, [transactions, snapshots, allocations, accounts, balanceEntries, accountValues, repaymentSummary]);
+    return {
+      profile,
+      score,
+      dataConfidence,
+      coverage,
+      coachInput,
+      momentum,
+      incomeQuality,
+      spendingProfile,
+      obligations,
+      standing,
+    };
+  }, [
+    transactions,
+    snapshots,
+    allocations,
+    accounts,
+    balanceEntries,
+    accountValues,
+    repaymentSummary,
+    loanApplications,
+    repayments,
+  ]);
 }
