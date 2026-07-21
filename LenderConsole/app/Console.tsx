@@ -120,16 +120,24 @@ function mergedStanding(passport: CreditPassport, ownApplications: ApplicationRe
   const ownStanding = computeRepaymentStanding(ownLoans);
   const BUCKET_RANK: Record<StandingBucket, number> = { clean: 0, slipping: 1, arrears: 2, impaired: 3 };
   const passportBucket: StandingBucket = passport.standing?.current.bucket ?? 'clean';
-  if (BUCKET_RANK[ownStanding.current.bucket] >= BUCKET_RANK[passportBucket]) return ownStanding;
+  const current = BUCKET_RANK[ownStanding.current.bucket] >= BUCKET_RANK[passportBucket] ? ownStanding.current : passport.standing!.current;
+
+  // Merge scars independently of which side's CURRENT bucket won: a clean-today own book (e.g.
+  // a single perfectly-paid loan) must not erase a worse historical scar signed into the
+  // passport from another lender -- the scar is meant to stay visible for its own 12-month
+  // window regardless of who currently looks worse.
+  const passportScar = passport.standing?.scar ?? null;
+  const scar =
+    !ownStanding.scar ? passportScar
+    : !passportScar ? ownStanding.scar
+    : BUCKET_RANK[ownStanding.scar.bucket] !== BUCKET_RANK[passportScar.bucket]
+      ? (BUCKET_RANK[ownStanding.scar.bucket] > BUCKET_RANK[passportScar.bucket] ? ownStanding.scar : passportScar)
+      : (ownStanding.scar.reachedMonthsAgo <= passportScar.reachedMonthsAgo ? ownStanding.scar : passportScar);
+
   return {
-    current: {
-      bucket: passport.standing!.current.bucket,
-      adverseRecord: passport.standing!.current.adverseRecord,
-      monthsInArrears: passport.standing!.current.monthsInArrears,
-      amountOverdue: passport.standing!.current.amountOverdue,
-    },
-    scar: passport.standing!.scar,
-    discountEligible: passport.standing!.discountEligible,
+    current,
+    scar,
+    discountEligible: current.bucket === 'clean' || current.bucket === 'slipping',
   };
 }
 
@@ -1247,24 +1255,32 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
           </div>
           </TourAnchor>
 
-          {/* Repayment-standing evidence (Task 11): shows the numbers behind decideLoan's adverseRecord reason. */}
+          {/* Repayment-standing evidence (Task 11): shows the numbers behind decideLoan's adverseRecord
+              reason. A clean current standing still shows its scar note, if any -- "clean today" and
+              "not clean once" are two different facts, and only the current-arrears line (not the whole
+              block) should disappear once cured. */}
           {(() => {
             if (!passport) return null;
             const standing = mergedStanding(passport, ownApplications, storedPolicy);
-            if (standing.current.bucket === 'clean') return null;
+            if (standing.current.bucket === 'clean' && !standing.scar) return null;
             const color = standing.current.bucket === 'impaired' ? p.red : p.amber; // AA-audited palette tokens, not the sub-AA raw hex CHIP_STYLE still uses
             return (
               <div style={{ margin: '10px 20px 0', borderRadius: 10, border: `1.5px solid ${color}`, background: `${color}14`, padding: '10px 14px', flexShrink: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color }}>
-                    {standing.current.monthsInArrears} month{standing.current.monthsInArrears > 1 ? 's' : ''} behind, RM{Math.round(standing.current.amountOverdue).toLocaleString('en-MY')} overdue
-                  </span>
-                  <InfoButton entry="repayment_standing" onOpen={setInfo} />
-                </div>
+                {standing.current.bucket !== 'clean' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color }}>
+                      {standing.current.monthsInArrears} month{standing.current.monthsInArrears > 1 ? 's' : ''} behind, RM{Math.round(standing.current.amountOverdue).toLocaleString('en-MY')} overdue
+                    </span>
+                    <InfoButton entry="repayment_standing" onOpen={setInfo} />
+                  </div>
+                )}
                 {standing.scar && (
-                  <p style={{ fontFamily: FONT.ui, fontSize: 11.5, color: p.ink3, margin: '4px 0 0' }}>
-                    Prior arrears event {standing.scar.reachedMonthsAgo} month{standing.scar.reachedMonthsAgo > 1 ? 's' : ''} ago, still on file (12-month window)
-                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <p style={{ fontFamily: FONT.ui, fontSize: 11.5, color: p.ink3, margin: 0 }}>
+                      Prior arrears event {standing.scar.reachedMonthsAgo} month{standing.scar.reachedMonthsAgo > 1 ? 's' : ''} ago, still on file (12-month window)
+                    </p>
+                    {standing.current.bucket === 'clean' && <InfoButton entry="repayment_standing" onOpen={setInfo} />}
+                  </div>
                 )}
               </div>
             );
