@@ -108,6 +108,28 @@ describe('priceLoan — reasons narration', () => {
   });
 });
 
+describe('standingClean guard', () => {
+  const standingInputs = { band: 'Good' as const, ladderApr: 0.22, costOfFunds: 0.05, targetReturn: 0.06 };
+
+  it('suggests a discount below the ladder when standing is clean', () => {
+    const r = priceLoan({ ...standingInputs, standingClean: true });
+    expect(r.suggestedRate).toBeLessThanOrEqual(r.ladderApr);
+  });
+
+  it('clamps to the ladder rate outright when standing is not clean, regardless of band/PD', () => {
+    const r = priceLoan({ ...standingInputs, standingClean: false });
+    expect(r.suggestedRate).toBe(r.ladderApr);
+    expect(r.discountBps).toBe(0);
+    expect(r.reasons.some((s) => s.includes('arrears'))).toBe(true);
+  });
+
+  it('defaults standingClean to true (back-compat: existing callers keep today\'s behavior)', () => {
+    const withFlag = priceLoan({ ...standingInputs, standingClean: true });
+    const withoutFlag = priceLoan(standingInputs as PricingInputs);
+    expect(withoutFlag.suggestedRate).toBe(withFlag.suggestedRate);
+  });
+});
+
 // ── repriceProducts ────────────────────────────────────────────────────────────
 
 describe('repriceProducts', () => {
