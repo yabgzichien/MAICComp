@@ -21,10 +21,9 @@ const BAND_COLOR: Record<string, string> = {
   Excellent: '#1f8a5b',
 };
 
-// Own-book repayment standing badge (Task 11): reuses this file's existing amber/red convention
-// (Building band's '#c0392b', Fair band's '#d98a00') rather than Console.tsx's Servicing-tab hex
-// set, since those are two separate local color maps for two separate files.
-const STANDING_COLOR: Record<string, string> = { slipping: '#d98a00', arrears: '#d98a00', impaired: '#c0392b' };
+// Own-book repayment standing badge (Task 11): color comes from the themed Palette (p.amber/
+// p.red, AA-audited in tokens.ts) rather than a static hex map, unlike BAND_COLOR/STATUS_COLOR
+// above — those predate the contrast-audit pass and are out of scope to retrofit here.
 const STANDING_LABEL: Record<string, string> = { slipping: '1 mo behind', arrears: '2 mo behind', impaired: 'Impaired' };
 
 /** Verdict-driving signal (P2.10): band + confidence, so an officer can triage a queue
@@ -104,7 +103,7 @@ function QueueCard({ p, a, selected, onSelect, standingBucket }: { p: Palette; a
       </p>
       <VerdictChip p={p} app={a} />
       {standingBucket && (
-        <span style={{ display: 'inline-block', marginTop: 3, fontFamily: FONT.ui, fontSize: 11, fontWeight: 700, color: STANDING_COLOR[standingBucket] }}>
+        <span style={{ display: 'inline-block', marginTop: 3, fontFamily: FONT.ui, fontSize: 11, fontWeight: 700, color: standingBucket === 'impaired' ? p.red : p.amber }}>
           {STANDING_LABEL[standingBucket]}
         </span>
       )}

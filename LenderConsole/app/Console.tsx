@@ -1252,7 +1252,7 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
             if (!passport) return null;
             const standing = mergedStanding(passport, ownApplications, storedPolicy);
             if (standing.current.bucket === 'clean') return null;
-            const color = standing.current.bucket === 'impaired' ? '#c0392b' : '#a3791f'; // matches CHIP_STYLE.delinquent/late (Servicing tab), no new hex
+            const color = standing.current.bucket === 'impaired' ? p.red : p.amber; // AA-audited palette tokens, not the sub-AA raw hex CHIP_STYLE still uses
             return (
               <div style={{ margin: '10px 20px 0', borderRadius: 10, border: `1.5px solid ${color}`, background: `${color}14`, padding: '10px 14px', flexShrink: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
