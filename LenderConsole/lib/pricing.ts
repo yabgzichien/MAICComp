@@ -57,7 +57,7 @@ export function priceLoan(inputs: PricingInputs): PricingSuggestion {
   const standingClean = inputs.standingClean ?? true;
   const suggestedRate = standingClean
     ? clamp(breakEvenRate + inputs.targetReturn, inputs.costOfFunds, inputs.ladderApr)
-    : inputs.ladderApr;
+    : Math.max(inputs.costOfFunds, inputs.ladderApr); // matches clamp()'s own floor-wins precedent if a policy ever sets ladderApr below cost of funds
   const discountBps = Math.max(0, Math.round((inputs.ladderApr - suggestedRate) * 10000));
 
   const econ = (rate: number): UnitEconomics => ({
