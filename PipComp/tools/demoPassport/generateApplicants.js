@@ -406,6 +406,9 @@ const PROFILES = [
       holder: { name: 'Lim Poh Choo', nricMasked: '••••••-••-9034', verified: true, provider: 'Demo verification (mock)' },
       momentum: { lookbackDays: 90, scoreFrom: 605, scoreTo: 630, coverageDaysFrom: 66, coverageDaysTo: 90, direction: 'rising' },
       repaymentRecord: { onTime: 2, total: 2 },
+      // Cured example (2026-07-21 design): clean today so her counter-offer role and full
+      // access are unaffected, but a scar from 4 months ago stays on file  demonstrates
+      // recovery without erasure.
       standing: {
         current: { bucket: 'clean', adverseRecord: 'none', monthsInArrears: 0, amountOverdue: 0 },
         scar: { bucket: 'arrears', reachedMonthsAgo: 4 },
@@ -445,6 +448,8 @@ const PROFILES = [
       assessment: { confidence: 0.7, coverageRatio: 0.9, coverageDays: 90, avgIncome: 1800, avgMonthlySurplus: 100, monthlyDebtService: 650 },
       holder: { name: 'Wong Siew Lian', nricMasked: '••••••-••-2258', verified: true, provider: 'Demo verification (mock)' },
       repaymentRecord: { onTime: 1, total: 2 },
+      // Arrears example (2026-07-21 design): 2 months behind on an existing loan  demonstrates
+      // access loss (tier capped, discount lost) alongside her existing affordability-decline role.
       standing: {
         current: { bucket: 'arrears', adverseRecord: 'soft', monthsInArrears: 2, amountOverdue: 700 },
         scar: null,
