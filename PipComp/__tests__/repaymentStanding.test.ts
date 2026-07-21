@@ -148,6 +148,28 @@ describe('scarAcross', () => {
     ];
     expect(scarAcross(loans, NOW)).toBeNull();
   });
+
+  it('keeps a cured event exactly 11 months old, drops one exactly 12 months old', () => {
+    const kept = scarAcross(
+      [{ applicationId: 'a', repayments: [repayment({ id: 'r1', dueDate: '2025-06-01', paidOn: '2025-07-22', status: 'late', amount: 300 })] }],
+      NOW
+    );
+    expect(kept).toEqual({ bucket: 'slipping', reachedMonthsAgo: 11 });
+
+    const dropped = scarAcross(
+      [{ applicationId: 'a', repayments: [repayment({ id: 'r1', dueDate: '2025-06-01', paidOn: '2025-07-21', status: 'late', amount: 300 })] }],
+      NOW
+    );
+    expect(dropped).toBeNull();
+  });
+
+  it('breaks a tie between equally-severe scars by preferring the more recent one', () => {
+    const loans = [
+      { applicationId: 'a', repayments: [repayment({ id: 'r1', dueDate: '2026-01-01', paidOn: '2026-03-01', status: 'late', amount: 300 })] }, // 2 months late, 4 months ago
+      { applicationId: 'b', repayments: [repayment({ id: 'r2', dueDate: '2026-04-01', paidOn: '2026-06-01', status: 'late', amount: 300 })] }, // 2 months late, 1 month ago
+    ];
+    expect(scarAcross(loans, NOW)).toEqual({ bucket: 'arrears', reachedMonthsAgo: 1 });
+  });
 });
 
 describe('computeRepaymentStanding', () => {

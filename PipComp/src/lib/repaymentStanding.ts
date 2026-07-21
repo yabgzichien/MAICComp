@@ -84,7 +84,7 @@ export function loanStandingFor(
 ): LoanStanding {
   if (defaulted) {
     const amountOverdue = repayments.reduce((s, r) => s + (RESOLVED_STATUSES.has(r.status) ? 0 : r.amount), 0);
-    return { applicationId, monthsInArrears: 3, amountOverdue, bucket: 'impaired' };
+    return { applicationId, monthsInArrears: 3, amountOverdue, bucket: standingBucketFor(3) };
   }
   const overdue = overdueRowsFor(repayments, now);
   const monthsInArrears = overdue.length;
