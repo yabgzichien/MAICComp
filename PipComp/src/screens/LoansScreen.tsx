@@ -290,7 +290,10 @@ export function LoansScreen({
 
           {(() => {
             const pkgOverdue = overdueRowsFor(pkg.repayments, new Date());
-            const justCleared = clearedForId === pkg.application.id && !!clearMsg;
+            // Only the cure's own refresh (not a fresh miss) should read as "just cleared" --
+            // otherwise falling behind again on this same loan would keep showing the stale
+            // green confirmation instead of the new red banner + button.
+            const justCleared = clearedForId === pkg.application.id && !!clearMsg && pkgOverdue.length === 0;
             if (pkgOverdue.length === 0 && !justCleared) return null;
             const amountOverdue = pkgOverdue.reduce((s, r) => s + r.amount, 0);
             return (
