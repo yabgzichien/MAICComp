@@ -41,6 +41,26 @@ export interface PassportMomentum {
   direction: 'rising' | 'flat' | 'falling';
 }
 
+export type StandingBucket = 'clean' | 'slipping' | 'arrears' | 'impaired';
+export type StandingAdverseRecord = 'none' | 'soft' | 'hard';
+
+/**
+ * Signed repayment-standing block (2026-07-21 design): current arrears state and a decaying
+ * historical scar, both re-derived from the repayment ledger — never a self-asserted claim.
+ * A lender reads `current` for access/pricing; `scar` is display-only, informing judgment
+ * without gating anything automatically (see the design doc's Locked decisions).
+ */
+export interface PassportStanding {
+  current: {
+    bucket: StandingBucket;
+    adverseRecord: StandingAdverseRecord;
+    monthsInArrears: number;
+    amountOverdue: number;
+  };
+  scar: { bucket: StandingBucket; reachedMonthsAgo: number } | null;
+  discountEligible: boolean;
+}
+
 /** Verified holder identity (eKYC) bound into the passport. Masked IC only  no raw NRIC. */
 export interface PassportHolder {
   name: string;
@@ -130,6 +150,8 @@ export interface CreditPassport {
   holder?: PassportHolder;
   /** Signed score trajectory (optional; absent on older passports). */
   momentum?: PassportMomentum;
+  /** Signed repayment standing (optional; absent on older passports or a borrower with no loans). */
+  standing?: PassportStanding;
   /** Version stamps of the producing logic (optional; absent on pre-v2 passports). */
   provenanceMeta?: PassportProvenanceMeta;
   /**
@@ -169,6 +191,8 @@ export interface PassportInput {
   holder?: PassportHolder;
   /** Optional signed score trajectory, copied into the signed passport. */
   momentum?: PassportMomentum;
+  /** Optional signed repayment standing, copied into the signed passport. */
+  standing?: PassportStanding;
   /** Optional version stamps of the producing logic, copied into the signed passport. */
   provenanceMeta?: PassportProvenanceMeta;
   /** Optional leading-digit counts (9 entries), copied into the signed passport. */
@@ -283,6 +307,25 @@ export function validatePassportShape(p: unknown): string[] {
     const nums = ['lookbackDays', 'scoreFrom', 'scoreTo', 'coverageDaysFrom', 'coverageDaysTo'];
     const okDir = m && typeof m.direction === 'string' && ['rising', 'flat', 'falling'].includes(m.direction as string);
     if (!m || typeof m !== 'object' || !nums.every((k) => isFiniteNum(m[k])) || !okDir) problems.push('momentum');
+  }
+  if (o.standing !== undefined) {
+    const s = o.standing as Record<string, unknown>;
+    const cur = s?.current as Record<string, unknown> | undefined;
+    const curOk =
+      cur &&
+      typeof cur === 'object' &&
+      ['clean', 'slipping', 'arrears', 'impaired'].includes(cur.bucket as string) &&
+      ['none', 'soft', 'hard'].includes(cur.adverseRecord as string) &&
+      isFiniteNum(cur.monthsInArrears) &&
+      isFiniteNum(cur.amountOverdue);
+    const scar = s?.scar;
+    const scarOk =
+      scar === null ||
+      (scar &&
+        typeof scar === 'object' &&
+        ['clean', 'slipping', 'arrears', 'impaired'].includes((scar as Record<string, unknown>).bucket as string) &&
+        isFiniteNum((scar as Record<string, unknown>).reachedMonthsAgo));
+    if (!s || typeof s !== 'object' || !curOk || !scarOk || typeof s.discountEligible !== 'boolean') problems.push('standing');
   }
   if (o.provenanceMeta !== undefined) {
     const v = o.provenanceMeta as Record<string, unknown>;
@@ -434,6 +477,7 @@ export async function buildPassport(
     ...(input.assessment ? { assessment: input.assessment } : {}),
     ...(input.holder ? { holder: input.holder } : {}),
     ...(input.momentum ? { momentum: input.momentum } : {}),
+    ...(input.standing ? { standing: input.standing } : {}),
     ...(input.provenanceMeta ? { provenanceMeta: input.provenanceMeta } : {}),
     ...(input.digitHistogram ? { digitHistogram: input.digitHistogram } : {}),
     ...(input.consent ? { consent: input.consent } : {}),

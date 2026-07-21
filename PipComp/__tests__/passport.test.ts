@@ -256,6 +256,50 @@ describe('momentum block (score trajectory)', () => {
   });
 });
 
+describe('standing block (repayment arrears)', () => {
+  const SAMPLE_STANDING = {
+    current: { bucket: 'arrears' as const, adverseRecord: 'soft' as const, monthsInArrears: 2, amountOverdue: 640 },
+    scar: { bucket: 'impaired' as const, reachedMonthsAgo: 5 },
+    discountEligible: false,
+  };
+
+  const withStanding: PassportInput = {
+    ...baseInput,
+    standing: SAMPLE_STANDING,
+  };
+
+  it('carries the standing block into the signed passport when present', async () => {
+    const { publicKeyHex, sign } = makeTestKeypair();
+    const { passport, signature } = await buildPassport(withStanding, sign);
+    expect(passport.standing).toEqual(SAMPLE_STANDING);
+    const result = verifyPassport(passport, signature, publicKeyHex);
+    expect(result.valid).toBe(true);
+  });
+
+  it('tampering with a standing value breaks verification', async () => {
+    const { publicKeyHex, sign } = makeTestKeypair();
+    const { passport, signature } = await buildPassport(withStanding, sign);
+    passport.standing!.current.bucket = 'clean'; // fake a clean standing
+    const result = verifyPassport(passport, signature, publicKeyHex);
+    expect(result.valid).toBe(false);
+    expect(result.tampered).toBe(true);
+  });
+
+  it('rejects a malformed standing block in shape validation', () => {
+    const bad = {
+      ...baseInput,
+      standing: { current: { bucket: 'arrears', monthsInArrears: 2, amountOverdue: 640 }, scar: null, discountEligible: false },
+    };
+    expect(validatePassportShape(bad)).toContain('standing');
+  });
+
+  it('standing is absent (back-compat) when omitted', async () => {
+    const { sign } = makeTestKeypair();
+    const { passport } = await buildPassport(baseInput, sign);
+    expect(passport.standing).toBeUndefined();
+  });
+});
+
 describe('holder identity (eKYC) binding', () => {
   const withHolder: PassportInput = {
     ...baseInput,

@@ -190,10 +190,13 @@ type RowBuilder = (d: PassportDraft) => ConsentScopeRow[];
  * aggregate  it records the very grants this ceremony produces. The Tier 1/2 Brief P
  * blocks (occupation/spendingProfile) are also excluded here: they are disclosed by their
  * own tiered ceremony sections when attached (see buildConsentReceipts and the ceremony's
- * Tier 1/2 rows). incomeQuality IS a Tier 0 aggregate, so it carries a builder below. Every
+ * Tier 1/2 rows). incomeQuality IS a Tier 0 aggregate, so it carries a builder below. `standing`
+ * is excluded too: buildPassportDraft doesn't populate it yet (repayment standing isn't wired
+ * into the ceremony as of this change)  once a later change adds it to PassportDraftArgs and
+ * assembles it below, this exclusion should be removed so the drift guard covers it. Every
  * other field stays covered by the drift guard (adding one breaks the build until disclosed).
  */
-const TIER0_DISCLOSURE: { [K in keyof Omit<PassportDraft, 'consent' | 'occupation' | 'spendingProfile'>]-?: RowBuilder | 'mergedIntoScore' | 'tier1' } = {
+const TIER0_DISCLOSURE: { [K in keyof Omit<PassportDraft, 'consent' | 'occupation' | 'spendingProfile' | 'standing'>]-?: RowBuilder | 'mergedIntoScore' | 'tier1' } = {
   score: (d) => [{ key: 'score', label: 'Credit score & band', detail: `${Math.round(d.score)} · ${d.band}` }],
   band: 'mergedIntoScore',
   factorSummary: (d) => [
@@ -273,7 +276,7 @@ const TIER0_DISCLOSURE: { [K in keyof Omit<PassportDraft, 'consent' | 'occupatio
 
 /** Tier 0  the aggregate fields every passport carries, with their real values. */
 export function tier0ScopeRows(draft: PassportDraft): ConsentScopeRow[] {
-  return (Object.keys(TIER0_DISCLOSURE) as (keyof Omit<PassportDraft, 'consent' | 'occupation' | 'spendingProfile'>)[]).flatMap((k) => {
+  return (Object.keys(TIER0_DISCLOSURE) as (keyof Omit<PassportDraft, 'consent' | 'occupation' | 'spendingProfile' | 'standing'>)[]).flatMap((k) => {
     const builder = TIER0_DISCLOSURE[k];
     return typeof builder === 'function' ? builder(draft) : [];
   });
