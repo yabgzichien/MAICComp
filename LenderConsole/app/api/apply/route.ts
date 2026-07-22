@@ -8,12 +8,18 @@
 // queue on load, not for public consumption.
 
 import { NextResponse } from 'next/server';
-import { parsePassportCode, verifyPassport } from '../../../lib/passport';
-import { decideLoan } from '../../../lib/loans';
+import { parsePassportCode, verifyPassport, type CreditPassport, type PassportAssessment } from '../../../lib/passport';
+import { decideLoan, type LoanDecision } from '../../../lib/loans';
+import { decidePriced } from '../../../lib/decidePriced';
+import { mergedStanding } from '../../../lib/repaymentStanding';
 import { readLenderPolicy } from '../../../lib/policyFile';
 import { appendServerApplication, clearServerApplications, readServerApplications } from '../../../lib/applicationsFile';
+import { writeOffer } from '../../../lib/offersStore';
 import { LENDER_REGISTRY } from '../../../lib/lenderRegistry';
 import type { DeclaredPurpose, PurposeCategory } from '../../../lib/applications';
+import type { StoredPolicy } from '../../../lib/policyStore';
+import type { PricingSuggestion } from '../../../lib/pricing';
+import type { CreditBand } from '../../../lib/securitization';
 
 const DEFAULT_LENDER_ID = 'tekun';
 
@@ -57,6 +63,55 @@ function parsePurpose(raw: unknown): DeclaredPurpose | undefined {
   if (typeof p.category !== 'string' || !PURPOSE_CATEGORIES.includes(p.category as PurposeCategory)) return undefined;
   const note = typeof p.note === 'string' ? p.note.slice(0, 140).trim() : undefined;
   return { category: p.category as PurposeCategory, ...(note ? { note } : {}) };
+}
+
+/** Decide + price a direct-apply submission the same way Console.tsx's "adopt" strip already
+ *  does for a manually-resolved file: read this lender's own applications, merge them with the
+ *  passport's signed cross-lender standing, and re-decide at the discounted rate priceLoan finds
+ *  (if any). Falls back to a plain ladder-rate decideLoan  today's exact behaviour, with no
+ *  adverseRecord/band/standingClean involved  on any failure, so a mergedStanding/decidePriced
+ *  bug degrades gracefully instead of blocking the applicant. */
+async function priceDecision(
+  passport: CreditPassport,
+  assessment: PassportAssessment,
+  requestedAmount: number,
+  stored: StoredPolicy,
+  lenderId: string,
+): Promise<{ priced: LoanDecision; pricing: PricingSuggestion | null }> {
+  try {
+    const lenderApps = await readServerApplications(undefined, lenderId);
+    const standing = mergedStanding(passport, lenderApps, stored);
+    const { pricing, priced } = decidePriced({
+      score: passport.score,
+      confidence: assessment.confidence,
+      avgMonthlySurplus: assessment.avgMonthlySurplus,
+      monthlyDebtService: assessment.monthlyDebtService,
+      avgIncome: assessment.avgIncome,
+      requestedAmount,
+      products: stored.products,
+      coverageRatio: assessment.coverageRatio,
+      coverageDaysCovered: assessment.coverageDays,
+      policy: stored.policy,
+      adverseRecord: standing.current.adverseRecord,
+      band: passport.band as CreditBand,
+      standingClean: standing.discountEligible,
+    });
+    return { priced, pricing };
+  } catch {
+    const priced = decideLoan({
+      score: passport.score,
+      confidence: assessment.confidence,
+      avgMonthlySurplus: assessment.avgMonthlySurplus,
+      monthlyDebtService: assessment.monthlyDebtService,
+      avgIncome: assessment.avgIncome,
+      requestedAmount,
+      products: stored.products,
+      coverageRatio: assessment.coverageRatio,
+      coverageDaysCovered: assessment.coverageDays,
+      policy: stored.policy,
+    });
+    return { priced, pricing: null };
+  }
 }
 
 export async function POST(req: Request) {
@@ -108,18 +163,7 @@ export async function POST(req: Request) {
   }
 
   const stored = await readLenderPolicy(lenderId);
-  const decision = decideLoan({
-    score: parsed.passport.score,
-    confidence: assessment.confidence,
-    avgMonthlySurplus: assessment.avgMonthlySurplus,
-    monthlyDebtService: assessment.monthlyDebtService,
-    avgIncome: assessment.avgIncome,
-    requestedAmount,
-    products: stored.products,
-    coverageRatio: assessment.coverageRatio,
-    coverageDaysCovered: assessment.coverageDays,
-    policy: stored.policy,
-  });
+  const { priced, pricing } = await priceDecision(parsed.passport, assessment, requestedAmount, stored, lenderId);
 
   const purpose = parsePurpose(b.purpose);
   const result = await appendServerApplication(
@@ -129,10 +173,10 @@ export async function POST(req: Request) {
       subject: parsed.passport.subject,
       applicantLabel: parsed.passport.holder?.name ?? 'Applicant',
       requestedAmount,
-      engineDecision: decision.decision,
-      offeredAmount: decision.maxAmount,
-      installment: decision.installment,
-      ...(decision.breakdown?.tierLabel ? { tierLabel: decision.breakdown.tierLabel } : {}),
+      engineDecision: priced.decision,
+      offeredAmount: priced.maxAmount,
+      installment: priced.installment,
+      ...(priced.breakdown?.tierLabel ? { tierLabel: priced.breakdown.tierLabel } : {}),
       ...(purpose ? { purpose } : {}),
       source: 'direct',
     },
@@ -140,11 +184,50 @@ export async function POST(req: Request) {
     lenderId,
   );
 
+  // Publish the offer whenever the engine approves outright (borrower acceptance, 2026-07-21).
+  // Previously only an OFFICER resolving a referred file published one, so an auto-approved
+  // direct-apply had no offer record at all: the console filed it straight to 'approved' (i.e.
+  // a live loan in Servicing) while the borrower app, which had nothing to poll, showed only
+  // the verdict it got back in this response. Nothing was ever accepted by anyone, and the
+  // officer never saw a file to work. Publishing here makes the approval a standing OFFER the
+  // borrower must answer  which is also what makes it visible as "awaiting borrower" in the
+  // queue. Idempotent by writeOffer's same-terms rule, so a repeat apply can't un-accept.
+  if (priced.decision === 'approve' && priced.maxAmount > 0 && parsed.passport.subject) {
+    try {
+      // Carry the tenor of the tier the engine actually priced on. Without it the borrower app
+      // re-derives a tier from the amount alone and can land on a longer one — booking a term
+      // and a total this lender never approved.
+      const tier = stored.products.find((pr) => pr.label === priced.breakdown?.tierLabel);
+      const discounted = pricing !== null && pricing.discountBps > 0;
+      await writeOffer(
+        undefined,
+        lenderId,
+        parsed.passport.subject,
+        {
+          maxAmount: priced.maxAmount,
+          installment: priced.installment,
+          ...(tier ? { tenorMonths: tier.tenorMonths } : {}),
+          ...(purpose ? { purpose } : {}),
+          ...(discounted
+            ? { apr: pricing!.suggestedRate, discountBps: pricing!.discountBps }
+            : tier
+              ? { apr: tier.apr }
+              : {}),
+        },
+        new Date(),
+      );
+    } catch {
+      // Best-effort: the application is already filed and the verdict is already in this
+      // response. A failed publish costs the borrower the in-app accept button, not the
+      // application  they can still be approved by the officer from the console side.
+    }
+  }
+
   return NextResponse.json(
     {
       filed: result.filed,
       id: result.id,
-      decision: { decision: decision.decision, maxAmount: decision.maxAmount, installment: decision.installment, reasons: decision.reasons },
+      decision: { decision: priced.decision, maxAmount: priced.maxAmount, installment: priced.installment, reasons: priced.reasons },
       alreadyFiled: !result.filed,
     },
     { headers: CORS_HEADERS },
