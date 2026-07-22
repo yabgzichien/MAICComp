@@ -8,18 +8,13 @@
 // queue on load, not for public consumption.
 
 import { NextResponse } from 'next/server';
-import { parsePassportCode, verifyPassport, type CreditPassport, type PassportAssessment } from '../../../lib/passport';
-import { decideLoan, type LoanDecision } from '../../../lib/loans';
-import { decidePriced } from '../../../lib/decidePriced';
-import { mergedStanding } from '../../../lib/repaymentStanding';
+import { parsePassportCode, verifyPassport } from '../../../lib/passport';
+import { priceDecision } from '../../../lib/applyPricing';
 import { readLenderPolicy } from '../../../lib/policyFile';
 import { appendServerApplication, clearServerApplications, readServerApplications } from '../../../lib/applicationsFile';
 import { writeOffer } from '../../../lib/offersStore';
 import { LENDER_REGISTRY } from '../../../lib/lenderRegistry';
 import type { DeclaredPurpose, PurposeCategory } from '../../../lib/applications';
-import type { StoredPolicy } from '../../../lib/policyStore';
-import type { PricingSuggestion } from '../../../lib/pricing';
-import type { CreditBand } from '../../../lib/securitization';
 
 const DEFAULT_LENDER_ID = 'tekun';
 
@@ -63,55 +58,6 @@ function parsePurpose(raw: unknown): DeclaredPurpose | undefined {
   if (typeof p.category !== 'string' || !PURPOSE_CATEGORIES.includes(p.category as PurposeCategory)) return undefined;
   const note = typeof p.note === 'string' ? p.note.slice(0, 140).trim() : undefined;
   return { category: p.category as PurposeCategory, ...(note ? { note } : {}) };
-}
-
-/** Decide + price a direct-apply submission the same way Console.tsx's "adopt" strip already
- *  does for a manually-resolved file: read this lender's own applications, merge them with the
- *  passport's signed cross-lender standing, and re-decide at the discounted rate priceLoan finds
- *  (if any). Falls back to a plain ladder-rate decideLoan  today's exact behaviour, with no
- *  adverseRecord/band/standingClean involved  on any failure, so a mergedStanding/decidePriced
- *  bug degrades gracefully instead of blocking the applicant. */
-async function priceDecision(
-  passport: CreditPassport,
-  assessment: PassportAssessment,
-  requestedAmount: number,
-  stored: StoredPolicy,
-  lenderId: string,
-): Promise<{ priced: LoanDecision; pricing: PricingSuggestion | null }> {
-  try {
-    const lenderApps = await readServerApplications(undefined, lenderId);
-    const standing = mergedStanding(passport, lenderApps, stored);
-    const { pricing, priced } = decidePriced({
-      score: passport.score,
-      confidence: assessment.confidence,
-      avgMonthlySurplus: assessment.avgMonthlySurplus,
-      monthlyDebtService: assessment.monthlyDebtService,
-      avgIncome: assessment.avgIncome,
-      requestedAmount,
-      products: stored.products,
-      coverageRatio: assessment.coverageRatio,
-      coverageDaysCovered: assessment.coverageDays,
-      policy: stored.policy,
-      adverseRecord: standing.current.adverseRecord,
-      band: passport.band as CreditBand,
-      standingClean: standing.discountEligible,
-    });
-    return { priced, pricing };
-  } catch {
-    const priced = decideLoan({
-      score: passport.score,
-      confidence: assessment.confidence,
-      avgMonthlySurplus: assessment.avgMonthlySurplus,
-      monthlyDebtService: assessment.monthlyDebtService,
-      avgIncome: assessment.avgIncome,
-      requestedAmount,
-      products: stored.products,
-      coverageRatio: assessment.coverageRatio,
-      coverageDaysCovered: assessment.coverageDays,
-      policy: stored.policy,
-    });
-    return { priced, pricing: null };
-  }
 }
 
 export async function POST(req: Request) {
@@ -163,7 +109,8 @@ export async function POST(req: Request) {
   }
 
   const stored = await readLenderPolicy(lenderId);
-  const { priced, pricing } = await priceDecision(parsed.passport, assessment, requestedAmount, stored, lenderId);
+  const lenderApps = await readServerApplications(undefined, lenderId);
+  const { priced, pricing } = priceDecision(parsed.passport, assessment, requestedAmount, stored, lenderApps);
 
   const purpose = parsePurpose(b.purpose);
   const result = await appendServerApplication(
@@ -198,7 +145,6 @@ export async function POST(req: Request) {
       // re-derives a tier from the amount alone and can land on a longer one — booking a term
       // and a total this lender never approved.
       const tier = stored.products.find((pr) => pr.label === priced.breakdown?.tierLabel);
-      const discounted = pricing !== null && pricing.discountBps > 0;
       await writeOffer(
         undefined,
         lenderId,
@@ -208,8 +154,8 @@ export async function POST(req: Request) {
           installment: priced.installment,
           ...(tier ? { tenorMonths: tier.tenorMonths } : {}),
           ...(purpose ? { purpose } : {}),
-          ...(discounted
-            ? { apr: pricing!.suggestedRate, discountBps: pricing!.discountBps }
+          ...(pricing && pricing.discountBps > 0
+            ? { apr: pricing.suggestedRate, discountBps: pricing.discountBps }
             : tier
               ? { apr: tier.apr }
               : {}),
