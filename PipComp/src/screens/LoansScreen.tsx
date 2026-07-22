@@ -6,11 +6,12 @@ import { Icon } from '../components/Icon';
 import { InfoButton } from '../components/InfoButton';
 import { Amount, Card, Eyebrow, ProgressTrack, TopBar } from '../components/ui';
 import { shortDate } from '../lib/dates';
-import { DEFAULT_PRODUCTS } from '../lib/loans';
+import { DEFAULT_PRODUCTS, type LoanProduct } from '../lib/loans';
+import { productForOffer } from '../lib/acceptOffer';
 import { buildLoanPackages, financingTotals, type LoanPackage } from '../lib/loanSummary';
 import { overdueRowsFor } from '../lib/repaymentStanding';
 import type { Repayment, RepaymentStatus } from '../db/loansRepo';
-import { useAppData } from '../state/store';
+import { useAppData, type PendingOffer } from '../state/store';
 import { useLenderSyncPoll } from '../state/useLenderSyncPoll';
 import { useCreditProfile } from '../state/useCreditProfile';
 import { colors, uiFont } from '../theme';
@@ -91,6 +92,94 @@ function LoanPackageCard({ pkg, onPress }: { pkg: LoanPackage; onPress: () => vo
   );
 }
 
+/** One lender offer awaiting the borrower's decision (borrower acceptance, 2026-07-21).
+ *  Nothing here is booked yet: the loan does not exist, there is no schedule and no liability
+ *  on the borrower's net worth, until Accept is tapped. The copy says so plainly, because the
+ *  version of this flow that shipped before simply created the loan on the borrower's behalf. */
+function OfferCard({
+  p,
+  busy,
+  onAccept,
+  onDecline,
+}: {
+  p: PendingOffer;
+  busy: boolean;
+  onAccept: () => void;
+  onDecline: () => void;
+}) {
+  const { offer, lender } = p;
+  // The lender's own tenor when they published one; only fall back to a tier lookup for
+  // offers made before that shipped.
+  const tenorMonths = offer.tenorMonths ?? productTenorFor(offer, lender.products);
+  return (
+    <Card style={styles.offerCard}>
+      <View style={styles.offerHeader}>
+        <View style={[styles.offerDot, { backgroundColor: lender.brandColor }]} />
+        <Text style={styles.offerLender} numberOfLines={1}>{lender.name}</Text>
+        <View style={styles.offerPill}>
+          <Text style={styles.offerPillText}>Approved</Text>
+        </View>
+      </View>
+      <Text style={styles.offerLead}>
+        {lender.name} has approved you. It&apos;s yours to take or leave — nothing is borrowed until you accept.
+      </Text>
+
+      <View style={styles.offerFigures}>
+        <View>
+          <Text style={styles.offerFigureLabel}>You&apos;d receive</Text>
+          <Amount value={offer.maxAmount} size={20} />
+        </View>
+        <View>
+          <Text style={styles.offerFigureLabel}>Repayment / mo</Text>
+          <Amount value={offer.installment} size={20} />
+        </View>
+      </View>
+      {tenorMonths > 0 && (
+        <Text style={styles.offerTerms}>
+          {tenorMonths} monthly repayments · RM{Math.round(offer.installment * tenorMonths).toLocaleString('en-MY')} repaid in total
+        </Text>
+      )}
+      {offer.apr != null && (
+        <Text style={styles.offerApr}>{(offer.apr * 100).toFixed(1)}% APR</Text>
+      )}
+      {offer.apr != null && offer.discountBps != null && offer.discountBps > 0 && (
+        <Text style={styles.offerDiscount}>
+          {offer.discountBps} bps below {lender.name}&apos;s standard {((offer.apr + offer.discountBps / 10000) * 100).toFixed(1)}% rate
+        </Text>
+      )}
+
+      <View style={styles.offerActions}>
+        <Pressable
+          onPress={onAccept}
+          disabled={busy}
+          style={({ pressed }) => [styles.offerAcceptBtn, (busy || pressed) && { opacity: 0.92 }]}
+          accessibilityRole="button"
+          accessibilityLabel={`Accept RM${Math.round(offer.maxAmount)} from ${lender.name}`}
+        >
+          {busy ? <ActivityIndicator size="small" color={colors.onAccent} /> : <Text style={styles.offerAcceptText}>Accept financing</Text>}
+        </Pressable>
+        <Pressable
+          onPress={onDecline}
+          disabled={busy}
+          style={({ pressed }) => [styles.offerDeclineBtn, (busy || pressed) && { opacity: 0.92 }]}
+          accessibilityRole="button"
+          accessibilityLabel={`Turn down ${lender.name}'s offer`}
+        >
+          <Text style={styles.offerDeclineText}>No thanks</Text>
+        </Pressable>
+      </View>
+    </Card>
+  );
+}
+
+/** Tenor the schedule will actually be built on  the same product `buildBookedLoan` picks when
+ *  the offer is accepted, so the total shown here is the total the borrower ends up with rather
+ *  than an independent guess. Falls back to 0 (the term line is then hidden) if no product fits. */
+function productTenorFor(offer: { maxAmount: number; installment: number }, products: LoanProduct[]): number {
+  const product = productForOffer({ decision: 'approve', maxAmount: offer.maxAmount, installment: offer.installment, reasons: [] }, products);
+  return product?.tenorMonths ?? 0;
+}
+
 export function LoansScreen({
   onBack,
   onOpenKyc = () => {},
@@ -103,8 +192,22 @@ export function LoansScreen({
   onOpenCoach?: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const { kyc, loanProducts, loanApplications, repayments, recordRepayment, missRepayment, reportDefault, clearArrears, pullServicing, adoptApprovedOffers, syncLenderResets, markFinancingSeen } =
-    useAppData();
+  const {
+    kyc,
+    loanProducts,
+    loanApplications,
+    repayments,
+    recordRepayment,
+    missRepayment,
+    reportDefault,
+    clearArrears,
+    pullServicing,
+    syncLenderResets,
+    pendingOffers,
+    refreshPendingOffers,
+    acceptPendingOffer,
+    declinePendingOffer,
+  } = useAppData();
   const { score } = useCreditProfile();
 
   const products = loanProducts.length > 0 ? loanProducts : DEFAULT_PRODUCTS;
@@ -126,27 +229,61 @@ export function LoansScreen({
   const [clearedForId, setClearedForId] = useState<string | null>(null);
 
   // Poll-on-focus (Bidirectional Servicing Sync, 2026-07-18 + approval-notify, 2026-07-19 +
-  // reset-sync, 2026-07-20): this screen only ever mounts while the borrower is actually on it
-  // (App.tsx swaps screens by conditional render, not a persistent navigator), so a mount
-  // effect IS the focus signal. Order matters: clear any loan a lender reset has orphaned
-  // FIRST (so a stale balance never flashes), then adopt any newly-approved financing, then
-  // pull servicing events for what remains, then clear the unseen badge  the borrower is now
-  // looking at My Financing, so nothing here is "unseen" anymore. `adoptApprovedOffers`
-  // coalesces with the live poll below rather than no-op'ing, so the badge is never cleared
-  // ahead of financing that is still being booked.
+  // reset-sync, 2026-07-20 + borrower acceptance, 2026-07-21): this screen only ever mounts
+  // while the borrower is actually on it (App.tsx swaps screens by conditional render, not a
+  // persistent navigator), so a mount effect IS the focus signal. Order matters: clear any loan
+  // a lender reset has orphaned FIRST (so a stale balance never flashes), then refresh the
+  // offers awaiting a decision, then pull servicing events for the loans that remain.
+  //
+  // Note the badge is NOT cleared here. It counts offers the borrower still has to answer, and
+  // merely looking at them doesn't answer them — it clears when they accept or decline.
   useEffect(() => {
     (async () => {
       await syncLenderResets();
-      await adoptApprovedOffers(score.score);
+      await refreshPendingOffers();
       await pullServicing();
-      await markFinancingSeen();
     })().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ...and keep checking while the borrower waits here: an officer approving or resetting
   // mid-demo should land in this list without needing to navigate away and back.
-  useLenderSyncPoll(score.score);
+  useLenderSyncPoll();
+
+  // One accept/decline in flight at a time, keyed by lender id so only the tapped card spins.
+  const [offerBusy, setOfferBusy] = useState<string | null>(null);
+  const [offerError, setOfferError] = useState('');
+  const [offerMsg, setOfferMsg] = useState('');
+
+  const onAcceptOffer = async (p: PendingOffer) => {
+    setOfferBusy(p.offer.lenderId);
+    setOfferError('');
+    setOfferMsg('');
+    try {
+      const ok = await acceptPendingOffer(p.offer, score.score);
+      if (ok) setOfferMsg(`${p.lender.name} financing accepted — it's in your loans below with its repayment schedule.`);
+      else setOfferError(`Couldn't confirm your acceptance with ${p.lender.name}. Nothing was disbursed — check your connection and try again.`);
+    } catch {
+      setOfferError(`Couldn't confirm your acceptance with ${p.lender.name}. Nothing was disbursed — check your connection and try again.`);
+    } finally {
+      setOfferBusy(null);
+    }
+  };
+
+  const onDeclineOffer = async (p: PendingOffer) => {
+    setOfferBusy(p.offer.lenderId);
+    setOfferError('');
+    setOfferMsg('');
+    try {
+      const ok = await declinePendingOffer(p.offer);
+      if (ok) setOfferMsg(`You turned down ${p.lender.name}'s offer. Nothing was borrowed, and your score is unaffected.`);
+      else setOfferError(`Couldn't reach ${p.lender.name} to turn this down. Try again in a moment.`);
+    } catch {
+      setOfferError(`Couldn't reach ${p.lender.name} to turn this down. Try again in a moment.`);
+    } finally {
+      setOfferBusy(null);
+    }
+  };
 
   // One package per loan (My Financing polish, 2026-07-19): groups the flat, cross-lender
   // repayments list back into "TEKUN · Emergency", "Naga · Working capital", etc.
@@ -460,8 +597,32 @@ export function LoansScreen({
         contentContainerStyle={{ padding: 18, paddingBottom: insets.bottom + 30 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Empty state: nothing disbursed yet  applying happens on the Credit Passport. */}
-        {packages.length === 0 && (
+        {/* Offers awaiting a decision, above everything else — this is the one thing on this
+            screen that needs the borrower to DO something, and it's what the Loan tab badge
+            is counting. */}
+        {pendingOffers.length > 0 && (
+          <>
+            <Eyebrow style={{ marginTop: 4, marginBottom: 10 }}>
+              {pendingOffers.length === 1 ? 'An offer is waiting for you' : `${pendingOffers.length} offers are waiting for you`}
+            </Eyebrow>
+            {pendingOffers.map((p) => (
+              <OfferCard
+                key={p.offer.lenderId}
+                p={p}
+                busy={offerBusy === p.offer.lenderId}
+                onAccept={() => onAcceptOffer(p)}
+                onDecline={() => onDeclineOffer(p)}
+              />
+            ))}
+          </>
+        )}
+        {offerMsg ? <Text style={[styles.muted, { marginBottom: 14 }]}>{offerMsg}</Text> : null}
+        {offerError ? <Text style={[styles.muted, { marginBottom: 14, color: RED }]}>{offerError}</Text> : null}
+
+        {/* Empty state: nothing disbursed yet  applying happens on the Credit Passport.
+            Suppressed while an offer is pending: "No financing yet" alongside a live approval
+            reads as a contradiction, and the offer card is already the clear next action. */}
+        {packages.length === 0 && pendingOffers.length === 0 && (
           <Card style={styles.gateCard}>
             <Icon name="trending" size={30} color={colors.accentInk} />
             <Text style={styles.gateTitle}>No financing yet</Text>
@@ -556,6 +717,26 @@ const styles = StyleSheet.create({
   gateBtnSecondary: { alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 999, backgroundColor: colors.accentTint, borderWidth: 1, borderColor: colors.accentSoft, marginTop: 10, alignSelf: 'stretch' },
   gateBtnSecondaryText: { fontFamily: uiFont(700), fontSize: 14.5, color: colors.accentInk },
   eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
+
+  /* offer awaiting the borrower's decision */
+  offerCard: { padding: 16, marginBottom: 12, borderWidth: 1.5, borderColor: GREEN + '55', backgroundColor: GREEN + '0a' },
+  offerHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  offerDot: { width: 11, height: 11, borderRadius: 999 },
+  offerLender: { flex: 1, fontFamily: uiFont(700), fontSize: 15, color: colors.ink },
+  offerPill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3, backgroundColor: GREEN },
+  offerPillText: { fontFamily: uiFont(700), fontSize: 11, color: colors.onAccent, letterSpacing: 0.3, textTransform: 'uppercase' },
+  offerLead: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, lineHeight: 18, marginTop: 8 },
+  offerFigures: { flexDirection: 'row', gap: 28, marginTop: 14 },
+  offerFigureLabel: { fontFamily: uiFont(600), fontSize: 11, color: colors.ink2, marginBottom: 3 },
+  offerTerms: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, marginTop: 10 },
+  offerApr: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2, marginTop: 6 },
+  offerDiscount: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, marginTop: 2 },
+  offerActions: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  offerAcceptBtn: { flex: 2, alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 999, backgroundColor: GREEN },
+  offerAcceptText: { fontFamily: uiFont(700), fontSize: 14.5, color: colors.onAccent },
+  offerDeclineBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 999, backgroundColor: 'transparent', borderWidth: 1.5, borderColor: colors.line },
+  offerDeclineText: { fontFamily: uiFont(600), fontSize: 14, color: colors.ink2 },
+
   fieldLabel: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink2, marginBottom: 8 },
   muted: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 8 },
   applyBtn: {
