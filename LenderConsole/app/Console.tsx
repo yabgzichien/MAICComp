@@ -18,7 +18,7 @@ import { type CreditPassport, type VerifyResult, parsePassportCode, verifyPasspo
 import { DEFAULT_POLICY, REASON_CATEGORY_LABELS, decideLoan, type LenderPolicy, type LoanDecision, type LoanProduct } from '../lib/loans';
 import { DEFAULT_STORED_POLICY, type StoredPolicy } from '../lib/policyStore';
 import { priceLoan, repriceProducts, type PricingSuggestion } from '../lib/pricing';
-import { computeRepaymentStanding, type RepaymentStanding, type StandingBucket } from '../lib/repaymentStanding';
+import { computeRepaymentStanding, mergedStanding, type RepaymentStanding, type StandingBucket } from '../lib/repaymentStanding';
 import { structurePool, type CreditBand, type PoolLoan } from '../lib/securitization';
 import { SAMPLE_POOL } from '../lib/samplePool';
 import { poolStatCells, trancheViews } from '../lib/poolView';
@@ -41,6 +41,7 @@ import { buildCreditMemo } from '../lib/creditMemo';
 import { counterOfferFor } from '../lib/counterOffer';
 import { findRecentPresentments, formatAgo, presentmentKey, type Presentment } from '../lib/presentment';
 import { clearPresentmentLog, readPresentmentLog, recordPresentment } from '../lib/presentmentStore';
+import { acceptanceLabel, acceptanceStateFor, liveBook, parseOfferBook, type AcceptanceState, type OfferBook } from '../lib/offerAcceptance';
 import { deriveTrustRows, type TrustRowState } from '../lib/trustPanel';
 import {
   fileApplication,
@@ -104,41 +105,6 @@ function decisionFor(passport: CreditPassport, amountStr: string, stored: Stored
     policy: stored.policy,
     adverseRecord: standing.current.adverseRecord,
   });
-}
-
-/** Worst-of the passport's own signed standing (arrears at other lenders) and this lender's
- *  own applications (arrears at THIS lender, computed from ApplicationRecord.repayments — the
- *  console's own real ledger). Mirrors the anti-stacking presentment check's "prefer signed
- *  cross-party evidence, but also check local state" pattern. */
-function mergedStanding(passport: CreditPassport, ownApplications: ApplicationRecord[], stored: StoredPolicy): RepaymentStanding {
-  const ownLoans = ownApplications
-    .filter((a) => a.subject === passport.subject && a.status === 'approved')
-    .map((a) => {
-      const tenorMonths = stored.products.find((p) => p.label === a.tierLabel)?.tenorMonths ?? 12;
-      return { app: a, tenorMonths };
-    });
-  const ownStanding = computeRepaymentStanding(ownLoans);
-  const BUCKET_RANK: Record<StandingBucket, number> = { clean: 0, slipping: 1, arrears: 2, impaired: 3 };
-  const passportBucket: StandingBucket = passport.standing?.current.bucket ?? 'clean';
-  const current = BUCKET_RANK[ownStanding.current.bucket] >= BUCKET_RANK[passportBucket] ? ownStanding.current : passport.standing!.current;
-
-  // Merge scars independently of which side's CURRENT bucket won: a clean-today own book (e.g.
-  // a single perfectly-paid loan) must not erase a worse historical scar signed into the
-  // passport from another lender -- the scar is meant to stay visible for its own 12-month
-  // window regardless of who currently looks worse.
-  const passportScar = passport.standing?.scar ?? null;
-  const scar =
-    !ownStanding.scar ? passportScar
-    : !passportScar ? ownStanding.scar
-    : BUCKET_RANK[ownStanding.scar.bucket] !== BUCKET_RANK[passportScar.bucket]
-      ? (BUCKET_RANK[ownStanding.scar.bucket] > BUCKET_RANK[passportScar.bucket] ? ownStanding.scar : passportScar)
-      : (ownStanding.scar.reachedMonthsAgo <= passportScar.reachedMonthsAgo ? ownStanding.scar : passportScar);
-
-  return {
-    current,
-    scar,
-    discountEligible: current.bucket === 'clean' || current.bucket === 'slipping',
-  };
 }
 
 /** Pure: parse + cryptographically verify a pasted code, then run the loan decision
@@ -1006,7 +972,25 @@ function MarkDefaultAction({ p, app, onMarkDefault }: { p: Palette; app: Applica
   );
 }
 
-function ApplicationCard({ p, app, passport, onResolve, onRecordRepayment, onMarkDefault }: { p: Palette; app: ApplicationRecord; passport?: CreditPassport | null; onResolve: (outcome: 'approved' | 'declined', rationale: string) => void; onRecordRepayment?: (instalmentSeq: number, amount: number, outcome: RepaymentOutcome) => void; onMarkDefault?: () => void }) {
+/** Take-up status strip (borrower acceptance, 2026-07-21): an approval is an offer until the
+ *  borrower takes it. Rendered wherever a file's status is shown so "approved" is never read as
+ *  "disbursed". Absent for officer-filed and seeded files, which carry no offer record. */
+function AcceptanceStrip({ p, state }: { p: Palette; state: AcceptanceState }) {
+  const tone =
+    state === 'accepted'
+      ? { fg: '#1f5c3f', bg: '#dcefe4', body: 'The borrower accepted these terms. This loan is live — service it on the Servicing tab.' }
+      : state === 'declined'
+        ? { fg: p.ink2, bg: p.surface2, body: 'The borrower turned this offer down. Nothing was disbursed; no further action is needed.' }
+        : { fg: '#6b4c0f', bg: '#f7ecd2', body: 'Approved on policy and sent to the borrower. Nothing is disbursed until they accept — this is their decision, not yours.' };
+  return (
+    <div style={{ borderRadius: 7, background: tone.bg, padding: '7px 9px', marginTop: 8 }}>
+      <p style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: tone.fg, marginBottom: 2 }}>{acceptanceLabel(state)}</p>
+      <p style={{ fontFamily: FONT.ui, fontSize: 12, color: tone.fg, lineHeight: 1.5 }}>{tone.body}</p>
+    </div>
+  );
+}
+
+function ApplicationCard({ p, app, passport, acceptance, onResolve, onRecordRepayment, onMarkDefault }: { p: Palette; app: ApplicationRecord; passport?: CreditPassport | null; acceptance?: AcceptanceState | null; onResolve: (outcome: 'approved' | 'declined', rationale: string) => void; onRecordRepayment?: (instalmentSeq: number, amount: number, outcome: RepaymentOutcome) => void; onMarkDefault?: () => void }) {
   const [rationale, setRationale] = useState('');
   const s = APP_STATUS_STYLE[app.status];
   const canResolve = rationale.trim().length > 0;
@@ -1029,6 +1013,8 @@ function ApplicationCard({ p, app, passport, onResolve, onRecordRepayment, onMar
         Filed {formatAgo(app.filedAt)}
         {app.purpose ? ` · purpose: ${PURPOSE_LABELS[app.purpose.category]}${app.purpose.note ? ` “${app.purpose.note}”` : ''} (self-reported)` : ''}
       </p>
+
+      {acceptance && <div style={{ marginBottom: 8, marginTop: -2 }}><AcceptanceStrip p={p} state={acceptance} /></div>}
 
       {app.status === 'referred' && (
         <div>
@@ -1134,7 +1120,7 @@ function PricingStrip({ p, pricing, adopted, onAdopt }: { p: Palette; pricing: P
   );
 }
 
-function RightDecision({ p, passport, decision, credential, amount, setAmount, onAssess, onCounterOffer, isCounterOffer, stacking, selectedApp, onResolve, onRecordRepayment, onGenerateLetter, purpose, setPurpose, policy, policyUpdatedAt, pricing, adoptedRate, onAdoptRate, lenderName, ownApplications, storedPolicy }: { p: Palette; passport: CreditPassport | null; decision: LoanDecision | null; credential: Credential | null; amount: string; setAmount: (s: string) => void; onAssess: () => void; onCounterOffer?: (counterAmount: number) => void; isCounterOffer?: boolean; stacking?: StackingSignal; selectedApp?: ApplicationRecord | null; onResolve?: (outcome: 'approved' | 'declined', rationale: string) => void; onRecordRepayment?: (instalmentSeq: number, amount: number, outcome: RepaymentOutcome) => void; onGenerateLetter?: () => void; purpose?: DeclaredPurpose | null; setPurpose?: (p: DeclaredPurpose | null) => void; policy?: LenderPolicy; policyUpdatedAt?: string; pricing?: PricingSuggestion | null; adoptedRate?: number | null; onAdoptRate?: (rate: number) => void; lenderName: string; ownApplications: ApplicationRecord[]; storedPolicy: StoredPolicy }) {
+function RightDecision({ p, passport, decision, credential, amount, setAmount, onAssess, onCounterOffer, isCounterOffer, stacking, selectedApp, acceptance, onResolve, onRecordRepayment, onGenerateLetter, purpose, setPurpose, policy, policyUpdatedAt, pricing, adoptedRate, onAdoptRate, lenderName, ownApplications, storedPolicy }: { p: Palette; passport: CreditPassport | null; decision: LoanDecision | null; credential: Credential | null; amount: string; setAmount: (s: string) => void; onAssess: () => void; onCounterOffer?: (counterAmount: number) => void; isCounterOffer?: boolean; stacking?: StackingSignal; selectedApp?: ApplicationRecord | null; acceptance?: AcceptanceState | null; onResolve?: (outcome: 'approved' | 'declined', rationale: string) => void; onRecordRepayment?: (instalmentSeq: number, amount: number, outcome: RepaymentOutcome) => void; onGenerateLetter?: () => void; purpose?: DeclaredPurpose | null; setPurpose?: (p: DeclaredPurpose | null) => void; policy?: LenderPolicy; policyUpdatedAt?: string; pricing?: PricingSuggestion | null; adoptedRate?: number | null; onAdoptRate?: (rate: number) => void; lenderName: string; ownApplications: ApplicationRecord[]; storedPolicy: StoredPolicy }) {
   const [memoOpen, setMemoOpen] = useState(false);
   const [letterOpen, setLetterOpen] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
@@ -1225,7 +1211,7 @@ function RightDecision({ p, passport, decision, credential, amount, setAmount, o
         )}
       </div>
 
-      {selectedApp && onResolve && <ApplicationCard p={p} app={selectedApp} passport={passport} onResolve={onResolve} onRecordRepayment={onRecordRepayment} />}
+      {selectedApp && onResolve && <ApplicationCard p={p} app={selectedApp} passport={passport} acceptance={acceptance} onResolve={onResolve} onRecordRepayment={onRecordRepayment} />}
 
       {decision ? (
         <>
@@ -1786,10 +1772,10 @@ function ServicingEmpty({ p, text }: { p: Palette; text: string }) {
   );
 }
 
-function ServicingDetail({ p, app, passport, onResolve, onRecordRepayment, onMarkDefault }: { p: Palette; app: ApplicationRecord; passport: CreditPassport | null; onResolve: (outcome: 'approved' | 'declined', rationale: string) => void; onRecordRepayment: (instalmentSeq: number, amount: number, outcome: RepaymentOutcome) => void; onMarkDefault: () => void }) {
+function ServicingDetail({ p, app, passport, acceptance, onResolve, onRecordRepayment, onMarkDefault }: { p: Palette; app: ApplicationRecord; passport: CreditPassport | null; acceptance?: AcceptanceState | null; onResolve: (outcome: 'approved' | 'declined', rationale: string) => void; onRecordRepayment: (instalmentSeq: number, amount: number, outcome: RepaymentOutcome) => void; onMarkDefault: () => void }) {
   return (
     <div style={{ width: 340, background: p.surface, borderLeft: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto', padding: '14px 0' }}>
-      <ApplicationCard p={p} app={app} passport={passport} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onMarkDefault={onMarkDefault} />
+      <ApplicationCard p={p} app={app} passport={passport} acceptance={acceptance} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onMarkDefault={onMarkDefault} />
     </div>
   );
 }
@@ -1832,6 +1818,10 @@ export default function Console() {
   // Active lender persona (Lender Tenancy spec): scopes policy, pipeline, and book to
   // one of the three registry lenders. Tenancy, not authentication  no credentials, no
   // session, just a stored id (same pattern as the tour dismissal above).
+  // This lender's published offers keyed by subject (borrower acceptance, 2026-07-21). Server
+  // state, never written from here: the console publishes through /api/offers and the borrower
+  // answers through its PATCH, so this is a read-only mirror refreshed on the pipeline poll.
+  const [offerBook, setOfferBook] = useState<OfferBook>({});
   const [activeLenderId, setActiveLenderIdState] = useState(DEFAULT_LENDER_ID);
   const [showPersonaPicker, setShowPersonaPicker] = useState(false);
   const [resettingDefaults, setResettingDefaults] = useState(false);
@@ -1863,6 +1853,23 @@ export default function Console() {
     }
   };
 
+  /** Pull this lender's published offer book (borrower acceptance, 2026-07-21) so the rail can
+   *  separate "approved, waiting on the borrower" from "accepted and disbursed". Server-side
+   *  only  the borrower writes their answer through the public PATCH, so the console learns
+   *  about it by re-reading, on exactly the same schedule it already polls direct-apply on.
+   *  A failure leaves the book as-is: the rail then shows the two triage queues alone, which
+   *  is the pre-acceptance behaviour, not a broken one. */
+  const pullOfferBook = async (lenderId: string) => {
+    try {
+      const res = await fetch(`/api/offers/book?lender=${lenderId}`);
+      if (!res.ok) return;
+      const parsed = parseOfferBook(await res.json());
+      if (lenderId === activeLenderId) setOfferBook(parsed);
+    } catch {
+      // offline/malformed  keep whatever book we already had.
+    }
+  };
+
   /** Loads everything scoped to `lenderId`: its stored policy (which re-evaluates
    *  whatever passport code/amount are currently on screen), its own applications
    *  pipeline, and  if that re-evaluation yields a valid passport  its own
@@ -1876,6 +1883,7 @@ export default function Console() {
     // Servicing sync (2026-07-18 design) runs after the direct-apply adoption above so it
     // sees any just-adopted approved loans too, not just the ones already in the pipeline.
     pullDirectApply(lenderId).finally(() => {
+      pullOfferBook(lenderId).catch(() => {});
       pullServicing(lenderId).catch(() => {});
     });
     fetch(`/api/policy?lender=${lenderId}`)
@@ -1985,6 +1993,7 @@ export default function Console() {
       setAmount('10,000');
       setApps([]);
       setPriors([]);
+      setOfferBook({});
       loadForLender(activeLenderId, SAMPLE_CODE, '10,000');
       setResetToast(`${activeLender.name}'s console was reset to defaults. Any matching loan on the borrower app's side will clear on its next sync.`);
     } finally {
@@ -2024,10 +2033,20 @@ export default function Console() {
    *  positive offer; a zero-offer or subject-less record publishes nothing. */
   const publishOffer = (app: ApplicationRecord, lenderId: string) => {
     if (!app.subject || !(app.offeredAmount > 0)) return;
+    // Tenor of the tier this file was priced on, so the borrower books the term we approved
+    // rather than re-deriving one from the amount (which can pick a different, longer tier).
+    const tier = storedPolicy.products.find((pr) => pr.label === app.tierLabel);
     fetch('/api/offers', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ subject: app.subject, lenderId, maxAmount: app.offeredAmount, installment: app.installment, ...(app.purpose ? { purpose: app.purpose } : {}) }),
+      body: JSON.stringify({
+        subject: app.subject,
+        lenderId,
+        maxAmount: app.offeredAmount,
+        installment: app.installment,
+        ...(tier ? { tenorMonths: tier.tenorMonths } : {}),
+        ...(app.purpose ? { purpose: app.purpose } : {}),
+      }),
     }).catch(() => {});
   };
 
@@ -2078,14 +2097,21 @@ export default function Console() {
   // Pip app. Without this, a direct-apply submission only ever adopted on mount/lender-switch,
   // so it silently sat in the server mailbox until the next reload. Also re-checks on window
   // focus (tab-switch back to the console, not just in-app tab switch) for the same reason.
+  // The offer book rides along on every one of these: a borrower accepting or declining is
+  // exactly as much "news" for the rail as a fresh submission is.
+  const pullPipeline = (lenderId: string) => {
+    pullDirectApply(lenderId).catch(() => {});
+    pullOfferBook(lenderId).catch(() => {});
+  };
+
   useEffect(() => {
-    if (tab === 'verify') pullDirectApply(activeLenderId).catch(() => {});
+    if (tab === 'verify') pullPipeline(activeLenderId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, activeLenderId]);
 
   useEffect(() => {
     const onFocus = () => {
-      if (tab === 'verify') pullDirectApply(activeLenderId).catch(() => {});
+      if (tab === 'verify') pullPipeline(activeLenderId);
     };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
@@ -2098,7 +2124,7 @@ export default function Console() {
   useEffect(() => {
     if (tab !== 'verify') return;
     const id = setInterval(() => {
-      pullDirectApply(activeLenderId).catch(() => {});
+      pullPipeline(activeLenderId);
     }, 5_000);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2300,13 +2326,20 @@ export default function Console() {
   };
 
   const selectedApp = apps.find((a) => a.id === selectedAppId) ?? null;
+  // Null for officer-filed/seeded files (no offer governs them) — the strip then doesn't render.
+  const selectedAcceptance = selectedApp ? acceptanceStateFor(selectedApp, offerBook) : null;
   // The live approved book (Brief Q)  maps approved applications into the pool shape.
-  const book = useMemo(() => bookToPool(apps), [apps]);
+  // Everything that answers "what is actually on our book?" runs off `booked`, not `apps`:
+  // an offer the borrower turned down keeps status 'approved' (that's the officer's decision,
+  // and the override matrix forbids rewriting it) but it is not a loan, and it must not appear
+  // in Servicing, the securitisation pool, or the portfolio's exposure numbers.
+  const booked = useMemo(() => liveBook(apps, offerBook), [apps, offerBook]);
+  const book = useMemo(() => bookToPool(booked), [booked]);
   // Servicing tab (console IA split, 2026-07-18; settled loans, 2026-07-18 stats/advisor
   // design): the approved book split into watchlist / active / settled sections.
-  const servicingSections = useMemo(() => orderServicingSections(apps), [apps]);
+  const servicingSections = useMemo(() => orderServicingSections(booked), [booked]);
   const servicingCount = servicingSections.defaulted.length + servicingSections.watchlist.length + servicingSections.active.length + servicingSections.settled.length;
-  const servicingWatchlistIds = useMemo(() => new Set(watchlistApplications(apps).map((a) => a.id)), [apps]);
+  const servicingWatchlistIds = useMemo(() => new Set(watchlistApplications(booked).map((a) => a.id)), [booked]);
 
   // Risk-based pricing suggestion (Brief R) for the current offer  computed from the
   // ORIGINAL ladder rate (not the adopted one) so the strip always shows ladder vs suggested.
@@ -2360,27 +2393,27 @@ export default function Console() {
       <main aria-label={TAB_LABELS[tab]} style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
         {tab === 'verify' ? (
           <>
-            <QueueRail p={p} apps={apps} selectedId={selectedAppId} onSelect={onSelectApp} onSeed={onSeed} onPasteNew={onPasteNew} forceSeedButton={tour.forceSeedButton} />
+            <QueueRail p={p} apps={apps} offerBook={offerBook} selectedId={selectedAppId} onSelect={onSelectApp} onSeed={onSeed} onPasteNew={onPasteNew} forceSeedButton={tour.forceSeedButton} />
             {showPassportInput && <LeftPanel p={p} flagged={flagged} statusValid={flagged ? false : statusValid} code={code} setCode={setCode} onVerify={onVerify} />}
             {showAlert ? <CenterAlert p={p} flagTime={flagTime} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} lapsedTiers={state.credential.verification.lapsedTiers} /> : <InvalidCenter p={p} reasons={state.reasons} />}
-            {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} onCounterOffer={onCounterOffer} isCounterOffer={isCounterOffer} stacking={stackingSignal} selectedApp={selectedApp} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onGenerateLetter={onGenerateLetter} purpose={purpose} setPurpose={setPurpose} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} pricing={pricing} adoptedRate={adoptedRate} onAdoptRate={onAdoptRate} lenderName={activeLender.name} ownApplications={apps} storedPolicy={storedPolicy} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} lenderName={activeLender.name} ownApplications={apps} storedPolicy={storedPolicy} />}
+            {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} onCounterOffer={onCounterOffer} isCounterOffer={isCounterOffer} stacking={stackingSignal} selectedApp={selectedApp} acceptance={selectedAcceptance} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onGenerateLetter={onGenerateLetter} purpose={purpose} setPurpose={setPurpose} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} pricing={pricing} adoptedRate={adoptedRate} onAdoptRate={onAdoptRate} lenderName={activeLender.name} ownApplications={apps} storedPolicy={storedPolicy} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} lenderName={activeLender.name} ownApplications={apps} storedPolicy={storedPolicy} />}
           </>
         ) : tab === 'servicing' ? (
           <>
-            <ServicingList p={p} apps={apps} sections={servicingSections} selectedId={selectedAppId} onSelect={onSelectApp} />
+            <ServicingList p={p} apps={booked} sections={servicingSections} selectedId={selectedAppId} onSelect={onSelectApp} />
             {servicingCount === 0 ? (
               <ServicingEmpty p={p} text="No approved loans yet. Approve applications on the Verify tab (or seed the pipeline) and they appear here for servicing." />
             ) : selectedApp && selectedApp.status === 'approved' && state.status === 'valid' ? (
               <>
                 <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} lapsedTiers={state.credential.verification.lapsedTiers} />
-                <ServicingDetail p={p} app={selectedApp} passport={state.passport} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onMarkDefault={onMarkDefault} />
+                <ServicingDetail p={p} app={selectedApp} passport={state.passport} acceptance={selectedAcceptance} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onMarkDefault={onMarkDefault} />
               </>
             ) : (
               <ServicingEmpty p={p} text="Select a loan from the list to service it: repayment status, monitoring check-ins, and audit trail." />
             )}
           </>
         ) : tab === 'portfolio' ? (
-          <PortfolioTab p={palette(false)} apps={apps} onStructure={() => { setPoolSource('live'); setTab('capital'); }} />
+          <PortfolioTab p={palette(false)} apps={booked} onStructure={() => { setPoolSource('live'); setTab('capital'); }} />
         ) : tab === 'capital' ? (
           <CapitalMarkets p={palette(false)} book={book} source={poolSource} setSource={setPoolSource} />
         ) : (

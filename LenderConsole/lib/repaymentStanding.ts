@@ -9,6 +9,8 @@
 import type { ApplicationRecord, RepaymentEvent } from './applications';
 import { monthsElapsed } from './performance';
 import type { AdverseRecord } from './loans';
+import type { CreditPassport } from './passport';
+import type { StoredPolicy } from './policyStore';
 
 export type StandingBucket = 'clean' | 'slipping' | 'arrears' | 'impaired';
 
@@ -143,5 +145,40 @@ export function computeRepaymentStanding(
     },
     scar,
     discountEligible: cur.bucket === 'clean' || cur.bucket === 'slipping',
+  };
+}
+
+/** Worst-of the passport's own signed standing (arrears at other lenders) and this lender's
+ *  own applications (arrears at THIS lender, computed from ApplicationRecord.repayments — the
+ *  console's own real ledger). Mirrors the anti-stacking presentment check's "prefer signed
+ *  cross-party evidence, but also check local state" pattern. */
+export function mergedStanding(passport: CreditPassport, ownApplications: ApplicationRecord[], stored: StoredPolicy): RepaymentStanding {
+  const ownLoans = ownApplications
+    .filter((a) => a.subject === passport.subject && a.status === 'approved')
+    .map((a) => {
+      const tenorMonths = stored.products.find((p) => p.label === a.tierLabel)?.tenorMonths ?? 12;
+      return { app: a, tenorMonths };
+    });
+  const ownStanding = computeRepaymentStanding(ownLoans);
+  const BUCKET_RANK: Record<StandingBucket, number> = { clean: 0, slipping: 1, arrears: 2, impaired: 3 };
+  const passportBucket: StandingBucket = passport.standing?.current.bucket ?? 'clean';
+  const current = BUCKET_RANK[ownStanding.current.bucket] >= BUCKET_RANK[passportBucket] ? ownStanding.current : passport.standing!.current;
+
+  // Merge scars independently of which side's CURRENT bucket won: a clean-today own book (e.g.
+  // a single perfectly-paid loan) must not erase a worse historical scar signed into the
+  // passport from another lender -- the scar is meant to stay visible for its own 12-month
+  // window regardless of who currently looks worse.
+  const passportScar = passport.standing?.scar ?? null;
+  const scar =
+    !ownStanding.scar ? passportScar
+    : !passportScar ? ownStanding.scar
+    : BUCKET_RANK[ownStanding.scar.bucket] !== BUCKET_RANK[passportScar.bucket]
+      ? (BUCKET_RANK[ownStanding.scar.bucket] > BUCKET_RANK[passportScar.bucket] ? ownStanding.scar : passportScar)
+      : (ownStanding.scar.reachedMonthsAgo <= passportScar.reachedMonthsAgo ? ownStanding.scar : passportScar);
+
+  return {
+    current,
+    scar,
+    discountEligible: current.bucket === 'clean' || current.bucket === 'slipping',
   };
 }
