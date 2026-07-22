@@ -18,7 +18,7 @@ import { type CreditPassport, type VerifyResult, parsePassportCode, verifyPasspo
 import { DEFAULT_POLICY, REASON_CATEGORY_LABELS, decideLoan, type LenderPolicy, type LoanDecision, type LoanProduct } from '../lib/loans';
 import { DEFAULT_STORED_POLICY, type StoredPolicy } from '../lib/policyStore';
 import { priceLoan, repriceProducts, type PricingSuggestion } from '../lib/pricing';
-import { computeRepaymentStanding, mergedStanding, type RepaymentStanding, type StandingBucket } from '../lib/repaymentStanding';
+import { mergedStanding } from '../lib/repaymentStanding';
 import { structurePool, type CreditBand, type PoolLoan } from '../lib/securitization';
 import { SAMPLE_POOL } from '../lib/samplePool';
 import { poolStatCells, trancheViews } from '../lib/poolView';
