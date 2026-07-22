@@ -144,7 +144,7 @@ function OfferCard({
       )}
       {offer.apr != null && offer.discountBps != null && offer.discountBps > 0 && (
         <Text style={styles.offerDiscount}>
-          {offer.discountBps} bps below {lender.name}&apos;s standard {((offer.apr + offer.discountBps / 10000) * 100).toFixed(1)}% rate
+          {(offer.discountBps / 100).toFixed(1)} percentage points below {lender.name}&apos;s standard {((offer.apr + offer.discountBps / 10000) * 100).toFixed(1)}% rate
         </Text>
       )}
 
