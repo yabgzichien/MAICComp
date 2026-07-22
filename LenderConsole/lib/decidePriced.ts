@@ -14,13 +14,17 @@ import { priceLoan, repriceProducts, type PricingSuggestion } from './pricing';
 import type { CreditBand } from './securitization';
 
 /**
- * decideLoan doesn't consume credit band (Brief R's pricing assistant is the only
- * consumer), so it isn't part of LoanDecisionInput. decidePriced needs it purely to call
- * priceLoan  it's threaded in here rather than added to LoanDecisionInput itself, which
- * would be an unrelated change to the decision engine's contract.
+ * decideLoan doesn't consume credit band or repayment standing (Brief R's pricing
+ * assistant is the only consumer of either), so neither is part of LoanDecisionInput.
+ * decidePriced needs both purely to call priceLoan  threaded in here as a superset of
+ * LoanDecisionInput rather than added to it, which would be an unrelated change to the
+ * decision engine's contract. Named fields (not a second positional boolean) match
+ * priceLoan's own PricingInputs.standingClean? convention in pricing.ts.
  */
 export interface PricedLoanDecisionInput extends LoanDecisionInput {
   band: CreditBand;
+  /** Loyalty-discount eligibility (mergedStanding(...).discountEligible upstream). */
+  standingClean: boolean;
 }
 
 export interface PricedLoanDecision {
@@ -34,7 +38,7 @@ export interface PricedLoanDecision {
   priced: LoanDecision;
 }
 
-export function decidePriced(input: PricedLoanDecisionInput, standingClean: boolean): PricedLoanDecision {
+export function decidePriced(input: PricedLoanDecisionInput): PricedLoanDecision {
   const decision = decideLoan(input);
   if (decision.decision !== 'approve' || !decision.breakdown) {
     return { decision, pricing: null, priced: decision };
@@ -53,7 +57,7 @@ export function decidePriced(input: PricedLoanDecisionInput, standingClean: bool
     ladderApr: tier.apr,
     costOfFunds: policy.costOfFunds,
     targetReturn: policy.targetReturn,
-    standingClean,
+    standingClean: input.standingClean,
   });
 
   if (pricing.suggestedRate < tier.apr) {

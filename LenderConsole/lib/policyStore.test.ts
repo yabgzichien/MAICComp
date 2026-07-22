@@ -97,6 +97,14 @@ describe('validateStoredPolicy', () => {
       expect(errs.some((e) => /duplicate tier/.test(e))).toBe(true);
     });
 
+    it('rejects duplicate tier labels even when ids differ — decidePriced/repriceProducts match tiers by label', () => {
+      const errs = errorsOf({
+        ...good(),
+        products: [DEFAULT_PRODUCTS[0], { ...DEFAULT_PRODUCTS[1], label: DEFAULT_PRODUCTS[0].label }],
+      });
+      expect(errs.some((e) => e.includes('.label') && /duplicate label/.test(e))).toBe(true);
+    });
+
     it('rejects a missing or blank label', () => {
       expect(errorsOf({ ...good(), products: [{ ...DEFAULT_PRODUCTS[0], label: '' }] }).some((e) => e.includes('.label'))).toBe(true);
       expect(errorsOf({ ...good(), products: [{ ...DEFAULT_PRODUCTS[0], label: '   ' }] }).some((e) => e.includes('.label'))).toBe(true);

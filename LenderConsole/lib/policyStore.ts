@@ -67,6 +67,14 @@ export function validateStoredPolicy(raw: unknown): PolicyValidation {
       return v;
     };
     const minConfidenceToApprove = ratio('minConfidenceToApprove');
+    // Optional on the wire: policies stored before the decline floor shipped, and older
+    // clients, simply don't carry it and inherit the engine default rather than being
+    // rejected outright.
+    let minConfidenceToConsider = DEFAULT_POLICY.minConfidenceToConsider;
+    if (p.minConfidenceToConsider !== undefined) {
+      const v = ratio('minConfidenceToConsider');
+      if (v !== undefined) minConfidenceToConsider = v;
+    }
     const maxInstallmentShareOfSurplus = ratio('maxInstallmentShareOfSurplus');
     const maxDsr = ratio('maxDsr');
     const emergencyOnlyBelowDays = days('emergencyOnlyBelowDays');
@@ -81,6 +89,12 @@ export function validateStoredPolicy(raw: unknown): PolicyValidation {
     ) {
       errors.push('policy.emergencyOnlyBelowDays: cannot exceed policy.fullLadderFromDays. The gates would invert.');
     }
+    // A decline floor at or above the auto-approve floor would leave no band for human review:
+    // every application would be either auto-approved or auto-declined, and the officer's
+    // queue would go permanently empty.
+    if (minConfidenceToApprove !== undefined && minConfidenceToConsider >= minConfidenceToApprove) {
+      errors.push('policy.minConfidenceToConsider: must be below policy.minConfidenceToApprove, or nothing would ever reach manual review.');
+    }
     if (errors.length === 0) {
       const products = validateProducts(o.products, errors);
       if (errors.length === 0 && products) {
@@ -89,6 +103,7 @@ export function validateStoredPolicy(raw: unknown): PolicyValidation {
           value: {
             policy: {
               minConfidenceToApprove: minConfidenceToApprove!,
+              minConfidenceToConsider,
               maxInstallmentShareOfSurplus: maxInstallmentShareOfSurplus!,
               maxDsr: maxDsr!,
               emergencyOnlyBelowDays: emergencyOnlyBelowDays!,
@@ -119,6 +134,7 @@ function validateProducts(raw: unknown, errors: string[]): LoanProduct[] | undef
     return undefined;
   }
   const seen = new Set<string>();
+  const seenLabels = new Set<string>();
   const clean: LoanProduct[] = [];
   raw.forEach((r, i) => {
     const t = r as Record<string, unknown>;
@@ -135,7 +151,13 @@ function validateProducts(raw: unknown, errors: string[]): LoanProduct[] | undef
     } else {
       seen.add(id);
     }
-    if (typeof t.label !== 'string' || t.label.trim().length === 0) errors.push(`${at}.label: required.`);
+    if (typeof t.label !== 'string' || t.label.trim().length === 0) {
+      errors.push(`${at}.label: required.`);
+    } else if (seenLabels.has(t.label)) {
+      errors.push(`${at}.label: duplicate label "${t.label}". Each tier's label must be unique  decidePriced and repriceProducts match tiers by label.`);
+    } else {
+      seenLabels.add(t.label);
+    }
     if (!isFiniteNum(t.minScore) || t.minScore < 300 || t.minScore > 900) errors.push(`${at}.minScore: must be a score between 300 and 900.`);
     if (!isFiniteNum(t.minAmount) || t.minAmount <= 0) errors.push(`${at}.minAmount: must be a positive amount.`);
     if (!isFiniteNum(t.maxAmount) || t.maxAmount <= 0) errors.push(`${at}.maxAmount: must be a positive amount.`);
