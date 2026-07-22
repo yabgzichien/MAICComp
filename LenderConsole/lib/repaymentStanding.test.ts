@@ -6,8 +6,11 @@ import {
   currentStandingAcross,
   scarAcross,
   computeRepaymentStanding,
+  mergedStanding,
 } from './repaymentStanding';
 import type { ApplicationRecord, RepaymentEvent } from './applications';
+import type { CreditPassport } from './passport';
+import { DEFAULT_STORED_POLICY } from './policyStore';
 
 const NOW = new Date('2026-07-21T00:00:00.000Z');
 
@@ -177,5 +180,46 @@ describe('computeRepaymentStanding', () => {
 
     const arrearsArgs = [{ app: app({ installment: 300, filedAt: '2026-05-21T00:00:00.000Z', resolvedAt: '2026-05-21T00:00:00.000Z', repayments: [] }), tenorMonths: 12 }];
     expect(computeRepaymentStanding(arrearsArgs, NOW).discountEligible).toBe(false);
+  });
+});
+
+function passport(overrides: Partial<CreditPassport>): CreditPassport {
+  return {
+    subject: 'sub1',
+    score: 700,
+    band: 'B',
+    factorSummary: [],
+    provenanceSummary: '',
+    evidenceHash: '',
+    repaymentRecord: { onTime: 0, total: 0 },
+    issuedAt: '2026-01-01T00:00:00.000Z',
+    validUntil: '2027-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+describe('mergedStanding', () => {
+  it('is not discount-eligible when the passport carries a signed arrears standing and there are no own applications', () => {
+    const p = passport({
+      standing: {
+        current: { bucket: 'arrears', adverseRecord: 'soft', monthsInArrears: 2, amountOverdue: 600 },
+        scar: null,
+        discountEligible: false,
+      },
+    });
+    const standing = mergedStanding(p, [], DEFAULT_STORED_POLICY);
+    expect(standing.discountEligible).toBe(false);
+  });
+
+  it('is discount-eligible for a clean passport with no own loans', () => {
+    const p = passport({
+      standing: {
+        current: { bucket: 'clean', adverseRecord: 'none', monthsInArrears: 0, amountOverdue: 0 },
+        scar: null,
+        discountEligible: true,
+      },
+    });
+    const standing = mergedStanding(p, [], DEFAULT_STORED_POLICY);
+    expect(standing.discountEligible).toBe(true);
   });
 });
