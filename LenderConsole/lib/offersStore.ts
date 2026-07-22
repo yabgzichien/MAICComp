@@ -10,6 +10,7 @@
 import * as path from 'path';
 import { readJson, writeJson } from './kvStore';
 import type { DeclaredPurpose } from './applications';
+import { isOfferRecord, type OfferRecord, type OfferResponse } from './offerAcceptance';
 
 const STORE_KEY = 'offers';
 const DEFAULT_LENDER_ID = 'tekun';
@@ -25,52 +26,11 @@ function defaultFilePathFor(lenderId: string): string {
   return lenderId === DEFAULT_LENDER_ID ? OFFERS_FILE_PATH : path.join(process.cwd(), '.data', `offers-${lenderId}.json`);
 }
 
-/** One published offer  the lender's current decided terms for a borrower-loan. `decision`
- *  is 'approve' for every record today (only approvals are published; a decline simply writes
- *  no offer), but carried explicitly so a future decline-notify can reuse this shape. */
-export interface OfferRecord {
-  subject: string;
-  lenderId: string;
-  decision: 'approve';
-  /** The offered principal and monthly installment  the borrower rebuilds the schedule from
-   *  these exactly as the accept-offer flow already does (installment is authoritative, tenor
-   *  is derived from the lender's product ladder by amount). */
-  maxAmount: number;
-  installment: number;
-  decidedAt: string; // ISO timestamp; also the change token the borrower dedupes on
-  /** The purpose the borrower declared at apply time (My Financing polish, 2026-07-19),
-   *  round-tripped so an auto-booked loan on the borrower side carries the same "why" a
-   *  manually-accepted one does. Absent when the filed application carried none. */
-  purpose?: DeclaredPurpose;
-}
-
-const PURPOSE_CATEGORIES_SET: ReadonlySet<string> = new Set(['stock', 'equipment', 'working-capital', 'emergency', 'education', 'other']);
-
-function isDeclaredPurpose(x: unknown): x is DeclaredPurpose {
-  if (!x || typeof x !== 'object') return false;
-  const p = x as Record<string, unknown>;
-  if (typeof p.category !== 'string' || !PURPOSE_CATEGORIES_SET.has(p.category)) return false;
-  return p.note === undefined || typeof p.note === 'string';
-}
-
-export function isOfferRecord(x: unknown): x is OfferRecord {
-  if (!x || typeof x !== 'object') return false;
-  const o = x as Record<string, unknown>;
-  return (
-    typeof o.subject === 'string' &&
-    o.subject.length > 0 &&
-    typeof o.lenderId === 'string' &&
-    o.decision === 'approve' &&
-    typeof o.maxAmount === 'number' &&
-    Number.isFinite(o.maxAmount) &&
-    o.maxAmount > 0 &&
-    typeof o.installment === 'number' &&
-    Number.isFinite(o.installment) &&
-    o.installment >= 0 &&
-    typeof o.decidedAt === 'string' &&
-    (o.purpose === undefined || isDeclaredPurpose(o.purpose))
-  );
-}
+// The record shape, its response block, and the validator live in offerAcceptance.ts — that
+// module is pure and therefore safe to import from the client bundle, which this one is not
+// (kvStore pulls in `fs`). Re-exported here so server code keeps a single import site.
+export type { OfferRecord, OfferResponse } from './offerAcceptance';
+export { isOfferRecord } from './offerAcceptance';
 
 /** Read `lenderId`'s whole offer book; a missing, corrupt, or unreachable store reads as
  *  empty rather than throwing. Pass `filePath` to force the local-file backend (tests). */
@@ -91,24 +51,59 @@ export async function readOffer(subject: string, filePath?: string, lenderId: st
   return book[subject] ?? null;
 }
 
-/** Publish (or overwrite) `subject`'s current offer with this lender. Latest write wins. */
+/** Publish (or overwrite) `subject`'s current offer with this lender. Latest write wins  with
+ *  one carve-out: re-publishing the SAME terms keeps whatever the borrower already answered.
+ *  Without that, an idempotent re-publish (the officer re-approving, a repeat direct-apply at
+ *  the same amount) would silently un-accept a loan the borrower had already taken, and it
+ *  would reappear in their "awaiting your decision" list. Genuinely different terms are a new
+ *  offer, so they clear the old answer and go back to awaiting. */
 export async function writeOffer(
   filePath: string | undefined,
   lenderId: string,
   subject: string,
-  offer: { maxAmount: number; installment: number; purpose?: DeclaredPurpose },
+  offer: { maxAmount: number; installment: number; tenorMonths?: number; purpose?: DeclaredPurpose; apr?: number; discountBps?: number },
   now: Date = new Date(),
 ): Promise<OfferRecord> {
+  const book = await readOfferBook(filePath, lenderId);
+  const prior = book[subject];
+  const sameTerms = prior !== undefined && prior.maxAmount === offer.maxAmount && prior.installment === offer.installment;
   const record: OfferRecord = {
     subject,
     lenderId,
     decision: 'approve',
     maxAmount: offer.maxAmount,
     installment: offer.installment,
-    decidedAt: now.toISOString(),
+    // Same terms → keep the original decidedAt too; the borrower dedupes on it, and bumping it
+    // for an unchanged offer would read as fresh news.
+    decidedAt: sameTerms ? prior.decidedAt : now.toISOString(),
+    ...(offer.tenorMonths ? { tenorMonths: offer.tenorMonths } : {}),
     ...(offer.purpose ? { purpose: offer.purpose } : {}),
+    ...(offer.apr ? { apr: offer.apr } : {}),
+    ...(offer.discountBps !== undefined ? { discountBps: offer.discountBps } : {}),
+    ...(sameTerms && prior.response ? { response: prior.response } : {}),
   };
+  book[subject] = record;
+  await writeJson(keyFor(lenderId), defaultFilePathFor(lenderId), book, filePath);
+  return record;
+}
+
+/** Stamp the borrower's accept/decline onto their current offer (borrower acceptance,
+ *  2026-07-21). Returns the updated record, or null when there is no offer to answer  a
+ *  response to nothing is dropped rather than conjuring an offer the lender never made.
+ *  First answer wins: an already-answered offer is returned untouched, so a duplicate tap
+ *  (or a retry after a flaky response) can't flip an acceptance into a decline. */
+export async function recordOfferResponse(
+  filePath: string | undefined,
+  lenderId: string,
+  subject: string,
+  state: OfferResponse['state'],
+  now: Date = new Date(),
+): Promise<OfferRecord | null> {
   const book = await readOfferBook(filePath, lenderId);
+  const existing = book[subject];
+  if (!existing) return null;
+  if (existing.response) return existing;
+  const record: OfferRecord = { ...existing, response: { state, at: now.toISOString() } };
   book[subject] = record;
   await writeJson(keyFor(lenderId), defaultFilePathFor(lenderId), book, filePath);
   return record;
