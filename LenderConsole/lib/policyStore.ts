@@ -154,7 +154,7 @@ function validateProducts(raw: unknown, errors: string[]): LoanProduct[] | undef
     if (typeof t.label !== 'string' || t.label.trim().length === 0) {
       errors.push(`${at}.label: required.`);
     } else if (seenLabels.has(t.label)) {
-      errors.push(`${at}.label: duplicate label "${t.label}". Each tier's label must be unique  decidePriced and repriceProducts match tiers by label.`);
+      errors.push(`${at}.label: duplicate label "${t.label}". Each tier's label must be unique — decidePriced and repriceProducts match tiers by label.`);
     } else {
       seenLabels.add(t.label);
     }
