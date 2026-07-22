@@ -5,7 +5,8 @@
 // without decideLoan or priceLoan themselves changing.
 import { describe, expect, it } from 'vitest';
 import { decidePriced, type PricedLoanDecisionInput } from './decidePriced';
-import { DEFAULT_POLICY, DEFAULT_PRODUCTS } from './loans';
+import { DEFAULT_POLICY, DEFAULT_PRODUCTS, decideLoan } from './loans';
+import { priceLoan, repriceProducts } from './pricing';
 
 // Base fixture: a comfortably-affordable, high-confidence, clean-standing file. Individual
 // tests override score/band/amount/income/standingClean fields to land in the scenario
@@ -100,6 +101,41 @@ describe('decidePriced', () => {
     expect(decision.breakdown).toBeUndefined();
     expect(pricing).toBeNull();
     expect(priced).toBe(decision);
+  });
+
+  it('(h) consistency: priced matches the officer\'s manual "adopt a suggested rate" recipe exactly (Console.tsx\'s repriceProducts + decideLoan)', () => {
+    // decidePriced's re-decide step is deliberately the same two-step recipe Console.tsx's
+    // onAdoptRate already used before this plan: repriceProducts(products, tierLabel, rate)
+    // then decideLoan. Prove decidePriced does exactly that and nothing more by independently
+    // reconstructing the officer's manual steps from the same input and asserting deep equality
+    // against decidePriced's own `priced` result — not just checking properties of the outcome.
+    const input = baseInput({ requestedAmount: 20000, avgIncome: 2000, monthlyDebtService: 100, avgMonthlySurplus: 3000 });
+    const { decision, pricing, priced } = decidePriced(input);
+    expect(decision.decision).toBe('approve');
+    expect(pricing).not.toBeNull();
+    expect(pricing!.discountBps).toBeGreaterThan(0); // sanity: this case actually discounts
+
+    // Manually replicate the officer's "adopt" click: reprice the approved tier to the
+    // suggested rate, then re-decide  computed independently of decidePriced's internals.
+    const manuallyRepriced = repriceProducts(input.products, decision.breakdown!.tierLabel, pricing!.suggestedRate);
+    const manualDecision = decideLoan({ ...input, products: manuallyRepriced });
+
+    expect(priced).toEqual(manualDecision);
+    expect(priced.maxAmount).toBe(manualDecision.maxAmount);
+    expect(priced.installment).toBe(manualDecision.installment);
+    expect(priced.decision).toBe(manualDecision.decision);
+
+    // And confirm the suggested rate driving both sides is itself independently reproducible
+    // from priceLoan given the same band/tier/policy/standing inputs decidePriced used.
+    const tier = input.products.find((p) => p.label === decision.breakdown!.tierLabel)!;
+    const independentPricing = priceLoan({
+      band: input.band,
+      ladderApr: tier.apr,
+      costOfFunds: input.policy!.costOfFunds,
+      targetReturn: input.policy!.targetReturn,
+      standingClean: input.standingClean,
+    });
+    expect(independentPricing.suggestedRate).toBe(pricing!.suggestedRate);
   });
 
   it('does not mutate the input object or its products array', () => {
