@@ -78,7 +78,12 @@ export async function writeOffer(
     decidedAt: sameTerms ? prior.decidedAt : now.toISOString(),
     ...(offer.tenorMonths ? { tenorMonths: offer.tenorMonths } : {}),
     ...(offer.purpose ? { purpose: offer.purpose } : {}),
-    ...(offer.apr ? { apr: offer.apr } : {}),
+    // apr/discountBps refresh unconditionally from the new call, NOT gated on sameTerms like
+    // decidedAt/response are: a re-publish always carries the caller's current pricing, even
+    // when maxAmount/installment happen to match the prior offer. Deliberate for now — see
+    // Task 3 code review — revisit if a same-terms-but-repriced republish needs to reset the
+    // borrower's answer too.
+    ...(offer.apr !== undefined ? { apr: offer.apr } : {}),
     ...(offer.discountBps !== undefined ? { discountBps: offer.discountBps } : {}),
     ...(sameTerms && prior.response ? { response: prior.response } : {}),
   };

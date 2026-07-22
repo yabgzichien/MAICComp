@@ -45,8 +45,20 @@ describe('isOfferRecord — applied APR and discount bps (auto-apply risk discou
     expect(isOfferRecord(offer({ apr: -1 }))).toBe(false);
   });
 
+  it('rejects apr: 0 — the guard requires strictly positive', () => {
+    expect(isOfferRecord(offer({ apr: 0 }))).toBe(false);
+  });
+
   it('rejects a non-integer discountBps', () => {
     expect(isOfferRecord(offer({ discountBps: 1.5 }))).toBe(false);
+  });
+
+  it('rejects a negative discountBps — the guard requires >= 0', () => {
+    expect(isOfferRecord(offer({ discountBps: -1 }))).toBe(false);
+  });
+
+  it('accepts discountBps: 0 — a real value, not the same as absent', () => {
+    expect(isOfferRecord(offer({ discountBps: 0 }))).toBe(true);
   });
 
   it('back-compat: still accepts a record with neither field', () => {

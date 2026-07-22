@@ -66,8 +66,20 @@ describe('parseOffer — applied APR and discount bps (auto-apply risk discount,
     expect(parsed?.apr).toBeUndefined();
   });
 
+  it('drops apr: 0 — the guard requires strictly positive', () => {
+    const parsed = parseOffer({ ...offer(), apr: 0 });
+    expect(parsed).not.toBeNull();
+    expect(parsed?.apr).toBeUndefined();
+  });
+
   it('drops a non-integer discountBps while keeping the rest of the offer', () => {
     const parsed = parseOffer({ ...offer(), discountBps: 1.5 });
+    expect(parsed).not.toBeNull();
+    expect(parsed?.discountBps).toBeUndefined();
+  });
+
+  it('drops a negative discountBps — the guard requires >= 0', () => {
+    const parsed = parseOffer({ ...offer(), discountBps: -1 });
     expect(parsed).not.toBeNull();
     expect(parsed?.discountBps).toBeUndefined();
   });
