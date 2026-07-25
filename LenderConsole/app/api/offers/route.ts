@@ -11,7 +11,7 @@
 // allowed  the borrower never writes here.
 
 import { NextResponse } from 'next/server';
-import { clearOfferBook, readOffer, writeOffer } from '../../../lib/offersStore';
+import { clearOfferBook, readOffer, recordOfferResponse, writeOffer } from '../../../lib/offersStore';
 import { LENDER_REGISTRY } from '../../../lib/lenderRegistry';
 import type { DeclaredPurpose, PurposeCategory } from '../../../lib/applications';
 
@@ -25,7 +25,7 @@ function resolveLenderId(raw: unknown): string | null {
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, PATCH, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
@@ -112,8 +112,57 @@ export async function POST(req: Request) {
   }
 
   const purpose = parsePurpose(b.purpose);
-  const record = await writeOffer(undefined, lenderId, b.subject, { maxAmount: b.maxAmount, installment: b.installment, ...(purpose ? { purpose } : {}) }, new Date());
+  const tenorMonths = typeof b.tenorMonths === 'number' && Number.isInteger(b.tenorMonths) && b.tenorMonths > 0 ? b.tenorMonths : undefined;
+  const record = await writeOffer(
+    undefined,
+    lenderId,
+    b.subject,
+    { maxAmount: b.maxAmount, installment: b.installment, ...(tenorMonths ? { tenorMonths } : {}), ...(purpose ? { purpose } : {}) },
+    new Date(),
+  );
   return NextResponse.json({ ok: true, record });
+}
+
+// Public + CORS, and the ONE thing the borrower may write here (borrower acceptance,
+// 2026-07-21): their answer to an offer this lender already published. It cannot create an
+// offer, change its terms, or reach any other subject's record  the worst a forged call can
+// do is answer an offer for a subject hash the caller already knows, which is the same
+// capability the GET above already grants. Publishing terms stays POST, same-origin only.
+export async function PATCH(req: Request) {
+  const ip = req.headers.get('x-forwarded-for') ?? 'unknown';
+  if (rateLimited(ip)) {
+    return NextResponse.json({ ok: false, errors: ['Too many requests. Try again shortly.'] }, { status: 429, headers: CORS_HEADERS });
+  }
+
+  const raw = await req.text();
+  if (raw.length > MAX_BODY_BYTES) {
+    return NextResponse.json({ ok: false, errors: ['Request too large.'] }, { status: 413, headers: CORS_HEADERS });
+  }
+
+  let body: unknown;
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    return NextResponse.json({ ok: false, errors: ['Body must be JSON.'] }, { status: 400, headers: CORS_HEADERS });
+  }
+
+  const b = body as Record<string, unknown>;
+  if (typeof b.subject !== 'string' || !b.subject) {
+    return NextResponse.json({ ok: false, errors: ['subject is required.'] }, { status: 400, headers: CORS_HEADERS });
+  }
+  const lenderId = resolveLenderId(b.lenderId);
+  if (lenderId === null) {
+    return NextResponse.json({ ok: false, errors: ['Unknown lender.'] }, { status: 400, headers: CORS_HEADERS });
+  }
+  if (b.response !== 'accepted' && b.response !== 'declined') {
+    return NextResponse.json({ ok: false, errors: ["response must be 'accepted' or 'declined'."] }, { status: 400, headers: CORS_HEADERS });
+  }
+
+  const record = await recordOfferResponse(undefined, lenderId, b.subject, b.response, new Date());
+  if (!record) {
+    return NextResponse.json({ ok: false, errors: ['No offer is open for this subject with this lender.'] }, { status: 404, headers: CORS_HEADERS });
+  }
+  return NextResponse.json({ ok: true, record }, { headers: CORS_HEADERS });
 }
 
 export async function OPTIONS() {

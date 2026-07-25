@@ -5,9 +5,10 @@
 // flash, the mission's slim banner variant, and the finale recap. Focus jumps to the card
 // on step change (web) so screen readers hear each step announced.
 import React, { useEffect, useRef } from 'react';
-import { AccessibilityInfo, Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Animated, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, shadowCard, uiFont } from '../theme';
-import type { TourStep } from '../lib/tourSteps';
+import { fillPersona, type TourStep } from '../lib/tourSteps';
+import { LENDER_API_BASE } from '../lib/lenderDirectory';
 import { Pip } from './Pip';
 
 export interface TourActProgress {
@@ -21,7 +22,7 @@ export interface TourRecapItem {
   done: boolean;
 }
 
-function ActMeter({ progress }: { progress: TourActProgress }) {
+function ActMeter({ progress, persona }: { progress: TourActProgress; persona?: { name?: string; role?: string } }) {
   return (
     <View style={styles.meterRow}>
       <View style={styles.meterTrack}>
@@ -33,7 +34,7 @@ function ActMeter({ progress }: { progress: TourActProgress }) {
         ))}
       </View>
       <Text style={styles.meterLabel}>
-        Act {progress.act} of {progress.totalActs} · {progress.actLabel}
+        Act {progress.act} of {progress.totalActs} · {fillPersona(progress.actLabel, persona ?? {})}
       </Text>
     </View>
   );
@@ -67,6 +68,8 @@ export function TourCard({
   bottomInset = 0,
   topInset = 0,
   placement = 'bottom',
+  persona,
+  handoffReady = false,
   onNext,
   onBack,
   onExit,
@@ -90,6 +93,10 @@ export function TourCard({
    *  never occludes the control it is asking the judge to tap (found live: the coach's
    *  what-if chips sat behind a bottom card). */
   placement?: 'bottom' | 'top';
+  /** Fills the copy's `{name}` / `{role}` tokens with the loaded demo borrower. */
+  persona?: { name?: string; role?: string };
+  /** Handoff steps only: whether the real loan has moved far enough to unlock Continue. */
+  handoffReady?: boolean;
   onNext: () => void;
   onBack: () => void;
   onExit: () => void;
@@ -98,7 +105,17 @@ export function TourCard({
   onMissionStart?: () => void;
 }) {
   const interactive = step.kind !== 'explain';
+  const isHandoff = step.kind === 'handoff';
+  const title = fillPersona(step.title, persona ?? {});
+  const body = fillPersona(step.body, persona ?? {});
   const focusRef = useRef<View>(null);
+
+  /** Open the lender console. Web-only in practice: on a phone there is no second window to
+   *  put it in, so the card falls back to the instruction alone and the judge switches
+   *  devices themselves. Best-effort  a blocked popup must never break the tour. */
+  const openConsole = () => {
+    Linking.openURL(LENDER_API_BASE).catch(() => {});
+  };
 
   useEffect(() => {
     if (Platform.OS !== 'web') return;
@@ -124,20 +141,42 @@ export function TourCard({
         ref={focusRef}
         focusable
         style={styles.card}
-        accessibilityLabel={`Tour, act ${progress.act} of ${progress.totalActs}. ${step.title}. ${step.body}`}
+        accessibilityLabel={`Tour, act ${progress.act} of ${progress.totalActs}. ${title}. ${body}`}
       >
         {celebrate ? <CelebrateFlash text={celebrate} /> : null}
-        <ActMeter progress={progress} />
+        <ActMeter progress={progress} persona={persona} />
         {interactive && (
           <View style={styles.turnPill}>
-            <Text style={styles.turnPillText}>YOUR TURN</Text>
+            <Text style={styles.turnPillText}>{isHandoff ? 'SWITCH APPS' : 'YOUR TURN'}</Text>
           </View>
         )}
         <Text style={styles.title} accessibilityRole="header" accessibilityLiveRegion="polite">
-          {step.title}
+          {title}
         </Text>
-        <Text style={styles.body}>{step.body}</Text>
+        <Text style={styles.body}>{body}</Text>
         {detail ? <Text style={styles.detail}>{detail}</Text> : null}
+
+        {isHandoff && step.handoff && (
+          <View style={styles.handoff}>
+            <Pressable
+              onPress={openConsole}
+              accessibilityRole="link"
+              accessibilityLabel="Open the Lender Console in a new tab"
+              style={styles.handoffBtn}
+              hitSlop={4}
+            >
+              <Text style={styles.handoffBtnText}>Open the Lender Console →</Text>
+            </Pressable>
+            {/* The honest status of the real loan. Announced politely so a screen-reader user
+                hears the gate open without having to poll the button's disabled state. */}
+            <Text
+              style={[styles.handoffStatus, handoffReady && styles.handoffStatusReady]}
+              accessibilityLiveRegion="polite"
+            >
+              {handoffReady ? step.handoff.ready : step.handoff.waiting}
+            </Text>
+          </View>
+        )}
 
         {recap && recap.length > 0 && (
           <View style={styles.recap}>
@@ -168,7 +207,27 @@ export function TourCard({
             <Text style={styles.exit}>Exit</Text>
           </Pressable>
           <View style={{ flex: 1 }} />
-          {interactive ? (
+          {isHandoff ? (
+            <>
+              <Pressable onPress={onSkip} accessibilityRole="button" accessibilityLabel="Skip this step" style={styles.secondaryBtn} hitSlop={8}>
+                <Text style={styles.secondaryText}>Skip</Text>
+              </Pressable>
+              {/* Gated, never automatic: the judge presses this when they come back. On the
+                  `approved` ending the offer already exists at this point, so self-advancing
+                  would carry them past the console without ever playing the officer. */}
+              <Pressable
+                onPress={onNext}
+                disabled={!handoffReady}
+                accessibilityRole="button"
+                accessibilityLabel={step.handoff?.cta ?? 'Continue'}
+                accessibilityState={{ disabled: !handoffReady }}
+                style={[styles.nextBtn, !handoffReady && styles.nextBtnDisabled]}
+                hitSlop={8}
+              >
+                <Text style={[styles.nextText, !handoffReady && styles.nextTextDisabled]}>{step.handoff?.cta}</Text>
+              </Pressable>
+            </>
+          ) : interactive ? (
             <Pressable onPress={onSkip} accessibilityRole="button" accessibilityLabel="Skip this step" style={styles.secondaryBtn} hitSlop={8}>
               <Text style={styles.secondaryText}>Skip</Text>
             </Pressable>
@@ -293,6 +352,21 @@ const styles = StyleSheet.create({
   secondaryText: { fontFamily: uiFont(600), fontSize: 13.5, color: colors.ink2 },
   nextBtn: { backgroundColor: colors.accentInk, borderRadius: 999, paddingVertical: 9, paddingHorizontal: 20 },
   nextText: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.onAccent },
+  // Disabled handoff Continue: reads clearly as "not yet" without going so faint it fails
+  // contrast (the ink pair here is checked by tools/contrastAudit).
+  nextBtnDisabled: { backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line },
+  nextTextDisabled: { color: colors.ink3 },
+  handoff: { marginTop: 12, gap: 8 },
+  handoffBtn: {
+    borderWidth: 1.5,
+    borderColor: colors.accentInk,
+    borderRadius: 999,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  handoffBtnText: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.accentInk },
+  handoffStatus: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink3, textAlign: 'center' },
+  handoffStatusReady: { fontFamily: uiFont(800), color: colors.accentInk },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',

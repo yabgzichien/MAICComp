@@ -149,7 +149,7 @@ export function EditTransactionModal({ txn, onClose }: { txn: Transaction | null
           )}
 
           <View style={{ marginTop: 18 }}>
-            <AccountLinkField accounts={accounts} selectedId={linkId} effect={linkEffect} onSelect={selectLink} onEffect={setLinkEffect} />
+            <AccountLinkField accounts={accounts} selectedId={linkId} effect={linkEffect} onSelect={selectLink} onEffect={setLinkEffect} label="Link to account (optional)" />
           </View>
 
           <View style={{ marginTop: 20 }}>

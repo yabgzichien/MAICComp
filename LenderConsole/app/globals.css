@@ -126,9 +126,64 @@ textarea {
 .tour-celebrate {
   animation: tour-celebrate-pop 0.4s ease-out both;
 }
+/* Tour-card attention beat. The card sits in the bottom-right corner, which is exactly where
+   a web app puts things people have trained themselves to ignore (cookie bars, chat widgets),
+   so a judge arriving from the borrower app was missing it entirely. Three things fix that
+   without turning it into a nag:
+     - `tour-card-enter` slides it in further and with more overshoot than a plain fade, so the
+       movement is caught in peripheral vision;
+     - `tour-card-attention` rings the card a few times and then STOPS (4 iterations, not
+       infinite) — enough to find it, not enough to keep pulling the eye off the console;
+     - `tour-badge-blink` marks the header chip while the ring runs.
+   All three re-run on every step change (React remounts them via a key), so the card re-earns
+   attention when it actually has something new to say. */
+@keyframes tour-card-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(26px) scale(0.94);
+  }
+  70% {
+    transform: translateY(-4px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes tour-card-attention {
+  0%,
+  100% {
+    box-shadow: 0 12px 38px rgba(0, 0, 0, 0.24), 0 0 0 0 rgba(31, 138, 91, 0.55);
+  }
+  50% {
+    box-shadow: 0 12px 38px rgba(0, 0, 0, 0.24), 0 0 0 11px rgba(31, 138, 91, 0);
+  }
+}
+.tour-card-enter {
+  animation: tour-card-enter 0.5s cubic-bezier(0.22, 1.2, 0.36, 1) both,
+    tour-card-attention 1.5s ease-out 0.35s 4;
+}
+@keyframes tour-badge-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.tour-badge-blink {
+  animation: tour-badge-blink 1.5s ease-in-out 4;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tour-halo,
-  .tour-celebrate {
+  .tour-celebrate,
+  .tour-badge-blink {
     animation: none;
+  }
+  /* Keep the card's arrival perceptible without motion: fade only, no travel, no ring. */
+  .tour-card-enter {
+    animation: fade-in-up 0.01s both;
   }
 }

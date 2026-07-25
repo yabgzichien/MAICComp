@@ -62,15 +62,26 @@ function toIsoDate(d: Date): string {
  * amount exactly `offer.installment` (the lender's decided figure, not recomputed from apr).
  * Returns null when the offer isn't an approval, has no positive amount, or no product applies.
  */
-export function buildBookedLoan(offer: DirectApplyDecision, products: LoanProduct[], acceptedAt: Date): BookedLoan | null {
+export function buildBookedLoan(
+  offer: DirectApplyDecision,
+  products: LoanProduct[],
+  acceptedAt: Date,
+  /** The lender's own tenor for this offer, when they published one. It WINS over the tier
+   *  lookup below: `productForOffer` picks the highest tier whose range contains the amount,
+   *  which is not necessarily the tier the lender priced on (coverage gates can cap them to a
+   *  lower, shorter one). Booking the derived tenor would give the borrower a longer schedule
+   *  and a bigger total than the lender ever approved. */
+  tenorOverride?: number,
+): BookedLoan | null {
   if (offer.decision !== 'approve') return null;
   if (offer.maxAmount <= 0) return null;
 
   const product = productForOffer(offer, products);
   if (!product) return null;
+  const tenorMonths = tenorOverride && tenorOverride > 0 ? tenorOverride : product.tenorMonths;
 
   const schedule: { dueDate: string; amount: number }[] = [];
-  for (let i = 1; i <= product.tenorMonths; i++) {
+  for (let i = 1; i <= tenorMonths; i++) {
     schedule.push({ dueDate: toIsoDate(addMonthsUTC(acceptedAt, i)), amount: offer.installment });
   }
 

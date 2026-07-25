@@ -1,8 +1,15 @@
 /**
- * Judge demo acceptance tests (spec F2, F3): the coach's hero beat compiles from the seed, and
- * the passport send-card's `supportable` pre-fill stays honestly coverage-gated  the full-ladder
+ * Judge demo acceptance tests (spec F2, F3): the coach plan compiles from the seed, and the
+ * passport send-card's `supportable` pre-fill stays honestly coverage-gated  the full-ladder
  * decision the Credit Passport pre-fills its requested amount from must remain a gated REFER for
  * the thin-coverage persona, never an unqualified approve.
+ *
+ * F2 changed shape in the confidence-gate rework (2026-07-22): Aina's coverage-unlock hero beat
+ * (REFER RM500 -> APPROVE RM3,000+) was retired on purpose  she is now referred on CONFIDENCE
+ * (mixed screenshot/manual provenance, ~58%, below the new 70% auto-approve floor), and fixing
+ * coverage alone can no longer clear that separate gate. The coverage lever still does something
+ * real and honest, though: it substantially raises the amount an officer would consider on
+ * review. See demoSeed.ts's buildAinaSeed docstring and HANDOFF.md's confidence-gate section.
  */
 import { buildDemoSeed } from '../src/data/demoSeed';
 import { assembleCredit, type CreditInputs } from '../src/lib/assembleCredit';
@@ -59,41 +66,46 @@ function assemble() {
   return assembleCredit(inputs, NOW);
 }
 
-describe('demo acceptance: coach hero-beat (spec F2)', () => {
-  it('the coverage lever produces an approve of RM3,000+ from the seeded state', () => {
+describe('demo acceptance: coach coverage lever (spec F2, retired hero-beat)', () => {
+  it('coverage still substantially raises the amount an officer would consider, without flipping the decision', () => {
     const { profile, coverage, dataConfidence, confidenceTxns, expenseRatio } = assemble();
     const coachInput: CoachPlanInput = { profile, coverage, confidenceTxns, expenseRatio, products: DEFAULT_PRODUCTS };
     const plan = buildCoachPlan(coachInput);
 
-    // Starting point: gated to Emergency (REFER), the "un-assessable" starting state.
+    // Starting point: gated to Emergency (REFER)  now confidence-driven, not coverage-driven.
     expect(plan.baseline.decision).toBe('refer');
 
     const coverageAction = plan.actions.find((a) => a.lever === 'coverage');
     expect(coverageAction).toBeDefined();
+    // `changed` is true because the OFFER improves (RM500 -> RM3,000+), which is a real, honest
+    // next step — it is not because the decision itself flips to approve anymore. Confidence
+    // sitting below the 70% auto-approve floor means fixing coverage alone can no longer clear
+    // that separate gate, and the coach plan is honest about that rather than overclaiming.
     expect(coverageAction!.changed).toBe(true);
-    expect(coverageAction!.sim.decisionTo).toBe('approve');
+    expect(coverageAction!.sim.decisionTo).toBe('refer');
     expect(coverageAction!.sim.maxAmountTo).toBeGreaterThanOrEqual(3000);
+    expect(coverageAction!.sim.maxAmountTo).toBeGreaterThan(coverageAction!.sim.maxAmountFrom);
 
     void dataConfidence; // sanity: destructured for completeness, not asserted here
   });
 });
 
-// 2026-07-15 agent-work review (item 3): the seed had drifted above its own spec  the demo-data
-// spec pins the persona at 700-740/Good/60-70% confidence ("credible, not Excellent"), but the
-// live seed had drifted to 770/Strong/71%. Pins the range here so the seed and the spec it
-// implements can't silently drift apart again.
-describe('demo acceptance: the persona stays in the spec-pinned Good band (spec B, 2026-07-15 review item 3)', () => {
-  it('score 700-740, band Good, confidence 60-72%', () => {
+// Confidence-gate rework (2026-07-22): Aina's provenance mix was retuned so she is referred on
+// CONFIDENCE (not just coverage)  see demoSeed.ts's buildAinaSeed docstring for the full
+// rationale. Pins the new range here so the seed and the design it demonstrates can't silently
+// drift apart again.
+describe('demo acceptance: the persona stays in the spec-pinned Good band (retuned 2026-07-22)', () => {
+  it('score 690-715, band Good, confidence 55-62%, referred on confidence not just coverage', () => {
     const { score, dataConfidence } = assemble();
     expect(score.band).toBe('Good');
-    expect(score.score).toBeGreaterThanOrEqual(700);
-    expect(score.score).toBeLessThanOrEqual(740);
-    // Spec's 60-70% target with a 2-point tolerance  the seed lands at ~70.7%, a hair over the
-    // spec's suggested ceiling once every other constraint (Benford >= 0.80, the coverage-unlock
-    // hero-beat >= RM3,000, essentialsRatio 60-70%) is satisfied simultaneously; see the demo
-    // seed's band-tuning trade-off documented in HANDOFF.md.
-    expect(dataConfidence.confidence).toBeGreaterThanOrEqual(0.6);
-    expect(dataConfidence.confidence).toBeLessThanOrEqual(0.72);
+    expect(score.score).toBeGreaterThanOrEqual(690);
+    expect(score.score).toBeLessThanOrEqual(715);
+    expect(dataConfidence.confidence).toBeGreaterThanOrEqual(0.55);
+    expect(dataConfidence.confidence).toBeLessThanOrEqual(0.62);
+    // Must sit below the 70% auto-approve floor and above the 35% decline floor  the whole
+    // point of this persona is landing in the human-judgement band, not at either edge.
+    expect(dataConfidence.confidence).toBeLessThan(0.7);
+    expect(dataConfidence.confidence).toBeGreaterThan(0.35);
   });
 });
 

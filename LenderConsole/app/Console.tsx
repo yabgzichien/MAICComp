@@ -925,6 +925,8 @@ function RecordRepaymentForm({ p, app, onRecord }: { p: Palette; app: Applicatio
   const nextSeq = (app.repayments?.length ?? 0) + 1;
   if (nextSeq > tenorMonths) return null;
   return (
+    // Act 10's do-step: the officer collects an instalment on the loan the judge just took.
+    <TourAnchor id="repayment-control">
     <div style={{ marginTop: 8, borderTop: `1px solid ${p.hairline}`, paddingTop: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
       <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>Record instalment {nextSeq}:</span>
       <select
@@ -943,6 +945,7 @@ function RecordRepaymentForm({ p, app, onRecord }: { p: Palette; app: Applicatio
         Record
       </button>
     </div>
+    </TourAnchor>
   );
 }
 
@@ -1017,6 +1020,10 @@ function ApplicationCard({ p, app, passport, acceptance, onResolve, onRecordRepa
       {acceptance && <div style={{ marginBottom: 8, marginTop: -2 }}><AcceptanceStrip p={p} state={acceptance} /></div>}
 
       {app.status === 'referred' && (
+        // The tour anchors the WHOLE resolve block, not the Approve button alone: approving is
+        // gated on a rationale, so a cutout around just the button spotlights a control the
+        // officer cannot press yet and walls off the input that unlocks it.
+        <TourAnchor id="resolve-action">
         <div>
           {rationaleInput}
           <div style={{ display: 'flex', gap: 6 }}>
@@ -1032,6 +1039,7 @@ function ApplicationCard({ p, app, passport, acceptance, onResolve, onRecordRepa
             </button>
           </div>
         </div>
+        </TourAnchor>
       )}
 
       {app.status === 'approved' && (
@@ -1749,16 +1757,19 @@ function ServicingSectionBlock({ p, label, dotColor, apps, isWatchlisted, settle
 
 function ServicingList({ p, apps, sections, selectedId, onSelect }: { p: Palette; apps: ApplicationRecord[]; sections: ServicingSections; selectedId: string | null; onSelect: (app: ApplicationRecord) => void }) {
   return (
-    <nav aria-label="Serviced loans" style={{ width: 260, background: p.surface2, borderRight: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto' }}>
-      <div style={{ padding: '14px 12px 10px', borderBottom: `1px solid ${p.hairline}` }}>
-        <p role="heading" aria-level={2} style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink2, letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: 4 }}>Servicing · Approved Book</p>
-        <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5 }}>{apps.filter((a) => a.status === 'approved').length} loan(s) disbursed</p>
-      </div>
-      <ServicingSectionBlock p={p} label="Defaulted" dotColor="#8a1f14" apps={sections.defaulted} isWatchlisted={false} settled={false} selectedId={selectedId} onSelect={onSelect} />
-      <ServicingSectionBlock p={p} label="Watchlist" dotColor="#c0392b" apps={sections.watchlist} isWatchlisted settled={false} selectedId={selectedId} onSelect={onSelect} />
-      <ServicingSectionBlock p={p} label="Active" dotColor="#3b5bdb" apps={sections.active} isWatchlisted={false} settled={false} selectedId={selectedId} onSelect={onSelect} />
-      <ServicingSectionBlock p={p} label="Settled" dotColor="#1f8a5b" apps={sections.settled} isWatchlisted={false} settled selectedId={selectedId} onSelect={onSelect} />
-    </nav>
+    // Act 10 spotlights the book the judge's own accepted loan just landed on.
+    <TourAnchor id="servicing-list">
+      <nav aria-label="Serviced loans" style={{ width: 260, background: p.surface2, borderRight: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto' }}>
+        <div style={{ padding: '14px 12px 10px', borderBottom: `1px solid ${p.hairline}` }}>
+          <p role="heading" aria-level={2} style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink2, letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: 4 }}>Servicing · Approved Book</p>
+          <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5 }}>{apps.filter((a) => a.status === 'approved').length} loan(s) disbursed</p>
+        </div>
+        <ServicingSectionBlock p={p} label="Defaulted" dotColor="#8a1f14" apps={sections.defaulted} isWatchlisted={false} settled={false} selectedId={selectedId} onSelect={onSelect} />
+        <ServicingSectionBlock p={p} label="Watchlist" dotColor="#c0392b" apps={sections.watchlist} isWatchlisted settled={false} selectedId={selectedId} onSelect={onSelect} />
+        <ServicingSectionBlock p={p} label="Active" dotColor="#3b5bdb" apps={sections.active} isWatchlisted={false} settled={false} selectedId={selectedId} onSelect={onSelect} />
+        <ServicingSectionBlock p={p} label="Settled" dotColor="#1f8a5b" apps={sections.settled} isWatchlisted={false} settled selectedId={selectedId} onSelect={onSelect} />
+      </nav>
+    </TourAnchor>
   );
 }
 
@@ -1813,8 +1824,6 @@ export default function Console() {
   // tab-driving, the spotlight anchor, and the semantic-signal subscription. It only observes
   // and advances  it never performs the officer's actions (assess, load flagged, seed, open
   // memo, issue a letter); those stay the officer's own taps, which the tour detects.
-  const tour = useConsoleTour({ tab, setTab });
-
   // Active lender persona (Lender Tenancy spec): scopes policy, pipeline, and book to
   // one of the three registry lenders. Tenancy, not authentication  no credentials, no
   // session, just a stored id (same pattern as the tour dismissal above).
@@ -1822,6 +1831,14 @@ export default function Console() {
   // state, never written from here: the console publishes through /api/offers and the borrower
   // answers through its PATCH, so this is a read-only mirror refreshed on the pipeline poll.
   const [offerBook, setOfferBook] = useState<OfferBook>({});
+  // Declared after `apps`/`offerBook` because the tour reads its own branch and handoff gate
+  // out of them — it follows the real loan rather than being told where the story is.
+  const tour = useConsoleTour({
+    tab,
+    setTab,
+    apps,
+    offerAnswered: Object.values(offerBook).some((o) => o?.response != null),
+  });
   const [activeLenderId, setActiveLenderIdState] = useState(DEFAULT_LENDER_ID);
   const [showPersonaPicker, setShowPersonaPicker] = useState(false);
   const [resettingDefaults, setResettingDefaults] = useState(false);
@@ -2264,6 +2281,10 @@ export default function Console() {
     setPurpose(app.purpose ?? null);
     setShowPassportInput(false);
     if (next.status === 'valid') setPriors(findRecentPresentments(readPresentmentLog(undefined, activeLenderId), presentmentKey(next.passport)));
+    // Cross-app tour act 7: only opening the file that actually came from the borrower app
+    // completes the step. Opening a seeded applicant is a perfectly reasonable thing for the
+    // officer to do, but it is not the beat the tour is asking for, so it must not advance.
+    if (app.source === 'direct') emitTourSignal('subject-opened');
   };
 
   const onPasteNew = () => {
@@ -2281,6 +2302,9 @@ export default function Console() {
     // its own (it only ever saw the "refer" verdict), so publish the offer back-channel so the
     // borrower auto-books it. Declines aren't published (the borrower simply gets no offer).
     if (outcome === 'approved' && app) publishOffer(app, activeLenderId);
+    // Cross-app tour act 7: only an APPROVE completes the officer's do-step, because only an
+    // approve publishes the offer the borrower is about to be sent back to answer.
+    if (outcome === 'approved') emitTourSignal('application-approved');
   };
 
   /** Officer-recorded repayment (portfolio performance): appends one instalment outcome to
@@ -2292,6 +2316,7 @@ export default function Console() {
     const app = apps.find((a) => a.id === selectedAppId);
     syncApps(recordRepayment(apps, selectedAppId, { instalmentSeq, amount: amt, outcome }, new Date()));
     if (app) writeThroughServicing(app, activeLenderId, { event: { instalmentSeq, outcome } });
+    emitTourSignal('repayment-recorded');
   };
 
   /** Officer "mark defaulted" action (Bidirectional Servicing Sync, 2026-07-18 design): a
@@ -2393,7 +2418,7 @@ export default function Console() {
       <main aria-label={TAB_LABELS[tab]} style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
         {tab === 'verify' ? (
           <>
-            <QueueRail p={p} apps={apps} offerBook={offerBook} selectedId={selectedAppId} onSelect={onSelectApp} onSeed={onSeed} onPasteNew={onPasteNew} forceSeedButton={tour.forceSeedButton} />
+            <QueueRail p={p} apps={apps} offerBook={offerBook} selectedId={selectedAppId} onSelect={onSelectApp} onSeed={onSeed} onPasteNew={onPasteNew} onLoadFlagged={onLoadFlagged} forceSeedButton={tour.forceSeedButton} />
             {showPassportInput && <LeftPanel p={p} flagged={flagged} statusValid={flagged ? false : statusValid} code={code} setCode={setCode} onVerify={onVerify} />}
             {showAlert ? <CenterAlert p={p} flagTime={flagTime} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} lapsedTiers={state.credential.verification.lapsedTiers} /> : <InvalidCenter p={p} reasons={state.reasons} />}
             {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} setAmount={setAmount} onAssess={onAssess} onCounterOffer={onCounterOffer} isCounterOffer={isCounterOffer} stacking={stackingSignal} selectedApp={selectedApp} acceptance={selectedAcceptance} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onGenerateLetter={onGenerateLetter} purpose={purpose} setPurpose={setPurpose} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} pricing={pricing} adoptedRate={adoptedRate} onAdoptRate={onAdoptRate} lenderName={activeLender.name} ownApplications={apps} storedPolicy={storedPolicy} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} setAmount={setAmount} onAssess={onAssess} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} lenderName={activeLender.name} ownApplications={apps} storedPolicy={storedPolicy} />}

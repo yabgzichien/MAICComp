@@ -14,7 +14,7 @@ import {
   type AgentAssessment,
   type StackingSignal,
 } from './agents';
-import { MIN_CONFIDENCE_TO_APPROVE, type LoanDecision } from './loans';
+import { MIN_CONFIDENCE_TO_CONSIDER, type LoanDecision } from './loans';
 import type { CreditPassport, PassportAssessment, PassportSpendingProfile } from './passport';
 
 const assessment = (over: Partial<PassportAssessment> = {}): PassportAssessment => ({
@@ -65,13 +65,19 @@ describe('assessFraud', () => {
     expect(a.confidence).toBe(90);
   });
 
-  it('is caution between the approval floor and the high-confidence bar', () => {
-    const a = assessFraud(assessment({ confidence: MIN_CONFIDENCE_TO_APPROVE + 0.05 }), 'ok');
+  // 'negative' (High risk) is tied to the DECLINE floor (MIN_CONFIDENCE_TO_CONSIDER), not the
+  // auto-approve floor (confidence-gate rework, 2026-07-22): a thin-file applicant sitting
+  // between the two floors is exactly what REFER exists for — real, un-fraudulent, just not
+  // enough evidence yet — and this specialist has no basis to call that "High risk". See
+  // agents.ts's assessFraud comment for the full rationale.
+  it('is caution for a thin-but-real file between the decline floor and the high-confidence bar', () => {
+    const a = assessFraud(assessment({ confidence: MIN_CONFIDENCE_TO_CONSIDER + 0.1 }), 'ok');
     expect(a.tone).toBe('caution');
+    expect(a.verdict).toBe('Moderate risk');
   });
 
-  it('is negative below the auto-approval confidence floor', () => {
-    const a = assessFraud(assessment({ confidence: MIN_CONFIDENCE_TO_APPROVE - 0.1 }), 'thin');
+  it('is negative only below the decline floor — where the engine itself would decline', () => {
+    const a = assessFraud(assessment({ confidence: MIN_CONFIDENCE_TO_CONSIDER - 0.1 }), 'thin');
     expect(a.tone).toBe('negative');
     expect(a.verdict).toBe('High risk');
   });

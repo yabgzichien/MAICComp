@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { BubbleText, PipSays } from '../components/ui';
 import { getLLM } from '../llm';
+import { todayISO } from '../lib/duplicates';
+import { defaultLinkEffect } from '../lib/networth';
 import { suggestForMerchant } from '../lib/recommend';
 import type { CategorySuggestion, ExtractedTxn, Transaction } from '../lib/types';
 import { emitTourSignal } from '../lib/tourSignals';
@@ -37,13 +39,14 @@ export function AddFlow({
   onClose: () => void;
   initialPhase?: Phase;
 }) {
-  const { commitCategorized, memory, categories, catById, tourActive } = useAppData();
+  const { commitCategorized, recordBalanceLink, accounts, memory, categories, catById, tourActive } = useAppData();
 
   const [phase, setPhase] = useState<Phase>(initialPhase);
   const [image, setImage] = useState<PickedImage | null>(null);
   const [extracted, setExtracted] = useState<ExtractedTxn[]>([]);
   const [suggestions, setSuggestions] = useState<(CategorySuggestion | null)[]>([]);
   const [cached, setCached] = useState<ExtractedTxn[] | undefined>(undefined);
+  const [linkId, setLinkId] = useState<string | null>(null);
   const [result, setResult] = useState<Transaction[]>([]);
   const [newLearned, setNewLearned] = useState<NewLearned[]>([]);
   const [hasKey, setHasKey] = useState(true);
@@ -58,9 +61,10 @@ export function AddFlow({
     setPhase('extract');
   };
 
-  const onExtracted = async (items: ExtractedTxn[]) => {
+  const onExtracted = async (items: ExtractedTxn[], accountId: string | null) => {
     emitTourSignal('scan-extracted');
     setExtracted(items);
+    setLinkId(accountId);
 
     const learned: (CategorySuggestion | null)[] = items.map((it) => {
       const s = suggestForMerchant(memory, it.merchant);
@@ -104,6 +108,15 @@ export function AddFlow({
 
   const onCategorized = async (assignments: (string | null)[], items: ExtractedTxn[]) => {
     const { created, newLearned: learned } = await commitCategorized(items, assignments, 'extracted');
+    // If the whole batch was tagged to an account, move that account's balance
+    // per saved row — direction derived from account kind + txn type (an expense
+    // reduces an asset / pays down a liability; income does the reverse).
+    const account = linkId ? accounts.find((a) => a.id === linkId) : null;
+    if (account) {
+      for (const t of created) {
+        await recordBalanceLink(account.id, t.amount, defaultLinkEffect(account.kind, t.type), t.date ?? todayISO());
+      }
+    }
     setResult(created);
     setNewLearned(learned);
     setPhase('saved');
@@ -150,6 +163,7 @@ export function AddFlow({
         key={`${image.uri}:${cached ? 'c' : 'f'}`}
         image={image}
         cachedItems={cached}
+        linkId={linkId}
         onBack={() => setPhase('attach')}
         onDone={onExtracted}
       />
@@ -161,6 +175,7 @@ export function AddFlow({
         extracted={extracted}
         suggestions={suggestions}
         categories={categories}
+        linkId={linkId}
         onBack={() => {
           setCached(extracted);
           setPhase('extract');

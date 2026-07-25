@@ -12,7 +12,7 @@ import {
   SpaceGrotesk_700Bold,
 } from '@expo-google-fonts/space-grotesk';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,7 +22,7 @@ import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { Pip } from './src/components/Pip';
 import { MissionBanner, TourCard, TourResumeChip, type TourRecapItem } from './src/components/TourCard';
 import { TourSpotlight } from './src/components/TourSpotlight';
-import { actProgress, BORROWER_TOUR_STEPS, clampTourStep, type TourStep } from './src/lib/tourSteps';
+import { actProgress, BORROWER_TOUR_STEPS, TOUR_TOTAL_ACTS, clampTourStep, fillPersona, stepsForBranch, type TourStep } from './src/lib/tourSteps';
 import { classifyScreenChange, classifySignal } from './src/lib/tourDrive';
 import { onTourSignal } from './src/lib/tourSignals';
 import { AddFlow } from './src/screens/AddFlow';
@@ -33,7 +33,6 @@ import { BudgetScreen } from './src/screens/BudgetScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
 import { CreditScreen } from './src/screens/CreditScreen';
 import { LoansScreen } from './src/screens/LoansScreen';
-import { LenderScreen } from './src/screens/LenderScreen';
 import { AttackGalleryScreen } from './src/screens/AttackGalleryScreen';
 import { PassportScreen } from './src/screens/PassportScreen';
 import { PassportCoachScreen } from './src/screens/PassportCoachScreen';
@@ -49,11 +48,12 @@ import { AppAlertModal } from './src/components/AppAlertModal';
 import { AccentProvider } from './src/state/accent';
 import { AlertHostProvider } from './src/state/alertHost';
 import { GlossaryProvider } from './src/state/glossary';
+import { DEMO_PROFILES } from './src/data/demoPersonas';
 import { AppDataProvider, useAppData } from './src/state/store';
 import { useNow } from './src/state/useNow';
 import { colors, platformShadow, uiFont } from './src/theme';
 
-type Screen = 'home' | 'add' | 'settings' | 'categories' | 'transactions' | 'breakdown' | 'budget' | 'recap' | 'networth' | 'credit' | 'loans' | 'passport' | 'coach' | 'lender' | 'attacks' | 'kyc' | 'calendar' | 'advancedImport';
+type Screen = 'home' | 'add' | 'settings' | 'categories' | 'transactions' | 'breakdown' | 'budget' | 'recap' | 'networth' | 'credit' | 'loans' | 'passport' | 'coach' | 'attacks' | 'kyc' | 'calendar' | 'advancedImport';
 
 /**
  * Web-only: a global :focus-visible outline so keyboard users get a visible focus indicator
@@ -157,17 +157,20 @@ function StatusClock() {
   return <Text style={webStyles.clock}>{`${hh}:${mm}`}</Text>;
 }
 
-/** Judge-readable labels for the finale recap, one per interactive step. */
+/** Judge-readable labels for the finale recap, one per interactive step. Persona-neutral: the
+ *  tour now runs on any of the three demo borrowers. */
 const TOUR_RECAP_LABELS: Record<string, string> = {
-  'open-credit': 'Opened her score',
+  'open-credit': 'Opened the score',
   'scan-mission': 'Scanned a real statement',
   whatif: 'Tested a what-if lever',
-  'kyc-verify': 'Verified her identity',
+  'kyc-verify': 'Verified the identity',
   'mint-passport': 'Minted the passport',
+  'send-request': 'Sent a real application',
+  'accept-offer': 'Accepted the offer',
 };
 
 function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
-  const { ready, onboardingComplete, tourActive, tourStepIndex, setTourStep, pauseTour, exitTour, startTour, coverage, unseenFinancingCount, clearedByLenderNotice, dismissClearedByLenderNotice } = useAppData();
+  const { ready, onboardingComplete, tourActive, tourStepIndex, tourBranch, setTourStep, pauseTour, exitTour, startTour, coverage, pendingOffers, activeDemoProfile, clearedByLenderNotice, dismissClearedByLenderNotice } = useAppData();
   const insets = useSafeAreaInsets();
   const [screen, setScreen] = useState<Screen>('home');
   const [txnFilter, setTxnFilter] = useState<string | null>(null);
@@ -196,7 +199,39 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
   const [coverageBefore, setCoverageBefore] = useState<number | null>(null);
   const recapRef = useRef(new Map<string, boolean>());
   const celebrateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const currentTourStep = tourActive ? BORROWER_TOUR_STEPS[clampTourStep(tourStepIndex, BORROWER_TOUR_STEPS.length)] : null;
+  // The script the judge is actually on. Before the application is sent there is no ending yet,
+  // so this is the unbranched prefix; once the lender's verdict lands, `tourBranch` selects one
+  // of the three endings and the run grows at the tail. Every index in the driver below is an
+  // index into THIS list, never into the raw registry.
+  const tourRun = useMemo(() => stepsForBranch(BORROWER_TOUR_STEPS, tourBranch), [tourBranch]);
+  const currentTourStep = tourActive ? tourRun[clampTourStep(tourStepIndex, tourRun.length)] ?? null : null;
+  // Mirrors `tourRun`, updated unconditionally every render (not just when effects
+  // re-subscribe). Sending the application latches the branch and emits 'application-sent' in
+  // the SAME synchronous tick, before React has re-run the signal-listener effect below (whose
+  // dependency array can't include tourBranch without reintroducing this exact race one level
+  // up). Without this ref, `completeStep`'s stale closure over `tourRun` still measured the
+  // 15-step unbranched-only length at the moment the send-request step completed, read
+  // `next(15) >= 15` as true, and called exitTour() instead of landing on the new handoff step
+  // — found live, the tour vanished the instant the application was sent.
+  const tourRunRef = useRef(tourRun);
+  tourRunRef.current = tourRun;
+
+  /** Persona the copy's `{name}` / `{role}` tokens fill from. */
+  const tourPersona = useMemo(() => {
+    const p = DEMO_PROFILES.find((x) => x.id === activeDemoProfile);
+    return { name: p?.name, role: p?.role?.toLowerCase() };
+  }, [activeDemoProfile]);
+
+  /** Whether the current handoff's Continue is unlocked. A handoff never self-advances: on the
+   *  `approved` ending the offer already exists at send time, so an auto-advance would skip the
+   *  console entirely and the judge would never play the officer. The gate only ENABLES the
+   *  button; pressing it stays the judge's decision. */
+  const handoffReady =
+    currentTourStep?.kind !== 'handoff'
+      ? false
+      : currentTourStep.handoff?.gate === 'none'
+        ? true
+        : pendingOffers.length > 0;
 
   const resetMission = () => {
     setMissionPhase(null);
@@ -213,7 +248,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
       advancingRef.current = false;
       setCelebrateText(null);
       const next = tourStepIndex + 1;
-      if (next >= BORROWER_TOUR_STEPS.length) {
+      if (next >= tourRunRef.current.length) {
         void exitTour();
         setTourPaused(false);
         return;
@@ -278,7 +313,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
   const tourNext = () => {
     if (!currentTourStep) return;
     const next = tourStepIndex + 1;
-    if (next >= BORROWER_TOUR_STEPS.length) {
+    if (next >= tourRunRef.current.length) {
       void exitTour();
       setTourPaused(false);
       return;
@@ -333,7 +368,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
           .map((id) => ({ label: TOUR_RECAP_LABELS[id], done: recapRef.current.get(id) === true }))
       : null;
 
-  const tourProgress = actProgress(BORROWER_TOUR_STEPS, tourStepIndex);
+  const tourProgress = actProgress(tourRun, tourStepIndex, TOUR_TOTAL_ACTS);
 
   // Card placement, deterministic (a measurement-driven flip proved unreliable  it left the
   // card covering the very button it was pointing at). A do-step whose target sits in the
@@ -425,7 +460,6 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
             setScreen('add');
           }}
           onAdvancedImport={() => setScreen('advancedImport')}
-          onOpenLender={() => setScreen('lender')}
           onOpenAttacks={() => setScreen('attacks')}
           onResetToOnboarding={() => setScreen('home')}
         />
@@ -488,7 +522,6 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
         />
       )}
       {screen === 'kyc' && <KycScreen onBack={() => setScreen(kycReturnTo)} />}
-      {screen === 'lender' && <LenderScreen onBack={() => setScreen('home')} />}
       {screen === 'breakdown' && (
         <BreakdownScreen
           onBack={() => setScreen('home')}
@@ -499,7 +532,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
         />
       )}
       </View>
-      {navTab && <BottomNav active={navTab} onNavigate={goTab} badges={{ loan: unseenFinancingCount }} />}
+      {navTab && <BottomNav active={navTab} onNavigate={goTab} badges={{ loan: pendingOffers.length }} />}
       {tourActive && currentTourStep && !tourPaused && (
         <TourSpotlight
           onDimPress={() => {
@@ -522,7 +555,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
         <TourCard
           step={currentTourStep}
           index={tourStepIndex}
-          total={BORROWER_TOUR_STEPS.length}
+          total={tourRun.length}
           progress={tourProgress}
           detail={tourDetail}
           celebrate={celebrateText}
@@ -530,6 +563,8 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
           bottomInset={navTab ? 0 : insets.bottom}
           topInset={insets.top}
           placement={tourCardPlacement}
+          persona={tourPersona}
+          handoffReady={handoffReady}
           onNext={tourNext}
           onBack={tourBack}
           onExit={tourExit}

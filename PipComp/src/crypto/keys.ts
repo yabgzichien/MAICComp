@@ -91,6 +91,33 @@ export function getOrCreateKeypair(): Promise<Keypair> {
   return _keypairPromise;
 }
 
+/**
+ * Discard the stored key so the next `getOrCreateKeypair()` mints a fresh one, giving this
+ * device a brand-new subject id.
+ *
+ * Used when switching demo personas. The subject hash is the join key every lender-side store
+ * is filed under — applications, the offer book, the servicing ledger — so without a rotation,
+ * loading "Ravi" over "Aina" leaves the new persona inheriting the old one's loans and pending
+ * offers from the lender's side, even after the local database is wiped. Two personas are two
+ * different people; they must not share an identity.
+ *
+ * Deliberately NOT wired into normal app use: a real borrower rotating their key would orphan
+ * every passport they have ever presented and every loan booked against it.
+ */
+export async function rotateKeypair(): Promise<void> {
+  _keypairPromise = null;
+  _memKey = null;
+  if (Platform.OS === 'web') {
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.removeItem(STORE_KEY);
+    } catch {
+      // localStorage blocked  clearing the in-memory copy above is all we can do.
+    }
+    return;
+  }
+  await SecureStore.deleteItemAsync(STORE_KEY);
+}
+
 async function _init(): Promise<Keypair> {
   // On native, secure-store must be present; on web we use localStorage instead.
   if (Platform.OS !== 'web') {

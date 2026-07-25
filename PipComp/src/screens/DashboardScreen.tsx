@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
@@ -15,6 +15,7 @@ import { catColorsForHue } from '../lib/catColors';
 import { currentMonthKey, txnMonthKey } from '../lib/budget';
 import { greeting, longDate, monthName } from '../lib/dates';
 import { fmt } from '../lib/format';
+import { netWorth } from '../lib/networth';
 import { computeStreak } from '../lib/streak';
 import { BORROWER_TOUR_STEPS, clampTourStep } from '../lib/tourSteps';
 import type { Category } from '../lib/types';
@@ -22,7 +23,7 @@ import { useAppData } from '../state/store';
 import { useLenderSyncPoll } from '../state/useLenderSyncPoll';
 import { useCreditProfile } from '../state/useCreditProfile';
 import { useNow } from '../state/useNow';
-import { colors, numFont, platformShadow, shadowCard, uiFont } from '../theme';
+import { colors, numFont, platformShadow, shadowCard, shadowToggle, uiFont } from '../theme';
 
 const RED = colors.red;
 const fallback: Category = { id: 'other', label: 'Other', icon: 'dots', hue: 220, kind: 'expense', isDefault: true };
@@ -59,7 +60,8 @@ export function DashboardScreen({
 }) {
   const insets = useSafeAreaInsets();
   const now = useNow();
-  const { transactions, catById, allocations, hasBudget, coverage, tourActive, tourStepIndex, startTour } = useAppData();
+  const { transactions, catById, allocations, hasBudget, coverage, accounts, accountValues, tourActive, tourStepIndex, startTour } = useAppData();
+  const nw = useMemo(() => netWorth(accounts, accountValues), [accounts, accountValues]);
   const { score, dataConfidence } = useCreditProfile();
   const activeTourAnchor = tourActive ? BORROWER_TOUR_STEPS[clampTourStep(tourStepIndex, BORROWER_TOUR_STEPS.length)].anchorId ?? null : null;
 
@@ -68,7 +70,7 @@ export function DashboardScreen({
   // application (bumping the unseen badge on the Loan tab) and clears any loan a lender's
   // console reset has orphaned  both without the borrower needing to navigate away and back.
   // Best-effort; an unreachable console degrades silently.
-  useLenderSyncPoll(score.score);
+  useLenderSyncPoll();
 
   const monthTxns = useMemo(() => {
     const cur = currentMonthKey();
@@ -149,14 +151,18 @@ export function DashboardScreen({
               <StreakCard streak={streak} dots={dots} coverage={coverage.daysCovered} onPress={onOpenCoach} />
             </TourAnchor>
 
-            {/* 2  Cash flow + where it goes */}
-            <CashFlowCard
+            {/* 2  Net worth / Cash flow (toggle) */}
+            <SummaryCard
               net={net}
               received={received}
               spent={spent}
               breakdown={breakdown}
               catById={catById}
               onSeeAll={onOpenBreakdown}
+              netWorthValue={nw.net}
+              assets={nw.assets}
+              liabilities={nw.liabilities}
+              onOpenNetWorth={onOpenNetWorth}
             />
 
             {/* 3  Compact credit card */}
@@ -176,6 +182,16 @@ export function DashboardScreen({
               onOpenNetWorth={onOpenNetWorth}
               onOpenPassport={onOpenPassport}
             />
+
+            {/* Scan CTA — kept high (right under the quick actions) so the core capture
+                loop is reachable without scrolling to the bottom of the feed. */}
+            <View style={{ paddingHorizontal: 16, marginTop: 12 }}>
+              <PrimaryButton onPress={onScan} height={54}>
+                <Icon name="camera" size={21} color="#fff" />
+                <BtnLabel>Scan a receipt</BtnLabel>
+                <Icon name="sparkles" size={16} color="#fff" />
+              </PrimaryButton>
+            </View>
 
             {/* This month budget (kept) */}
             <View style={{ paddingHorizontal: 16, marginTop: 10 }}>
@@ -212,14 +228,16 @@ export function DashboardScreen({
           </>
         )}
 
-        {/* Scan CTA (kept  the core capture loop) */}
-        <View style={{ paddingHorizontal: 16, marginTop: 14 }}>
-          <PrimaryButton onPress={onScan} height={54}>
-            <Icon name="camera" size={21} color="#fff" />
-            <BtnLabel>Scan a receipt</BtnLabel>
-            <Icon name="sparkles" size={16} color="#fff" />
-          </PrimaryButton>
-        </View>
+        {/* Empty-state fallback: no cards above, so the capture CTA lives here instead. */}
+        {empty && (
+          <View style={{ paddingHorizontal: 16, marginTop: 14 }}>
+            <PrimaryButton onPress={onScan} height={54}>
+              <Icon name="camera" size={21} color="#fff" />
+              <BtnLabel>Scan a receipt</BtnLabel>
+              <Icon name="sparkles" size={16} color="#fff" />
+            </PrimaryButton>
+          </View>
+        )}
       </ScrollView>
     </FadeIn>
   );
@@ -300,8 +318,63 @@ function StreakCard({ streak, dots, coverage, onPress }: { streak: number; dots:
   );
 }
 
-/* ── Cash-flow card ── */
-function CashFlowCard({
+/* ── Summary card: toggles between Net worth (default) and Cash flow ── */
+type SummaryView = 'networth' | 'cashflow';
+
+function SummaryCard({
+  net,
+  received,
+  spent,
+  breakdown,
+  catById,
+  onSeeAll,
+  netWorthValue,
+  assets,
+  liabilities,
+  onOpenNetWorth,
+}: {
+  net: number;
+  received: number;
+  spent: number;
+  breakdown: { catId: string; amt: number }[];
+  catById: Record<string, Category>;
+  onSeeAll: () => void;
+  netWorthValue: number;
+  assets: number;
+  liabilities: number;
+  onOpenNetWorth: () => void;
+}) {
+  const [view, setView] = useState<SummaryView>('networth');
+  return (
+    <Card style={styles.cashCard}>
+      {/* segmented toggle */}
+      <View style={styles.segTrack}>
+        {(['networth', 'cashflow'] as SummaryView[]).map((v) => {
+          const on = view === v;
+          return (
+            <Pressable
+              key={v}
+              onPress={() => setView(v)}
+              style={[styles.segBtn, on && styles.segBtnOn]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: on }}
+            >
+              <Text style={[styles.segText, on && styles.segTextOn]}>{v === 'networth' ? 'Net worth' : 'Cash flow'}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {view === 'networth' ? (
+        <NetWorthView net={netWorthValue} assets={assets} liabilities={liabilities} onSeeAll={onOpenNetWorth} />
+      ) : (
+        <CashFlowView net={net} received={received} spent={spent} breakdown={breakdown} catById={catById} onSeeAll={onSeeAll} />
+      )}
+    </Card>
+  );
+}
+
+function CashFlowView({
   net,
   received,
   spent,
@@ -318,7 +391,7 @@ function CashFlowCard({
 }) {
   const pos = net >= 0;
   return (
-    <Card style={styles.cashCard}>
+    <>
       <View style={styles.cashTop}>
         <View style={{ flex: 1 }}>
           <View style={styles.eyebrowRow}>
@@ -373,7 +446,76 @@ function CashFlowCard({
           })}
         </>
       )}
-    </Card>
+    </>
+  );
+}
+
+function NetWorthView({
+  net,
+  assets,
+  liabilities,
+  onSeeAll,
+}: {
+  net: number;
+  assets: number;
+  liabilities: number;
+  onSeeAll: () => void;
+}) {
+  const pos = net >= 0;
+  const maxV = Math.max(assets, liabilities, 1);
+  const rows: { label: string; amt: number; icon: IconName; color: string }[] = [
+    { label: 'Assets', amt: assets, icon: 'trending', color: colors.accent },
+    { label: 'Liabilities', amt: liabilities, icon: 'scale', color: RED },
+  ];
+  return (
+    <>
+      <View style={styles.cashTop}>
+        <View style={{ flex: 1 }}>
+          <View style={styles.eyebrowRow}>
+            <Eyebrow>Net worth</Eyebrow>
+            <InfoButton entry="net_worth" />
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 6 }}>
+            {!pos && <Text style={[styles.cashSign, { color: RED }]}>−</Text>}
+            <Amount value={Math.abs(net)} size={30} weight={700} color={pos ? colors.ink : RED} />
+          </View>
+          <Text style={styles.cashSub}>Assets − Liabilities · today</Text>
+        </View>
+        <View style={styles.incomeBadge}>
+          <Text style={styles.incomeAmt}>RM {fmt(assets)}</Text>
+          <Text style={styles.incomeLabel}>assets</Text>
+        </View>
+      </View>
+
+      <View style={styles.cashDivider} />
+      <View style={styles.sectionHead}>
+        <View style={styles.eyebrowRow}>
+          <Eyebrow>Balance sheet</Eyebrow>
+        </View>
+        <Pressable onPress={onSeeAll} hitSlop={8}>
+          <Text style={styles.seeAll}>See all →</Text>
+        </Pressable>
+      </View>
+      {rows.map((r) => {
+        const pct = Math.round((r.amt / maxV) * 100);
+        return (
+          <View key={r.label} style={styles.spendRow}>
+            <View style={[styles.spendIcon, { backgroundColor: r.color + '1f' }]}>
+              <Icon name={r.icon} size={16} color={r.color} stroke={1.9} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={styles.spendLabelRow}>
+                <Text style={styles.spendLabel} numberOfLines={1}>{r.label}</Text>
+                <Text style={styles.spendAmt}>RM {fmt(r.amt)}</Text>
+              </View>
+              <View style={styles.spendTrack}>
+                <View style={{ height: '100%', width: `${pct}%`, borderRadius: 4, backgroundColor: r.color }} />
+              </View>
+            </View>
+          </View>
+        );
+      })}
+    </>
   );
 }
 
@@ -508,6 +650,13 @@ const styles = StyleSheet.create({
   dotTodo: { borderWidth: 2, borderColor: colors.ink3, borderStyle: 'dashed' },
   streakBest: { fontFamily: uiFont(500), fontSize: 11, textAlign: 'right' },
   streakBestNum: { fontFamily: numFont(600), color: colors.ink2 },
+
+  /* summary toggle */
+  segTrack: { flexDirection: 'row', backgroundColor: colors.surface2, borderRadius: 999, padding: 3, marginBottom: 16, borderWidth: 1, borderColor: colors.line2 },
+  segBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: 999 },
+  segBtnOn: { backgroundColor: colors.surface, ...shadowToggle },
+  segText: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink2 },
+  segTextOn: { color: colors.ink },
 
   /* cash flow */
   cashCard: { marginHorizontal: 16, marginTop: 10, padding: 16 },

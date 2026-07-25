@@ -35,8 +35,8 @@ const TABS: { key: NavTab; label: string }[] = [
   { key: 'profile', label: 'Profile' },
 ];
 
-/** Persistent bottom tab bar for the borrower app. `badges` shows an unread count over a
- *  tab's icon (e.g. loans just approved from the console the borrower hasn't opened yet). */
+/** Persistent bottom tab bar for the borrower app. `badges` shows a count over a tab's icon
+ *  today, the number of lender offers waiting on the borrower's accept/decline. */
 export function BottomNav({ active, onNavigate, badges }: { active: NavTab; onNavigate: (tab: NavTab) => void; badges?: Partial<Record<NavTab, number>> }) {
   const insets = useSafeAreaInsets();
   return (

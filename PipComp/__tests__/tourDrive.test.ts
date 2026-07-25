@@ -82,4 +82,20 @@ describe('classifySignal', () => {
   it('screen-gated do steps never advance on signals', () => {
     expect(classifySignal(byId('open-credit'), 0, 'scan-saved')).toBe('ignore');
   });
+
+  // A handoff is cleared by the judge pressing Continue once its gate has opened, never by a
+  // signal. The offer arriving must NOT self-advance it: on the `approved` branch the offer is
+  // already published at send time, so an auto-advancing handoff would skip the console
+  // entirely and the judge would never play the officer.
+  it('handoff steps never advance on a signal', () => {
+    for (const id of ['handoff-referred', 'handoff-approved', 'handoff-declined', 'loan-live']) {
+      expect(classifySignal(byId(id), 0, 'application-sent')).toBe('ignore');
+      expect(classifySignal(byId(id), 0, 'offer-accepted')).toBe('ignore');
+    }
+  });
+
+  it('a handoff still pauses when the judge wanders to another screen', () => {
+    expect(classifyScreenChange(byId('handoff-referred'), 0, 'home', false)).toBe('pause');
+    expect(classifyScreenChange(byId('handoff-referred'), 0, 'loans', true)).toBe('ignore');
+  });
 });

@@ -61,11 +61,20 @@ describe('decideLoan', () => {
   });
 
   it('flips an otherwise-approve to refer when confidence is low', () => {
+    // 0.42 is the human-judgement band: under the 70% auto-approve floor but above the 35%
+    // decline floor. (0.2 used to land here too; it is now an outright decline — below.)
     const confident = decideLoan({ ...baseInput, confidence: 0.9 });
-    const unsure = decideLoan({ ...baseInput, confidence: 0.2 });
+    const unsure = decideLoan({ ...baseInput, confidence: 0.42 });
     expect(confident.decision).toBe('approve');
     expect(unsure.decision).toBe('refer');
     expect(unsure.reasons.some((x) => /confidence/i.test(x))).toBe(true);
+  });
+
+  it('declines outright below the confidence floor rather than referring an unlendable file', () => {
+    const r = decideLoan({ ...baseInput, confidence: 0.2 });
+    expect(r.decision).toBe('decline');
+    expect(r.maxAmount).toBe(0);
+    expect(r.reasons.some((x) => /could be corroborated/i.test(x))).toBe(true);
   });
 
   it('refers an applicant with a soft adverse record', () => {
@@ -234,12 +243,22 @@ describe('categorized reasons (Brief J)', () => {
   });
 
   it('data-quality: the low-confidence refer reads as a remedy, never an accusation', () => {
-    const r = decideLoan({ ...baseInput, confidence: 0.2 });
+    const r = decideLoan({ ...baseInput, confidence: 0.42 });
     const row = r.categorizedReasons!.find((x) => x.category === 'data-quality');
     expect(row).toBeDefined();
     expect(row!.text).toMatch(/could not verify enough/i);
-    expect(row!.text).toMatch(/20%/);
+    expect(row!.text).toMatch(/42%/);
     expect(row!.text).toMatch(/more verified history/i);
+  });
+
+  it('data-quality: the confidence DECLINE also reads as a remedy, with something curable to do', () => {
+    const r = decideLoan({ ...baseInput, confidence: 0.2 });
+    const row = r.categorizedReasons!.find((x) => x.category === 'data-quality');
+    expect(row!.text).toMatch(/could be corroborated/i);
+    expect(row!.text).toMatch(/20%/);
+    expect(row!.text).toMatch(/then reapply/i);
+    // Never an accusation: the borrower is told the evidence is thin, not that they lied.
+    expect(row!.text).not.toMatch(/fraud|fake|false/i);
   });
 
   it('data-quality: coverage caps carry the data-quality category', () => {
@@ -318,7 +337,8 @@ const starterInput: LoanDecisionInput = { ...baseInput, score: 560, band: 'Fair'
 describe('lender policy (Brief N)', () => {
   it('locks DEFAULT_POLICY to the historical hardcoded thresholds + pricing defaults', () => {
     expect(DEFAULT_POLICY).toEqual({
-      minConfidenceToApprove: 0.5,
+      minConfidenceToApprove: 0.7,
+      minConfidenceToConsider: 0.35,
       maxInstallmentShareOfSurplus: 0.35,
       maxDsr: 0.4,
       emergencyOnlyBelowDays: 30,

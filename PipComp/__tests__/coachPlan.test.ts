@@ -337,6 +337,7 @@ describe('lender policy pass-through', () => {
       ...input,
       policy: {
         minConfidenceToApprove: 0.99,
+        minConfidenceToConsider: 0.35,
         maxInstallmentShareOfSurplus: 0.35,
         maxDsr: 0.4,
         emergencyOnlyBelowDays: 30,

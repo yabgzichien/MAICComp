@@ -84,6 +84,7 @@ describe('parseLenderDirectory', () => {
 
   const publishedPolicy = {
     minConfidenceToApprove: 0.6,
+    minConfidenceToConsider: 0.35,
     maxInstallmentShareOfSurplus: 0.3,
     maxDsr: 0.35,
     emergencyOnlyBelowDays: 30,

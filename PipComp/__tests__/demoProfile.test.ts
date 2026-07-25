@@ -59,11 +59,17 @@ describe('buildDemoSeed', () => {
     expect(roundRatio).toBeLessThanOrEqual(0.05);
   });
 
-  it('lands 90-day coverage at 15-17 distinct days', () => {
+  it('lands 90-day coverage at 12-14 distinct days', () => {
+    // Confidence-gate retune (2026-07-22): most of her discretionary spend is now 'manual'
+    // provenance (see buildAinaSeed), and `computeCoverage` deliberately excludes 'manual' rows
+    // from the day count ("resists trivial gaming"  see coverage.ts). Fewer contributing rows
+    // per cluster day means coverage genuinely reads a little thinner too (was 15-17, now
+    // 12-14)  a consistent side effect, not a separate tuning knob: less-screenshotted spend
+    // is honestly both less trusted AND less verifiably recent.
     const seed = buildDemoSeed(NOW);
     const coverage = computeCoverage(toCoverageInputs(seed), NOW);
-    expect(coverage.daysCovered).toBeGreaterThanOrEqual(15);
-    expect(coverage.daysCovered).toBeLessThanOrEqual(17);
+    expect(coverage.daysCovered).toBeGreaterThanOrEqual(12);
+    expect(coverage.daysCovered).toBeLessThanOrEqual(14);
   });
 
   it('detects exactly 3 recurring obligations (TNB, Unifi, the motorbike installment)', () => {
@@ -88,11 +94,15 @@ describe('buildDemoSeed', () => {
     expect(obligations.evidencedMonthlyDebtService).toBeCloseTo(sum, 5);
   });
 
-  it('yields overall data confidence >= 0.65', () => {
+  it('yields overall data confidence in the 55-60% human-judgement band (retuned 2026-07-22)', () => {
+    // Was ">= 0.65"; the confidence-gate rework retuned her provenance mix specifically so she
+    // sits below the new 70% auto-approve floor  see buildAinaSeed's docstring and
+    // demoPersonaOutcomes.test.ts for the full rationale and the floor-boundary assertions.
     const seed = buildDemoSeed(NOW);
     const coverage = computeCoverage(toCoverageInputs(seed), NOW);
     const dc = computeDataConfidence(toConfidenceTxns(seed), coverage.ratio, 1);
-    expect(dc.confidence).toBeGreaterThanOrEqual(0.65);
+    expect(dc.confidence).toBeGreaterThanOrEqual(0.55);
+    expect(dc.confidence).toBeLessThanOrEqual(0.6);
   });
 
   it('pays 4-5 uneven income amounts per full month (no two equal within a month)', () => {

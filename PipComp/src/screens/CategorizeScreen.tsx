@@ -7,7 +7,9 @@ import { Amount, B, BtnLabel, BubbleText, Card, CategoryChip, PipSays, PrimaryBu
 import { applyDateEdit, fullDateWithWeekday, ISO_DATE_RE, isValidIsoDate, shortDate } from '../lib/dates';
 import { findDuplicate, todayISO } from '../lib/duplicates';
 import { fmt } from '../lib/format';
+import { CLASS_BY_ID } from '../lib/networth';
 import { DROP, type Category, type CategorySuggestion, type ExtractedTxn, type TxnType } from '../lib/types';
+import type { IconName } from '../components/Icon';
 import { useAccent, useAccentAlert } from '../state/accent';
 import { useAppData } from '../state/store';
 import { colors, numFont, shadowToggle, uiFont } from '../theme';
@@ -16,17 +18,21 @@ export function CategorizeScreen({
   extracted,
   suggestions,
   categories,
+  linkId = null,
   onBack,
   onComplete,
 }: {
   extracted: ExtractedTxn[];
   suggestions: (CategorySuggestion | null)[];
   categories: Category[];
+  /** Account the whole scanned batch is linked to, if any — shown on each card. */
+  linkId?: string | null;
   onBack: () => void;
   onComplete: (assignments: (string | null)[], items: ExtractedTxn[]) => void;
 }) {
   const insets = useSafeAreaInsets();
-  const { transactions } = useAppData();
+  const { transactions, accounts } = useAppData();
+  const linkedAccount = useMemo(() => (linkId ? accounts.find((a) => a.id === linkId) ?? null : null), [linkId, accounts]);
   const theme = useAccent();
   const { setAlert } = useAccentAlert();
   const today = useMemo(() => todayISO(), []);
@@ -203,7 +209,14 @@ export function CategorizeScreen({
               <Text style={styles.focusMerchant} numberOfLines={1}>
                 {item!.merchant}
               </Text>
-              {item!.method ? <Text style={styles.focusSub}>{item!.method}</Text> : null}
+              {linkedAccount ? (
+                <View style={styles.acctRow}>
+                  <Icon name={(CLASS_BY_ID[linkedAccount.cls]?.icon ?? 'wallet') as IconName} size={12} color={colors.ink3} />
+                  <Text style={styles.focusSub} numberOfLines={1}>{linkedAccount.name}</Text>
+                </View>
+              ) : item!.method ? (
+                <Text style={styles.focusSub}>{item!.method}</Text>
+              ) : null}
               <DateEditor value={item!.date} onChange={setDate} />
             </View>
             <AmountEditor value={item!.amount} income={isIncome} onChange={setAmount} />
@@ -400,7 +413,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   focusMerchant: { fontFamily: uiFont(700), fontSize: 16, color: colors.ink },
-  focusSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 2 },
+  focusSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 2, flexShrink: 1 },
+  acctRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
   dateTap: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6, alignSelf: 'flex-start' },
   dateText: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2 },
   dateInput: {

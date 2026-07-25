@@ -94,6 +94,11 @@ function pipPairs(t) {
     ['PipComp onAccent on accentInk (buttons)', t.onAccent, t.accentInk, false],
     ['PipComp accentInk on surface', t.accentInk, t.surface, false],
     ['PipComp accentInk on accentSoft (chips)', t.accentInk, t.accentSoft, false],
+    // Onboarding verdict pills (2026-07-25): one per demo persona's lender outcome.
+    ['PipComp accentInk on accentTint (approve pill)', t.accentInk, t.accentTint, false],
+    ['PipComp amber on amberTint (refer pill)', t.amber, t.amberTint, false],
+    ['PipComp red on redTint (decline pill)', t.red, t.redTint, false],
+    ['PipComp red on surface', t.red, t.surface, false],
   ];
 }
 function consolePairs(label, p) {

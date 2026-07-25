@@ -105,6 +105,7 @@ describe('policy-aware cap labels', () => {
     minCoverageRatioForFullLadder: 0.5,
     costOfFunds: 0.05,
     targetReturn: 0.06,
+    minConfidenceToConsider: 0.35,
   };
 
   it('headroomLayout ticks move and relabel under a custom policy', () => {

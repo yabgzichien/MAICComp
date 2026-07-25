@@ -60,13 +60,14 @@ import { DEFAULT_PRODUCTS, decideLoan, type LoanDecision, type LoanProduct } fro
 import { computeRepaymentStanding, overdueRowsFor } from '../lib/repaymentStanding';
 import { buildBookedLoan, outstandingAfter } from '../lib/acceptOffer';
 import type { DirectApplyDecision } from '../lib/directApply';
-import { fetchLenderDirectory, LENDER_API_BASE } from '../lib/lenderDirectory';
-import { offerToDecision, parseOffer, pendingOffers, type Offer } from '../lib/offers';
+import { fetchLenderDirectory, LENDER_API_BASE, type LenderProfile } from '../lib/lenderDirectory';
+// `pendingOffers` is aliased: the store holds state of the same name, which would shadow it.
+import { offerToDecision, parseOffer, pendingOffers as offersAwaitingResponse, respondToOffer, type Offer } from '../lib/offers';
 import { applicationsClearedByReset, clearedLoanMessage, parseResetMarker } from '../lib/resetSync';
 import type { DeclaredPurpose } from '../lib/loanPurpose';
 import { mergeLoanWithServicing, servicingWritePayload } from '../lib/servicingSync';
 import type { ServicingRecord } from '../lib/mergeServicing';
-import { getOrCreateKeypair } from '../crypto/keys';
+import { getOrCreateKeypair, rotateKeypair } from '../crypto/keys';
 import type { CreditBand } from '../lib/creditScore';
 import { budgetHash, monthKey } from '../lib/budget';
 import { computeCoverage, type Coverage } from '../lib/coverage';
@@ -75,19 +76,16 @@ import { getOccupation, setOccupation as dbSetOccupation, type Occupation } from
 import { getMeta, setMeta } from '../db/metaRepo';
 import { MockEkycProvider } from '../ekyc/mock';
 import type { EkycResult } from '../ekyc/types';
-import { BORROWER_TOUR_STEPS, clampTourStep } from '../lib/tourSteps';
+import { BORROWER_TOUR_STEPS, clampTourStep, stepsForBranch, type TourBranch } from '../lib/tourSteps';
 import { emitTourSignal } from '../lib/tourSignals';
 
 const ONBOARDING_KEY = 'onboarding_complete';
 const TOUR_ACTIVE_KEY = 'tour_active';
 const TOUR_STEP_KEY = 'tour_step_index';
+const TOUR_BRANCH_KEY = 'tour_branch';
 // Which demo persona (if any) is currently loaded — lets the KYC screen prefill identity +
 // work & income for a zero-typing demo run (see loadDemoData below). Null for a real user.
 const ACTIVE_DEMO_PROFILE_KEY = 'active_demo_profile';
-// Count of loans auto-booked from a console approval that the borrower hasn't seen yet
-// (approval-notify, 2026-07-19). Drives the red badge on the Loan tab; cleared when the
-// borrower opens My Financing. Persisted so the badge survives a reload.
-const UNSEEN_FINANCING_KEY = 'unseen_financing_count';
 import { applyEffect, currentValue, type LinkEffect } from '../lib/networth';
 import { holdingValue, isHolding, mergeAccountValues } from '../lib/prices';
 import { merchantKey } from '../lib/normalize';
@@ -113,6 +111,14 @@ function todayKey(): string {
 export interface NewLearned {
   merchant: string;
   categoryId: string;
+}
+
+/** An offer waiting on the borrower, paired with the lender who made it (borrower acceptance,
+ *  2026-07-21). The lender profile rides along because accepting needs that lender's product
+ *  ladder to build the repayment schedule, and the UI needs its name and brand colour. */
+export interface PendingOffer {
+  offer: Offer;
+  lender: LenderProfile;
 }
 
 interface AppData {
@@ -152,6 +158,9 @@ interface AppData {
    *  refresh resumes where it left off. */
   tourActive: boolean;
   tourStepIndex: number;
+  /** Which ending the cross-app script is running, or null before the application is sent. */
+  tourBranch: TourBranch | null;
+  setTourBranch: (branch: TourBranch | null) => Promise<void>;
   /** Start the tour. `fresh: true` restarts from step 0 (Settings "Restart judge tour");
    *  omitted, it resumes from whatever step was last persisted. */
   startTour: (opts?: { fresh?: boolean }) => Promise<void>;
@@ -185,6 +194,8 @@ interface AppData {
    *  screen's identity + work & income prefill so a demo run needs zero typing. */
   activeDemoProfile: DemoProfileId | null;
   addAccount: (name: string, kind: AccountKind, cls: string, openingValue: number, asOf: string, icon?: string | null) => Promise<void>;
+  /** Returns a default account id for the add flows, creating a "Cash" account if none exist. */
+  ensureDefaultAccount: () => Promise<string>;
   updateAccount: (id: string, fields: { name: string; cls: string; icon?: string | null }) => Promise<void>;
   deleteAccount: (id: string) => Promise<void>;
   setBalance: (accountId: string, value: number, asOf: string) => Promise<void>;
@@ -224,21 +235,31 @@ interface AppData {
     offer: DirectApplyDecision,
     lender: { id?: string; products: LoanProduct[]; name: string },
     scoreAt: number,
-    purpose?: DeclaredPurpose
+    purpose?: DeclaredPurpose,
+    /** The lender's own tenor for this offer; overrides the amount-derived tier lookup. */
+    tenorMonths?: number
   ) => Promise<LoanApplication | null>;
   /** Pull every lender-routed loan's shared servicing record and merge server-side
    *  repayment/default events into the local schedule (Bidirectional Servicing Sync,
    *  2026-07-18 design)  called on My Financing focus. Best-effort: an unreachable console
    *  degrades silently, same posture as direct-apply. */
   pullServicing: () => Promise<void>;
-  /** Count of loans auto-booked from a console approval the borrower hasn't opened yet
-   *  (approval-notify, 2026-07-19)  drives the red badge on the Loan tab. */
-  unseenFinancingCount: number;
-  /** Poll the approved-offer back-channel and auto-book any newly-approved financing. Called
-   *  on Home and My Financing focus. `currentScore` is the score the loan is recorded against. */
-  adoptApprovedOffers: (currentScore: number) => Promise<void>;
-  /** Clear the unseen-financing badge (borrower has now opened My Financing). */
-  markFinancingSeen: () => Promise<void>;
+  /** Offers a lender has approved and published that this borrower has NOT yet accepted or
+   *  declined (borrower acceptance, 2026-07-21). This is the borrower's decision queue, and
+   *  its length is the red badge on the Loan tab. Refreshed by `refreshPendingOffers`. */
+  pendingOffers: PendingOffer[];
+  /** Poll every published lender for offers awaiting this borrower's decision. Called on Home
+   *  and My Financing focus, and on an interval while either is open. Best-effort: an
+   *  unreachable console leaves the current list alone rather than emptying it. */
+  refreshPendingOffers: () => Promise<void>;
+  /** Take up an offer: tells the lender the borrower accepted, then books the financing
+   *  locally (schedule + Net-worth liability). Returns false if the lender couldn't be told
+   *  nothing is booked in that case, so the two sides can't disagree about whether a loan
+   *  exists. `currentScore` is the score the loan is recorded against. */
+  acceptPendingOffer: (offer: Offer, currentScore: number) => Promise<boolean>;
+  /** Turn an offer down. Tells the lender, then drops it from the decision queue. Nothing is
+   *  booked. Returns false if the lender couldn't be reached. */
+  declinePendingOffer: (offer: Offer) => Promise<boolean>;
   /** Poll every lender this borrower has a loan with for a reset marker (data-consistency
    *  follow-up, 2026-07-20): if that lender's console was reset since the loan was booked,
    *  removes it locally (application, repayments, and its Net-worth liability account) so the
@@ -274,8 +295,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     total: 0,
     missed: 0,
   });
-  // Loans auto-booked from a console approval the borrower hasn't opened yet (approval-notify).
-  const [unseenFinancingCount, setUnseenFinancingCount] = useState(0);
+  // Offers a lender has approved but this borrower hasn't answered yet (borrower acceptance,
+  // 2026-07-21). In-memory only: the lender's offer record is the source of truth for what is
+  // still open, so this is always re-derived from a poll rather than persisted and reconciled.
+  const [pendingOffers, setPendingOffers] = useState<PendingOffer[]>([]);
   // Banner text for a just-detected lender-side reset that removed one or more local loans
   // (data-consistency follow-up, 2026-07-20). In-memory only, not persisted: it's a live-event
   // notice for whichever sync run just found it, not app state to restore across a reload.
@@ -286,9 +309,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [activeDemoProfile, setActiveDemoProfileState] = useState<DemoProfileId | null>(null);
   const [tourActive, setTourActive] = useState(false);
   const [tourStepIndex, setTourStepIndexState] = useState(0);
+  const [tourBranch, setTourBranchState] = useState<TourBranch | null>(null);
+  /** Mirrors `tourBranch` for synchronous reads  see `setTourStep`. */
+  const tourBranchRef = useRef<TourBranch | null>(null);
 
   const refreshAll = useCallback(async () => {
-    const [cats, txns, mem, income, alloc, snaps, accts, entries, cache, products, applications, allRepayments, repSummary, kycRow, onboardingFlag, tourActiveFlag, tourStepRaw, unseenFinancingRaw, activeDemoProfileRaw] =
+    const [cats, txns, mem, income, alloc, snaps, accts, entries, cache, products, applications, allRepayments, repSummary, kycRow, onboardingFlag, tourActiveFlag, tourStepRaw, activeDemoProfileRaw, tourBranchRaw] =
       await Promise.all([
         listCategories(),
         listTransactions(),
@@ -307,8 +333,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         getMeta(ONBOARDING_KEY),
         getMeta(TOUR_ACTIVE_KEY),
         getMeta(TOUR_STEP_KEY),
-        getMeta(UNSEEN_FINANCING_KEY),
         getMeta(ACTIVE_DEMO_PROFILE_KEY),
+        getMeta(TOUR_BRANCH_KEY),
       ]);
     setOccupationState(await getOccupation());
     setKycState(kycRow);
@@ -317,8 +343,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       DEMO_PROFILES.some((p) => p.id === activeDemoProfileRaw) ? (activeDemoProfileRaw as DemoProfileId) : null
     );
     setTourActive(tourActiveFlag === 'true');
-    setTourStepIndexState(clampTourStep(tourStepRaw ? Number(tourStepRaw) || 0 : 0, BORROWER_TOUR_STEPS.length));
-    setUnseenFinancingCount(Math.max(0, Number(unseenFinancingRaw) || 0));
+    const branch = (['referred', 'approved', 'declined'] as const).find((b) => b === tourBranchRaw) ?? null;
+    tourBranchRef.current = branch;
+    setTourBranchState(branch);
+    setTourStepIndexState(
+      clampTourStep(tourStepRaw ? Number(tourStepRaw) || 0 : 0, stepsForBranch(BORROWER_TOUR_STEPS, branch).length)
+    );
     setCategories(cats);
     setTransactions(txns);
     setMemory(mem);
@@ -505,8 +535,25 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setOnboardingComplete(false);
   }, []);
 
+  /**
+   * Load a demo persona, replacing everything the previous one left behind.
+   *
+   * The wipe and the key rotation are both load-bearing, and neither used to happen when the
+   * Settings persona picker called this (only the "Reset demo" row wiped first). Without the
+   * wipe, switching personas ADDED the new seed on top of the old one, so a loan taken as Ravi
+   * was still sitting in Aina's My Financing. Without the rotation, the local wipe alone
+   * wouldn't be enough: every lender-side store is keyed by the passport subject hash, so the
+   * new persona would inherit the old one's applications, pending offers, and servicing ledger
+   * from the console the moment it polled. Two personas are two different people.
+   *
+   * `pendingOffers` is cleared in the same breath — it's in-memory state the wipe can't reach,
+   * and an offer made to the outgoing persona is not the incoming one's to accept.
+   */
   const loadDemoData = useCallback(async (profile?: DemoProfileId) => {
     const id = profile ?? 'aina';
+    await dbResetAllData();
+    await rotateKeypair();
+    setPendingOffers([]);
     await loadDemoProfile(id);
     await setMeta(ACTIVE_DEMO_PROFILE_KEY, id);
     setActiveDemoProfileState(id);
@@ -522,6 +569,20 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     },
     []
   );
+
+  // Every transaction is tied to an account now, so the add flows need a guaranteed
+  // default. Prefer an existing cash account; otherwise create a "Cash" one (opening
+  // balance 0, dated today). Returns the account id to preselect.
+  const ensureDefaultAccount = useCallback(async (): Promise<string> => {
+    const activeAccts = accounts.filter((a) => !a.archived);
+    const existing = activeAccts.find((a) => a.cls === 'cash') ?? activeAccts[0];
+    if (existing) return existing.id;
+    const created = await dbAddAccount('Cash', 'asset', 'cash', 0, new Date().toISOString().slice(0, 10), null);
+    const [accts, entries] = await Promise.all([listAccounts(), listBalanceEntries()]);
+    setAccounts(accts);
+    setBalanceEntries(entries);
+    return created.id;
+  }, [accounts]);
 
   const updateAccount = useCallback(async (id: string, fields: { name: string; cls: string; icon?: string | null }) => {
     await dbUpdateAccount(id, fields);
@@ -544,8 +605,16 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const recordBalanceLink = useCallback(
     async (accountId: string, amount: number, effect: LinkEffect, asOf: string) => {
       const entries = await listBalanceEntries();
-      const current = currentValue(entries.filter((e) => e.accountId === accountId));
-      await dbAddBalanceEntry(accountId, applyEffect(current, amount, effect), asOf);
+      const mine = entries.filter((e) => e.accountId === accountId);
+      const current = currentValue(mine);
+      // The adjustment must become the account's CURRENT reading, otherwise net worth
+      // (which reads the latest-dated entry) won't move. A linked txn is often dated
+      // in the past — a scanned statement, or a back-dated manual entry — and stamping
+      // the new entry at that past date would let an existing, more-recent reading
+      // shadow it. So never date it before the latest reading we already have.
+      const latestAsOf = mine.reduce((m, e) => (e.asOf > m ? e.asOf : m), '');
+      const effectiveAsOf = asOf > latestAsOf ? asOf : latestAsOf;
+      await dbAddBalanceEntry(accountId, applyEffect(current, amount, effect), effectiveAsOf);
       setBalanceEntries(await listBalanceEntries());
     },
     []
@@ -669,9 +738,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       offer: DirectApplyDecision,
       lender: { id?: string; products: LoanProduct[]; name: string },
       scoreAt: number,
-      purpose?: DeclaredPurpose
+      purpose?: DeclaredPurpose,
+      tenorMonths?: number
     ): Promise<LoanApplication | null> => {
-      const booked = buildBookedLoan(offer, lender.products, new Date());
+      const booked = buildBookedLoan(offer, lender.products, new Date(), tenorMonths);
       if (!booked) return null;
       const application = await dbCreateApplication(booked.productId, booked.principal, offer, scoreAt, lender.name, lender.id ?? null, purpose ?? null);
       await dbInsertSchedule(application.id, booked.schedule);
@@ -694,16 +764,40 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setOnboardingComplete(true);
   }, []);
 
+  // Steps are indexed against the BRANCH-FILTERED run, not the raw registry: once the
+  // application has been sent, the three endings' handoff steps are no longer interchangeable
+  // and the raw registry contains steps this run will never show. `stepsForBranch` guarantees
+  // the filtered run shares an unbranched prefix with the unfiltered one, so a saved index
+  // stays meaningful across the moment the branch is decided.
+  //
+  // The clamp reads the branch through a REF, not the state variable. Sending the application
+  // latches the branch and advances the tour in the same tick, and a `useCallback` closure
+  // would still hold the pre-send `null` at that moment — clamping the new handoff step (index
+  // 15) against the 15-step unbranched run and snapping the judge straight back onto the send
+  // button they just pressed.
   const setTourStep = useCallback(async (index: number) => {
-    const clamped = clampTourStep(index, BORROWER_TOUR_STEPS.length);
+    const clamped = clampTourStep(index, stepsForBranch(BORROWER_TOUR_STEPS, tourBranchRef.current).length);
     await setMeta(TOUR_STEP_KEY, String(clamped));
     setTourStepIndexState(clamped);
+  }, []);
+
+  /** Latch which ending the script is running. Called once, when the application's verdict
+   *  comes back from the lender  the branch is real state, never a persona guess. */
+  const setTourBranch = useCallback(async (branch: TourBranch | null) => {
+    tourBranchRef.current = branch;
+    await setMeta(TOUR_BRANCH_KEY, branch ?? '');
+    setTourBranchState(branch);
   }, []);
 
   const startTour = useCallback(async (opts?: { fresh?: boolean }) => {
     if (opts?.fresh) {
       await setMeta(TOUR_STEP_KEY, '0');
+      // A fresh run has not asked any lender for anything yet, so it has no ending. Leaving a
+      // previous run's branch latched would resume act 6 on the wrong handoff.
+      await setMeta(TOUR_BRANCH_KEY, '');
+      tourBranchRef.current = null;
       setTourStepIndexState(0);
+      setTourBranchState(null);
     }
     await setMeta(TOUR_ACTIVE_KEY, 'true');
     setTourActive(true);
@@ -717,8 +811,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const exitTour = useCallback(async () => {
     await setMeta(TOUR_ACTIVE_KEY, 'false');
     await setMeta(TOUR_STEP_KEY, '0');
+    await setMeta(TOUR_BRANCH_KEY, '');
+    tourBranchRef.current = null;
     setTourActive(false);
     setTourStepIndexState(0);
+    setTourBranchState(null);
   }, []);
 
   const verifyIdentity = useCallback(async (fullName: string, nric: string): Promise<EkycResult> => {
@@ -934,81 +1031,99 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
   const dismissClearedByLenderNotice = useCallback(() => setClearedByLenderNotice(null), []);
 
-  // Guards adoptApprovedOffers against re-entrancy: a fast Home→Loan navigation could fire two
-  // adopts before the first's booked application lands in state, double-booking the same offer.
-  // Holds the in-flight run so a concurrent caller AWAITS it rather than returning immediately:
-  // My Financing's mount effect does `await adoptApprovedOffers(...)` and then clears the unseen
-  // badge, so a no-op early return would let it mark "seen" financing that hadn't been booked
-  // yet — and render its empty state against the pre-adopt application list.
-  const adoptingRef = useRef<Promise<void> | null>(null);
+  // Coalesces concurrent refreshes: Home and My Financing both poll, and a fast Home→Loan
+  // navigation fires two within a tick. A concurrent caller AWAITS the in-flight run rather
+  // than returning early, so a screen that refreshes and then reads `pendingOffers` never
+  // renders its empty state against a list that is still loading.
+  const refreshingOffersRef = useRef<Promise<void> | null>(null);
 
   /**
-   * Poll the approved-offer back-channel and auto-book any new financing (approval-notify,
-   * 2026-07-19). When an officer approves a REFERRED application in the console, the borrower
-   * app has no way to accept it (it only ever saw the "refer" verdict); this closes that gap so
-   * the loan appears in My Financing on the next Home/Loan focus. Polls every directory lender
-   * for this subject, books each pending offer through the same `acceptLenderOffer` path an
-   * accepted offer uses, and bumps the unseen-financing badge. Best-effort: an unreachable
-   * console degrades silently. Dedupe reads applications fresh from the DB (not the React
-   * closure) so a just-booked offer is never booked twice. `currentScore` snapshots the score
-   * the loan is recorded against, same as the manual accept flow.
+   * Poll every published lender for offers still awaiting this borrower's decision (borrower
+   * acceptance, 2026-07-21).
+   *
+   * This replaces the old `adoptApprovedOffers`, which BOOKED whatever it found: a loan could
+   * appear in My Financing, with a schedule and a liability on the borrower's net worth,
+   * without them ever having agreed to it. An approval is an offer, so the poll now only fills
+   * the decision queue — `acceptPendingOffer` is the one path that books anything.
+   *
+   * Best-effort throughout: an unreachable console leaves the existing list alone rather than
+   * emptying it, so a dropped tick never makes a real waiting offer vanish from the badge.
    */
-  const adoptApprovedOffers = useCallback(async (currentScore: number) => {
-    // Already running → join that run instead of starting a second one or returning early.
-    if (adoptingRef.current) return adoptingRef.current;
+  const refreshPendingOffers = useCallback(async () => {
+    if (refreshingOffersRef.current) return refreshingOffersRef.current;
     const run = (async () => {
       const dir = await fetchLenderDirectory();
       const realLenders = dir.lenders.filter((l) => l.id !== 'offline');
       if (realLenders.length === 0) return;
       const subject = await getSubject();
 
-      const offers: Offer[] = [];
+      const found: PendingOffer[] = [];
+      let reachedAny = false;
       for (const lender of realLenders) {
         try {
           const res = await fetch(`${LENDER_API_BASE}/api/offers?subject=${encodeURIComponent(subject)}&lender=${encodeURIComponent(lender.id)}`);
           if (!res.ok) continue;
+          reachedAny = true;
           const offer = parseOffer(await res.json());
-          if (offer) offers.push(offer);
+          if (offer) found.push({ offer, lender });
         } catch {
           // offline/malformed for this lender  just skip it.
         }
       }
+      // Every lender unreachable → keep what we had. Distinguishing this from a genuine
+      // "nothing is waiting" is the whole point: silently clearing the badge on a flaky
+      // connection would lose the borrower an offer they still need to answer.
+      if (!reachedAny) return;
 
+      // Dedupe reads applications fresh from the DB rather than the React closure, so an offer
+      // accepted moments ago on another screen is already excluded on this tick.
       const existing = await dbListApplications();
-      const toBook = pendingOffers(offers, existing);
-      if (toBook.length === 0) return;
-
-      let booked = 0;
-      for (const offer of toBook) {
-        const lender = realLenders.find((l) => l.id === offer.lenderId);
-        if (!lender) continue;
-        const app = await acceptLenderOffer(offerToDecision(offer), { id: lender.id, products: lender.products, name: lender.name }, currentScore, offer.purpose);
-        if (app) booked += 1;
-      }
-
-      if (booked > 0) {
-        const next = (Number(await getMeta(UNSEEN_FINANCING_KEY)) || 0) + booked;
-        await setMeta(UNSEEN_FINANCING_KEY, String(next));
-        setUnseenFinancingCount(next);
-      }
+      const stillOpen = offersAwaitingResponse(found.map((f) => f.offer), existing);
+      const openIds = new Set(stillOpen.map((o) => o.lenderId));
+      setPendingOffers(found.filter((f) => openIds.has(f.offer.lenderId)));
     })();
-    adoptingRef.current = run;
-    // Clear the latch on settle, identity-checked so a late finish can't clear a newer run.
-    // The trailing catch keeps this derived chain from surfacing as an unhandled rejection —
-    // `run` itself still rejects for the caller, who owns the error.
+    refreshingOffersRef.current = run;
     run
       .finally(() => {
-        if (adoptingRef.current === run) adoptingRef.current = null;
+        if (refreshingOffersRef.current === run) refreshingOffersRef.current = null;
       })
       .catch(() => {});
     return run;
-  }, [getSubject, acceptLenderOffer]);
+  }, [getSubject]);
 
-  /** Clear the unseen-financing badge  called when the borrower opens My Financing, so a
-   *  loan they've now seen stops badging the Loan tab. */
-  const markFinancingSeen = useCallback(async () => {
-    await setMeta(UNSEEN_FINANCING_KEY, '0');
-    setUnseenFinancingCount(0);
+  /** Take up an offer. The lender is told FIRST and the loan is only booked if that write
+   *  lands: booking against a lender who still thinks the offer is open would leave the
+   *  borrower with a loan the console shows as never accepted, which is exactly the kind of
+   *  two-sided disagreement `syncLenderResets` exists to clean up after. */
+  const acceptPendingOffer = useCallback(
+    async (offer: Offer, currentScore: number): Promise<boolean> => {
+      const lender = pendingOffers.find((p) => p.offer.lenderId === offer.lenderId)?.lender;
+      if (!lender) return false;
+      const told = await respondToOffer(LENDER_API_BASE, { subject: offer.subject, lenderId: offer.lenderId, response: 'accepted' });
+      if (!told) return false;
+      const app = await acceptLenderOffer(
+        offerToDecision(offer),
+        { id: lender.id, products: lender.products, name: lender.name },
+        currentScore,
+        offer.purpose,
+        offer.tenorMonths
+      );
+      setPendingOffers((cur) => cur.filter((p) => p.offer.lenderId !== offer.lenderId));
+      // Fired only once the lender has recorded the answer AND the loan is booked, so the
+      // tour's act-9 do-step can never celebrate an acceptance that did not actually land.
+      if (app !== null) emitTourSignal('offer-accepted');
+      return app !== null;
+    },
+    [pendingOffers, acceptLenderOffer]
+  );
+
+  /** Turn an offer down. Nothing local is created; the lender records the decline so the file
+   *  stops sitting in their "awaiting borrower" queue. */
+  const declinePendingOffer = useCallback(async (offer: Offer): Promise<boolean> => {
+    const told = await respondToOffer(LENDER_API_BASE, { subject: offer.subject, lenderId: offer.lenderId, response: 'declined' });
+    if (!told) return false;
+    setPendingOffers((cur) => cur.filter((p) => p.offer.lenderId !== offer.lenderId));
+    return true;
   }, []);
 
   const coverage = useMemo(() => computeCoverage(transactions), [transactions]);
@@ -1022,6 +1137,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     completeOnboarding,
     tourActive,
     tourStepIndex,
+    tourBranch,
+    setTourBranch,
     startTour,
     setTourStep,
     pauseTour,
@@ -1059,6 +1176,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     loadDemoData,
     activeDemoProfile,
     addAccount,
+    ensureDefaultAccount,
     updateAccount,
     deleteAccount,
     setBalance,
@@ -1076,9 +1194,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     clearArrears,
     acceptLenderOffer,
     pullServicing,
-    unseenFinancingCount,
-    adoptApprovedOffers,
-    markFinancingSeen,
+    pendingOffers,
+    refreshPendingOffers,
+    acceptPendingOffer,
+    declinePendingOffer,
     syncLenderResets,
     clearedByLenderNotice,
     dismissClearedByLenderNotice,

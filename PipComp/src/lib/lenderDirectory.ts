@@ -9,7 +9,7 @@
 // the valid ones. Any transport failure degrades to a single offline generic-ladder
 // entry so the Coach screen never breaks in a disconnected demo environment.
 
-import { DEFAULT_PRODUCTS, type LenderPolicy, type LoanProduct } from './loans';
+import { DEFAULT_POLICY, DEFAULT_PRODUCTS, type LenderPolicy, type LoanProduct } from './loans';
 
 /** One published lender: display identity + its loan product ladder, and (Brief N)
  *  optionally the affordability thresholds the lender's console decides with 
@@ -78,12 +78,22 @@ function parsePolicy(raw: unknown): LenderPolicy | null {
   const ratio = (v: unknown): v is number => isFiniteNum(v) && v > 0 && v <= 1;
   const days = (v: unknown): v is number => isFiniteNum(v) && Number.isInteger(v) && v >= 0 && v <= 90;
   if (!ratio(p.minConfidenceToApprove) || !ratio(p.maxInstallmentShareOfSurplus) || !ratio(p.maxDsr)) return null;
+  // Optional: a console that predates the confidence decline floor publishes no such field.
+  // Defaulting is right here — dropping the whole lender over a missing optional threshold
+  // would silently remove them from the borrower's directory.
+  let minConfidenceToConsider = DEFAULT_POLICY.minConfidenceToConsider;
+  if (p.minConfidenceToConsider !== undefined) {
+    if (!ratio(p.minConfidenceToConsider)) return null;
+    if (p.minConfidenceToConsider >= p.minConfidenceToApprove) return null;
+    minConfidenceToConsider = p.minConfidenceToConsider;
+  }
   if (!days(p.emergencyOnlyBelowDays) || !days(p.fullLadderFromDays)) return null;
   if (!ratio(p.minCoverageRatioForFullLadder)) return null;
   if (!ratio(p.costOfFunds) || !ratio(p.targetReturn)) return null;
   if (p.emergencyOnlyBelowDays > p.fullLadderFromDays) return null;
   return {
     minConfidenceToApprove: p.minConfidenceToApprove,
+    minConfidenceToConsider,
     maxInstallmentShareOfSurplus: p.maxInstallmentShareOfSurplus,
     maxDsr: p.maxDsr,
     emergencyOnlyBelowDays: p.emergencyOnlyBelowDays,

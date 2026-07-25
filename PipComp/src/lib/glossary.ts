@@ -32,6 +32,11 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     short: 'How your spending splits across categories.',
     body: 'Grouping transactions by category (food, transport, bills, etc.) makes it easier to spot where a budget is being overspent, and feeds the category-level detail on the Budget screen.',
   },
+  net_worth: {
+    term: 'Net worth',
+    short: 'Everything you own minus everything you owe.',
+    body: 'Assets (cash, savings, investments) minus liabilities (loans, credit cards). Watching it rise over time is a clearer picture of financial health than any single month of cash flow.',
+  },
   apr: {
     term: 'APR',
     short: 'Annual Percentage Rate — the yearly cost of borrowing, as a percentage.',

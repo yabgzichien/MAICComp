@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AccountLinkField } from '../components/AccountLinkField';
@@ -22,21 +22,28 @@ export function ManualEntryScreen({
   onComplete: (item: ExtractedTxn, categoryId: string) => void;
 }) {
   const insets = useSafeAreaInsets();
-  const { accounts, recordBalanceLink } = useAppData();
+  const { accounts, recordBalanceLink, ensureDefaultAccount } = useAppData();
   const [merchant, setMerchant] = useState('');
   const [amountText, setAmountText] = useState('');
   const [dateText, setDateText] = useState(todayISO());
   const [type, setType] = useState<TxnType>('expense');
   const [cat, setCat] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
-  const [linkId, setLinkId] = useState<string | null>(null);
+
+  // Every transaction is tied to an account. Default to a cash account (prefer an
+  // existing one); the effect below seeds it and creates a "Cash" account if none exist.
+  const defaultAcctId = useMemo(() => {
+    const act = accounts.filter((a) => !a.archived);
+    return (act.find((a) => a.cls === 'cash') ?? act[0])?.id ?? null;
+  }, [accounts]);
+  const [linkId, setLinkId] = useState<string | null>(defaultAcctId);
   const [linkEffect, setLinkEffect] = useState<LinkEffect>('subtract');
 
   const grid = useMemo(() => categories.filter((c) => c.kind === type), [categories, type]);
   const amount = Math.max(0, parseFloat(amountText.replace(/[^0-9.]/g, '')) || 0);
   const dateTrimmed = dateText.trim();
   const validDate = isValidIsoDate(dateTrimmed) ? dateTrimmed : null;
-  const canSave = merchant.trim().length > 0 && amount > 0 && !!cat && !!validDate;
+  const canSave = merchant.trim().length > 0 && amount > 0 && !!cat && !!validDate && !!linkId;
 
   const switchType = (t: TxnType) => {
     if (t === type) return;
@@ -53,6 +60,15 @@ export function ManualEntryScreen({
     const a = id ? accounts.find((x) => x.id === id) : null;
     if (a) setLinkEffect(defaultLinkEffect(a.kind, type));
   };
+
+  // Seed the required account selection once accounts are known, creating a
+  // default "Cash" account if the user has none yet.
+  useEffect(() => {
+    if (linkId) return;
+    if (defaultAcctId) selectLink(defaultAcctId);
+    else ensureDefaultAccount().then(selectLink);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultAcctId]);
 
   const save = async () => {
     if (!canSave || !cat || !validDate) return;
@@ -110,6 +126,10 @@ export function ManualEntryScreen({
           />
         </View>
 
+        <View style={{ marginTop: 18 }}>
+          <AccountLinkField accounts={accounts} selectedId={linkId} effect={linkEffect} onSelect={selectLink} onEffect={setLinkEffect} required />
+        </View>
+
         <Eyebrow style={{ marginTop: 18, marginBottom: 8 }}>Date</Eyebrow>
         <TextInput
           value={dateText}
@@ -136,10 +156,6 @@ export function ManualEntryScreen({
               <Text style={styles.addChipText}>New category</Text>
             </Pressable>
           </View>
-        </View>
-
-        <View style={{ marginTop: 18 }}>
-          <AccountLinkField accounts={accounts} selectedId={linkId} effect={linkEffect} onSelect={selectLink} onEffect={setLinkEffect} />
         </View>
       </ScrollView>
 

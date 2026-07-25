@@ -16,13 +16,14 @@ import { buildConsentReceipts, buildPassportDraft, monitoringScopeRow, tier0Scop
 import { useCreditProfile } from '../state/useCreditProfile';
 import { useAppData } from '../state/store';
 import { decideLoan, DEFAULT_PRODUCTS, type Decision } from '../lib/loans';
+import { filedFootText, lenderOutcome, type LenderOutcome } from '../lib/lenderOutcome';
 import { computeBorrowingLimit, outstandingExposure } from '../lib/borrowingLimit';
 import { submitApplication, type DirectApplyResult } from '../lib/directApply';
 import { fetchLenderDirectory, LENDER_API_BASE, type LenderProfile } from '../lib/lenderDirectory';
 import { PURPOSE_CATEGORIES, PURPOSE_LABELS, type PurposeCategory } from '../lib/loanPurpose';
 import { TourAnchor } from '../components/TourAnchor';
 import { emitTourSignal } from '../lib/tourSignals';
-import { BORROWER_TOUR_STEPS, clampTourStep } from '../lib/tourSteps';
+import { BORROWER_TOUR_STEPS, branchForDecision, clampTourStep, stepsForBranch } from '../lib/tourSteps';
 import { PassportCeremonyScreen } from './PassportCeremonyScreen';
 import { colors, numFont, platformShadow, uiFont } from '../theme';
 
@@ -55,8 +56,9 @@ function decisionLabel(d: Decision): string {
 export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () => {} }: { onBack: () => void; onOpenKyc?: () => void; onOpenLoans?: () => void }) {
   const insets = useSafeAreaInsets();
   const { profile, score, dataConfidence, coverage, momentum, coachInput, incomeQuality, spendingProfile, obligations, standing } = useCreditProfile();
-  const { kyc, occupation, loanApplications, loanProducts, repaymentSummary, accountValues, tourActive, tourStepIndex, acceptLenderOffer } = useAppData();
-  const activeTourAnchor = tourActive ? BORROWER_TOUR_STEPS[clampTourStep(tourStepIndex, BORROWER_TOUR_STEPS.length)].anchorId ?? null : null;
+  const { kyc, occupation, loanApplications, loanProducts, repaymentSummary, accountValues, tourActive, tourStepIndex, tourBranch, setTourBranch } = useAppData();
+  const tourRun = useMemo(() => stepsForBranch(BORROWER_TOUR_STEPS, tourBranch), [tourBranch]);
+  const activeTourAnchor = tourActive ? tourRun[clampTourStep(tourStepIndex, tourRun.length)]?.anchorId ?? null : null;
 
   const [phase, setPhase] = useState<'consent' | 'minted'>('consent');
   const [includeIdentity, setIncludeIdentity] = useState(true);
@@ -92,14 +94,11 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
   // Bumped on every send attempt so the result card's entrance animation replays even when
   // the new result is the same status as the last one (e.g. tapping "Send" twice in a row).
   const [sendSeq, setSendSeq] = useState(0);
-  const [booked, setBooked] = useState(false);
-  const [bookingBusy, setBookingBusy] = useState(false);
-  // Synchronous in-flight latches for the two irreversible actions on this screen (filing an
-  // application, booking a loan). The `sendBusy`/`bookingBusy` state drives the UI; these drive
-  // the guard, because state doesn't update until the next render and a burst of taps all land
-  // in the same tick.
+  // Synchronous in-flight latch for the one irreversible action on this screen: filing an
+  // application. The `sendBusy` state drives the UI; this drives the guard, because state
+  // doesn't update until the next render and a burst of taps all land in the same tick.
+  // (Accepting an offer is no longer done here — it lives in My Financing.)
   const sendingRef = useRef(false);
-  const bookingRef = useRef(false);
 
   // Published lender directory (GET /api/lenders). Fetched once on mount; a transport failure
   // leaves it empty and the send flow falls back to the built-in ladder (routes to TEKUN).
@@ -170,13 +169,41 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
   const defaultAmount = Math.min(supportable > 0 ? supportable : ladderMin, requestCeiling);
   const effectiveAmount = amount ?? defaultAmount;
 
+  // What each lender would decide at the amount currently on screen (per-lender outcome
+  // preview, 2026-07-21). Same engine, same published policy and ladder the lender's own
+  // console decides with, so this is a real preview and not a guess — the borrower can see
+  // "this one approves instantly, that one sends me to an officer" before sending anything.
+  // Recomputed as the amount moves, which is the point: it's how they find the amount that
+  // clears a lender's automatic bar.
+  const lenderOutcomes = useMemo(() => {
+    const out = new Map<string, LenderOutcome>();
+    for (const l of lenders) {
+      const d = decideLoan({
+          score: score.score,
+          band: score.band,
+          confidence: score.confidence,
+          avgMonthlySurplus: profile.avgSurplus,
+          monthlyDebtService: profile.monthlyDebtService,
+          avgIncome: profile.avgIncome,
+          requestedAmount: effectiveAmount,
+          products: l.products,
+          coverageRatio: coverage.ratio,
+          coverageDaysCovered: coverage.daysCovered,
+          integrityFloorBreached: dataConfidence.integrityFloorBreached,
+        ...(l.policy ? { policy: l.policy } : {}),
+      });
+      out.set(l.id, lenderOutcome(d, effectiveAmount));
+    }
+    return out;
+  }, [lenders, score, profile, coverage, dataConfidence, effectiveAmount]);
+  const selectedOutcome = selectedLender ? lenderOutcomes.get(selectedLender.id) ?? null : null;
+
   // Switching lenders re-defaults the amount to the new lender's supportable figure and clears
   // any stale verdict  the borrower is now asking a different lender.
   const selectLender = (id: string) => {
     setSelectedLenderId(id);
     setAmount(null);
     setSendResult(null);
-    setBooked(false);
   };
 
   const sharedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -286,7 +313,6 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
 
   const stepAmount = (delta: number) => {
     setSendResult(null);
-    setBooked(false);
     setAmount((cur) => {
       const base = cur ?? defaultAmount;
       const next = Math.round(base + delta);
@@ -315,7 +341,6 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
     sendingRef.current = true;
     setSendBusy(true);
     setSendResult(null);
-    setBooked(false);
     setSendSeq((n) => n + 1);
     try {
       const result = await submitApplication(LENDER_API_BASE, {
@@ -327,36 +352,22 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
         ...(selectedLender && selectedLender.id !== 'offline' ? { lenderId: selectedLender.id } : {}),
       });
       setSendResult(result);
-      setBooked(false);
+      // Cross-app tour act 6: the ending is chosen by what the lender's engine actually
+      // decided, never by which persona is loaded. Only a genuinely FILED application picks a
+      // branch — a duplicate, rejection, or offline send left nothing on anyone's desk, so the
+      // tour stays on the send step and the judge can try again.
+      if (result.status === 'filed') {
+        // Latch the branch BEFORE the signal: the driver advances synchronously off this
+        // emission and needs the branch-filtered run already in place to land on the right
+        // handoff.
+        await setTourBranch(branchForDecision(result.decision.decision));
+        emitTourSignal('application-sent');
+      }
     } catch {
       setSendResult({ status: 'offline' });
-      setBooked(false);
     } finally {
       sendingRef.current = false;
       setSendBusy(false);
-    }
-  };
-
-  // Accept the lender's approved offer  books it locally into "My Financing" via the store's
-  // acceptLenderOffer action (Task 3). Only reachable when the last decision was an approve
-  // with a positive amount; see the FILED result block below.
-  const acceptOffer = async () => {
-    // Same synchronous double-fire guard as sendToLender  booking twice would create two real
-    // loans, which is worse than a duplicate application.
-    if (!sendResult || sendResult.status !== 'filed' || bookingRef.current || booked) return;
-    bookingRef.current = true;
-    setBookingBusy(true);
-    try {
-      const app = await acceptLenderOffer(
-        sendResult.decision,
-        { id: selectedLender && selectedLender.id !== 'offline' ? selectedLender.id : undefined, products: sendProducts, name: selectedLender?.name ?? 'Lender' },
-        score.score,
-        { category: purpose }
-      );
-      if (app) setBooked(true);
-    } finally {
-      bookingRef.current = false;
-      setBookingBusy(false);
     }
   };
 
@@ -510,6 +521,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
               <View style={styles.lenderList}>
                 {lenders.map((l) => {
                   const on = selectedLender?.id === l.id;
+                  const outcome = lenderOutcomes.get(l.id) ?? null;
                   return (
                     <Pressable
                       key={l.id}
@@ -517,11 +529,20 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
                       style={[styles.lenderRow, on && styles.lenderRowOn]}
                       accessibilityRole="radio"
                       accessibilityState={{ selected: on }}
+                      accessibilityLabel={outcome ? `${l.name}. ${outcome.headline}. ${outcome.detail}` : l.name}
                     >
                       <View style={[styles.lenderDot, { backgroundColor: l.brandColor }]} />
                       <View style={{ flex: 1 }}>
                         <Text style={styles.lenderName} numberOfLines={1}>{l.name}</Text>
                         <Text style={styles.lenderBlurb} numberOfLines={2}>{l.blurb}</Text>
+                        {outcome && (
+                          <View style={styles.outcomeBlock}>
+                            <View style={[styles.outcomeChip, { backgroundColor: decisionColor(outcome.decision) + '1a' }]}>
+                              <Text style={[styles.outcomeChipText, { color: decisionColor(outcome.decision) }]}>{outcome.headline}</Text>
+                            </View>
+                            <Text style={styles.outcomeDetail}>{outcome.detail}</Text>
+                          </View>
+                        )}
                       </View>
                       {on && <Icon name="check" size={16} color={colors.accentInk} stroke={2.6} />}
                     </Pressable>
@@ -564,7 +585,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
               return (
                 <Pressable
                   key={c}
-                  onPress={() => { setPurpose(c); setSendResult(null); setBooked(false); }}
+                  onPress={() => { setPurpose(c); setSendResult(null); }}
                   style={[styles.purposeChip, on && styles.purposeChipOn]}
                   accessibilityRole="radio"
                   accessibilityState={{ selected: on }}
@@ -574,6 +595,21 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
               );
             })}
           </View>
+
+          {/* The same verdict again, right above the button — the lender list can be scrolled
+              well off screen by the time the borrower gets here, and this is the moment they
+              are deciding whether to press send. */}
+          {selectedLender && selectedOutcome && (
+            <View style={[styles.outcomeBanner, { borderColor: decisionColor(selectedOutcome.decision) + '55', backgroundColor: decisionColor(selectedOutcome.decision) + '0d' }]}>
+              <Text style={[styles.outcomeBannerTitle, { color: decisionColor(selectedOutcome.decision) }]}>
+                {selectedOutcome.headline}
+              </Text>
+              <Text style={styles.outcomeBannerBody}>
+                {selectedOutcome.detail}
+                {selectedOutcome.decision === 'approve' ? " You'll still choose whether to take it." : ''}
+              </Text>
+            </View>
+          )}
 
           <Pressable
             onPress={sendToLender}
@@ -642,31 +678,17 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
                   ))}
                 </View>
               )}
-              <Text style={styles.resultFoot}>Filed in the lender's queue for review.</Text>
+              <Text style={styles.resultFoot}>
+                {filedFootText(sendResult.decision.decision, selectedLender && selectedLender.id !== 'offline' ? selectedLender.name : 'The lender')}
+              </Text>
 
+              {/* Accepting happens in one place only — My Financing, where the Loan tab badge
+                  points. Two accept buttons in two screens meant the borrower could take a
+                  loan from a screen that never shows them what they already owe. */}
               {sendResult.decision.decision === 'approve' && sendResult.decision.maxAmount > 0 && (
-                booked ? (
-                  <View style={styles.bookedRow}>
-                    <Icon name="check" size={14} color={DEC_GREEN} stroke={2.6} />
-                    <Text style={styles.bookedText}>Booked — track it in My Financing.</Text>
-                    <Pressable onPress={onOpenLoans} style={styles.bookedBtn} accessibilityRole="button">
-                      <Text style={styles.bookedBtnText}>Go to My Financing</Text>
-                    </Pressable>
-                  </View>
-                ) : (
-                  <Pressable
-                    onPress={acceptOffer}
-                    disabled={bookingBusy}
-                    style={({ pressed }) => [styles.acceptBtn, (bookingBusy || pressed) && { opacity: 0.92 }]}
-                    accessibilityRole="button"
-                  >
-                    {bookingBusy ? (
-                      <ActivityIndicator size="small" color={colors.onAccent} />
-                    ) : (
-                      <Text style={styles.acceptBtnText}>Accept this offer</Text>
-                    )}
-                  </Pressable>
-                )
+                <Pressable onPress={onOpenLoans} style={({ pressed }) => [styles.acceptBtn, pressed && { opacity: 0.92 }]} accessibilityRole="button">
+                  <Text style={styles.acceptBtnText}>Review and accept in My Financing</Text>
+                </Pressable>
               )}
             </FadeIn>
           )}
@@ -792,6 +814,13 @@ const styles = StyleSheet.create({
   lenderDot: { width: 12, height: 12, borderRadius: 999 },
   lenderName: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.ink },
   lenderBlurb: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, lineHeight: 15, marginTop: 2 },
+  outcomeBlock: { marginTop: 7, gap: 4, alignItems: 'flex-start' },
+  outcomeChip: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 },
+  outcomeChipText: { fontFamily: uiFont(700), fontSize: 11.5 },
+  outcomeDetail: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, lineHeight: 16 },
+  outcomeBanner: { marginTop: 18, borderRadius: 12, borderWidth: 1.5, padding: 12 },
+  outcomeBannerTitle: { fontFamily: uiFont(700), fontSize: 13.5 },
+  outcomeBannerBody: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, lineHeight: 18, marginTop: 4 },
   stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   stepperBtn: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentTint, borderWidth: 1, borderColor: colors.accentSoft },
   stepperPressed: { transform: [{ scale: 0.92 }] },
@@ -835,10 +864,6 @@ const styles = StyleSheet.create({
   resultFoot: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, marginTop: 12 },
   acceptBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: 999, backgroundColor: DEC_GREEN, marginTop: 14 },
   acceptBtnText: { fontFamily: uiFont(700), fontSize: 14.5, color: colors.onAccent },
-  bookedRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 14, flexWrap: 'wrap' },
-  bookedText: { flex: 1, fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink },
-  bookedBtn: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: DEC_GREEN },
-  bookedBtnText: { fontFamily: uiFont(700), fontSize: 12.5, color: colors.onAccent },
   noticeBox: { marginTop: 14, backgroundColor: colors.surface2, borderRadius: 12, padding: 12, gap: 4 },
   noticeError: { backgroundColor: '#c5402f14' },
   noticeText: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, lineHeight: 18 },

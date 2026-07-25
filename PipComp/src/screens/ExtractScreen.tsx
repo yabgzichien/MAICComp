@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AccountLinkField } from '../components/AccountLinkField';
 import { Icon } from '../components/Icon';
 import { Amount, B, BtnLabel, BubbleText, Card, Eyebrow, PipSays, PrimaryButton, TopBar } from '../components/ui';
 import { fmt } from '../lib/format';
@@ -18,19 +19,36 @@ const PREVIEW_H = 300;
 export function ExtractScreen({
   image,
   cachedItems,
+  linkId: initialLinkId = null,
   onBack,
   onDone,
 }: {
   image: PickedImage;
   cachedItems?: ExtractedTxn[];
+  linkId?: string | null;
   onBack: () => void;
-  onDone: (items: ExtractedTxn[]) => void;
+  onDone: (items: ExtractedTxn[], linkId: string | null) => void;
 }) {
   const insets = useSafeAreaInsets();
-  const { memory, catById } = useAppData();
+  const { memory, catById, accounts, ensureDefaultAccount } = useAppData();
   const [phase, setPhase] = useState<Phase>(cachedItems ? 'result' : 'scanning');
   const [items, setItems] = useState<ExtractedTxn[]>(cachedItems ?? []);
+  // The batch is always tied to an account. Default to a cash account (prefer an
+  // existing one), keeping any selection carried back from the categorize step.
+  const defaultAcctId = useMemo(() => {
+    const act = accounts.filter((a) => !a.archived);
+    return (act.find((a) => a.cls === 'cash') ?? act[0])?.id ?? null;
+  }, [accounts]);
+  const [linkId, setLinkId] = useState<string | null>(initialLinkId ?? defaultAcctId);
   const [error, setError] = useState('');
+
+  // Seed the required account once accounts are known, creating a "Cash" one if none exist.
+  useEffect(() => {
+    if (linkId) return;
+    if (defaultAcctId) setLinkId(defaultAcctId);
+    else ensureDefaultAccount().then(setLinkId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultAcctId]);
 
   const scan = useRef(new Animated.Value(0)).current;
 
@@ -139,6 +157,12 @@ export function ExtractScreen({
 
         {phase === 'result' && items.length > 0 && (
           <View style={{ paddingHorizontal: 18, paddingTop: 20 }}>
+            <AccountLinkField accounts={accounts} selectedId={linkId} onSelect={setLinkId} required />
+          </View>
+        )}
+
+        {phase === 'result' && items.length > 0 && (
+          <View style={{ paddingHorizontal: 18, paddingTop: 20 }}>
             <Eyebrow style={{ marginBottom: 10 }}>Extracted items</Eyebrow>
             <Card style={{ overflow: 'hidden' }}>
               {withSuggestions.map((e, i) => (
@@ -174,7 +198,7 @@ export function ExtractScreen({
       {/* sticky footer */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
         {phase === 'result' && items.length > 0 && (
-          <PrimaryButton onPress={() => onDone(items)}>
+          <PrimaryButton onPress={() => onDone(items, linkId)}>
             <BtnLabel>Sort {items.length} item{items.length > 1 ? 's' : ''}</BtnLabel>
             <Icon name="arrowRight" size={19} color="#fff" />
           </PrimaryButton>

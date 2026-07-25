@@ -7,7 +7,7 @@
 // soften a decline or refer, and it never changes maxAmount/installment.
 
 import type { CreditPassport, PassportAssessment, PassportIncomeQuality, PassportSpendingProfile } from './passport';
-import { MAX_DSR, MIN_CONFIDENCE_TO_APPROVE, type LoanDecision } from './loans';
+import { MAX_DSR, MIN_CONFIDENCE_TO_CONSIDER, type LoanDecision } from './loans';
 
 export type AgentId = 'fraud' | 'credit' | 'affordability' | 'risk' | 'decision';
 export type VerdictTone = 'positive' | 'caution' | 'negative';
@@ -78,8 +78,16 @@ export function assessFraud(
   incomeQuality?: PassportIncomeQuality,
 ): AgentAssessment {
   const confidencePct = pct(assessment.confidence);
+  // 'negative' (High risk) is tied to the DECLINE floor, not the auto-approve floor. Those two
+  // floors answer different questions now (confidence-gate rework, 2026-07-22): approve asks
+  // "confident enough to skip a human", decline asks "too little evidence to lend against at
+  // all". A thin-file applicant sitting between the two floors is exactly what REFER exists for
+  // — real, un-fraudulent, just not enough history — and labeling that band "High risk" would
+  // read as an accusation this specialist has no basis to make. Before this fix, 'negative' was
+  // pinned to the approve floor, so raising that floor to 0.70 silently swallowed the whole
+  // "Moderate risk" band down to a 5-point sliver (was 0.7 with the old policy).
   const baseTone: VerdictTone =
-    assessment.confidence >= HIGH_CONFIDENCE ? 'positive' : assessment.confidence >= MIN_CONFIDENCE_TO_APPROVE ? 'caution' : 'negative';
+    assessment.confidence >= HIGH_CONFIDENCE ? 'positive' : assessment.confidence >= MIN_CONFIDENCE_TO_CONSIDER ? 'caution' : 'negative';
 
   const stackedCount = stacking?.priorCount ?? 0;
   const stackTone: VerdictTone = stackedCount >= STACKING_NEGATIVE_COUNT ? 'negative' : stackedCount >= 1 ? 'caution' : 'positive';

@@ -27,6 +27,13 @@ export const colors = {
   // status / decision accents (from the redesign tokens)
   amber: '#9c6300', // AA on white (5.00:1) — was #d98a00 (2.77:1, sub-AA)
   red: '#c0392b',
+  // Pale fills + borders for the amber/red verdict states, mirroring accentTint/accentSoft.
+  // Tints are deliberately shallow (5% mix, not 7%) — amber is dark enough that a 7% fill
+  // drops amber-on-tint under 4.5:1. Guarded by tools/contrastAudit/audit.js.
+  amberTint: '#faf7f2',
+  amberSoft: '#efe6d6',
+  redTint: '#fcf5f4',
+  redSoft: '#f5dfdd',
   deltaUp: '#42e893', // "+8 pts" up-arrow green on dark surfaces
   passportDark: '#11231a',
 } as const;

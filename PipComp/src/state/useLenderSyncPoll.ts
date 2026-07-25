@@ -1,8 +1,9 @@
 // src/state/useLenderSyncPoll.ts (approval-notify follow-up 2026-07-20; renamed + broadened
 // from useApprovedOfferPoll.ts for the reset-sync follow-up, same day)
 // Keeps this borrower in sync with every lender console it has a loan or application with,
-// while a screen is open: adopts any newly-approved offer, and clears any loan a lender's
-// console reset has orphaned.
+// while a screen is open: refreshes the offers awaiting their decision (borrower acceptance,
+// 2026-07-21  this used to silently BOOK them; now it only fills the decision queue and the
+// Loan-tab badge), and clears any loan a lender's console reset has orphaned.
 //
 // The original wiring polled ONLY on mount, which meant a console approval reached the
 // borrower solely if they happened to navigate away and back afterwards. In the normal demo
@@ -12,12 +13,12 @@
 // the app or the browser tab) and a modest interval while the screen stays open.
 //
 // Mirrors the Lender Console's own poll-on-focus pattern for direct-apply submissions. Both
-// underlying actions are idempotent (adopt dedupes against the DB and coalesces concurrent
-// runs; reset-sync deleting an already-deleted row/account is a harmless no-op), so an extra
-// tick is always harmless. Reset-sync runs first each tick: a lender reset older loans away
-// before any newly-approved offer (against the now-clean console) gets adopted.
+// underlying actions are idempotent (the offer refresh coalesces concurrent runs and derives
+// its result entirely from the server; reset-sync deleting an already-deleted row/account is a
+// harmless no-op), so an extra tick is always harmless. Reset-sync runs first each tick: a
+// lender reset clears older loans away before the offer refresh reads that console again.
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { useAppData } from './store';
 
@@ -28,13 +29,10 @@ const POLL_INTERVAL_MS = 8_000;
 /**
  * Poll both lender-facing sync actions for as long as the calling screen is mounted: once on
  * mount, again whenever the app returns to the foreground, and every `POLL_INTERVAL_MS` in
- * between. `currentScore` is read through a ref so a score change never restarts the timer.
- * Best-effort throughout — an unreachable console degrades silently.
+ * between. Best-effort throughout — an unreachable console degrades silently.
  */
-export function useLenderSyncPoll(currentScore: number): void {
-  const { adoptApprovedOffers, syncLenderResets } = useAppData();
-  const scoreRef = useRef(currentScore);
-  scoreRef.current = currentScore;
+export function useLenderSyncPoll(): void {
+  const { refreshPendingOffers, syncLenderResets } = useAppData();
 
   useEffect(() => {
     let alive = true;
@@ -43,7 +41,7 @@ export function useLenderSyncPoll(currentScore: number): void {
       syncLenderResets()
         .catch(() => {})
         .finally(() => {
-          if (alive) adoptApprovedOffers(scoreRef.current).catch(() => {});
+          if (alive) refreshPendingOffers().catch(() => {});
         });
     };
 
@@ -61,5 +59,5 @@ export function useLenderSyncPoll(currentScore: number): void {
       clearInterval(timer);
       sub.remove();
     };
-  }, [adoptApprovedOffers, syncLenderResets]);
+  }, [refreshPendingOffers, syncLenderResets]);
 }

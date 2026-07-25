@@ -118,7 +118,8 @@ export function NetWorthScreen({ onBack }: { onBack: () => void }) {
           <Icon name="chevronLeft" size={18} color={colors.ink2} />
         </Pressable>
         <Text style={styles.navTitle}>Net Worth</Text>
-        <View style={styles.navBtn} />
+        {/* invisible spacer keeps the title centered opposite the back button */}
+        <View style={{ width: 36 }} />
       </View>
 
       <ScrollView

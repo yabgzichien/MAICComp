@@ -216,11 +216,27 @@ describe('decideLoan — referral gates', () => {
     expect(d.categorizedReasons?.some((r) => r.category === 'record')).toBe(true);
   });
 
-  it('confidence below the policy floor flips to refer, category "data-quality", with the honest wording', () => {
-    const d = decideLoan({ ...base(), confidence: 0.3 });
+  it('confidence between the two floors flips to refer, category "data-quality", with the honest wording', () => {
+    // 0.42 sits in the human-judgement band: too weak to auto-approve, strong enough to be
+    // worth an officer's time. (Below 0.35 it is a decline — see the decline-gate test below.)
+    const d = decideLoan({ ...base(), confidence: 0.42 });
     expect(d.decision).toBe('refer');
-    expect(d.reasons.some((r) => /below the 50% auto-approval floor/.test(r))).toBe(true);
+    expect(d.reasons.some((r) => /below the 70% auto-approval floor/.test(r))).toBe(true);
     expect(d.categorizedReasons?.some((r) => r.category === 'data-quality')).toBe(true);
+  });
+
+  it('confidence below the decline floor is rejected outright, not referred', () => {
+    // Previously 0.3 referred, which handed an officer a file they could only decline.
+    const d = decideLoan({ ...base(), confidence: 0.3 });
+    expect(d.decision).toBe('decline');
+    expect(d.maxAmount).toBe(0);
+    expect(d.reasons.some((r) => /could be corroborated/.test(r))).toBe(true);
+    expect(d.categorizedReasons?.some((r) => r.category === 'data-quality')).toBe(true);
+  });
+
+  it('the decline floor stays below the integrity rings 0.39 cap, so a fraud catch still reaches a human', () => {
+    const d = decideLoan({ ...base(), confidence: 0.39 });
+    expect(d.decision).toBe('refer');
   });
 
   it('coverage-forced-refer still carries an affordable offer amount, not zero', () => {

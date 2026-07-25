@@ -105,15 +105,30 @@ const AINA_MERCHANTS: Merchant[] = [
 
 /**
  * Pure builder for the judge demo seed — Profile 1: Aina.
- * An online seller running a small shop through social media and e-wallet payments.
+ * An online seller running a small shop through social media and e-wallet payments. She scans
+ * e-wallet screenshots for online sales, but logs cash-on-delivery and in-person sales by hand —
+ * so about half her expense rows are honestly self-reported rather than screenshot-extracted.
  * Income is real but uneven week to week — exactly the "credit-invisible but banked" applicant.
  *
- * Target: 700-740/Good, 60-72% confidence, coverage-gated Emergency-REFER → ≥RM3,000 approve.
- * DO NOT modify the body of this function. Aina's demoAcceptance.test.ts pins are the
- * regression guard — any output change will break them.
+ * Target (retuned 2026-07-22, confidence-gate rework): ~690-710/Good, 55-60% confidence,
+ * REFERRED — and referred on CONFIDENCE now, not just coverage: her provenance trust sits
+ * genuinely below the auto-approve floor because of the manual/extracted split above, which is
+ * an honest "less fully verified" story, not a fraud signal (Benford, round-number ratio, and
+ * duplicate checks all still read clean — see demoPersonaOutcomes.test.ts). This retuning
+ * retired the old coverage-only-unlock demo beat (reaching 30 days used to flip her straight to
+ * an approve; it no longer does, since the confidence gate now also has to clear) — see
+ * HANDOFF.md's confidence-gate section for why.
+ * demoAcceptance.test.ts's pins were updated to match; keep them in sync with any further edit.
  */
 export function buildAinaSeed(now: Date = new Date()): DemoSeed {
   const rng = mulberry32(AINA_SEED);
+  // A SEPARATE, independent stream for the provenance coin flip below. It must not share
+  // `rng` with the amount generation: drawing from the same stream would consume extra calls
+  // and shift every amount generated afterward, silently perturbing the Benford/round-number
+  // characteristics this seed was already tuned to hit  entangling "how trustworthy the
+  // source looks" with "how genuine the numbers look", which is exactly the distinction this
+  // retune needs to keep clean.
+  const provenanceRng = mulberry32(AINA_SEED + 9973);
 
   // ── Transactions: income + categorized expenses ──────────────────────────────────────────
   const txns: NewTxn[] = [];
@@ -153,6 +168,15 @@ export function buildAinaSeed(now: Date = new Date()): DemoSeed {
         : m % 2 === 0
           ? logUniform(rng, lo, mid)
           : logUniform(rng, mid, hi);
+      // Provenance mix (confidence-gate retune, 2026-07-22): the 3 stable recurring bills
+      // (TNB, Unifi, the motorbike installment) always arrive as e-wallet auto-pay
+      // notifications, so they stay 'extracted' — real people don't hand-type their own
+      // direct debits. Everything else is discretionary, in-person spend she sometimes
+      // screenshots and sometimes just logs by hand; a coin flip on the SAME deterministic
+      // rng keeps this reproducible. This is what pulls her provenance trust genuinely below
+      // the auto-approve floor — an honest "less fully verified", not a fraud signal (Benford,
+      // round-number ratio, and duplicate checks are untouched by this and stay clean).
+      const source = merchant.stableBand ? 'extracted' : provenanceRng() < 0.8 ? 'manual' : 'extracted';
       txns.push({
         merchantRaw: merchant.name,
         merchantKey: merchantKey(merchant.name),
@@ -160,7 +184,7 @@ export function buildAinaSeed(now: Date = new Date()): DemoSeed {
         type: 'expense',
         date: iso(d),
         categoryId: merchant.categoryId,
-        source: 'extracted',
+        source,
       });
     });
   }

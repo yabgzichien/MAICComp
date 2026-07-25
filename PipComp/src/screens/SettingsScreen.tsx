@@ -8,6 +8,7 @@ import { getProvider, llmErrorMessage } from '../llm';
 import { confirmAction, notify } from '../lib/platformAlert';
 import { configFor, loadSettings, type LLMSettings, type ProviderRole } from '../settings/settingsStore';
 import { DEMO_PROFILES, type DemoProfileId } from '../data/demoProfile';
+import { VERDICT_STYLE } from '../lib/verdictStyle';
 import { useAppData } from '../state/store';
 import { colors, radius, uiFont } from '../theme';
 
@@ -15,9 +16,9 @@ type TestState = { status: 'idle' | 'busy' | 'ok' | 'fail'; message?: string };
 
 
 
-export function SettingsScreen({ onBack, onMigrate, onAdvancedImport, onOpenLender = () => {}, onOpenAttacks = () => {}, onResetToOnboarding }: { onBack: () => void; onMigrate?: () => void; onAdvancedImport?: () => void; onOpenLender?: () => void; onOpenAttacks?: () => void; onResetToOnboarding?: () => void }) {
+export function SettingsScreen({ onBack, onMigrate, onAdvancedImport, onOpenAttacks = () => {}, onResetToOnboarding }: { onBack: () => void; onMigrate?: () => void; onAdvancedImport?: () => void; onOpenAttacks?: () => void; onResetToOnboarding?: () => void }) {
   const insets = useSafeAreaInsets();
-  const { memory, refreshAll, expectedIncome, allocations, hasBudget, resetBudget, resetAllData, resetToOnboarding, loadDemoData, startTour } = useAppData();
+  const { memory, refreshAll, expectedIncome, allocations, hasBudget, resetBudget, resetAllData, resetToOnboarding, loadDemoData, startTour, activeDemoProfile } = useAppData();
   const [settings, setSettings] = useState<LLMSettings | null>(null);
   const [resettingDemo, setResettingDemo] = useState(false);
 
@@ -72,7 +73,8 @@ export function SettingsScreen({ onBack, onMigrate, onAdvancedImport, onOpenLend
       async () => {
         setResettingDemo(true);
         try {
-          await resetAllData();
+          // loadDemoData wipes and rotates the passport key itself now, so the explicit
+          // resetAllData that used to precede it here would just be a second wipe.
           await loadDemoData();
         } finally {
           setResettingDemo(false);
@@ -202,26 +204,16 @@ export function SettingsScreen({ onBack, onMigrate, onAdvancedImport, onOpenLend
           </Pressable>
         )}
 
-        <DemoProfilePicker onLoad={(id) => loadDemoData(id)} />
+        <Eyebrow style={{ marginTop: 26, marginBottom: 10 }}>Demo profiles</Eyebrow>
+        <DemoProfilePicker activeId={activeDemoProfile} onLoad={(id) => loadDemoData(id)} />
 
-        <Eyebrow style={{ marginTop: 26, marginBottom: 10 }}>Lender tools</Eyebrow>
-        <Pressable
-          onPress={onOpenLender}
-          style={({ pressed }) => [styles.providerRow, styles.migrateRow, { opacity: pressed ? 0.9 : 1 }]}
-        >
-          <View style={styles.providerBadge}>
-            <Icon name="scale" size={16} color={colors.accent} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.providerName}>Lender Console</Text>
-            <Text style={styles.providerSub}>Verify a Credit Passport and assess an applicant's credit profile.</Text>
-          </View>
-          <Icon name="chevronRight" size={18} color={colors.ink3} />
-        </Pressable>
-
+        {/* The in-app Lender Console mirror was removed (2026-07-21): the real console is its
+            own web app, and shipping a second, always-slightly-behind copy of it inside the
+            BORROWER's settings blurred whose app this is. */}
+        <Eyebrow style={{ marginTop: 26, marginBottom: 10 }}>Demo tools</Eyebrow>
         <Pressable
           onPress={onOpenAttacks}
-          style={({ pressed }) => [styles.providerRow, styles.migrateRow, { marginTop: 12, opacity: pressed ? 0.9 : 1 }]}
+          style={({ pressed }) => [styles.providerRow, styles.migrateRow, { opacity: pressed ? 0.9 : 1 }]}
         >
           <View style={styles.providerBadge}>
             <Icon name="alert" size={16} color={colors.accent} />
@@ -247,7 +239,7 @@ export function SettingsScreen({ onBack, onMigrate, onAdvancedImport, onOpenLend
           <Icon name="chevronRight" size={18} color={colors.ink3} />
         </Pressable>
 
-        <Card style={{ padding: 16, marginTop: 14 }}>
+        <Card style={{ padding: 16, marginTop: 12 }}>
           <View style={styles.providerRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.providerName}>Reset demo</Text>
@@ -268,7 +260,8 @@ export function SettingsScreen({ onBack, onMigrate, onAdvancedImport, onOpenLend
 
         {/* Distinct "danger zone" treatment  this is the one irreversible action on this
             screen, so it shouldn't look like every other settings row. */}
-        <Card style={[{ padding: 16, marginTop: 14 }, styles.dangerCard]}>
+        <Eyebrow style={{ marginTop: 26, marginBottom: 10, color: '#b3261e' }}>Danger zone</Eyebrow>
+        <Card style={[{ padding: 16 }, styles.dangerCard]}>
           <View style={styles.providerRow}>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -374,20 +367,11 @@ function ProviderCard({
 
 // ── Demo Profile Picker ───────────────────────────────────────────────────────
 
-/** Accent color for each profile — distinct so judges visually parse the spectrum at a glance. */
-const PROFILE_ACCENT: Record<DemoProfileId, string> = {
-  aina: colors.accent,
-  ravi: '#2e7d32',   // deep green — strong/Excellent
-  faizal: '#c0392b', // red-amber  — fraud-flagged
-};
+// Accent + icon come from the persona's own lender outcome (VERDICT_STYLE), so a persona reads
+// the same colour here as on the onboarding front door. These used to be two hardcoded maps and
+// they had drifted — Aina was plain green here while her outcome is a referral.
 
-const PROFILE_ICON: Record<DemoProfileId, IconName> = {
-  aina: 'sparkles',
-  ravi: 'check',
-  faizal: 'alert',
-};
-
-function DemoProfilePicker({ onLoad }: { onLoad: (id: DemoProfileId) => void }) {
+function DemoProfilePicker({ activeId, onLoad }: { activeId: DemoProfileId | null; onLoad: (id: DemoProfileId) => void }) {
   const [loading, setLoading] = useState<DemoProfileId | null>(null);
 
   const handleLoad = (id: DemoProfileId) => {
@@ -407,51 +391,50 @@ function DemoProfilePicker({ onLoad }: { onLoad: (id: DemoProfileId) => void }) 
     );
   };
 
-  const [primary, ...secondary] = DEMO_PROFILES;
-
+  // All three profiles render identically; the one currently loaded is tinted with
+  // its accent and shows an "In use" pill in place of the Load button.
   return (
-    <View style={{ gap: 10 }}>
-      {/* Primary row — Aina, the default profile */}
-      <Card style={{ padding: 16 }}>
-        <View style={styles.providerRow}>
-          <View style={[styles.providerBadge, { backgroundColor: `${PROFILE_ACCENT[primary.id]}18` }]}>
-            <Icon name={PROFILE_ICON[primary.id]} size={16} color={PROFILE_ACCENT[primary.id]} />
+    <View style={{ gap: 12 }}>
+      {DEMO_PROFILES.map((profile) => {
+        const verdict = VERDICT_STYLE[profile.outcome.decision];
+        const accent = verdict.ink;
+        const active = activeId === profile.id;
+        const busy = loading === profile.id;
+        return (
+          <View
+            key={profile.id}
+            style={[styles.profileCard, active && { borderColor: accent, backgroundColor: `${accent}0d` }]}
+          >
+            <View style={[styles.providerBadge, { backgroundColor: `${accent}18` }]}>
+              {busy ? <ActivityIndicator size="small" color={accent} /> : <Icon name={verdict.icon} size={16} color={accent} />}
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={styles.profileNameRow}>
+                <Text style={[styles.providerName, { color: accent }]}>{profile.name}</Text>
+                {active && (
+                  <View style={[styles.activePill, { backgroundColor: `${accent}1f` }]}>
+                    <Text style={[styles.activePillText, { color: accent }]}>In use</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.providerSub}>{profile.story}</Text>
+            </View>
+            {active ? (
+              <View style={styles.activeDot}>
+                <Icon name="check" size={15} color={accent} stroke={2.6} />
+              </View>
+            ) : (
+              <Pressable
+                onPress={() => handleLoad(profile.id)}
+                disabled={loading !== null}
+                style={({ pressed }) => [styles.loadBtn, { borderColor: `${accent}55` }, { opacity: pressed || (loading !== null && !busy) ? 0.6 : 1 }]}
+              >
+                <Text style={[styles.loadBtnText, { color: accent }]}>Load</Text>
+              </Pressable>
+            )}
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.providerName}>{primary.name}</Text>
-            <Text style={styles.providerSub}>{primary.story}</Text>
-          </View>
-          <Pressable onPress={() => handleLoad(primary.id)} style={styles.resetBtn} disabled={loading !== null}>
-            {loading === primary.id
-              ? <ActivityIndicator size="small" color={PROFILE_ACCENT[primary.id]} />
-              : <>
-                  <Icon name={PROFILE_ICON[primary.id]} size={16} color={PROFILE_ACCENT[primary.id]} />
-                  <Text style={[styles.resetText, { color: PROFILE_ACCENT[primary.id] }]}>Load</Text>
-                </>}
-          </Pressable>
-        </View>
-      </Card>
-
-      {/* Secondary rows — Ravi and Faizal */}
-      {secondary.map((profile) => (
-        <Pressable
-          key={profile.id}
-          onPress={() => handleLoad(profile.id)}
-          disabled={loading !== null}
-          style={({ pressed }) => [styles.providerRow, styles.migrateRow, { opacity: pressed ? 0.88 : 1 }]}
-        >
-          <View style={[styles.providerBadge, { backgroundColor: `${PROFILE_ACCENT[profile.id]}18` }]}>
-            {loading === profile.id
-              ? <ActivityIndicator size="small" color={PROFILE_ACCENT[profile.id]} />
-              : <Icon name={PROFILE_ICON[profile.id]} size={16} color={PROFILE_ACCENT[profile.id]} />}
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.providerName, { color: PROFILE_ACCENT[profile.id] }]}>{profile.name}</Text>
-            <Text style={styles.providerSub}>{profile.story}</Text>
-          </View>
-          <Icon name="chevronRight" size={18} color={colors.ink3} />
-        </Pressable>
-      ))}
+        );
+      })}
     </View>
   );
 }
@@ -517,4 +500,22 @@ const styles = StyleSheet.create({
   migrateRow: { padding: 16, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line2 },
   resetBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 8 },
   resetText: { fontFamily: uiFont(600), fontSize: 13.5 },
+
+  /* demo profile picker */
+  profileCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.line2,
+  },
+  profileNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  activePill: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  activePillText: { fontFamily: uiFont(700), fontSize: 10, letterSpacing: 0.4, textTransform: 'uppercase' },
+  activeDot: { width: 30, height: 30, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  loadBtn: { borderRadius: 999, borderWidth: 1.5, paddingHorizontal: 16, paddingVertical: 7 },
+  loadBtnText: { fontFamily: uiFont(700), fontSize: 13 },
 });

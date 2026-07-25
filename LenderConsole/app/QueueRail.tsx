@@ -3,12 +3,19 @@
 // Queue rail (Brief O; rescoped 2026-07-18 console IA split)  the left edge of the
 // two-pane workbench. Pure triage: New and Referred are the officer's actual work,
 // shown expanded; Declined is a collapsed Archive (its one real revisit case is
-// generating an adverse-action letter). Approved loans and the Watchlist moved to the
-// Servicing tab, which owns the approved book operationally.
+// generating an adverse-action letter). Accepted loans and the Watchlist live on the
+// Servicing tab, which owns the disbursed book operationally.
+//
+// Offered (borrower acceptance, 2026-07-21) sits between the two: approved on policy but not
+// yet taken up. It is not the officer's decision to make, so it isn't a triage queue — but it
+// is visible here because the alternative is what shipped before, where an engine-approved
+// direct application appeared nowhere at all on this tab and silently showed up in Servicing
+// as a live loan the borrower had never agreed to.
 
 import { useState } from 'react';
 import { FONT, type Palette } from './tokens';
 import { orderQueue, type ApplicationRecord, type ApplicationStatus } from '../lib/applications';
+import { awaitingAcceptance, declinedByBorrower, type OfferBook } from '../lib/offerAcceptance';
 import { formatAgo } from '../lib/presentment';
 import { currentStandingAcross } from '../lib/repaymentStanding';
 import { TourAnchor } from './TourAnchor';
@@ -59,7 +66,11 @@ const STATUS_COLOR: Record<ApplicationStatus, string> = {
 const rm = (n: number): string => `RM${Math.round(n).toLocaleString('en-MY')}`;
 
 function QueueCard({ p, a, selected, onSelect, standingBucket }: { p: Palette; a: ApplicationRecord; selected: boolean; onSelect: () => void; standingBucket?: 'slipping' | 'arrears' | 'impaired' }) {
-  return (
+  // The cross-app tour spotlights the application the judge sent themselves, so act 7's "open
+  // the file you sent" points at one card among a seeded deskful. TourAnchor renders
+  // `display: contents`, so wrapping changes no layout; a card that is not the direct one is
+  // returned bare rather than anchored.
+  const card = (
     <button
       onClick={onSelect}
       style={{
@@ -109,23 +120,33 @@ function QueueCard({ p, a, selected, onSelect, standingBucket }: { p: Palette; a
       )}
     </button>
   );
+  return a.source === 'direct' ? <TourAnchor id="direct-file">{card}</TourAnchor> : card;
 }
 
 export default function QueueRail({
   p,
   apps,
+  offerBook,
   selectedId,
   onSelect,
   onSeed,
   onPasteNew,
+  onLoadFlagged,
   forceSeedButton = false,
 }: {
   p: Palette;
   apps: ApplicationRecord[];
+  /** This lender's published offers, keyed by subject (borrower acceptance, 2026-07-21).
+   *  Drives the "Offered" section below. Empty until the book loads, or when the console is
+   *  offline — the rail then just shows the two triage queues as it always did. */
+  offerBook: OfferBook;
   selectedId: string | null;
   onSelect: (app: ApplicationRecord) => void;
   onSeed: () => void;
   onPasteNew: () => void;
+  /** Loads the fabricated demo passport into the verifier, switching the console to its alert
+   *  view. Optional so the rail still renders without it. */
+  onLoadFlagged?: () => void;
   /** The console tour keeps the seed button visible even on a non-empty pipeline so the
    *  "seed the pipeline" step stays completable on a restart. */
   forceSeedButton?: boolean;
@@ -136,9 +157,18 @@ export default function QueueRail({
   const matches = (a: ApplicationRecord) => !q || a.applicantLabel.toLowerCase().includes(q) || a.id.toLowerCase().includes(q);
 
   const triageQueues = QUEUES.map(({ status, label }) => ({ status, label, queue: orderQueue(apps, status).filter(matches) }));
-  const triageEmpty = triageQueues.every((t) => t.queue.length === 0);
   const archived = orderQueue(apps, 'declined').filter(matches);
-  const servicedCount = apps.filter((a) => a.status === 'approved').length;
+  // Approved on policy, not yet taken up (borrower acceptance, 2026-07-21). These are the files
+  // that used to vanish: the engine approved them outright, so they skipped both triage queues
+  // and landed in Servicing as loans nobody had agreed to. They are not the officer's decision
+  // to make — hence a section of their own rather than a row in New — but the officer does need
+  // to see that they exist and that nothing has been disbursed on them yet.
+  const offered = awaitingAcceptance(apps, offerBook).filter(matches);
+  // Offers the borrower turned down. They are off the book entirely (see liveBook) — but they
+  // still need somewhere to live, or a file the officer worked would appear to have vanished.
+  const notTakenUp = declinedByBorrower(apps, offerBook).filter(matches);
+  const acceptedCount = apps.filter((a) => a.status === 'approved').length - offered.length - notTakenUp.length;
+  const triageEmpty = triageQueues.every((t) => t.queue.length === 0) && offered.length === 0;
 
   // Display-only per-card own-book standing estimate (Task 11). The real tenor-aware value is
   // computed at assess time by Console.tsx's mergedStanding (Task 10); this is a queue-triage
@@ -173,6 +203,22 @@ export default function QueueRail({
         >
           + Paste new application
         </button>
+        {/* Restores the entry point to the fabricated-passport demo. `onLoadFlagged` and the
+            whole alert view (AlertBanner / CenterAlert / RightAlert, and the `fraud-signals`
+            anchor inside it) were still in the code but unreachable — nothing called
+            setFlagged(true), so the "Catch a fraudster" act narrated a screen that could never
+            render. Sits next to Paste rather than in the header because it is the same kind of
+            action: load a passport into the verifier. */}
+        {onLoadFlagged && (
+          <TourAnchor id="load-flagged">
+            <button
+              onClick={onLoadFlagged}
+              style={{ width: '100%', marginTop: 6, padding: '7px 0', borderRadius: 8, border: `1.5px dashed ${p.red}`, cursor: 'pointer', background: 'transparent', fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.red }}
+            >
+              ⚠ Load flagged applicant
+            </button>
+          </TourAnchor>
+        )}
       </div>
 
       {(apps.length === 0 || forceSeedButton) && (
@@ -197,10 +243,28 @@ export default function QueueRail({
         <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, padding: '10px 12px' }}>No applicants match &quot;{search}&quot;.</p>
       )}
 
-      {!q && triageEmpty && servicedCount > 0 && (
+      {!q && triageEmpty && acceptedCount > 0 && (
         <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, padding: '10px 12px', lineHeight: 1.5 }}>
-          Nothing needs your review right now. {servicedCount} loan{servicedCount === 1 ? '' : 's'} in <strong style={{ color: p.ink2 }}>Servicing</strong>.
+          Nothing needs your review right now. {acceptedCount} loan{acceptedCount === 1 ? '' : 's'} in <strong style={{ color: p.ink2 }}>Servicing</strong>.
         </p>
+      )}
+
+      {offered.length > 0 && (
+        <div style={{ padding: '10px 8px 4px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px', marginBottom: 5 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink2, letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: STATUS_COLOR.approved, display: 'inline-block' }} />
+              Offered
+            </span>
+            <span style={{ fontFamily: FONT.num, fontSize: 12, fontWeight: 700, color: p.ink1 }}>{offered.length}</span>
+          </div>
+          <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.45, padding: '0 4px 6px' }}>
+            Approved on policy, waiting on the borrower to accept. Nothing is disbursed yet.
+          </p>
+          {offered.map((a) => (
+            <QueueCard key={a.id} p={p} a={a} selected={a.id === selectedId} onSelect={() => onSelect(a)} standingBucket={standingByApp.get(a.id)} />
+          ))}
+        </div>
       )}
 
       {triageQueues.map(({ status, label, queue }) => {
@@ -220,6 +284,24 @@ export default function QueueRail({
           </div>
         );
       })}
+
+      {notTakenUp.length > 0 && (
+        <div style={{ padding: '10px 8px 4px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px', marginBottom: 5 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink3, letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: p.ink3, display: 'inline-block' }} />
+              Not taken up
+            </span>
+            <span style={{ fontFamily: FONT.num, fontSize: 12, fontWeight: 700, color: p.ink3 }}>{notTakenUp.length}</span>
+          </div>
+          <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.45, padding: '0 4px 6px' }}>
+            Approved, but the borrower turned the offer down. Off the book — not in Servicing or the portfolio.
+          </p>
+          {notTakenUp.map((a) => (
+            <QueueCard key={a.id} p={p} a={a} selected={a.id === selectedId} onSelect={() => onSelect(a)} standingBucket={standingByApp.get(a.id)} />
+          ))}
+        </div>
+      )}
 
       {archived.length > 0 && (() => {
         const expanded = archiveOpen || q.length > 0; // a search that matches an archived file must actually show it

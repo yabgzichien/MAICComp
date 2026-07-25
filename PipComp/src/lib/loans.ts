@@ -96,7 +96,17 @@ const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.m
 
 // --- Tunable policy constants -------------------------------------------------
 // Below this confidence, we don't trust the score enough to auto-approve: refer for human review.
-const MIN_CONFIDENCE_TO_APPROVE = 0.5;
+const MIN_CONFIDENCE_TO_APPROVE = 0.7;
+// Below this confidence, the data is too weak to lend against at all — decline rather than
+// occupy an officer's time. Set at 0.35 for two reasons that both matter:
+//   1. It sits BELOW the integrity rings' hard cap of 0.39 (see dataConfidence's Trust
+//      Dampener), which is pinned there precisely so an asymmetric-fraud catch lands in REFER
+//      and gets a human. Putting this floor at or above 0.39 would silently convert every one
+//      of those catches into an automatic rejection — the opposite of what that layer is for.
+//   2. It leaves a genuine 0.35–0.50 band for human judgement instead of a knife-edge, and it
+//      is low enough that no honest thin-file borrower reaches it: a thin file is penalised on
+//      COVERAGE, which is a separate gate, not on whether the data it does have looks real.
+const MIN_CONFIDENCE_TO_CONSIDER = 0.35;
 // An approved installment may not exceed this share of the applicant's average monthly surplus,
 // so a new repayment doesn't eat into their cash-flow buffer.
 const MAX_INSTALLMENT_SHARE_OF_SURPLUS = 0.35;
@@ -112,6 +122,10 @@ const MAX_DSR = 0.4;
 export interface LenderPolicy {
   /** Below this confidence, never auto-approve  refer for human review. */
   minConfidenceToApprove: number;
+  /** Below this confidence, decline outright  too little of the data could be corroborated
+   *  to lend against at all. Must stay below the integrity rings' 0.39 cap so a fraud catch
+   *  still escalates to a human instead of auto-rejecting. */
+  minConfidenceToConsider: number;
   /** An installment may not exceed this share of average monthly surplus. */
   maxInstallmentShareOfSurplus: number;
   /** Total debt service (existing + new installment) over income may not exceed this. */
@@ -130,6 +144,7 @@ export interface LenderPolicy {
 
 export const DEFAULT_POLICY: LenderPolicy = {
   minConfidenceToApprove: MIN_CONFIDENCE_TO_APPROVE,
+  minConfidenceToConsider: MIN_CONFIDENCE_TO_CONSIDER,
   maxInstallmentShareOfSurplus: MAX_INSTALLMENT_SHARE_OF_SURPLUS,
   maxDsr: MAX_DSR,
   emergencyOnlyBelowDays: 30,
@@ -366,6 +381,21 @@ export function decideLoan(input: LoanDecisionInput): LoanDecision {
     reasons.push({
       category: 'integrity',
       text: 'Data-integrity check: the income pattern could not be validated automatically. Declined pending manual verification with the lender.',
+    });
+    return finish('decline', 0, 0);
+  }
+
+  // Confidence floor. Checked BEFORE the coverage filter deliberately: a borrower whose data
+  // can't be corroborated at all is declined for THAT, and told so. Letting the coverage gate
+  // run first would hand them a "routed to manual review" message and an officer a file that
+  // can only be declined.
+  if (confidence < policy.minConfidenceToConsider) {
+    reasons.push({
+      category: 'data-quality',
+      text:
+        `Too little of the recorded data could be corroborated (confidence ${Math.round(confidence * 100)}%, below the ` +
+        `${Math.round(policy.minConfidenceToConsider * 100)}% minimum to assess). Declined — add verifiable income and ` +
+        `spending sources, then reapply.`,
     });
     return finish('decline', 0, 0);
   }

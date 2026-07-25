@@ -143,3 +143,35 @@ describe('outstandingAfter', () => {
     expect(outstandingAfter(2000, 0, 0)).toBe(0);
   });
 });
+
+describe('buildBookedLoan — lender tenor override (borrower acceptance, 2026-07-21)', () => {
+  const at = new Date('2026-07-21T00:00:00.000Z');
+  const products = [
+    { id: 'starter', label: 'Starter Capital', minScore: 500, minAmount: 2000, maxAmount: 5000, tenorMonths: 12, apr: 0.28 },
+    { id: 'growth', label: 'Growth Capital', minScore: 650, minAmount: 4000, maxAmount: 10000, tenorMonths: 18, apr: 0.22 },
+  ];
+  const offer = { decision: 'approve' as const, maxAmount: 5000, installment: 482.53, reasons: [] };
+
+  it('without an override it derives the tier from the amount — the highest one that fits', () => {
+    // RM5,000 falls inside BOTH tiers, so the lookup picks Growth (18 months).
+    expect(buildBookedLoan(offer, products, at)!.schedule).toHaveLength(18);
+  });
+
+  it('the lender’s published tenor wins over that lookup', () => {
+    // The lender actually priced this on Starter (12 months) — a coverage gate had capped them
+    // to it. Booking 18 would give the borrower a longer schedule and a larger total than the
+    // lender approved, which is exactly the mismatch this override exists to stop.
+    expect(buildBookedLoan(offer, products, at, 12)!.schedule).toHaveLength(12);
+  });
+
+  it('every instalment is still the lender’s decided amount', () => {
+    const booked = buildBookedLoan(offer, products, at, 12)!;
+    expect(booked.schedule.every((r) => r.amount === 482.53)).toBe(true);
+    expect(booked.principal).toBe(5000);
+  });
+
+  it('a zero or negative override is ignored rather than producing an empty schedule', () => {
+    expect(buildBookedLoan(offer, products, at, 0)!.schedule).toHaveLength(18);
+    expect(buildBookedLoan(offer, products, at, -3)!.schedule).toHaveLength(18);
+  });
+});

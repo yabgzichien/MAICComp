@@ -22,6 +22,7 @@ interface ThresholdForm {
   maxDsrPct: string;
   surplusSharePct: string;
   confidenceFloorPct: string;
+  confidenceDeclinePct: string;
   emergencyDays: string;
   fullLadderDays: string;
   minCoveragePct: string;
@@ -43,6 +44,7 @@ const toThresholdForm = (p: LenderPolicy): ThresholdForm => ({
   maxDsrPct: String(Math.round(p.maxDsr * 100)),
   surplusSharePct: String(Math.round(p.maxInstallmentShareOfSurplus * 100)),
   confidenceFloorPct: String(Math.round(p.minConfidenceToApprove * 100)),
+  confidenceDeclinePct: String(Math.round(p.minConfidenceToConsider * 100)),
   emergencyDays: String(p.emergencyOnlyBelowDays),
   fullLadderDays: String(p.fullLadderFromDays),
   minCoveragePct: String(Math.round(p.minCoverageRatioForFullLadder * 100)),
@@ -70,6 +72,7 @@ function formToCandidate(t: ThresholdForm, rows: LadderRow[]): unknown {
       maxDsr: num(t.maxDsrPct) / 100,
       maxInstallmentShareOfSurplus: num(t.surplusSharePct) / 100,
       minConfidenceToApprove: num(t.confidenceFloorPct) / 100,
+      minConfidenceToConsider: num(t.confidenceDeclinePct) / 100,
       emergencyOnlyBelowDays: num(t.emergencyDays),
       fullLadderFromDays: num(t.fullLadderDays),
       minCoverageRatioForFullLadder: num(t.minCoveragePct) / 100,
@@ -92,6 +95,7 @@ const THRESHOLD_FIELDS: { key: keyof ThresholdForm; label: string; suffix: strin
   { key: 'maxDsrPct', label: 'DSR cap', suffix: '%', hint: 'Total debt service (existing + new installment) over income may not exceed this.' },
   { key: 'surplusSharePct', label: 'Installment share of surplus', suffix: '%', hint: 'An installment may not consume more than this share of average monthly surplus.' },
   { key: 'confidenceFloorPct', label: 'Confidence floor', suffix: '%', hint: 'Below this data confidence, never auto-approve. Refer to a human.' },
+  { key: 'confidenceDeclinePct', label: 'Confidence decline floor', suffix: '%', hint: 'Below this, decline outright — too little of the data could be corroborated to assess at all. Must stay under the confidence floor above, and under 39%, or the fraud rings’ own catches would auto-reject instead of reaching a human.' },
   { key: 'emergencyDays', label: 'Emergency-only gate', suffix: 'days', hint: 'Below this many covered days (of the last 90): Emergency tier only, forced referral.' },
   { key: 'fullLadderDays', label: 'Full-ladder gate', suffix: 'days', hint: 'From this many covered days the full ladder opens; below it, Starter and below.' },
   { key: 'minCoveragePct', label: 'Coverage ratio floor', suffix: '%', hint: 'Even with a full window, coverage below this still caps eligibility to Starter.' },
