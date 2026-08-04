@@ -54,7 +54,7 @@ const NO_EVIDENCE_ALL_QUIET: AdvisorSuggestion = {
   band: null,
   headline: 'No policy changes suggested right now',
   evidence: [],
-  action: 'Consider nothing yet — every band with enough evidence is performing in line with its risk model.',
+  action: 'Consider nothing yet: every band with enough evidence is performing in line with its risk model.',
 };
 
 /** One band's suggestion, or null if it's performing in line with its risk model.
@@ -80,7 +80,7 @@ function suggestionForBand(row: CohortRow): AdvisorSuggestion | null {
       band,
       headline: `${band} band's collection shortfall is concentrated, not isolated`,
       evidence: [`Collection rate ${pct(collectionRate)} across ${loanCount} loans`],
-      action: `Consider reviewing the ${band} tier's coverage or confidence threshold — the shortfall spans the cohort, not one file.`,
+      action: `Consider reviewing the ${band} tier's coverage or confidence threshold, since the shortfall spans the whole cohort rather than one file.`,
     };
   }
 
@@ -90,7 +90,7 @@ function suggestionForBand(row: CohortRow): AdvisorSuggestion | null {
       band,
       headline: `${band} band is performing better than its risk model predicted`,
       evidence: [`Realized loss ${pct(realized)} vs expected ${pct(expected)} across ${loanCount} loans`],
-      action: `Consider a rate review for the ${band} tier — the pricing assistant's math would support a modest discount.`,
+      action: `Consider a rate review for the ${band} tier, because the pricing assistant's math would support a modest discount.`,
     };
   }
 

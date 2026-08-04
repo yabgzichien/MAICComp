@@ -7,7 +7,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FONT, type Palette } from './tokens';
-import { SectionLabel, useModalA11y } from './shared';
+import { InfoButton, InfoModal, SectionLabel, useModalA11y } from './shared';
 import { buildAdverseActionLetter, letterToPdfDoc, letterToText, type AdverseActionLetter } from '../lib/adverseAction';
 import { downloadPdf } from '../lib/pdfExport';
 import type { CreditPassport } from '../lib/passport';
@@ -52,6 +52,7 @@ export default function AdverseActionLetterModal({
   const [narrative, setNarrative] = useState<{ opening: string; closing: string } | null>(null);
   const [provenance, setProvenance] = useState<Provenance>('pending');
   const [copied, setCopied] = useState(false);
+  const [info, setInfo] = useState<string | null>(null);
 
   useEffect(() => {
     if (!letter) return;
@@ -124,6 +125,7 @@ export default function AdverseActionLetterModal({
         animation: 'fade-in-up 0.2s ease-out both',
       }}
     >
+      <InfoModal entry={info} onClose={() => setInfo(null)} p={p} />
       <div
         ref={dialogRef}
         onClick={(e) => e.stopPropagation()}
@@ -198,10 +200,10 @@ export default function AdverseActionLetterModal({
             </p>
           </Section>
 
-          <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.55 }}>
-            This letter restates a decision made by the deterministic policy engine. It does not itself decide anything, and every figure and reason
-            traces back to that decision.
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>Letter scope</span>
+            <InfoButton entry="letter_advisory_boilerplate" onOpen={setInfo} />
+          </div>
         </div>
       </div>
     </div>

@@ -8,10 +8,12 @@
 
 import React, { useEffect, useState } from 'react';
 import { FONT, type Palette } from './tokens';
-import { SectionLabel } from './shared';
+import { InfoButton, InfoModal, SectionLabel } from './shared';
 import { TourAnchor } from './TourAnchor';
+import { useTourLocked } from './tourContext';
 import { DEFAULT_POLICY, DEFAULT_PRODUCTS, type LenderPolicy, type LoanProduct } from '../lib/loans';
 import { aprWarnings, CANONICAL_TIER_IDS, validateStoredPolicy, type StoredPolicy } from '../lib/policyStore';
+import { emitTourSignal } from '../lib/tourSignals';
 import { findLender, type LenderProfile } from '../lib/lenderRegistry';
 import type { ApplicationRecord } from '../lib/applications';
 import AdvisorCard from './AdvisorCard';
@@ -91,20 +93,23 @@ function formToCandidate(t: ThresholdForm, rows: LadderRow[]): unknown {
   };
 }
 
-const THRESHOLD_FIELDS: { key: keyof ThresholdForm; label: string; suffix: string; hint: string }[] = [
-  { key: 'maxDsrPct', label: 'DSR cap', suffix: '%', hint: 'Total debt service (existing + new installment) over income may not exceed this.' },
-  { key: 'surplusSharePct', label: 'Installment share of surplus', suffix: '%', hint: 'An installment may not consume more than this share of average monthly surplus.' },
+/** `hint` renders inline (a real cross-field constraint or consequence the form doesn't
+ *  otherwise validate live); `glossaryKey` renders as an InfoButton instead (a definition,
+ *  moved off the working form  see the 2026-08-03 console declutter pass). */
+const THRESHOLD_FIELDS: { key: keyof ThresholdForm; label: string; suffix: string; hint?: string; glossaryKey?: string }[] = [
+  { key: 'maxDsrPct', label: 'DSR cap', suffix: '%', glossaryKey: 'dsr_cap' },
+  { key: 'surplusSharePct', label: 'Installment share of surplus', suffix: '%', glossaryKey: 'surplus_share_cap' },
   { key: 'confidenceFloorPct', label: 'Confidence floor', suffix: '%', hint: 'Below this data confidence, never auto-approve. Refer to a human.' },
-  { key: 'confidenceDeclinePct', label: 'Confidence decline floor', suffix: '%', hint: 'Below this, decline outright — too little of the data could be corroborated to assess at all. Must stay under the confidence floor above, and under 39%, or the fraud rings’ own catches would auto-reject instead of reaching a human.' },
+  { key: 'confidenceDeclinePct', label: 'Confidence decline floor', suffix: '%', hint: 'Below this, decline outright: too little of the data could be corroborated to assess at all. Must stay under the confidence floor above, and under 39%, or the fraud rings’ own catches would auto-reject instead of reaching a human.' },
   { key: 'emergencyDays', label: 'Emergency-only gate', suffix: 'days', hint: 'Below this many covered days (of the last 90): Emergency tier only, forced referral.' },
   { key: 'fullLadderDays', label: 'Full-ladder gate', suffix: 'days', hint: 'From this many covered days the full ladder opens; below it, Starter and below.' },
   { key: 'minCoveragePct', label: 'Coverage ratio floor', suffix: '%', hint: 'Even with a full window, coverage below this still caps eligibility to Starter.' },
 ];
 
 /** Pricing inputs for the risk-based pricing assistant (Brief R). */
-const PRICING_FIELDS: { key: keyof ThresholdForm; label: string; suffix: string; hint: string }[] = [
+const PRICING_FIELDS: { key: keyof ThresholdForm; label: string; suffix: string; hint?: string; glossaryKey?: string }[] = [
   { key: 'costOfFundsPct', label: 'Cost of funds', suffix: '% p.a.', hint: 'Your blended annual funding cost. The floor the assistant never prices below.' },
-  { key: 'targetReturnPct', label: 'Target net return', suffix: '% p.a.', hint: 'Net margin above break-even the assistant aims for when discounting a strong file.' },
+  { key: 'targetReturnPct', label: 'Target net return', suffix: '% p.a.', glossaryKey: 'target_return' },
 ];
 
 const LADDER_COLS = [
@@ -133,9 +138,15 @@ export default function PolicyTab({
 }) {
   const [thresholds, setThresholds] = useState<ThresholdForm>(() => toThresholdForm(stored.policy));
   const [rows, setRows] = useState<LadderRow[]>(() => toLadderRows(stored.products));
+  // The ladder is act 10's own do-step control. Only Save is withheld before the tour gets
+  // there: editing the form changes nothing real (the candidate lives in local state until the
+  // PUT), so locking the inputs would be theatre while leaving Save live would let a judge
+  // re-price the engine mid-script and contradict verdicts the tour has already narrated.
+  const publishLocked = useTourLocked('product-ladder');
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
+  const [info, setInfo] = useState<string | null>(null);
 
   // Published Criteria panel (Brief H stretch): proves the editor and the borrower-facing
   // directory genuinely agree, by fetching the SAME GET /api/lenders payload the borrower
@@ -187,6 +198,9 @@ export default function PolicyTab({
         return;
       }
       onSaved(body as StoredPolicy);
+      // Act 10's "design a loan product" step advances on this, and only on a save the server
+      // actually accepted — the tour must never celebrate a policy that was rejected.
+      emitTourSignal('policy-published');
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2500);
       fetchPublished();
@@ -212,6 +226,7 @@ export default function PolicyTab({
 
   return (
     <div style={{ flex: 1, background: p.bg, overflowY: 'auto' }}>
+      <InfoModal entry={info} onClose={() => setInfo(null)} p={p} />
       <div style={{ padding: '20px 40px 18px', background: p.surface, borderBottom: `1px solid ${p.hairline}` }}>
         <div style={{ maxWidth: 1080, margin: '0 auto', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
           <div>
@@ -219,10 +234,10 @@ export default function PolicyTab({
             <h2 style={{ fontFamily: FONT.ui, fontSize: 22, fontWeight: 800, color: p.ink1, letterSpacing: '-0.4px', marginTop: 4, marginBottom: 5 }}>
               Lender Policy Editor
             </h2>
-            <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, maxWidth: 620, lineHeight: 1.5 }}>
-              Every decision on the Verify tab runs under these thresholds, the audit trail cites them, and{' '}
-              <strong style={{ color: p.ink2 }}>the published criteria borrowers are coached toward update with them</strong> (GET /api/lenders).
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>What these thresholds control</span>
+              <InfoButton entry="policy_thresholds_scope" onOpen={setInfo} />
+            </div>
           </div>
           <div style={{ textAlign: 'right', flexShrink: 0 }}>
             <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>
@@ -244,8 +259,9 @@ export default function PolicyTab({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <input value={thresholds[f.key]} onChange={(e) => setThreshold(f.key, e.target.value)} inputMode="numeric" style={{ ...inputStyle, width: 76 }} />
                   <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>{f.suffix}</span>
+                  {f.glossaryKey && <InfoButton entry={f.glossaryKey} onOpen={setInfo} />}
                 </div>
-                <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.45, marginTop: 4 }}>{f.hint}</p>
+                {f.hint && <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.45, marginTop: 4 }}>{f.hint}</p>}
               </div>
             ))}
           </div>
@@ -253,7 +269,7 @@ export default function PolicyTab({
         </TourAnchor>
 
         {/* ── Advisor (2026-07-18 stats/advisor design) ── */}
-        <AdvisorCard p={p} apps={apps} />
+        <AdvisorCard p={p} apps={apps} onInfo={setInfo} />
 
         {/* ── Pricing (risk-based assistant, Brief R) ── */}
         <div style={{ background: p.surface, borderRadius: 12, padding: '14px 18px', boxShadow: p.shadow }}>
@@ -265,17 +281,20 @@ export default function PolicyTab({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <input value={thresholds[f.key]} onChange={(e) => setThreshold(f.key, e.target.value)} inputMode="numeric" style={{ ...inputStyle, width: 76 }} />
                   <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>{f.suffix}</span>
+                  {f.glossaryKey && <InfoButton entry={f.glossaryKey} onOpen={setInfo} />}
                 </div>
-                <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.45, marginTop: 4 }}>{f.hint}</p>
+                {f.hint && <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.45, marginTop: 4 }}>{f.hint}</p>}
               </div>
             ))}
           </div>
-          <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5, marginTop: 10 }}>
-            The assistant suggests a rate that meets your target return, <strong style={{ color: p.ink2 }}>clamped to the tier ladder as a ceiling</strong>  it discounts strong files, it never surcharges past the published rate.
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10 }}>
+            <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>How the assistant prices</span>
+            <InfoButton entry="pricing_assistant_behavior" onOpen={setInfo} />
+          </div>
         </div>
 
         {/* ── Product ladder ── */}
+        <TourAnchor id="product-ladder">
         <div style={{ background: p.surface, borderRadius: 12, padding: '14px 18px', boxShadow: p.shadow }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
             <SectionLabel color={p.ink2}>Product ladder</SectionLabel>
@@ -333,11 +352,15 @@ export default function PolicyTab({
             </div>
           ))}
         </div>
+        </TourAnchor>
 
         {/* ── Published Criteria panel (Brief H stretch) ── */}
         <div style={{ background: p.surface, borderRadius: 12, padding: '14px 18px', boxShadow: p.shadow }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-            <SectionLabel color={p.ink2}>Published criteria · GET /api/lenders</SectionLabel>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <SectionLabel color={p.ink2}>Published criteria · GET /api/lenders</SectionLabel>
+              <InfoButton entry="published_criteria_panel" onOpen={setInfo} />
+            </div>
             <button
               onClick={fetchPublished}
               disabled={publishedLoading}
@@ -346,13 +369,10 @@ export default function PolicyTab({
               {publishedLoading ? 'Refreshing…' : 'Refresh'}
             </button>
           </div>
-          <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5, marginTop: 6, marginBottom: 10 }}>
-            What the borrower app&apos;s Coach actually reads right now: fetched fresh from the published directory, not from this form.
-          </p>
-          {publishedError && <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.red }}>Could not reach the published directory.</p>}
+          {publishedError && <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.red, marginTop: 8 }}>Could not reach the published directory.</p>}
           {published && (
             <>
-              <p style={{ fontFamily: FONT.ui, fontSize: 13, fontWeight: 700, color: p.ink1 }}>{published.name}</p>
+              <p style={{ fontFamily: FONT.ui, fontSize: 13, fontWeight: 700, color: p.ink1, marginTop: 8 }}>{published.name}</p>
               <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5, marginTop: 2, marginBottom: 10 }}>{published.blurb}</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 1fr 1fr 0.9fr 0.8fr', gap: '4px 10px' }}>
                 {['Tier', 'Min score', 'Min RM', 'Max RM', 'Tenor (mo)', 'APR %'].map((h) => (
@@ -388,13 +408,14 @@ export default function PolicyTab({
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <button
             onClick={save}
-            disabled={!validation.ok || saving}
+            disabled={!validation.ok || saving || publishLocked}
+            title={publishLocked ? 'The guided tour hasn’t reached this step yet.' : undefined}
             style={{
               padding: '10px 26px',
               borderRadius: 9,
               border: 'none',
-              cursor: validation.ok && !saving ? 'pointer' : 'not-allowed',
-              background: validation.ok ? p.accentInk : 'rgba(20,40,30,0.12)',
+              cursor: validation.ok && !saving && !publishLocked ? 'pointer' : 'not-allowed',
+              background: validation.ok && !publishLocked ? p.accentInk : 'rgba(20,40,30,0.12)',
               color: 'white',
               fontFamily: FONT.ui,
               fontSize: 12.5,
@@ -419,7 +440,7 @@ export default function PolicyTab({
         </div>
 
         <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.55, maxWidth: 720 }}>
-          The engine only uses these numbers as thresholds. The rules never change. Adverse-action reasons quote the active values automatically.
+          Active values here are quoted verbatim in adverse-action letters to declined borrowers.
         </p>
       </div>
     </div>

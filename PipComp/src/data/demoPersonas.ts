@@ -5,6 +5,7 @@
 // demoProfile.ts (persister).
 import type { PipExpr } from '../components/Pip';
 import type { EmploymentType } from '../db/occupationRepo';
+import { TOUR_TOTAL_ACTS } from '../lib/tourSteps';
 
 export type DemoProfileId = 'aina' | 'ravi' | 'faizal';
 
@@ -58,7 +59,7 @@ export const DEMO_PROFILES: ReadonlyArray<DemoPersona> = [
     id: 'aina',
     name: 'Aina',
     role: 'Online seller',
-    story: 'Real but uneven e-wallet income. The credit-invisible gig worker.',
+    story: 'Real but uneven e-wallet income, and no paper trail a bank would recognise.',
     outcome: {
       decision: 'refer',
       label: 'Referred',
@@ -76,10 +77,61 @@ export const DEMO_PROFILES: ReadonlyArray<DemoPersona> = [
     outcome: {
       decision: 'decline',
       label: 'Declined',
-      note: 'The money looks fine. The evidence behind it does not.',
+      note: 'The money looks fine, but the evidence behind it does not hold up.',
     },
     expr: 'think',
     identity: { fullName: 'Mohd Faizal Bin Ismail', nric: '880203-14-5679' },
     occupation: { occupation: 'Small trader', sector: 'Retail', employmentType: 'self-employed', tenureMonths: 8 },
   },
 ] as const;
+
+/** What the guided tour actually DOES on each ending, for the front door.
+ *
+ *  The three paths are not equal — the referral plays all ten acts and is the only one where the
+ *  judge personally makes the lending call (the console's `approve` step exists on that branch
+ *  alone); an outright approval publishes its offer at submission, so the judge reads a verdict
+ *  rather than reaching one; a decline never publishes an offer, so the acceptance and servicing
+ *  acts are unreachable and the script closes at the lender's desk. Left invisible, a judge
+ *  discovers that asymmetry two acts from the end and reads the short path as a thin demo. This
+ *  makes it a labelled choice instead.
+ *
+ *  Keyed on the DECISION, never on a persona id, so the copy follows the engine: if a seed change
+ *  flips a persona's verdict, `outcome.decision` moves with it (pinned against the real engine by
+ *  `__tests__/demoPersonaOutcomes.test.ts`) and this line moves too. The act count comes from
+ *  `TOUR_TOTAL_ACTS` for the same reason. */
+export const TOUR_PATH: Record<DemoOutcome['decision'], { line: string; recommended: boolean }> = {
+  refer: {
+    line: `All ${TOUR_TOTAL_ACTS} acts, and the only path where you make the lending call yourself.`,
+    recommended: true,
+  },
+  approve: {
+    line: 'Cleared on submission, so you read the verdict rather than reach it.',
+    recommended: false,
+  },
+  decline: {
+    line: 'The short path: no offer is ever made, so it closes at the lender’s desk.',
+    recommended: false,
+  },
+};
+
+/** The persona the front door opens on, and the one wearing the "start here" badge. Derived from
+ *  `TOUR_PATH` rather than named, so the badge always sits on whichever borrower currently gets
+ *  the fullest run of the script. */
+export const RECOMMENDED_DEMO_PROFILE: DemoProfileId =
+  DEMO_PROFILES.find((p) => TOUR_PATH[p.outcome.decision].recommended)?.id ?? DEMO_PROFILES[0].id;
+
+/** Can this persona be picked as the FIRST run, on the front door?
+ *
+ *  Only the recommended one. A judge's first pass through a ten-act cross-app script should be
+ *  the ending that plays all of it and hands them the lending decision; the two short paths land
+ *  much better as "now see what changes" than as an opening move.
+ *
+ *  Scoped to the front door on purpose, and deliberately NOT backed by any persisted "tour
+ *  finished" flag. The other two endings stay one screen away for the whole session (Profile →
+ *  Demo profiles, which the console's finale card points at), so this steers the opening move
+ *  without ever being a door that can get stuck shut — and the rows stay visible and labelled,
+ *  because three verdicts on screen at once is the front door's own proof that one engine
+ *  produces three answers. */
+export function canStartWith(persona: DemoPersona): boolean {
+  return TOUR_PATH[persona.outcome.decision].recommended;
+}

@@ -234,7 +234,7 @@ const TIER0_DISCLOSURE: { [K in keyof Omit<PassportDraft, 'consent' | 'occupatio
             label: 'Repayment standing',
             detail:
               d.standing.current.bucket === 'clean'
-                ? 'Clean — no arrears on file'
+                ? 'Clean, no arrears on file'
                 : `${d.standing.current.monthsInArrears} month${d.standing.current.monthsInArrears > 1 ? 's' : ''} behind, ${rm(d.standing.current.amountOverdue)} overdue`,
           },
         ]

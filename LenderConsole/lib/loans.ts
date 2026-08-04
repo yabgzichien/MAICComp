@@ -295,7 +295,7 @@ export function decideLoan(input: LoanDecisionInput): LoanDecision {
       category: 'data-quality',
       text:
         `Too little of the recorded data could be corroborated (confidence ${Math.round(confidence * 100)}%, below the ` +
-        `${Math.round(policy.minConfidenceToConsider * 100)}% minimum to assess). Declined — add verifiable income and ` +
+        `${Math.round(policy.minConfidenceToConsider * 100)}% minimum to assess). Declined. Add verifiable income and ` +
         `spending sources, then reapply.`,
     });
     return finish('decline', 0, 0);

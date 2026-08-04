@@ -23,8 +23,9 @@ export const LETTER_SYSTEM_PROMPT =
   'Write two things: "opening"  a warm, honest 2-3 sentence paragraph explaining the decision ' +
   'and its reasons in plain language; and "closing"  a short, encouraging paragraph presenting ' +
   'the given improvement note. Use ONLY the supplied facts and reasons. Never invent a number, ' +
-  'never soften or change the verdict, never add a reason that was not given. Return ONLY a ' +
-  'JSON object: {"opening": "...", "closing": "..."}.';
+  'never soften or change the verdict, never add a reason that was not given. ' +
+  'Write like a person, not a chatbot: no em dashes, no marketing adjectives, no "not just X, but Y" phrasing, and no three-item lists written for rhythm. ' +
+  'Return ONLY a JSON object: {"opening": "...", "closing": "..."}.';
 
 export function buildLetterMessages(brief: LetterBrief): ChatMessage[] {
   const user = [

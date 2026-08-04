@@ -15,12 +15,13 @@ export const ATTACK_SYSTEM_PROMPT =
   'You are a fraud-risk security analyst writing a terse incident report. In at most 3 short ' +
   'sentences, plain text, no preamble: state what the attack tried, how the deterministic integrity ' +
   'engine responded (which signals fired, the confidence and the loan outcome), and the verdict. ' +
-  'Use ONLY the facts provided  never invent a signal or change the verdict.';
+  'Use ONLY the facts provided  never invent a signal or change the verdict. ' +
+  'Write like a person, not a chatbot: no em dashes, no marketing adjectives, no "not just X, but Y" phrasing, and no three-item lists written for rhythm. ';
 
 /** Build the compact incident-report prompt from a computed attack result. */
 export function buildAttackPrompt(result: AttackResult): string {
-  const signals = result.firedSignals.length
-    ? result.firedSignals.map((s) => `- ${s}`).join('\n')
+  const signals = result.signals.length
+    ? result.signals.map((s) => `- ${s.detail}`).join('\n')
     : '- (no integrity signals fired)';
   return [
     `Attack: ${result.name}.`,
@@ -44,5 +45,5 @@ export function attackFallback(result: AttackResult): string {
       : result.verdict === 'flagged'
         ? `approved but flagged (confidence ${pct(result.confidence)})`
         : `slipped through (confidence ${pct(result.confidence)})`;
-  return `${result.name}: ${outcome}. ${result.firedSignals.length} integrity signal(s) fired.`;
+  return `${result.name}: ${outcome}. ${result.signals.length} integrity signal(s) fired.`;
 }

@@ -15,6 +15,7 @@ import { getLLM } from '../llm';
 import { buildCoachPrompt, COACH_SYSTEM_PROMPT, coachPlanFallback } from '../llm/coachPrompt';
 import { baseline, buildCoachPlan, type CoachAction, type CoachLever, type CoachSim } from '../lib/coachPlan';
 import { fetchLenderDirectory, type LenderDirectory } from '../lib/lenderDirectory';
+import { LenderRequirements } from '../components/LenderRequirements';
 import { BORROWER_TOUR_STEPS, clampTourStep } from '../lib/tourSteps';
 import { useAppData } from '../state/store';
 import { useCreditProfile } from '../state/useCreditProfile';
@@ -286,6 +287,20 @@ export function PassportCoachScreen({
             ) : (
               <Text style={styles.lenderBlurb}>{selectedLender.blurb}</Text>
             )}
+            {/* The bars the plan below is coaching toward, with the borrower's own standing
+                marked against each one. Open by default: "what am I short of" is the question
+                this whole screen exists to answer. */}
+            <LenderRequirements
+              lender={selectedLender}
+              you={{
+                score: b.score,
+                confidence: b.confidence,
+                daysCovered: coachInput.coverage.daysCovered,
+                coverageRatio: coachInput.coverage.ratio,
+              }}
+              initiallyOpen
+              style={{ marginTop: 10 }}
+            />
           </>
         )}
 

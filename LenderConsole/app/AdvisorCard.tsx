@@ -9,7 +9,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { FONT, type Palette } from './tokens';
-import { SectionLabel } from './shared';
+import { InfoButton, SectionLabel } from './shared';
 import { buildPolicyAdvisor, type AdvisorSuggestion } from '../lib/policyAdvisor';
 import type { ApplicationRecord } from '../lib/applications';
 
@@ -58,7 +58,7 @@ function AdvisorSuggestionCard({ p, suggestion, narration, provenance }: { p: Pa
   );
 }
 
-export default function AdvisorCard({ p, apps }: { p: Palette; apps: ApplicationRecord[] }) {
+export default function AdvisorCard({ p, apps, onInfo }: { p: Palette; apps: ApplicationRecord[]; onInfo?: (entry: string) => void }) {
   const suggestions = useMemo(() => buildPolicyAdvisor(apps), [apps]);
   const [narrations, setNarrations] = useState<Record<string, string>>({});
   const [provenance, setProvenance] = useState<Provenance>('pending');
@@ -101,9 +101,12 @@ export default function AdvisorCard({ p, apps }: { p: Palette; apps: Application
           return <AdvisorSuggestionCard key={id} p={p} suggestion={s} narration={narrations[id] ?? s.headline} provenance={provenanceFor(id)} />;
         })}
       </div>
-      <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, marginTop: 10, lineHeight: 1.5 }}>
-        Advisory only. Every suggestion is computed deterministically from the same realized-vs-expected performance the Portfolio tab shows; nothing here writes to your policy automatically — review and apply changes above.
-      </p>
+      {onInfo && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10 }}>
+          <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>Advisory only</span>
+          <InfoButton entry="advisor_disclaimer" onOpen={onInfo} />
+        </div>
+      )}
     </div>
   );
 }

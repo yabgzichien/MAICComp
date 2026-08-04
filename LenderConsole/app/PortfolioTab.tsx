@@ -131,7 +131,7 @@ function PerformanceSection({ p, apps }: { p: Palette; apps: ApplicationRecord[]
         <div style={{ padding: '18px 20px', borderRadius: 12, background: p.surface, border: `1px solid ${p.hairline}`, boxShadow: p.shadow }}>
           <p style={{ fontFamily: FONT.ui, fontSize: 13, fontWeight: 700, color: p.ink1, marginBottom: 4 }}>No repayments recorded yet</p>
           <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.55 }}>
-            Performance appears here once the first instalment on an approved loan comes due and is recorded.
+            Appears once the first instalment comes due.
           </p>
         </div>
       ) : (
@@ -217,6 +217,7 @@ function BookStatisticsCard({ p, apps }: { p: Palette; apps: ApplicationRecord[]
 export default function PortfolioTab({ p, apps, onStructure }: { p: Palette; apps: ApplicationRecord[]; onStructure: () => void }) {
   const book = useMemo(() => buildPortfolio(apps), [apps]);
   const empty = book.loanCount === 0;
+  const [info, setInfo] = useState<string | null>(null);
 
   const stats: { label: string; value: string }[] = [
     { label: 'Total Exposure', value: formatPoolMoney(book.totalExposure) },
@@ -229,14 +230,16 @@ export default function PortfolioTab({ p, apps, onStructure }: { p: Palette; app
 
   return (
     <div style={{ flex: 1, background: p.bg, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+      <InfoModal entry={info} onClose={() => setInfo(null)} p={p} />
       <div style={{ padding: '20px 40px 18px', background: p.surface, borderBottom: `1px solid ${p.hairline}`, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
           <div>
             <SectionLabel color={p.ink2}>Portfolio · Approved Book</SectionLabel>
             <h2 style={{ fontFamily: FONT.ui, fontSize: 22, fontWeight: 800, color: p.ink1, letterSpacing: '-0.4px', marginTop: 4, marginBottom: 5 }}>Loan Book Overview</h2>
-            <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, maxWidth: 620, lineHeight: 1.5 }}>
-              Every loan you approve in the pipeline books here. Structure it into rated tranches in one click: <strong style={{ color: p.ink2 }}>approve → book → securitize</strong>, one continuous flow.
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>How a loan reaches this book</span>
+              <InfoButton entry="portfolio_pipeline" onOpen={setInfo} />
+            </div>
           </div>
           <button
             onClick={onStructure}
@@ -267,7 +270,7 @@ export default function PortfolioTab({ p, apps, onStructure }: { p: Palette; app
           <div style={{ maxWidth: 520, padding: '18px 20px', borderRadius: 12, background: p.surface, border: `1px solid ${p.hairline}`, boxShadow: p.shadow }}>
             <p style={{ fontFamily: FONT.ui, fontSize: 13, fontWeight: 700, color: p.ink1, marginBottom: 6 }}>No approved loans yet</p>
             <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.6 }}>
-              Approve applications on the Verify tab (or seed the pipeline) and they book here automatically. The Capital Markets tab shows the illustrative sample pool until then.
+              Approve an application and it books here automatically. Capital Markets shows a sample pool until then.
             </p>
           </div>
         </div>
@@ -305,10 +308,9 @@ export default function PortfolioTab({ p, apps, onStructure }: { p: Palette; app
           <BookStatisticsCard p={p} apps={apps} />
 
           <div style={{ padding: '4px 40px 24px', marginTop: 'auto' }}>
-            <div style={{ padding: '11px 18px', borderRadius: 10, background: p.surface, border: `1px solid ${p.hairline}`, boxShadow: p.shadow }}>
-              <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.6 }}>
-                Pool risk comes from verified credit bands (approved loans already cleared the fraud and confidence gates). Confidence is shown for context. Declared purpose stands in for sector until verified occupation ships.
-              </p>
+            <div style={{ padding: '11px 18px', borderRadius: 10, background: p.surface, border: `1px solid ${p.hairline}`, boxShadow: p.shadow, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>Pool risk methodology</span>
+              <InfoButton entry="pool_risk_methodology" onOpen={setInfo} />
             </div>
           </div>
         </>

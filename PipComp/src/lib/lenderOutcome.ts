@@ -57,7 +57,7 @@ export function lenderOutcome(decision: LoanDecision, requestedAmount: number): 
     return {
       decision: decision.decision,
       headline,
-      detail: `Their policy approves ${rm(decision.maxAmount > 0 ? decision.maxAmount : requestedAmount)} automatically — no loan officer has to sign off.`,
+      detail: `Their policy approves ${rm(decision.maxAmount > 0 ? decision.maxAmount : requestedAmount)} automatically, and no loan officer has to sign off.`,
     };
   }
 
@@ -82,7 +82,7 @@ export function lenderOutcome(decision: LoanDecision, requestedAmount: number): 
  *  nobody's review queue, and a declined one isn't waiting on anything. */
 export function filedFootText(decision: Decision, lenderName: string): string {
   if (decision === 'approve') {
-    return `Approved by ${lenderName}'s policy — no officer review needed. Your offer is waiting in My Financing; nothing is borrowed until you accept it.`;
+    return `Approved by ${lenderName}'s policy, so no officer review needed. Your offer is waiting in My Financing; nothing is borrowed until you accept it.`;
   }
   if (decision === 'refer') {
     return `Filed with ${lenderName} for a loan officer to review. Their decision arrives in My Financing.`;

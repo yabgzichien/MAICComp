@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FONT, type Palette } from './tokens';
-import { SectionLabel, useModalA11y } from './shared';
+import { InfoButton, InfoModal, SectionLabel, useModalA11y } from './shared';
 import { runAgentPanel, type StackingSignal } from '../lib/agents';
 import { buildCreditMemo, memoToMarkdown, memoToPdfDoc, fallbackNarrative, type CreditMemo, type MemoPricing, type MemoResolution } from '../lib/creditMemo';
 import { downloadPdf } from '../lib/pdfExport';
@@ -55,6 +55,7 @@ export default function CreditMemoModal({
   const fallback = useMemo(() => fallbackNarrative(memo), [memo]);
   const [narrative, setNarrative] = useState(fallback);
   const [provenance, setProvenance] = useState<Provenance>('pending');
+  const [info, setInfo] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -118,6 +119,7 @@ export default function CreditMemoModal({
         animation: 'fade-in-up 0.2s ease-out both',
       }}
     >
+      <InfoModal entry={info} onClose={() => setInfo(null)} p={p} />
       <div
         ref={dialogRef}
         onClick={(e) => e.stopPropagation()}
@@ -235,10 +237,10 @@ export default function CreditMemoModal({
             </div>
           </Section>
 
-          <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.55 }}>
-            Advisory drafting over a deterministic decision. Every figure, verdict, and compliance flag is computed by the policy engine; this memo
-            restates them and cannot change them.
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>Memo scope</span>
+            <InfoButton entry="memo_advisory_boilerplate" onOpen={setInfo} />
+          </div>
         </div>
       </div>
     </div>

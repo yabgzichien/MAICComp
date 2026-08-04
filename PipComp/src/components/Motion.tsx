@@ -54,6 +54,46 @@ export function FadeIn({
  * final value if rAF stalls (e.g. a backgrounded/hidden tab, where browsers
  * throttle requestAnimationFrame) instead of leaving the count-up stuck.
  */
+/**
+ * Same ease-out drive as `useEased`, but between two arbitrary values  used for
+ * counting a number *down* (the Attack Gallery's confidence falling from its
+ * pre-check level to the capped one).
+ *
+ * Unlike `useEased` this starts at `from`, not at the destination: it is meant
+ * to be mounted at the moment the count should begin, so showing the final
+ * value first would spoil the beat. The setTimeout backstop still guarantees it
+ * lands exactly on `to` if rAF stalls.
+ */
+export function useEasedFrom(from: number, to: number, duration = 900): number {
+  const [val, setVal] = useState(from);
+  useEffect(() => {
+    let raf = 0;
+    let settled = false;
+    const start = Date.now();
+    const settle = () => {
+      settled = true;
+      setVal(to);
+    };
+    const tick = () => {
+      const t = Math.min(1, (Date.now() - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
+      setVal(from + (to - from) * eased);
+      if (t < 1) raf = requestAnimationFrame(tick);
+      else settle();
+    };
+    setVal(from);
+    raf = requestAnimationFrame(tick);
+    const fallback = setTimeout(() => {
+      if (!settled) settle();
+    }, duration + 300);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(fallback);
+    };
+  }, [from, to, duration]);
+  return val;
+}
+
 export function useEased(target: number, duration = 950): number {
   const [val, setVal] = useState(target);
   useEffect(() => {

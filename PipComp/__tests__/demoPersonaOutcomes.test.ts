@@ -17,7 +17,8 @@
  *             none of it credible.
  * If a seed change flips any of these, the demo silently stops making its point.
  */
-import { DEMO_PROFILES, type DemoProfileId } from '../src/data/demoPersonas';
+import { canStartWith, DEMO_PROFILES, RECOMMENDED_DEMO_PROFILE, TOUR_PATH, type DemoProfileId } from '../src/data/demoPersonas';
+import { BORROWER_TOUR_STEPS, branchForDecision, stepsForBranch } from '../src/lib/tourSteps';
 import { buildAinaSeed, buildFaizalSeed, buildRaviSeed, type DemoSeed } from '../src/data/demoSeed';
 import { assembleCredit, type CreditInputs } from '../src/lib/assembleCredit';
 import { decideLoan, DEFAULT_POLICY, DEFAULT_PRODUCTS } from '../src/lib/loans';
@@ -161,5 +162,41 @@ describe('the confidence decline floor stays clear of the integrity rings', () =
   it('leaves a real band for human review between decline and auto-approve', () => {
     expect(DEFAULT_POLICY.minConfidenceToConsider).toBeLessThan(DEFAULT_POLICY.minConfidenceToApprove);
     expect(DEFAULT_POLICY.minConfidenceToApprove - DEFAULT_POLICY.minConfidenceToConsider).toBeGreaterThanOrEqual(0.1);
+  });
+});
+
+/**
+ * The front door labels each ending with what the tour actually does on it (TOUR_PATH) and badges
+ * one as the place to start. Both are derived from `outcome.decision`, which the suite above pins
+ * against the real engine — these tests guard the derivation itself.
+ */
+describe('front-door tour-path labels', () => {
+  it('labels every outcome, with no empty line', () => {
+    for (const persona of DEMO_PROFILES) {
+      expect(TOUR_PATH[persona.outcome.decision].line.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('recommends exactly one ending', () => {
+    const recommended = DEMO_PROFILES.filter((p) => TOUR_PATH[p.outcome.decision].recommended);
+    expect(recommended).toHaveLength(1);
+    expect(RECOMMENDED_DEMO_PROFILE).toBe(recommended[0].id);
+  });
+
+  // The front door lets exactly one ending be the opening move, and it has to be the badged one:
+  // a screen that recommends Aina but only lets you start as Ravi is worse than either rule alone.
+  it('allows exactly one opening move, and it is the recommended one', () => {
+    const startable = DEMO_PROFILES.filter(canStartWith);
+    expect(startable).toHaveLength(1);
+    expect(startable[0].id).toBe(RECOMMENDED_DEMO_PROFILE);
+  });
+
+  // The point of the badge is "this one plays the whole story". An ending that never reaches
+  // taking the loan is the one thing it must never point at — which is exactly what would happen
+  // if `recommended` were moved onto the decline.
+  it('never recommends an ending that cannot reach the offer', () => {
+    const persona = DEMO_PROFILES.find((p) => p.id === RECOMMENDED_DEMO_PROFILE)!;
+    const run = stepsForBranch(BORROWER_TOUR_STEPS, branchForDecision(persona.outcome.decision));
+    expect(run.map((s) => s.id)).toContain('accept-offer');
   });
 });

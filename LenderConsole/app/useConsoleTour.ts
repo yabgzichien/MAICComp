@@ -18,7 +18,13 @@ import {
   type ConsoleTourStep,
   type ConsoleTourTab,
 } from '../lib/tourSteps';
-import { classifyConsoleSignal, classifyConsoleTabChange } from '../lib/tourDrive';
+import {
+  classifyConsoleHandoffGate,
+  classifyConsoleSignal,
+  classifyConsoleTabChange,
+  isConsoleControlLocked,
+  tourControlledAnchors,
+} from '../lib/tourDrive';
 import { onTourSignal } from '../lib/tourSignals';
 import type { ApplicationRecord } from '../lib/applications';
 import { LENDER_REGISTRY } from '../lib/lenderRegistry';
@@ -56,6 +62,20 @@ export interface ConsoleTourController {
   applicant: string | null;
   /** Handoff steps only: whether the borrower has answered the standing offer yet. */
   handoffReady: boolean;
+  /** Handoff steps only: this step is watching the real loan and will advance by itself, so the
+   *  card renders no Continue button. */
+  handoffSelfAdvancing: boolean;
+  /** Anchor ids whose real controls must not be usable yet — see `isConsoleControlLocked`. Read
+   *  through `TourLockedControlsContext` by the control sites themselves. Empty whenever no
+   *  script is running, so a console with no tour on it behaves exactly as it always did. */
+  lockedControls: ReadonlySet<string>;
+  /** A script is mid-run on a real file. Drives the off-script guards (see
+   *  `TourRunningContext`) rather than any per-step lock. */
+  running: boolean;
+  /** The application the script is about. While `running`, the queue rail allows selecting only
+   *  this file: picking a seeded neighbour mid-run would silently re-point assess, the memo and
+   *  the decision at a file the narration is not about. */
+  queueLockedToAppId: string | null;
   next: () => void;
   back: () => void;
   skip: () => void;
@@ -135,8 +155,9 @@ export function useConsoleTour({
   }, [awaitingBorrower]);
 
   // Refs so the once-mounted signal subscription always reads current state (no stale closure).
-  const stateRef = useRef({ visible, index, paused, celebrating: false });
-  stateRef.current = { visible, index, paused, celebrating: celebrating !== null };
+  // `required` rides along so `skip` can refuse without re-creating its callback per step.
+  const stateRef = useRef({ visible, index, paused, celebrating: false, required: false });
+  stateRef.current = { visible, index, paused, celebrating: celebrating !== null, required: step?.required === true };
   const tabRef = useRef(tab);
   tabRef.current = tab;
   const tourDrivenRef = useRef(false);
@@ -250,6 +271,38 @@ export function useConsoleTour({
     });
   }, [advance, steps]);
 
+  /** Whether the current handoff's gate is open — the real loan has moved far enough for the
+   *  script to continue. */
+  const handoffReady = step?.kind !== 'handoff' ? false : step.handoff?.gate === 'none' ? true : offerAnswered;
+
+  /** This handoff watches the real loan and moves on by itself the moment it is ready  no
+   *  Continue button is ever rendered, only the live waiting line (see `classifyConsoleHandoffGate`,
+   *  which is state-based: it does not matter whether the gate was already open when the step
+   *  opened, only whether it is open now). Must agree with the effect below: a card that hides
+   *  its button on a step that then refuses to advance is a dead end. */
+  const handoffSelfAdvancing =
+    step?.kind === 'handoff' && step.handoff?.gate !== 'none' && step.handoff?.onOpen === 'advance';
+
+  // The borrower answering the standing offer clears the handoff on its own: the officer is in
+  // the other tab when it happens, and coming back only to confirm what the console already
+  // knows is a click that carries no decision.
+  useEffect(() => {
+    if (!visible || paused || celebrating !== null || !step) return;
+    if (classifyConsoleHandoffGate(step, handoffReady) === 'advance') advance();
+  }, [visible, paused, celebrating, step, handoffReady, advance]);
+
+  // Which real controls are still off-limits. Recomputed only when the step (or the ending)
+  // changes; a Set so the control sites do a hash lookup rather than re-deriving the script.
+  //
+  // Deliberately still locked while PAUSED: pausing is "I stepped away to look around", and the
+  // whole point here is that looking around must not include filing decisions the script has
+  // not reached. Exiting the tour is what hands the desk back.
+  const running = visible && !awaitingBorrower;
+  const lockedControls = useMemo(() => {
+    if (!running) return new Set<string>();
+    return new Set(tourControlledAnchors().filter((id) => isConsoleControlLocked(steps, index, id)));
+  }, [running, steps, index]);
+
   const next = useCallback(() => {
     if (step?.finale) {
       setVisible(false);
@@ -268,7 +321,12 @@ export function useConsoleTour({
     persist(Math.max(0, stateRef.current.index - 1));
   }, [persist]);
 
-  const skip = useCallback(() => advance(), [advance]);
+  // Required steps render no Skip and refuse one here too, so no other caller can route around
+  // the beat the rest of the script reads back.
+  const skip = useCallback(() => {
+    if (stateRef.current.required) return;
+    advance();
+  }, [advance]);
 
   const exit = useCallback(() => {
     setVisible(false);
@@ -319,7 +377,11 @@ export function useConsoleTour({
     directElsewhere,
     branch,
     applicant: followed?.applicantLabel ?? null,
-    handoffReady: step?.kind !== 'handoff' ? false : step.handoff?.gate === 'none' ? true : offerAnswered,
+    handoffReady,
+    handoffSelfAdvancing,
+    lockedControls,
+    running,
+    queueLockedToAppId: running ? followed?.id ?? null : null,
     next,
     back,
     skip,

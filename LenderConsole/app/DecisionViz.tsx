@@ -74,7 +74,24 @@ export function HeadroomBar({ p, assessment, installment, policy, onInfo }: { p:
               stroke={p.ink2}
               strokeDasharray="4 3"
               strokeWidth={1.5}
-              label={{ value: t.label, position: 'top', fontSize: 12, fontFamily: FONT.ui, fill: p.ink2 }}
+              // Not a fixed `position: 'top'` label: the tick sits at the borrower's own
+              // debt-to-income ratio, which can land anywhere on the axis  including right
+              // near an edge (a low-surplus borrower's surplus-cap tick can sit at ~12% of
+              // income even though the cap itself is 35%). A centered label there gets its
+              // left half clipped by the chart's 2px margin  found live, a clipped "35%"
+              // read as "85%". Anchor from the edge instead of the middle whenever the tick
+              // is close enough that a centered label would overrun it.
+              label={(props: { viewBox?: { x?: number; y?: number } }) => {
+                const x = props.viewBox?.x ?? 0;
+                const y = props.viewBox?.y ?? 0;
+                const anchor = t.frac < 0.15 ? 'start' : t.frac > 0.85 ? 'end' : 'middle';
+                const dx = anchor === 'start' ? 3 : anchor === 'end' ? -3 : 0;
+                return (
+                  <text x={x + dx} y={y - 5} textAnchor={anchor} fontSize={12} fontFamily={FONT.ui} fill={p.ink2}>
+                    {t.label}
+                  </text>
+                );
+              }}
             />
           ))}
         </BarChart>

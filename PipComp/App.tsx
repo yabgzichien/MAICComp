@@ -23,7 +23,7 @@ import { Pip } from './src/components/Pip';
 import { MissionBanner, TourCard, TourResumeChip, type TourRecapItem } from './src/components/TourCard';
 import { TourSpotlight } from './src/components/TourSpotlight';
 import { actProgress, BORROWER_TOUR_STEPS, TOUR_TOTAL_ACTS, clampTourStep, fillPersona, stepsForBranch, type TourStep } from './src/lib/tourSteps';
-import { classifyScreenChange, classifySignal } from './src/lib/tourDrive';
+import { classifyHandoffGate, classifyScreenChange, classifySignal } from './src/lib/tourDrive';
 import { onTourSignal } from './src/lib/tourSignals';
 import { AddFlow } from './src/screens/AddFlow';
 import { AllTransactionsScreen } from './src/screens/AllTransactionsScreen';
@@ -170,9 +170,12 @@ const TOUR_RECAP_LABELS: Record<string, string> = {
 };
 
 function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
-  const { ready, onboardingComplete, tourActive, tourStepIndex, tourBranch, setTourStep, pauseTour, exitTour, startTour, coverage, pendingOffers, activeDemoProfile, clearedByLenderNotice, dismissClearedByLenderNotice } = useAppData();
+  const { ready, onboardingComplete, tourActive, tourPaused, tourStepIndex, tourBranch, setTourStep, pauseTour, exitTour, startTour, coverage, pendingOffers, activeDemoProfile, clearedByLenderNotice, dismissClearedByLenderNotice } = useAppData();
   const insets = useSafeAreaInsets();
   const [screen, setScreen] = useState<Screen>('home');
+  /** Where the Attack Gallery's back button returns to. It has two entrances  the Settings row
+   *  and the tour's passport-step deep link  and each should go back where it came from. */
+  const [attacksOrigin, setAttacksOrigin] = useState<Screen>('settings');
   const [txnFilter, setTxnFilter] = useState<string | null>(null);
   const [addInitial, setAddInitial] = useState<'attach' | 'import'>('attach');
   const [calendarMonth, setCalendarMonth] = useState<string | undefined>(undefined);
@@ -191,7 +194,10 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
   // tour never fights the user for control: stray taps pause it, and the Resume chip
   // brings it back to the same step. Mission phase, recap facts, and the coverage delta
   // are in-memory only  a resume across an app kill restarts the step cleanly.
-  const [tourPaused, setTourPaused] = useState(false);
+  // `tourPaused` lives in the store rather than here: the real screens gate their off-script
+  // controls on a run being in progress (`tourRunning`), and a pause they could not see would
+  // make pausing a way to walk around the script. pauseTour/startTour/exitTour own the flag, so
+  // there is nothing to set alongside them here.
   const tourDrivenRef = useRef(false);
   const advancingRef = useRef(false);
   const [missionPhase, setMissionPhase] = useState<number | null>(null);
@@ -222,16 +228,24 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
     return { name: p?.name, role: p?.role?.toLowerCase() };
   }, [activeDemoProfile]);
 
-  /** Whether the current handoff's Continue is unlocked. A handoff never self-advances: on the
-   *  `approved` ending the offer already exists at send time, so an auto-advance would skip the
-   *  console entirely and the judge would never play the officer. The gate only ENABLES the
-   *  button; pressing it stays the judge's decision. */
+  /** Whether the current handoff's gate is open  the real loan has moved far enough for the
+   *  script to continue. */
   const handoffReady =
     currentTourStep?.kind !== 'handoff'
       ? false
       : currentTourStep.handoff?.gate === 'none'
         ? true
         : pendingOffers.length > 0;
+
+  /** This handoff watches the real loan and moves on by itself the moment it is ready  no
+   *  Continue button is ever rendered, only the live waiting line (see `classifyHandoffGate`,
+   *  which is state-based: it does not matter whether the gate was already open when the step
+   *  opened, only whether it is open now). Must agree with the effect below: a card that hides
+   *  its button on a step that then refuses to advance is a dead end. */
+  const handoffSelfAdvancing =
+    currentTourStep?.kind === 'handoff' &&
+    currentTourStep.handoff?.gate !== 'none' &&
+    currentTourStep.handoff?.onOpen === 'advance';
 
   const resetMission = () => {
     setMissionPhase(null);
@@ -250,7 +264,6 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
       const next = tourStepIndex + 1;
       if (next >= tourRunRef.current.length) {
         void exitTour();
-        setTourPaused(false);
         return;
       }
       void setTourStep(next);
@@ -291,7 +304,6 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
     else if (outcome === 'phase') setMissionPhase((p) => (p ?? 0) + 1);
     else if (outcome === 'pause') {
       resetMission();
-      setTourPaused(true);
       void pauseTour();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -315,31 +327,45 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
     const next = tourStepIndex + 1;
     if (next >= tourRunRef.current.length) {
       void exitTour();
-      setTourPaused(false);
       return;
     }
     void setTourStep(next);
   };
+  // The other half of the script running: an offer landing (or being published) clears the
+  // handoff the judge is parked on, without them having to confirm what the app can already
+  // see. `pendingOffers` is fed by useLenderSyncPoll, which is why every gated handoff sits on
+  // a screen that polls. State-based, not transition-based  see `classifyHandoffGate`.
+  useEffect(() => {
+    if (!tourActive || !currentTourStep || advancingRef.current) return;
+    if (classifyHandoffGate(currentTourStep, handoffReady) === 'advance') tourNext();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tourActive, tourStepIndex, handoffReady]);
+
   const tourBack = () => void setTourStep(Math.max(0, tourStepIndex - 1));
+  // Required steps have no Skip control, and refuse one here too: the card is not the only
+  // thing that can reach this (the mission banner calls it as well), and a step whose artefact
+  // the rest of the script reads must not be skippable by any route.
   const tourSkip = () => {
-    if (currentTourStep) completeStep(currentTourStep, true);
+    if (currentTourStep && !currentTourStep.required) completeStep(currentTourStep, true);
   };
   const tourExit = () => {
     resetMission();
     setCelebrateText(null);
     advancingRef.current = false;
     void exitTour();
-    setTourPaused(false);
   };
   const tourResume = () => {
-    setTourPaused(false);
     void startTour();
   };
   /** Deep-link off the current step's optional action (UI/UX P3.18: surface the Attack
    *  Gallery from the tour, not only Settings). Ends the tour and jumps straight there. */
   const tourAction = () => {
     if (!currentTourStep?.actionScreen) return;
+    // Back out of the gallery to the step the judge left, not to Settings  on the guided path
+    // they never opened Settings, so landing there reads as being dumped somewhere strange.
+    const from = currentTourStep.screen as Screen;
     tourExit();
+    setAttacksOrigin(from);
     setScreen(currentTourStep.actionScreen as Screen);
   };
   /** The mission CTA: remember today's coverage for the delta beat, then open the REAL add
@@ -460,11 +486,14 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
             setScreen('add');
           }}
           onAdvancedImport={() => setScreen('advancedImport')}
-          onOpenAttacks={() => setScreen('attacks')}
+          onOpenAttacks={() => {
+            setAttacksOrigin('settings');
+            setScreen('attacks');
+          }}
           onResetToOnboarding={() => setScreen('home')}
         />
       )}
-      {screen === 'attacks' && <AttackGalleryScreen onBack={() => setScreen('settings')} />}
+      {screen === 'attacks' && <AttackGalleryScreen onBack={() => setScreen(attacksOrigin)} />}
       {screen === 'advancedImport' && <AdvancedImportScreen onClose={() => setScreen('settings')} />}
       {screen === 'categories' && <CategoriesScreen onBack={() => setScreen('home')} />}
       {screen === 'transactions' && (
@@ -537,7 +566,6 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
         <TourSpotlight
           onDimPress={() => {
             resetMission();
-            setTourPaused(true);
             void pauseTour();
           }}
         />
@@ -548,6 +576,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
           phaseIndex={missionPhase}
           phaseCount={currentTourStep.mission?.phases.length ?? 0}
           topInset={insets.top}
+          required={currentTourStep.required}
           onSkip={tourSkip}
           onExit={tourExit}
         />
@@ -565,6 +594,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
           placement={tourCardPlacement}
           persona={tourPersona}
           handoffReady={handoffReady}
+          handoffSelfAdvancing={handoffSelfAdvancing}
           onNext={tourNext}
           onBack={tourBack}
           onExit={tourExit}

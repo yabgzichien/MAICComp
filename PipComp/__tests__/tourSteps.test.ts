@@ -83,6 +83,18 @@ describe('BORROWER_TOUR_STEPS (the borrower half of the unified script)', () => 
     expect(delta.anchorId).toBe('coverage-chip');
   });
 
+  it('offers the Attack Gallery exactly once, off the passport beat', () => {
+    // The gallery is otherwise reachable only from Settings, which a judge on the guided path
+    // never opens. This deep-link is the only thing that puts the fraud self-test in front of
+    // them, so it must not silently fall out of the script.
+    const withAction = BORROWER_TOUR_STEPS.filter((s) => s.actionScreen === 'attacks');
+    expect(withAction.map((s) => s.id)).toEqual(['passport']);
+    expect(withAction[0].actionLabel).toBe('See the fraud defences work');
+    // Taking the action ends the tour, so it may not sit on a step that still owes the judge
+    // something to do.
+    expect(withAction[0].kind).toBe('explain');
+  });
+
   it('every do step celebrates', () => {
     for (const s of BORROWER_TOUR_STEPS.filter((x) => x.kind === 'do')) {
       expect(s.celebrate && s.celebrate.length > 0).toBe(true);
@@ -96,7 +108,7 @@ describe('BORROWER_TOUR_STEPS (the borrower half of the unified script)', () => 
   });
 
   // The whole point of act 6: the send is the judge's own action, and the handoff that follows
-  // it waits on the lender rather than self-advancing.
+  // it waits on the lender.
   it('act 6 sends the request itself, then hands off', () => {
     const send = BORROWER_TOUR_STEPS.find((s) => s.id === 'send-request')!;
     expect(send.kind).toBe('do');
@@ -115,6 +127,39 @@ describe('BORROWER_TOUR_STEPS (the borrower half of the unified script)', () => 
     const polling = ['home', 'loans'];
     for (const step of BORROWER_TOUR_STEPS.filter((s) => s.handoff?.gate === 'offer-pending')) {
       expect(polling).toContain(step.screen);
+    }
+  });
+
+  // Only the referred handoff may clear itself. Its gate can open for exactly one reason — the
+  // judge approved the file in the console — whereas the approved ending's offer exists at send
+  // time and merely takes a poll to arrive, so riding that would skip acts 7 and 8.
+  it('only the referred handoff self-advances when its gate opens', () => {
+    const onOpen = (id: string) => BORROWER_TOUR_STEPS.find((s) => s.id === id)!.handoff!.onOpen;
+    expect(onOpen('handoff-referred')).toBe('advance');
+    expect(onOpen('handoff-approved')).toBe('prompt');
+    expect(onOpen('handoff-declined')).toBe('prompt');
+    expect(onOpen('loan-live')).toBe('prompt');
+  });
+
+  // A self-advancing handoff renders no Continue button, so its waiting line is the only thing
+  // on the card telling the judge what is being waited on.
+  it('a self-advancing handoff says what it is waiting for', () => {
+    for (const step of BORROWER_TOUR_STEPS.filter((s) => s.handoff?.onOpen === 'advance')) {
+      expect(step.handoff!.waiting.length).toBeGreaterThan(0);
+    }
+  });
+
+  // The four beats that MAKE what the rest of the script reads: the scan the coverage delta is
+  // measured against, the identity the passport needs, the passport the application carries,
+  // and the send that decides the ending and puts a file on the console's desk.
+  it('the artefact-making steps cannot be skipped', () => {
+    const required = BORROWER_TOUR_STEPS.filter((s) => s.required).map((s) => s.id);
+    expect(required).toEqual(['scan-mission', 'kyc-verify', 'mint-passport', 'send-request']);
+  });
+
+  it('every required step is one the judge acts on, never an explain or a handoff', () => {
+    for (const step of BORROWER_TOUR_STEPS.filter((s) => s.required)) {
+      expect(['do', 'mission']).toContain(step.kind);
     }
   });
 
@@ -168,7 +213,7 @@ describe('validateTourBranches', () => {
       {
         ...explain('b', { branches: ['referred'] }),
         kind: 'handoff' as const,
-        handoff: { target: 'console' as const, cta: 'Go', waiting: 'w', ready: 'r', gate: 'offer-pending' as const },
+        handoff: { target: 'console' as const, cta: 'Go', waiting: 'w', ready: 'r', gate: 'offer-pending' as const, onOpen: 'prompt' as const },
       },
     ];
     expect(validateTourBranches(steps)).toContain(
@@ -181,7 +226,7 @@ describe('validateTourBranches', () => {
       {
         ...explain('a'),
         kind: 'handoff' as const,
-        handoff: { target: 'console' as const, cta: 'Go', waiting: '', ready: 'r', gate: 'none' as const },
+        handoff: { target: 'console' as const, cta: 'Go', waiting: '', ready: 'r', gate: 'none' as const, onOpen: 'prompt' as const },
       },
     ];
     expect(validateTourBranches(steps)).toEqual([]);
@@ -298,10 +343,32 @@ describe('validateTourSteps', () => {
     const both = [{
       ...explain('b'),
       kind: 'handoff' as const,
-      handoff: { target: 'console' as const, cta: 'Go', waiting: 'w', ready: 'r', gate: 'none' as const },
+      handoff: { target: 'console' as const, cta: 'Go', waiting: 'w', ready: 'r', gate: 'none' as const, onOpen: 'prompt' as const },
       advanceOn: { screen: 'home' as const },
     }];
     expect(validateTourSteps(both, ['home'])).toContain('handoff step b must not have advanceOn or mission');
+  });
+
+  it('flags a required step that has no Skip to withhold', () => {
+    expect(validateTourSteps([{ ...explain('a'), required: true }], ['home'])).toContain(
+      'step a is explain, which cannot be required'
+    );
+    const handoff = [{
+      ...explain('b'),
+      kind: 'handoff' as const,
+      required: true,
+      handoff: { target: 'console' as const, cta: 'Go', waiting: 'w', ready: 'r', gate: 'none' as const, onOpen: 'prompt' as const },
+    }];
+    expect(validateTourSteps(handoff, ['home'])).toContain('step b is handoff, which cannot be required');
+  });
+
+  it('flags an ungated handoff that claims it will self-advance', () => {
+    const steps = [{
+      ...explain('a'),
+      kind: 'handoff' as const,
+      handoff: { target: 'console' as const, cta: 'Go', waiting: '', ready: 'r', gate: 'none' as const, onOpen: 'advance' as const },
+    }];
+    expect(validateTourSteps(steps, ['home'])).toContain('handoff step a is ungated, so it cannot self-advance');
   });
 
   it('flags an empty branches list', () => {

@@ -44,7 +44,7 @@ export const LENDER_REGISTRY: LenderProfile[] = [
   {
     id: 'koperasi-sejahtera',
     name: 'Koperasi Usahawan Sejahtera',
-    blurb: 'Member-owned credit cooperative. The cheapest rates in the directory, but a stricter score bar and no emergency tier — built for established members.',
+    blurb: 'Member-owned credit cooperative. The cheapest rates in the directory, but a stricter score bar and no emergency tier, built for established members.',
     brandColor: '#1f8a5b',
     // Cheapest money in the directory (10-12%), but you must be established: high score
     // bars, no emergency safety net, no big-ticket scale tier. A thin-file borrower is

@@ -8,6 +8,7 @@
 import React, { useEffect, useState } from 'react';
 import { FONT, type Palette } from './tokens';
 import { fillPersona } from '../lib/tourSteps';
+import { LENDER_REGISTRY } from '../lib/lenderRegistry';
 import { onTourAnchor, type AnchorReport } from '../lib/tourAnchorRect';
 import type { ConsoleTourController } from './useConsoleTour';
 
@@ -133,6 +134,12 @@ export function TourCard({ p, c, officer, lender }: { p: Palette; c: ConsoleTour
         borderRadius: 14,
         border: `1.5px solid ${p.accentSoft}`,
         padding: '15px 17px',
+        // The card is fixed-position and grows with its content — the finale, which carries the
+        // closing recap AND the "try another ending" panel, is more than twice the height of a
+        // plain step. On a short window that would run off the top edge and clip the copy
+        // silently, so it scrolls inside itself instead. Never bites on a normal step.
+        maxHeight: 'calc(100vh - 40px)',
+        overflowY: 'auto',
       }}
     >
       {c.celebrating ? (
@@ -198,6 +205,7 @@ export function TourCard({ p, c, officer, lender }: { p: Palette; c: ConsoleTour
               </p>
             </>
           )}
+          {step.finale && <AnotherEnding p={p} />}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
             <button onClick={c.exit} style={ghostBtn(p)}>Exit</button>
             <div style={{ flex: 1 }} />
@@ -205,18 +213,26 @@ export function TourCard({ p, c, officer, lender }: { p: Palette; c: ConsoleTour
               <button onClick={c.back} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: p.ink2, fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, padding: '7px 4px' }}>Back</button>
             )}
             {isDo ? (
-              <button onClick={c.skip} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: p.ink3, fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, padding: '7px 8px' }}>Skip</button>
+              // A required do-step (opening the judge's own file, making the call) offers no
+              // Skip: everything after it reads what it produces. Exit still ends the tour.
+              step.required ? null : (
+                <button onClick={c.skip} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: p.ink3, fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, padding: '7px 8px' }}>Skip</button>
+              )
             ) : isHandoff ? (
               <>
                 <button onClick={c.skip} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: p.ink3, fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, padding: '7px 8px' }}>Skip</button>
-                {/* Gated, never automatic — the officer presses this when they return. */}
-                <button
-                  onClick={c.next}
-                  disabled={!c.handoffReady}
-                  style={c.handoffReady ? primaryBtn(p) : disabledBtn(p)}
-                >
-                  {step.handoff?.cta}
-                </button>
+                {/* No Continue while the step is watching the real loan: it advances itself the
+                    moment the borrower answers. The button is rendered only when the gate was
+                    already open on arrival, or when there is no gate at all. */}
+                {!c.handoffSelfAdvancing && (
+                  <button
+                    onClick={c.next}
+                    disabled={!c.handoffReady}
+                    style={c.handoffReady ? primaryBtn(p) : disabledBtn(p)}
+                  >
+                    {step.handoff?.cta}
+                  </button>
+                )}
               </>
             ) : (
               <button onClick={c.next} style={primaryBtn(p)}>{step.finale ? 'Done' : 'Next'}</button>
@@ -224,6 +240,45 @@ export function TourCard({ p, c, officer, lender }: { p: Palette; c: ConsoleTour
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/** Closing invitation, on both endings' finale card. The script the judge just played is one of
+ *  three, chosen by the engine from the borrower's real data — so the most useful thing to hand
+ *  them at the end is the door to the other two.
+ *
+ *  Names no personas on purpose. The demo borrowers live in the borrower app's own registry
+ *  (`PipComp/src/data/demoPersonas.ts`), which this console cannot see; hardcoding "Ravi, Aina,
+ *  Faizal" here would be three facts free to drift. The three VERDICTS are this registry's own
+ *  `ConsoleTourBranch` union, so naming those instead is both concrete and self-checking. */
+function AnotherEnding({ p }: { p: Palette }) {
+  return (
+    <div style={{ marginTop: 12, paddingTop: 11, borderTop: `1px solid ${p.hairline}` }}>
+      <p style={{ fontFamily: FONT.ui, fontSize: 11.5, fontWeight: 800, color: p.accentInk, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 5 }}>
+        Try another ending
+      </p>
+      <p style={{ fontFamily: FONT.ui, fontSize: 12.5, color: p.ink2, lineHeight: 1.5 }}>
+        Three demo borrowers ship with the app, and the engine gives each a different answer:
+        approved outright, referred to you, or declined on the evidence. You have seen one.
+      </p>
+      <a
+        href={BORROWER_APP_URL}
+        target="_blank"
+        rel="noreferrer"
+        style={{ display: 'block', textAlign: 'center', marginTop: 10, padding: '9px 0', borderRadius: 8, border: `1.5px solid ${p.accentInk}`, color: p.accentInk, fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, textDecoration: 'none' }}
+      >
+        Load another borrower →
+      </a>
+      {/* Both instructions are the BORROWER app's, because the script starts there — the ⟳
+          badge in this header restarts the console half alone, which would drop the judge into
+          act 7 with no application of their own. */}
+      <p style={{ fontFamily: FONT.ui, fontSize: 11.5, color: p.ink3, lineHeight: 1.5, marginTop: 7 }}>
+        In the app: <strong style={{ color: p.ink2 }}>Profile → Demo profiles</strong>, load
+        another, then <strong style={{ color: p.ink2 }}>Restart judge tour</strong> on the same
+        screen. {LENDER_REGISTRY.length} lender desks sit behind this header’s switcher too, each
+        running its own published policy.
+      </p>
     </div>
   );
 }

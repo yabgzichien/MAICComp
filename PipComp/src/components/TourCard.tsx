@@ -70,6 +70,7 @@ export function TourCard({
   placement = 'bottom',
   persona,
   handoffReady = false,
+  handoffSelfAdvancing = false,
   onNext,
   onBack,
   onExit,
@@ -95,8 +96,11 @@ export function TourCard({
   placement?: 'bottom' | 'top';
   /** Fills the copy's `{name}` / `{role}` tokens with the loaded demo borrower. */
   persona?: { name?: string; role?: string };
-  /** Handoff steps only: whether the real loan has moved far enough to unlock Continue. */
+  /** Handoff steps only: whether the real loan has moved far enough for the script to go on. */
   handoffReady?: boolean;
+  /** Handoff steps only: this step is watching the real loan and will advance by itself, so it
+   *  renders no Continue button  the waiting line is the whole story. */
+  handoffSelfAdvancing?: boolean;
   onNext: () => void;
   onBack: () => void;
   onExit: () => void;
@@ -212,25 +216,34 @@ export function TourCard({
               <Pressable onPress={onSkip} accessibilityRole="button" accessibilityLabel="Skip this step" style={styles.secondaryBtn} hitSlop={8}>
                 <Text style={styles.secondaryText}>Skip</Text>
               </Pressable>
-              {/* Gated, never automatic: the judge presses this when they come back. On the
-                  `approved` ending the offer already exists at this point, so self-advancing
-                  would carry them past the console without ever playing the officer. */}
-              <Pressable
-                onPress={onNext}
-                disabled={!handoffReady}
-                accessibilityRole="button"
-                accessibilityLabel={step.handoff?.cta ?? 'Continue'}
-                accessibilityState={{ disabled: !handoffReady }}
-                style={[styles.nextBtn, !handoffReady && styles.nextBtnDisabled]}
-                hitSlop={8}
-              >
-                <Text style={[styles.nextText, !handoffReady && styles.nextTextDisabled]}>{step.handoff?.cta}</Text>
-              </Pressable>
+              {/* No Continue while the step is watching the real loan: it advances itself the
+                  moment the gate opens, and a button asking the judge to confirm the offer they
+                  can already see is a click that tells the app nothing. The button IS rendered
+                  when the gate was already open on arrival — the `approved` ending, where
+                  self-advancing would carry them past the console without ever playing the
+                  officer, and `gate: 'none'` steps, which have nothing to wait for. */}
+              {!handoffSelfAdvancing && (
+                <Pressable
+                  onPress={onNext}
+                  disabled={!handoffReady}
+                  accessibilityRole="button"
+                  accessibilityLabel={step.handoff?.cta ?? 'Continue'}
+                  accessibilityState={{ disabled: !handoffReady }}
+                  style={[styles.nextBtn, !handoffReady && styles.nextBtnDisabled]}
+                  hitSlop={8}
+                >
+                  <Text style={[styles.nextText, !handoffReady && styles.nextTextDisabled]}>{step.handoff?.cta}</Text>
+                </Pressable>
+              )}
             </>
           ) : interactive ? (
-            <Pressable onPress={onSkip} accessibilityRole="button" accessibilityLabel="Skip this step" style={styles.secondaryBtn} hitSlop={8}>
-              <Text style={styles.secondaryText}>Skip</Text>
-            </Pressable>
+            // A required step (the scan, eKYC, the mint, the send) offers no Skip at all: what
+            // it builds is what every later act reads. Exit, top left, remains the way out.
+            step.required ? null : (
+              <Pressable onPress={onSkip} accessibilityRole="button" accessibilityLabel="Skip this step" style={styles.secondaryBtn} hitSlop={8}>
+                <Text style={styles.secondaryText}>Skip</Text>
+              </Pressable>
+            )
           ) : (
             <>
               {index > 0 && (
@@ -258,6 +271,7 @@ export function MissionBanner({
   phaseIndex,
   phaseCount,
   topInset = 0,
+  required = false,
   onSkip,
   onExit,
 }: {
@@ -265,6 +279,8 @@ export function MissionBanner({
   phaseIndex: number;
   phaseCount: number;
   topInset?: number;
+  /** Mirrors the card: a required mission drops Skip and leaves ✕ (exit) as the only way out. */
+  required?: boolean;
   onSkip: () => void;
   onExit: () => void;
 }) {
@@ -279,9 +295,11 @@ export function MissionBanner({
         <Text style={styles.bannerText} accessibilityLiveRegion="polite" numberOfLines={2}>
           {instruction}
         </Text>
-        <Pressable onPress={onSkip} accessibilityRole="button" accessibilityLabel="Skip the scan mission" hitSlop={8}>
-          <Text style={styles.bannerSkip}>Skip</Text>
-        </Pressable>
+        {!required && (
+          <Pressable onPress={onSkip} accessibilityRole="button" accessibilityLabel="Skip the scan mission" hitSlop={8}>
+            <Text style={styles.bannerSkip}>Skip</Text>
+          </Pressable>
+        )}
         <Pressable onPress={onExit} accessibilityRole="button" accessibilityLabel="Exit tour" hitSlop={8}>
           <Text style={styles.bannerExit}>✕</Text>
         </Pressable>

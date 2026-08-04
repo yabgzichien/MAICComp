@@ -20,10 +20,13 @@ import { filedFootText, lenderOutcome, type LenderOutcome } from '../lib/lenderO
 import { computeBorrowingLimit, outstandingExposure } from '../lib/borrowingLimit';
 import { submitApplication, type DirectApplyResult } from '../lib/directApply';
 import { fetchLenderDirectory, LENDER_API_BASE, type LenderProfile } from '../lib/lenderDirectory';
+import { criteriaSummary, lenderCriteria } from '../lib/lenderCriteria';
+import { LenderRequirements } from '../components/LenderRequirements';
 import { PURPOSE_CATEGORIES, PURPOSE_LABELS, type PurposeCategory } from '../lib/loanPurpose';
 import { TourAnchor } from '../components/TourAnchor';
 import { emitTourSignal } from '../lib/tourSignals';
 import { BORROWER_TOUR_STEPS, branchForDecision, clampTourStep, stepsForBranch } from '../lib/tourSteps';
+import { isControlLocked } from '../lib/tourDrive';
 import { PassportCeremonyScreen } from './PassportCeremonyScreen';
 import { colors, numFont, platformShadow, uiFont } from '../theme';
 
@@ -56,9 +59,14 @@ function decisionLabel(d: Decision): string {
 export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () => {} }: { onBack: () => void; onOpenKyc?: () => void; onOpenLoans?: () => void }) {
   const insets = useSafeAreaInsets();
   const { profile, score, dataConfidence, coverage, momentum, coachInput, incomeQuality, spendingProfile, obligations, standing } = useCreditProfile();
-  const { kyc, occupation, loanApplications, loanProducts, repaymentSummary, accountValues, tourActive, tourStepIndex, tourBranch, setTourBranch } = useAppData();
+  const { kyc, occupation, loanApplications, loanProducts, repaymentSummary, accountValues, tourActive, tourRunning, tourStepIndex, tourBranch, setTourBranch } = useAppData();
   const tourRun = useMemo(() => stepsForBranch(BORROWER_TOUR_STEPS, tourBranch), [tourBranch]);
   const activeTourAnchor = tourActive ? tourRun[clampTourStep(tourStepIndex, tourRun.length)]?.anchorId ?? null : null;
+  // Sending is the act-6 beat. Filing a real application before the tour asks puts a file on the
+  // console's desk that the next four acts then narrate out of order, so the button waits for
+  // its step. Gated on `tourRunning`, not `tourActive`: pausing the tour (tapping into the app)
+  // must not be a way around act 6. No tour → no lock; this is the tour's rule, not the app's.
+  const tourBlocksSend = tourRunning && isControlLocked(tourRun, tourStepIndex, 'send-button');
 
   const [phase, setPhase] = useState<'consent' | 'minted'>('consent');
   const [includeIdentity, setIncludeIdentity] = useState(true);
@@ -197,6 +205,19 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
     return out;
   }, [lenders, score, profile, coverage, dataConfidence, effectiveAmount]);
   const selectedOutcome = selectedLender ? lenderOutcomes.get(selectedLender.id) ?? null : null;
+
+  // The borrower's standing against a lender's published bars (lender requirements, 2026-08-03).
+  // Same figures the engine above is fed, so a requirement marked "met" here is met by the very
+  // check that will run on the console.
+  const criteriaStanding = useMemo(
+    () => ({
+      score: score.score,
+      confidence: score.confidence,
+      daysCovered: coverage.daysCovered,
+      coverageRatio: coverage.ratio,
+    }),
+    [score, coverage]
+  );
 
   // Switching lenders re-defaults the amount to the new lender's supportable figure and clears
   // any stale verdict  the borrower is now asking a different lender.
@@ -337,7 +358,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
     // state: several taps dispatched in one tick all run before React re-renders, so every one
     // of them would read `sendBusy === false` and fire its own POST (measured: 5 taps → 5
     // applications). A ref flips synchronously, so only the first tap gets through.
-    if (!pasteCode || sendingRef.current || sendLocked) return;
+    if (!pasteCode || sendingRef.current || sendLocked || tourBlocksSend) return;
     sendingRef.current = true;
     setSendBusy(true);
     setSendResult(null);
@@ -513,7 +534,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
         {/* Request financing  direct-apply straight to the chosen lender console */}
         <Card style={styles.reqCard}>
           <Text style={styles.reqTitle}>Request financing</Text>
-          <Text style={styles.reqSub}>Pick a lender and send this signed passport straight to them to apply. Only your signed aggregates travel — never your raw transactions.</Text>
+          <Text style={styles.reqSub}>Pick a lender and send this signed passport straight to them to apply. Only your signed aggregates travel, never your raw transactions.</Text>
 
           {lenders.length > 0 && (
             <>
@@ -534,13 +555,14 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
                       <View style={[styles.lenderDot, { backgroundColor: l.brandColor }]} />
                       <View style={{ flex: 1 }}>
                         <Text style={styles.lenderName} numberOfLines={1}>{l.name}</Text>
-                        <Text style={styles.lenderBlurb} numberOfLines={2}>{l.blurb}</Text>
+                        {/* Rate and entry bar on the row itself: comparing lenders is the whole
+                            point of this list, and price is half of that comparison. */}
+                        <Text style={styles.lenderTerms}>{criteriaSummary(lenderCriteria(l))}</Text>
                         {outcome && (
                           <View style={styles.outcomeBlock}>
                             <View style={[styles.outcomeChip, { backgroundColor: decisionColor(outcome.decision) + '1a' }]}>
                               <Text style={[styles.outcomeChipText, { color: decisionColor(outcome.decision) }]}>{outcome.headline}</Text>
                             </View>
-                            <Text style={styles.outcomeDetail}>{outcome.detail}</Text>
                           </View>
                         )}
                       </View>
@@ -549,6 +571,17 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
                   );
                 })}
               </View>
+              {/* The chosen lender's full published criteria, open by default: this is the last
+                  screen before a real application is filed, so the bars being applied to it
+                  should be readable without a tap. */}
+              {selectedLender && (
+                <LenderRequirements
+                  lender={selectedLender}
+                  you={criteriaStanding}
+                  initiallyOpen
+                  style={{ marginTop: 10 }}
+                />
+              )}
             </>
           )}
 
@@ -611,32 +644,42 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
             </View>
           )}
 
-          <Pressable
-            onPress={sendToLender}
-            disabled={sendBusy || sendLocked}
-            style={({ pressed }) => [styles.sendBtn, sendLocked && styles.sendBtnLocked, (sendBusy || pressed) && { opacity: 0.92 }]}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: sendBusy || sendLocked }}
-          >
-            {sendBusy ? (
-              <ActivityIndicator size="small" color={colors.onAccent} />
-            ) : sendLocked ? (
-              <>
-                <Icon name="check" size={15} color={colors.ink3} stroke={2.6} />
-                <Text style={[styles.sendBtnText, { color: colors.ink3 }]}>Request sent</Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.sendBtnText}>
-                  {selectedLender && selectedLender.id !== 'offline' ? `Send to ${selectedLender.name.split(' ')[0]}` : 'Send request to lender'}
-                </Text>
-                <Icon name="arrowRight" size={16} color={colors.onAccent} />
-              </>
-            )}
-          </Pressable>
-          {sendLocked && (
+          <TourAnchor id="send-button" activeId={activeTourAnchor}>
+            <Pressable
+              onPress={sendToLender}
+              disabled={sendBusy || sendLocked || tourBlocksSend}
+              style={({ pressed }) => [
+                styles.sendBtn,
+                (sendLocked || tourBlocksSend) && styles.sendBtnLocked,
+                (sendBusy || pressed) && { opacity: 0.92 },
+              ]}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: sendBusy || sendLocked || tourBlocksSend }}
+            >
+              {sendBusy ? (
+                <ActivityIndicator size="small" color={colors.onAccent} />
+              ) : sendLocked ? (
+                <>
+                  <Icon name="check" size={15} color={colors.ink3} stroke={2.6} />
+                  <Text style={[styles.sendBtnText, { color: colors.ink3 }]}>Request sent</Text>
+                </>
+              ) : (
+                <>
+                  <Text style={[styles.sendBtnText, tourBlocksSend && { color: colors.ink3 }]}>
+                    {selectedLender && selectedLender.id !== 'offline' ? `Send to ${selectedLender.name.split(' ')[0]}` : 'Send request to lender'}
+                  </Text>
+                  <Icon name="arrowRight" size={16} color={tourBlocksSend ? colors.ink3 : colors.onAccent} />
+                </>
+              )}
+            </Pressable>
+          </TourAnchor>
+          {sendLocked ? (
             <Text style={styles.sendLockedHint}>Change the amount, purpose, or lender to send another request.</Text>
-          )}
+          ) : tourBlocksSend ? (
+            // Says WHY rather than leaving a dead button: the judge is mid-tour and this is the
+            // act they haven't reached yet.
+            <Text style={styles.sendLockedHint}>The guided tour sends this for real in act 6. Keep going and it unlocks.</Text>
+          ) : null}
 
           {sendResult && sendResult.status === 'filed' && (
             <FadeIn key={sendSeq} style={styles.resultBox}>
@@ -704,7 +747,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
               <Text style={styles.resultTitle}>
                 {selectedLender && selectedLender.id !== 'offline' ? `Waiting in ${selectedLender.name}'s queue` : "Waiting in the lender's queue"}
               </Text>
-              <Text style={[styles.resultFoot, { marginTop: 6 }]}>This passport is already filed at this amount — no need to send it again.</Text>
+              <Text style={[styles.resultFoot, { marginTop: 6 }]}>This passport is already filed at this amount, so there is no need to send it again.</Text>
             </FadeIn>
           )}
 
@@ -718,7 +761,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
 
           {sendResult && sendResult.status === 'offline' && (
             <View style={styles.noticeBox}>
-              <Text style={styles.noticeText}>Couldn't reach the lender console. Present your signed code offline instead — see below.</Text>
+              <Text style={styles.noticeText}>Couldn't reach the lender console. Present your signed code offline instead, as described below.</Text>
             </View>
           )}
         </Card>
@@ -726,7 +769,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
         {/* Offline fallback  the manual hand-over that keeps working with no connection */}
         <Card style={styles.fallbackCard}>
           <Text style={styles.fallbackTitle}>Present offline instead</Text>
-          <Text style={styles.fallbackSub}>No connection to a lender? Share your signed code — any lender can verify it offline, no server needed.</Text>
+          <Text style={styles.fallbackSub}>No connection to a lender? Share your signed code instead. Any lender can verify it offline, without a server.</Text>
           <View style={styles.codeRow}>
             <View style={styles.codeField}>
               <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
@@ -813,11 +856,10 @@ const styles = StyleSheet.create({
   lenderRowOn: { backgroundColor: colors.accentTint, borderColor: colors.accent },
   lenderDot: { width: 12, height: 12, borderRadius: 999 },
   lenderName: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.ink },
-  lenderBlurb: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, lineHeight: 15, marginTop: 2 },
+  lenderTerms: { fontFamily: numFont(600), fontSize: 11.5, color: colors.accentInk, marginTop: 4 },
   outcomeBlock: { marginTop: 7, gap: 4, alignItems: 'flex-start' },
   outcomeChip: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 },
   outcomeChipText: { fontFamily: uiFont(700), fontSize: 11.5 },
-  outcomeDetail: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, lineHeight: 16 },
   outcomeBanner: { marginTop: 18, borderRadius: 12, borderWidth: 1.5, padding: 12 },
   outcomeBannerTitle: { fontFamily: uiFont(700), fontSize: 13.5 },
   outcomeBannerBody: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, lineHeight: 18, marginTop: 4 },

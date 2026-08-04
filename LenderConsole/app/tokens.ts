@@ -141,17 +141,17 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   loans_pooled: {
     term: 'Loans Pooled',
     short: 'How many individual micro-loans back this instrument.',
-    body: 'Diversification is the engine of securitisation. With 1,000 independent borrowers, any single default barely moves the pool; realised losses cluster tightly around the statistical expected loss instead of swinging wildly. More loans → more predictable losses → tranches that can be rated and priced with confidence.',
+    body: 'Pooling works because the borrowers are independent of one another. With 1,000 of them, any single default barely moves the pool, and realised losses cluster tightly around the statistical expected loss instead of swinging wildly. The more loans in the pool, the more predictable the losses, and the more confidently each tranche can be rated and priced.',
   },
   wtd_avg_score: {
     term: 'Weighted-Average Score',
     short: "The pool's average Pip credit score, weighted by loan size.",
-    body: 'Each borrower carries a deterministic 300–900 Pip score. Weighting by principal (not by headcount) reflects where the money actually sits, so a few large loans cannot hide behind many tiny high-scoring ones. A 667 average sits in the "Good" band, thin-file by traditional bank standards, which is exactly the informal-economy segment Pip is built to fund safely.',
+    body: 'Each borrower carries a deterministic 300–900 Pip score. Weighting by principal (not by headcount) reflects where the money actually sits, so a few large loans cannot hide behind many tiny high-scoring ones. A 667 average sits in the "Good" band, thin-file by traditional bank standards, which is the informal-economy segment Pip is built for.',
   },
   wtd_avg_pd: {
     term: 'Weighted-Average PD (Probability of Default)',
     short: 'The size-weighted chance a borrower fails to repay over the loan term.',
-    body: "PD is derived from each borrower's credit band and the ML fraud / data-confidence layer, then weighted by principal. It is one of the two inputs to expected loss (the other being loss-given-default). At 14.2% this pool prices its risk openly, rather than assuming the credit-invisible are simply uncreditworthy.",
+    body: "PD is derived from each borrower's credit band and the ML fraud / data-confidence layer, then weighted by principal. It is one of the two inputs to expected loss (the other being loss-given-default). This pool puts its risk at 14.2% and prices against that figure, instead of treating credit-invisible borrowers as unlendable by default.",
   },
   expected_loss: {
     term: 'Expected Loss',
@@ -161,7 +161,7 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   senior: {
     term: 'Senior Tranche',
     short: 'Paid first, loses last. The safest slice, lowest yield, highest rating.',
-    body: 'In the loss waterfall, cash flows fill the senior tranche first and losses reach it last, only after every junior tranche beneath it is wiped out. That subordination (28% of the pool here) is what earns it an investment-grade "A" and its lower profit rate: safety is bought with yield. This is the slice a pension fund or bank treasury would hold.',
+    body: 'In the loss waterfall, cash flows fill the senior tranche first and losses reach it last, only after every junior tranche beneath it is wiped out. That subordination (28% of the pool here) is what earns it an investment-grade "A" and its lower profit rate, because you pay for the safety in yield. This is the slice a pension fund or bank treasury would hold.',
   },
   mezzanine: {
     term: 'Mezzanine Tranche',
@@ -186,12 +186,12 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   profit_rate: {
     term: 'Profit Rate p.a.',
     short: 'The annual return to investors in this tranche. Profit-sharing, not interest.',
-    body: 'To stay Shariah-compliant, returns are structured as profit-sharing on the underlying financing rather than riba (interest). Rates rise as you move down the stack (8.5% → 13.5% → 19%) because investors are paid more for standing closer to the first loss. The spread between tranches is the price of risk.',
+    body: 'To stay Shariah-compliant, returns are structured as profit-sharing on the underlying financing rather than riba (interest). Rates rise as you move down the stack (8.5% → 13.5% → 19%) because investors are paid more for standing closer to the first loss. The gap between tranches is what that extra exposure costs.',
   },
   rating: {
     term: 'Tranche Rating',
     short: "A creditworthiness grade computed deterministically from the pool's expected loss.",
-    body: 'These ratings are not marketing labels. Each is calculated from the tranche\'s loss-coverage multiple (how many times over its subordination can absorb the pool\'s expected loss). A weaker pool is honestly downgraded, not rubber-stamped AAA. That is the discipline whose absence made mispriced ratings so damaging in 2008, here applied deterministically and auditably.',
+    body: 'Each rating is calculated from the tranche\'s loss-coverage multiple: how many times over its subordination can absorb the pool\'s expected loss. A weaker pool comes out downgraded rather than stamped AAA. Mispriced ratings did enormous damage in 2008, so the arithmetic here is fixed and auditable.',
   },
   waterfall: {
     term: 'Loss Waterfall',
@@ -206,7 +206,7 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   benford: {
     term: "Benford's Law Check",
     short: 'Compares the leading digits of reported amounts to the distribution real transaction data naturally follows.',
-    body: "Genuine transaction amounts follow a predictable curve of leading digits (about 30% start with 1, only ~5% with 9). Fabricated figures, typed or rounded by a person, don't. They cluster unnaturally. The chart runs on the passport's signed aggregate digit counts, never raw transactions.",
+    body: "Genuine transaction amounts follow a predictable curve of leading digits (about 30% start with 1, only ~5% with 9). Fabricated figures, typed or rounded by a person, cluster unnaturally instead. The chart runs on the passport's signed aggregate digit counts, not on raw transactions.",
   },
 
   // ── Portfolio repayment performance (2026-07-18 design) ─────────────────────
@@ -223,12 +223,12 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   realized_loss: {
     term: 'Realized Loss (vs Expected)',
     short: 'What has actually been missed so far, compared with what the risk model predicted upfront.',
-    body: "Expected loss (PD × loss-given-default) is a prediction made at underwriting. Realized loss is what has actually failed to collect since. Comparing the two, band by band, is the validation loop: it is how a lender checks whether the credit score is honestly predictive rather than just a plausible-sounding number.",
+    body: "Expected loss (PD × loss-given-default) is a prediction made at underwriting. Realized loss is what has actually failed to collect since. Comparing the two, band by band, is the validation loop: it is how a lender checks whether the credit score actually predicts anything.",
   },
   interest_collected: {
     term: 'Interest Collected',
     short: 'Of everything collected so far, the portion that is profit rather than principal returning.',
-    body: 'Each instalment repays a slice of principal and a slice of interest. This figure nets out the principal share (assumed to reduce in a straight line with instalments paid) from total collections, leaving the interest actually earned to date — the portfolio economics behind the risk numbers.',
+    body: 'Each instalment repays a slice of principal and a slice of interest. This figure nets out the principal share (assumed to reduce in a straight line with instalments paid) from total collections, leaving the interest actually earned to date. That is the portfolio economics behind the risk numbers.',
   },
   cohort: {
     term: 'Cohort (by Credit Band)',
@@ -238,22 +238,22 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   delinquent: {
     term: 'Current / Late / Delinquent',
     short: 'How far behind schedule a loan is, if at all.',
-    body: 'Current: paid up to date. Late: exactly one instalment behind. Delinquent: two or more instalments behind, or any instalment missed outright — a missed payment marks a loan delinquent even if the borrower later catches up on later instalments, since a default event does not un-happen.',
+    body: 'Current: paid up to date. Late: exactly one instalment behind. Delinquent: two or more instalments behind, or any instalment missed outright. A missed payment marks a loan delinquent even if the borrower catches up on later instalments, since a default event does not un-happen.',
   },
   fully_repaid: {
     term: 'Fully Repaid',
     short: 'Loans that finished their entire repayment schedule, and what came back.',
-    body: 'A loan settles once every instalment on its schedule has been paid. Because a single missed instalment permanently blocks a loan from ever reaching that state, a settled loan’s realized loss is always zero — this is the strongest evidence the validation loop can offer: not a prediction, but principal that has actually come home. Settled loans stop counting toward live exposure elsewhere on this tab (the money is no longer at risk) but stay in this figure, since it is exactly where they matter most.',
+    body: 'A loan settles once every instalment on its schedule has been paid. Because a single missed instalment permanently blocks a loan from ever reaching that state, a settled loan’s realized loss is always zero. That is the strongest evidence the validation loop can offer, because it is principal that has actually come back rather than a forecast about it. Settled loans stop counting toward live exposure elsewhere on this tab (the money is no longer at risk) but stay in this figure, since it is exactly where they matter most.',
   },
   median: {
     term: 'Median',
     short: 'The middle value once every loan is sorted low to high.',
-    body: "Unlike the mean, the median is not pulled around by one or two outlier loans — a single RM20,000 Scale-tier loan barely moves it, but can drag the mean well above what a typical borrower actually received. Reporting both side by side (with the gap between them) is itself informative: mean far above median means a few large loans, not the book's typical borrower, are driving the average.",
+    body: "Unlike the mean, the median is not pulled around by one or two outlier loans. A single RM20,000 Scale-tier loan barely moves it, but can drag the mean well above what a typical borrower actually received. Reporting both side by side, with the gap between them, is itself informative: a mean far above the median means a few large loans are driving the average rather than the book's typical borrower.",
   },
   standard_deviation: {
     term: 'Standard Deviation (σ)',
     short: 'How spread out the values are around the mean, in the same units as the figure itself.',
-    body: "A small σ means the book is homogeneous (every borrower looks similar); a large σ means the book spans very different borrowers. Reported here rather than variance (which squares the units — RM² for loan amounts is not a readable number) so the spread can be compared directly against the mean it sits beside.",
+    body: "A small σ means the book is homogeneous (every borrower looks similar); a large σ means the book spans very different borrowers. Reported here rather than variance, which squares the units (RM² for loan amounts is not a readable number), so the spread can be compared directly against the mean it sits beside.",
   },
   distribution_strip: {
     term: 'Distribution Strip',
@@ -263,6 +263,83 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   repayment_standing: {
     term: 'Repayment Standing',
     short: "The applicant's current arrears state and repayment history, re-derived from the ledger.",
-    body: "Standing is not self-reported — it's computed from the same repayment schedule this console tracks for every disbursed loan. Access follows progressive-lending practice: one month behind still refers for review, two months loses the loyalty discount and caps the eligible tier, three or more declines new applications until cleared. Paying down arrears restores access the same day; the event itself stays visible for 12 months, mirroring how Malaysia's CCRIS (Bank Negara's credit reference system) reports a borrower's payment conduct — this console doesn't integrate with CCRIS, but a licensed lender using it in production would report through it, which is what CTOS-type scores actually read from.",
+    body: "Standing is computed from the same repayment schedule this console tracks for every disbursed loan, not reported by the applicant. Access follows progressive-lending practice: one month behind still refers for review, two months loses the loyalty discount and caps the eligible tier, three or more declines new applications until cleared. Paying down arrears restores access the same day, though the event itself stays visible for 12 months. That mirrors how Malaysia's CCRIS (Bank Negara's credit reference system) reports a borrower's payment conduct. This console doesn't integrate with CCRIS, but a licensed lender using it in production would report through it, which is what CTOS-type scores actually read from.",
+  },
+
+  // ── Console declutter pass (2026-08-03): explanatory text moved off the working screens ──
+  stacking_registry: {
+    term: 'Stacking Check Scope',
+    short: "This console's stacking check only sees its own presentment log.",
+    body: 'A production deployment shares presentment history across lenders via a registry, so a borrower presenting the same passport to several lenders would be caught everywhere. Here the check is local to this console: it catches repeat presentments to this lender only.',
+  },
+  occupation_self_declared: {
+    term: 'Self-Declared Occupation',
+    short: 'Occupation is self-declared, not verified against any registry.',
+    body: "This is Tier 1 context the applicant typed in, not a figure the passport's aggregates prove. Weigh it alongside the verified score and factor figures rather than as fact on its own.",
+  },
+  evidenced_debt_service: {
+    term: 'Evidenced Debt Service',
+    short: 'The evidenced monthly debt-service figure sums these detected recurring outflows.',
+    body: 'Each row above is a recurring obligation the spending-profile analysis found in the transaction pattern itself, not one the applicant reported. Their total is what feeds the DSR (debt-service ratio) figure elsewhere in the decision.',
+  },
+  ai_panel_advisory: {
+    term: 'AI Assessment Panel Scope',
+    short: "The panel is advisory only. It can flag caution but can't approve, decline, or change the amount.",
+    body: 'Every verdict and confidence score the panel shows is computed deterministically from the same passport aggregates the policy engine itself reads. An LLM may narrate a verdict into a sentence, but never sets the verdict, and nothing here writes back to the decision.',
+  },
+  dsr_cap: {
+    term: 'DSR Cap',
+    short: "Total debt service (existing obligations plus the new installment) over income can't exceed this.",
+    body: "This is the debt-service ratio ceiling the engine checks every application against. Raising it lets more applicants qualify for a given amount; lowering it tightens affordability across the whole book.",
+  },
+  surplus_share_cap: {
+    term: 'Installment Share of Surplus Cap',
+    short: "An installment can't consume more than this share of the applicant's average monthly surplus.",
+    body: "Surplus is income left over after expenses. This cap keeps a new installment from eating too far into that buffer, independent of the DSR cap above (both are checked; the tighter one binds).",
+  },
+  target_return: {
+    term: 'Target Net Return',
+    short: 'Net margin above break-even the pricing assistant aims for when discounting a strong file.',
+    body: 'The assistant only ever discounts toward this target on files it judges strong; it never prices below your cost of funds and never surcharges past the tier ladder\'s published rate.',
+  },
+  policy_thresholds_scope: {
+    term: 'What These Thresholds Control',
+    short: 'Every decision on the Verify tab, the audit trail, and the criteria borrowers are coached toward.',
+    body: 'These numbers are read live by the decision engine (Verify tab), cited in every audit trail entry, and published at GET /api/lenders: the same feed the borrower app\'s Coach reads to tell an applicant what would move them into a better tier. Editing here changes all three at once.',
+  },
+  pricing_assistant_behavior: {
+    term: 'Pricing Assistant Behavior',
+    short: 'Suggests a rate toward your target return, clamped to the tier ladder as a ceiling.',
+    body: 'The assistant discounts strong files toward the target net return above, but never surcharges past the published ladder rate for that tier. The ladder is always a ceiling, never something the assistant can exceed.',
+  },
+  published_criteria_panel: {
+    term: 'Published Criteria Panel',
+    short: "Live copy of what the borrower app's Coach actually reads right now.",
+    body: "This panel fetches fresh from GET /api/lenders (the published directory) rather than reading this form's local, possibly unsaved state. It's how you confirm a save actually reached borrowers, not just this screen.",
+  },
+  advisor_disclaimer: {
+    term: 'Policy Advisor Scope',
+    short: 'Advisory only, computed from the same realized-vs-expected performance the Portfolio tab shows.',
+    body: 'Every suggestion here is deterministic, not a model guess. It comes from the same performance aggregates as the Portfolio tab. Nothing here writes to policy automatically; applying a suggestion is always a manual edit above.',
+  },
+  portfolio_pipeline: {
+    term: 'Approve → Book → Securitize',
+    short: 'How a loan moves from a decision on the Verify tab to a rated pool.',
+    body: 'Every loan approved in the pipeline books onto this tab automatically. One click on "Structure this pool" then takes the live book and structures it into rated tranches on the Capital Markets tab.',
+  },
+  pool_risk_methodology: {
+    term: 'Pool Risk Methodology',
+    short: 'Risk here comes only from verified credit bands on loans that already cleared the fraud/confidence gates.',
+    body: 'Confidence is shown for context, not folded into the risk figures. Declared purpose stands in for sector in the concentration breakdown until verified occupation data ships.',
+  },
+  memo_advisory_boilerplate: {
+    term: 'Credit Memo Scope',
+    short: "This memo restates the policy engine's figures and verdicts. It can't change them.",
+    body: 'Every figure, verdict, and compliance flag in this memo is computed by the deterministic policy engine. Any narration is advisory drafting over that decision, never a second opinion that could alter it.',
+  },
+  letter_advisory_boilerplate: {
+    term: 'Adverse-Action Letter Scope',
+    short: "This letter restates the policy engine's decision. It doesn't decide anything itself.",
+    body: 'Every figure and reason in this letter traces back to the deterministic decision already made. Any narration only smooths the opening/closing prose; it cannot change a reason or a figure.',
   },
 };

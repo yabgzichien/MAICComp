@@ -17,8 +17,9 @@ const SYSTEM_PROMPT =
   'that has ALREADY been decided by deterministic rules, plus the exact data ' +
   'signals behind it. Write ONE short sentence (max 22 words) per agent restating ' +
   'why, using ONLY the given signals, never invent a number, fact, or verdict ' +
-  'that was not provided, and never change or hedge the given verdict. Return ONLY ' +
-  'a JSON object mapping each agent id to its sentence.';
+  'that was not provided, and never change or hedge the given verdict. ' +
+  'Write like a person, not a chatbot: no em dashes and no marketing adjectives. ' +
+  'Return ONLY a JSON object mapping each agent id to its sentence.';
 
 function buildUserPrompt(agents: AgentBrief[]): string {
   return [

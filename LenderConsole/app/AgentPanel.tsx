@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { FONT, type Palette } from './tokens';
-import { MiniBar, SectionLabel } from './shared';
+import { InfoButton, MiniBar, SectionLabel } from './shared';
 import { runAgentPanel, type AgentAssessment, type StackingSignal, type VerdictTone } from '../lib/agents';
 import type { CreditPassport } from '../lib/passport';
 import type { LoanDecision } from '../lib/loans';
@@ -77,7 +77,7 @@ function AgentCard({
   );
 }
 
-export default function AgentPanel({ p, passport, decision, stacking }: { p: Palette; passport: CreditPassport; decision: LoanDecision; stacking?: StackingSignal }) {
+export default function AgentPanel({ p, passport, decision, stacking, onInfo }: { p: Palette; passport: CreditPassport; decision: LoanDecision; stacking?: StackingSignal; onInfo?: (entry: string) => void }) {
   const panel = useMemo(() => runAgentPanel(passport, decision, stacking), [passport, decision, stacking]);
   const [rationales, setRationales] = useState<Record<string, string>>({});
   const [provenance, setProvenance] = useState<Provenance>('pending');
@@ -123,10 +123,12 @@ export default function AgentPanel({ p, passport, decision, stacking }: { p: Pal
           <AgentCard key={agent.id} p={p} agent={agent} index={i} rationale={rationales[agent.id] ?? agent.rationale} provenance={provenanceFor(agent.id)} />
         ))}
       </div>
-      <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5, marginTop: 10 }}>
-        Advisory only. Verdicts and confidence are computed deterministically from the same passport aggregates as the policy engine. The panel can flag
-        additional caution; it cannot approve, decline, or change the amount.
-      </p>
+      {onInfo && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10 }}>
+          <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>Advisory only</span>
+          <InfoButton entry="ai_panel_advisory" onOpen={onInfo} />
+        </div>
+      )}
     </div>
   );
 }

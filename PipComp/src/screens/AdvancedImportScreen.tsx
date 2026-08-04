@@ -496,7 +496,7 @@ export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
             <Card style={{ padding: 16, marginTop: 18, gap: 10 }}>
               {txnCount > 0 && (
                 <Text style={styles.doneText}>
-                  Transaction categories were filled in from what Pip has learned — tweak them in your transactions list.
+                  Transaction categories were filled in from what Pip has learned. Tweak them in your transactions list.
                 </Text>
               )}
               {accCount > 0 && (
@@ -606,7 +606,7 @@ export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
               </Pressable>
 
               <Text style={styles.copyHint}>
-                Paste the prompt and attach your file(s) — statements, spreadsheets, or any financial export. Multiple files are fine.
+                Paste the prompt and attach your file(s): statements, spreadsheets, or any financial export. Multiple files are fine.
               </Text>
 
               <View>

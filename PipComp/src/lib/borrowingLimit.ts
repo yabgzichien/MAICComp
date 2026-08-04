@@ -106,13 +106,13 @@ export function computeBorrowingLimit(
     binding = 'exposure';
     reason =
       available > 0
-        ? `RM${available.toLocaleString('en-MY')} of your RM${limit.toLocaleString('en-MY')} limit is free — the rest is committed to loans you're already repaying.`
-        : `You've drawn your full RM${limit.toLocaleString('en-MY')} limit — repay before borrowing more.`;
+        ? `RM${available.toLocaleString('en-MY')} of your RM${limit.toLocaleString('en-MY')} limit is free. The rest is committed to loans you're already repaying.`
+        : `You've drawn your full RM${limit.toLocaleString('en-MY')} limit. Repay some of it before borrowing more.`;
   } else if (cap < engineMax) {
     binding = 'progression';
     reason =
       input.repaymentMissed > 0
-        ? 'Your limit is held back by a missed repayment — a clean run of on-time payments raises it.'
+        ? 'Your limit is held back by a missed repayment. A clean run of on-time payments raises it.'
         : 'Your limit grows as you build an on-time repayment record.';
   } else {
     binding = 'affordability';

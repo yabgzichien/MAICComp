@@ -9,10 +9,12 @@
 // this registry legitimately skips the acts the other app owns, which is why the validator
 // below checks only that acts never regress, not that they are contiguous from 1.
 //
-// The two halves are joined by `handoff` steps and by real loan state: a handoff's Continue
-// stays disabled until the underlying record actually exists (an offer published, an offer
-// answered). Nothing here polls or fetches  the step only declares WHAT must be true; the
-// driver supplies whether it is.
+// The two halves are joined by `handoff` steps and by real loan state: a handoff waits on the
+// underlying record actually existing (an offer published, an offer answered), and where that
+// can only happen because the judge did the work next door it moves on by itself rather than
+// asking them to confirm it (`onOpen`). Nothing here polls or fetches: the step declares WHAT
+// must be true and what its opening means; the driver supplies whether it is, and
+// `classifyHandoffGate` puts the two together.
 //
 // Kept separate from the tour's runtime state (App.tsx local state, persisted via metaRepo) so
 // the steps stay trivially unit-testable.
@@ -67,19 +69,34 @@ export type TourPip = 'idle' | 'happy' | 'think' | 'curious';
  *  none           nothing to wait for; the judge simply moves on when they are ready. */
 export type TourHandoffGate = 'offer-pending' | 'none';
 
+/** What the gate opening MEANS for this particular handoff.
+ *
+ *  advance  the record moving IS the judge coming back, so the step clears itself and no
+ *            Continue button is ever rendered. Right when the gate can only open because the
+ *            judge did the work in the other app (act 6 referred: an officer approved it).
+ *  prompt   the gate merely ENABLES a Continue button the judge presses themselves. Right when
+ *            the record can move without the judge having done anything yet: on the `approved`
+ *            ending the offer is published at send time and simply takes a poll to arrive, so
+ *            self-advancing would carry them past the console and they would never play the
+ *            officer. Also the only sane setting for `gate: 'none'`, which has nothing to ride. */
+export type TourHandoffOnOpen = 'advance' | 'prompt';
+
 export interface TourHandoff {
   /** Where the judge is being sent. 'console' renders the Lender Console link (web only  on
    *  native there is no second window to open, so the card shows the instruction alone). */
   target: 'console';
-  /** Button label once the gate is open. */
+  /** Button label. On an `onOpen: 'advance'` handoff this is never actually rendered  the step
+   *  advances itself the moment its gate reads open, so the `cta` only exists for `onOpen:
+   *  'prompt'` handoffs and to satisfy the type. */
   cta: string;
   /** Status line while the gate is still closed. Must describe what is being waited ON, not
    *  merely that something is loading  the judge is in another tab and needs to know when to
-   *  come back. */
+   *  come back. This is the whole card on a self-advancing handoff. */
   waiting: string;
   /** Status line once the gate opens. */
   ready: string;
   gate: TourHandoffGate;
+  onOpen: TourHandoffOnOpen;
 }
 
 export interface TourMissionPhase {
@@ -104,6 +121,15 @@ export interface TourStep {
   body: string;
   /** Which endings this step belongs to. Absent = all three. */
   branches?: TourBranch[];
+  /** This beat cannot be skipped: the card renders no Skip, and the driver refuses one even if
+   *  something else asks for it. Reserved for the acts that MAKE the artefacts the rest of the
+   *  script reads — a skipped scan, eKYC, mint or send leaves later steps narrating a passport
+   *  or an application that was never built, which is worse than no tour at all. Exit is still
+   *  the way out; this removes the half-measure, not the escape hatch.
+   *
+   *  Only meaningful on `do` and `mission` steps: explain steps advance on Next, and a handoff's
+   *  Skip is the only thing standing between the judge and a gate that never opens. */
+  required?: boolean;
   /** Optional TourAnchor id to spotlight on this step. Anchors are enhancement, never a
    *  dependency  a step with none (or a mismatched one) still renders card-only. */
   anchorId?: string;
@@ -130,10 +156,10 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     actLabel: 'Meet {name}',
     pip: 'happy',
     title: 'Welcome to Pip Credit',
-    // A dash label rather than "a {role}" ("a delivery driver" / "an online seller" / "a small
+    // A colon label rather than "a {role}" ("a delivery driver" / "an online seller" / "a small
     // trader" would need a/an grammar logic just for this one line). Found live: the first cut
     // read "a online seller" for Aina.
-    body: 'You are {name} — {role}, no payslip. You are about to build that credit yourself.',
+    body: 'You are {name}: {role}, no payslip. You are about to build that credit yourself.',
   },
   {
     id: 'coverage',
@@ -143,7 +169,7 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     actLabel: 'Meet {name}',
     pip: 'think',
     title: 'Coverage unlocks credit',
-    body: 'This chip counts recorded days, not logins. Remember the number. You are about to move it.',
+    body: 'This chip counts days you recorded data, not logins. Remember the number, because you move it next.',
     anchorId: 'coverage-chip',
   },
   // ── Act 2 · See the score ───────────────────────────────────────────────────
@@ -168,7 +194,7 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     actLabel: 'See the score',
     pip: 'think',
     title: 'A transparent score',
-    body: 'Score, data confidence, and every factor visible. Nothing is a black box.',
+    body: 'You can see the score, how much data backs it, and every factor that fed it.',
     anchorId: 'credit-gauge',
   },
   // ── Act 3 · Move the number ─────────────────────────────────────────────────
@@ -181,6 +207,9 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     pip: 'curious',
     title: 'Add real data yourself',
     body: 'Do what a borrower does: scan a statement. Upload your own, or pick a sample.',
+    // The coverage delta, the score movement and everything downstream is measured against
+    // this scan actually happening.
+    required: true,
     mission: {
       cta: 'Add a statement',
       phases: [
@@ -199,7 +228,7 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     actLabel: 'Move the number',
     pip: 'happy',
     title: 'You moved the number',
-    body: 'The chip changed because of what you scanned. Real data, real movement.',
+    body: 'The chip changed because of the statement you just scanned.',
     anchorId: 'coverage-chip',
   },
   // ── Act 4 · Get the plan ────────────────────────────────────────────────────
@@ -228,7 +257,7 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     actLabel: 'Get the plan',
     pip: 'think',
     title: 'A real before and after',
-    body: 'Every lever re-runs the real engines. Honest deltas, including the ones that change nothing.',
+    body: 'Every lever re-runs the real engines, including the ones that turn out to change nothing.',
     anchorId: 'coach-hero-card',
   },
   {
@@ -260,7 +289,7 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     actLabel: 'Get the plan',
     pip: 'happy',
     title: 'See it land',
-    body: 'Try more chips if you like. The result updates live. Next when ready.',
+    body: 'Try more chips if you like; the result updates as you go. Hit Next when you are done.',
     anchorId: 'whatif-result',
   },
   // ── Act 5 · Mint the passport ───────────────────────────────────────────────
@@ -278,6 +307,9 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     // can scroll clear of the card.
     title: 'Verify the identity',
     body: 'Identity and work details are already filled in. Tap Verify, then Done.',
+    // The passport cannot be minted without a verified identity, so skipping here only moves
+    // the dead end one step later.
+    required: true,
     advanceOn: { signal: 'kyc-occupation-saved' },
     celebrate: 'Identity verified.',
   },
@@ -290,6 +322,8 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     pip: 'curious',
     title: 'Mint the passport',
     body: 'Choose what to share, tier by tier, then mint. Consent stays with {name}.',
+    // No passport, no application, no console half of the script.
+    required: true,
     advanceOn: { signal: 'passport-minted' },
     celebrate: 'Passport minted.',
   },
@@ -301,8 +335,12 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     actLabel: 'Mint the passport',
     pip: 'happy',
     title: 'The Credit Passport',
-    body: 'Signed, aggregate only, carrying real momentum. Lenders verify it offline.',
+    body: 'Signed aggregates only, plus how the score has moved. Lenders can verify it offline.',
     anchorId: 'passport-card',
+    // The one place in the script where a judge can leave and watch the fraud defences run
+    // live. Ends the tour, so it sits on an explain step rather than mid-mission.
+    actionLabel: 'See the fraud defences work',
+    actionScreen: 'attacks',
   },
   // ── Act 6 · Ask for the money ───────────────────────────────────────────────
   {
@@ -313,7 +351,7 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     actLabel: 'Ask for the money',
     pip: 'think',
     title: 'Every lender decides differently',
-    body: 'Each row runs that lender’s own published policy at this amount. A real preview, not a guess.',
+    body: 'Each row runs that lender’s own published policy at this amount, so it previews the real answer.',
     anchorId: 'lender-picker',
   },
   {
@@ -325,6 +363,10 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     pip: 'curious',
     title: 'Send the request',
     body: 'Your turn: send the passport to the lender you picked.',
+    // The send is what decides the ending and what puts a file on the console's desk: skip it
+    // and the remaining four acts have nothing real to narrate. The button itself is locked
+    // until this step for the same reason from the other side — see `isControlLocked`.
+    required: true,
     anchorId: 'send-button',
     advanceOn: { signal: 'application-sent' },
     celebrate: 'Your application is filed.',
@@ -342,13 +384,17 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     pip: 'curious',
     branches: ['referred'],
     title: 'Referred to a human',
-    body: 'No instant answer. An officer has to decide. Go and be that officer.',
+    body: 'There is no instant answer here: an officer has to decide. Go and be that officer.',
     handoff: {
       target: 'console',
-      cta: 'I have decided — continue',
+      cta: 'I have decided',
       waiting: 'Waiting for the lender’s decision…',
       ready: 'The lender has answered. Come back and see.',
       gate: 'offer-pending',
+      // The only way this gate opens is the judge approving the file in the console, so the
+      // offer landing already IS their decision. Pressing Continue on top of that told the app
+      // nothing it could not see, so the step clears itself onto the offer.
+      onOpen: 'advance',
     },
   },
   {
@@ -363,10 +409,14 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     body: 'The engine cleared every gate, so an offer is already standing. See the file it left.',
     handoff: {
       target: 'console',
-      cta: 'I have seen it — continue',
+      cta: 'I have seen the file',
       waiting: 'Publishing the offer…',
       ready: 'The offer is waiting for you here.',
       gate: 'offer-pending',
+      // Deliberately NOT self-advancing. This offer exists at send time and only takes a poll
+      // to show up — nothing about it opening says the judge has been to the console, and
+      // advancing on it would skip acts 7 and 8 entirely.
+      onOpen: 'prompt',
     },
   },
   {
@@ -385,6 +435,7 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
       waiting: '',
       ready: 'The rest of this story happens on the lender’s desk.',
       gate: 'none',
+      onOpen: 'prompt',
     },
   },
   // ── Act 9 · Take the offer ──────────────────────────────────────────────────
@@ -399,7 +450,7 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     pip: 'happy',
     branches: ['referred', 'approved'],
     title: 'The terms came back',
-    body: 'Amount, instalment and rate, all from the lender’s own engine. Yours to take or refuse.',
+    body: 'The amount, instalment and rate all came from the lender’s own engine. Take it or refuse it.',
     anchorId: 'offer-card',
   },
   {
@@ -411,8 +462,13 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     pip: 'curious',
     branches: ['referred', 'approved'],
     title: 'Answer the offer',
-    body: 'Your turn: accept it. An approval is an offer until you say yes.',
-    anchorId: 'offer-card',
+    // Names the button by its real label: this step is where the auto-advancing act-6 handoff
+    // now lands the judge, so it must point at the control rather than at the idea.
+    body: 'Your turn: tap Accept financing. An approval is an offer until you say yes.',
+    // Narrower than 'offer-arrived's card-wide anchor: this step's own action is one button,
+    // and "No thanks" stays visible-but-disabled beside it (declining strands the tour), so the
+    // spotlight should land on the control the judge can actually press.
+    anchorId: 'offer-accept-btn',
     advanceOn: { signal: 'offer-accepted' },
     celebrate: 'You took the loan.',
   },
@@ -425,13 +481,14 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     pip: 'happy',
     branches: ['referred', 'approved'],
     title: 'It is a live loan',
-    body: 'Schedule, balance and standing all start now. The lender sees it too.',
+    body: 'The schedule, balance and standing all start now, and the lender sees the same thing.',
     handoff: {
       target: 'console',
       cta: 'Finish on the lender’s desk',
       waiting: '',
       ready: 'Head back and service the loan you just took.',
       gate: 'none',
+      onOpen: 'prompt',
     },
   },
 ];
@@ -494,8 +551,19 @@ export function validateTourSteps(steps: TourStep[], validScreens: readonly stri
     if (step.kind === 'handoff' && (step.advanceOn || step.mission)) {
       problems.push(`handoff step ${step.id} must not have advanceOn or mission`);
     }
+    // An ungated handoff has no opening to ride, so asking it to self-advance would strand the
+    // judge on a card with neither a button nor anything to wait for.
+    if (step.handoff?.gate === 'none' && step.handoff.onOpen === 'advance') {
+      problems.push(`handoff step ${step.id} is ungated, so it cannot self-advance`);
+    }
     if (step.kind === 'explain' && (step.advanceOn || step.mission || step.handoff)) {
       problems.push(`explain step ${step.id} must not have advanceOn, mission, or handoff`);
+    }
+    // `required` withholds Skip, which only exists on do/mission steps. On an explain step it
+    // would be a no-op that reads as a guarantee; on a handoff it would remove the judge's only
+    // way past a gate that never opens.
+    if (step.required && step.kind !== 'do' && step.kind !== 'mission') {
+      problems.push(`step ${step.id} is ${step.kind}, which cannot be required`);
     }
     if (step.kind === 'mission') {
       if (!step.mission || step.mission.phases.length === 0) problems.push(`mission step ${step.id} has no phases`);

@@ -4,12 +4,16 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../components/Icon';
 import { InfoButton } from '../components/InfoButton';
+import { LenderRequirements } from '../components/LenderRequirements';
+import { TourAnchor } from '../components/TourAnchor';
 import { Amount, Card, Eyebrow, ProgressTrack, TopBar } from '../components/ui';
 import { shortDate } from '../lib/dates';
 import { DEFAULT_PRODUCTS, type LoanProduct } from '../lib/loans';
+import { type BorrowerStanding } from '../lib/lenderCriteria';
 import { productForOffer } from '../lib/acceptOffer';
 import { buildLoanPackages, financingTotals, type LoanPackage } from '../lib/loanSummary';
 import { overdueRowsFor } from '../lib/repaymentStanding';
+import { BORROWER_TOUR_STEPS, clampTourStep } from '../lib/tourSteps';
 import type { Repayment, RepaymentStatus } from '../db/loansRepo';
 import { useAppData, type PendingOffer } from '../state/store';
 import { useLenderSyncPoll } from '../state/useLenderSyncPoll';
@@ -101,74 +105,102 @@ function OfferCard({
   busy,
   onAccept,
   onDecline,
+  restrictToAccept,
+  activeTourAnchor,
+  you,
 }: {
   p: PendingOffer;
   busy: boolean;
   onAccept: () => void;
   onDecline: () => void;
+  /** The borrower's standing, so the lender's published bars can be marked against it. */
+  you?: BorrowerStanding;
+  /** The guided tour's script only has one ending once an offer exists: the judge accepts it.
+   *  Declining here strands the tour on the acceptance step forever (no signal it listens for
+   *  ever fires), so while the tour is driving this screen "No thanks" stays visible but
+   *  disabled rather than clickable  the judge sees the choice existed, but the script steers
+   *  them at Accept. */
+  restrictToAccept: boolean;
+  /** Which TourAnchor id, if any, is live right now  threaded down so Accept can spotlight
+   *  itself on the accept-offer step. */
+  activeTourAnchor: string | null;
 }) {
   const { offer, lender } = p;
   // The lender's own tenor when they published one; only fall back to a tier lookup for
   // offers made before that shipped.
   const tenorMonths = offer.tenorMonths ?? productTenorFor(offer, lender.products);
+  const declineDisabled = busy || restrictToAccept;
   return (
-    <Card style={styles.offerCard}>
-      <View style={styles.offerHeader}>
-        <View style={[styles.offerDot, { backgroundColor: lender.brandColor }]} />
-        <Text style={styles.offerLender} numberOfLines={1}>{lender.name}</Text>
-        <View style={styles.offerPill}>
-          <Text style={styles.offerPillText}>Approved</Text>
+    <TourAnchor id="offer-card" activeId={activeTourAnchor}>
+      <Card style={styles.offerCard}>
+        <View style={styles.offerHeader}>
+          <View style={[styles.offerDot, { backgroundColor: lender.brandColor }]} />
+          <Text style={styles.offerLender} numberOfLines={1}>{lender.name}</Text>
+          <View style={styles.offerPill}>
+            <Text style={styles.offerPillText}>Approved</Text>
+          </View>
         </View>
-      </View>
-      <Text style={styles.offerLead}>
-        {lender.name} has approved you. It&apos;s yours to take or leave — nothing is borrowed until you accept.
-      </Text>
-
-      <View style={styles.offerFigures}>
-        <View>
-          <Text style={styles.offerFigureLabel}>You&apos;d receive</Text>
-          <Amount value={offer.maxAmount} size={20} />
-        </View>
-        <View>
-          <Text style={styles.offerFigureLabel}>Repayment / mo</Text>
-          <Amount value={offer.installment} size={20} />
-        </View>
-      </View>
-      {tenorMonths > 0 && (
-        <Text style={styles.offerTerms}>
-          {tenorMonths} monthly repayments · RM{Math.round(offer.installment * tenorMonths).toLocaleString('en-MY')} repaid in total
+        <Text style={styles.offerLead}>
+          {lender.name} has approved you. It&apos;s yours to take or leave, and nothing is borrowed until you accept.
         </Text>
-      )}
-      {offer.apr != null && (
-        <Text style={styles.offerApr}>{(offer.apr * 100).toFixed(1)}% APR</Text>
-      )}
-      {offer.apr != null && offer.discountBps != null && offer.discountBps > 0 && (
-        <Text style={styles.offerDiscount}>
-          {(offer.discountBps / 100).toFixed(1)} percentage points below {lender.name}&apos;s standard {((offer.apr + offer.discountBps / 10000) * 100).toFixed(1)}% rate
-        </Text>
-      )}
 
-      <View style={styles.offerActions}>
-        <Pressable
-          onPress={onAccept}
-          disabled={busy}
-          style={({ pressed }) => [styles.offerAcceptBtn, (busy || pressed) && { opacity: 0.92 }]}
-          accessibilityRole="button"
-          accessibilityLabel={`Accept RM${Math.round(offer.maxAmount)} from ${lender.name}`}
-        >
-          {busy ? <ActivityIndicator size="small" color={colors.onAccent} /> : <Text style={styles.offerAcceptText}>Accept financing</Text>}
-        </Pressable>
-        <Pressable
-          onPress={onDecline}
-          disabled={busy}
-          style={({ pressed }) => [styles.offerDeclineBtn, (busy || pressed) && { opacity: 0.92 }]}
-          accessibilityRole="button"
-          accessibilityLabel={`Turn down ${lender.name}'s offer`}
-        >
-          <Text style={styles.offerDeclineText}>No thanks</Text>
-        </Pressable>
-      </View>
-    </Card>
+        <View style={styles.offerFigures}>
+          <View>
+            <Text style={styles.offerFigureLabel}>You&apos;d receive</Text>
+            <Amount value={offer.maxAmount} size={20} />
+          </View>
+          <View>
+            <Text style={styles.offerFigureLabel}>Repayment / mo</Text>
+            <Amount value={offer.installment} size={20} />
+          </View>
+        </View>
+        {tenorMonths > 0 && (
+          <Text style={styles.offerTerms}>
+            {tenorMonths} monthly repayments · RM{Math.round(offer.installment * tenorMonths).toLocaleString('en-MY')} repaid in total
+          </Text>
+        )}
+        {offer.apr != null && (
+          <Text style={styles.offerApr}>{(offer.apr * 100).toFixed(1)}% APR</Text>
+        )}
+        {offer.apr != null && offer.discountBps != null && offer.discountBps > 0 && (
+          <Text style={styles.offerDiscount}>
+            {(offer.discountBps / 100).toFixed(1)} percentage points below {lender.name}&apos;s standard {((offer.apr + offer.discountBps / 10000) * 100).toFixed(1)}% rate
+          </Text>
+        )}
+
+        {/* The criteria behind this offer, collapsed: an approval is exactly the moment a
+            borrower wants to check what the rate is tied to before they accept it. */}
+        <LenderRequirements lender={lender} you={you} style={{ marginTop: 14 }} />
+
+        <View style={styles.offerActions}>
+          <TourAnchor id="offer-accept-btn" activeId={activeTourAnchor}>
+            <Pressable
+              onPress={onAccept}
+              disabled={busy}
+              style={({ pressed }) => [styles.offerAcceptBtn, (busy || pressed) && { opacity: 0.92 }]}
+              accessibilityRole="button"
+              accessibilityLabel={`Accept RM${Math.round(offer.maxAmount)} from ${lender.name}`}
+            >
+              {busy ? <ActivityIndicator size="small" color={colors.onAccent} /> : <Text style={styles.offerAcceptText}>Accept financing</Text>}
+            </Pressable>
+          </TourAnchor>
+          <Pressable
+            onPress={onDecline}
+            disabled={declineDisabled}
+            style={({ pressed }) => [styles.offerDeclineBtn, (declineDisabled || pressed) && { opacity: 0.5 }]}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: declineDisabled }}
+            accessibilityLabel={
+              restrictToAccept
+                ? `Turning down ${lender.name}'s offer is not available during the guided tour`
+                : `Turn down ${lender.name}'s offer`
+            }
+          >
+            <Text style={styles.offerDeclineText}>No thanks</Text>
+          </Pressable>
+        </View>
+      </Card>
+    </TourAnchor>
   );
 }
 
@@ -207,8 +239,14 @@ export function LoansScreen({
     refreshPendingOffers,
     acceptPendingOffer,
     declinePendingOffer,
+    tourActive,
+    tourRunning,
+    tourStepIndex,
   } = useAppData();
-  const { score } = useCreditProfile();
+  const { score, coverage } = useCreditProfile();
+  // Mirrors the pattern in DashboardScreen/CreditScreen/PassportCoachScreen: which anchor, if
+  // any, the tour wants spotlit right now on THIS screen.
+  const activeTourAnchor = tourActive ? BORROWER_TOUR_STEPS[clampTourStep(tourStepIndex, BORROWER_TOUR_STEPS.length)].anchorId ?? null : null;
 
   const products = loanProducts.length > 0 ? loanProducts : DEFAULT_PRODUCTS;
 
@@ -250,6 +288,18 @@ export function LoansScreen({
   // mid-demo should land in this list without needing to navigate away and back.
   useLenderSyncPoll();
 
+  // Same figures the loan engine is fed elsewhere, so a bar marked met here is met by the check
+  // that actually runs on the lender's console.
+  const criteriaStanding = useMemo<BorrowerStanding>(
+    () => ({
+      score: score.score,
+      confidence: score.confidence,
+      daysCovered: coverage.daysCovered,
+      coverageRatio: coverage.ratio,
+    }),
+    [score, coverage]
+  );
+
   // One accept/decline in flight at a time, keyed by lender id so only the tapped card spins.
   const [offerBusy, setOfferBusy] = useState<string | null>(null);
   const [offerError, setOfferError] = useState('');
@@ -261,10 +311,10 @@ export function LoansScreen({
     setOfferMsg('');
     try {
       const ok = await acceptPendingOffer(p.offer, score.score);
-      if (ok) setOfferMsg(`${p.lender.name} financing accepted — it's in your loans below with its repayment schedule.`);
-      else setOfferError(`Couldn't confirm your acceptance with ${p.lender.name}. Nothing was disbursed — check your connection and try again.`);
+      if (ok) setOfferMsg(`${p.lender.name} financing accepted. It's in your loans below, with its repayment schedule.`);
+      else setOfferError(`Couldn't confirm your acceptance with ${p.lender.name}. Nothing was disbursed, so check your connection and try again.`);
     } catch {
-      setOfferError(`Couldn't confirm your acceptance with ${p.lender.name}. Nothing was disbursed — check your connection and try again.`);
+      setOfferError(`Couldn't confirm your acceptance with ${p.lender.name}. Nothing was disbursed, so check your connection and try again.`);
     } finally {
       setOfferBusy(null);
     }
@@ -343,7 +393,7 @@ export function LoansScreen({
     setClearMsg('');
     try {
       await clearArrears(applicationId);
-      setClearMsg('Arrears cleared — your access and rate discount are restored.');
+      setClearMsg('Arrears cleared. Your access and rate discount are restored.');
       setClearedForId(applicationId);
     } finally {
       setClearBusy(false);
@@ -419,7 +469,7 @@ export function LoansScreen({
                 {pkg.application.defaultedSource === 'lender'
                   ? `Reported as defaulted by ${pkg.lenderLabel}.`
                   : 'You reported this loan as defaulted (demo).'}{' '}
-                This loan is written off and counts against your track record — it never rewrites a passport you've
+                This loan is written off and counts against your track record. It never rewrites a passport you've
                 already signed, but the next one you mint will carry the lower score.
               </Text>
             </Card>
@@ -532,7 +582,7 @@ export function LoansScreen({
                 </View>
                 <Text style={styles.demoBody}>
                   {pkg.nextDue
-                    ? 'Skip your next installment. It dents your track record (and Pip Score) without paying down the loan — the opposite of an on-time payment. Re-open Credit to confirm.'
+                    ? 'Skip your next installment. It dents your track record (and Pip Score) without paying down the loan, which is the opposite of an on-time payment. Re-open Credit to confirm.'
                     : 'No scheduled installments left to miss.'}
                 </Text>
                 {pkg.nextDue && (
@@ -563,7 +613,7 @@ export function LoansScreen({
                   </View>
                   <Text style={styles.demoTitle}>Simulate default → reported to CTOS (mock)</Text>
                 </View>
-                <Text style={styles.demoBody}>Marks this loan defaulted (demo — no real bureau is notified).</Text>
+                <Text style={styles.demoBody}>Marks this loan defaulted. This is a demo; no real bureau is notified.</Text>
                 <Pressable
                   onPress={() => simulateDefault(pkg.application.id)}
                   style={[styles.applyBtn, { backgroundColor: RED, marginTop: 10 }]}
@@ -612,6 +662,9 @@ export function LoansScreen({
                 busy={offerBusy === p.offer.lenderId}
                 onAccept={() => onAcceptOffer(p)}
                 onDecline={() => onDeclineOffer(p)}
+                restrictToAccept={tourRunning}
+                activeTourAnchor={activeTourAnchor}
+                you={criteriaStanding}
               />
             ))}
           </>
@@ -683,25 +736,6 @@ export function LoansScreen({
           </>
         )}
 
-        {/* Post-disbursement check-in (Brief S)  a fresh passport share, not tied to any one
-            lender, so it lives at the list level rather than inside a specific loan's detail. */}
-        {ongoingPackages.length > 0 && (
-          <>
-            <Eyebrow style={{ marginTop: 22, marginBottom: 10 }}>Keep your lender in the loop</Eyebrow>
-            <Card style={{ padding: 16 }}>
-              <Text style={styles.fieldLabel}>Share a check-in</Text>
-              <Text style={styles.muted}>
-                If you granted ongoing monitoring when you minted your passport, re-sharing a fresh one lets your
-                lender see your updated numbers before a repayment is ever missed. The same signed passport, just
-                current.
-              </Text>
-              <Pressable onPress={onOpenPassport} style={[styles.applyBtn, { backgroundColor: colors.accentInk }]}>
-                <Icon name="trending" size={16} color={colors.onAccent} />
-                <Text style={styles.applyBtnText}>Share a check-in</Text>
-              </Pressable>
-            </Card>
-          </>
-        )}
       </ScrollView>
     </View>
   );

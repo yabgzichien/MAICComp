@@ -158,6 +158,15 @@ interface AppData {
    *  refresh resumes where it left off. */
   tourActive: boolean;
   tourStepIndex: number;
+  /** The judge stepped into the real app mid-tour: no card on screen, but the run is still
+   *  theirs to resume. In-memory only, exactly like the resume chip it drives — after a reload
+   *  there is no run to resume, and a lock outliving its own tour would be a dead control with
+   *  nothing on screen to explain it. */
+  tourPaused: boolean;
+  /** A tour run is in progress, whether or not its card is showing. This — not `tourActive` —
+   *  is what the real screens gate their off-script controls on (the send button, the offer's
+   *  "No thanks"), because pausing must not be a way to walk around the script. */
+  tourRunning: boolean;
   /** Which ending the cross-app script is running, or null before the application is sent. */
   tourBranch: TourBranch | null;
   setTourBranch: (branch: TourBranch | null) => Promise<void>;
@@ -308,6 +317,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [activeDemoProfile, setActiveDemoProfileState] = useState<DemoProfileId | null>(null);
   const [tourActive, setTourActive] = useState(false);
+  const [tourPaused, setTourPaused] = useState(false);
   const [tourStepIndex, setTourStepIndexState] = useState(0);
   const [tourBranch, setTourBranchState] = useState<TourBranch | null>(null);
   /** Mirrors `tourBranch` for synchronous reads  see `setTourStep`. */
@@ -801,11 +811,13 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     }
     await setMeta(TOUR_ACTIVE_KEY, 'true');
     setTourActive(true);
+    setTourPaused(false);
   }, []);
 
   const pauseTour = useCallback(async () => {
     await setMeta(TOUR_ACTIVE_KEY, 'false');
     setTourActive(false);
+    setTourPaused(true);
   }, []);
 
   const exitTour = useCallback(async () => {
@@ -814,6 +826,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     await setMeta(TOUR_BRANCH_KEY, '');
     tourBranchRef.current = null;
     setTourActive(false);
+    setTourPaused(false);
     setTourStepIndexState(0);
     setTourBranchState(null);
   }, []);
@@ -1136,6 +1149,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     onboardingComplete,
     completeOnboarding,
     tourActive,
+    tourPaused,
+    tourRunning: tourActive || tourPaused,
     tourStepIndex,
     tourBranch,
     setTourBranch,

@@ -24,8 +24,9 @@ export const MEMO_SYSTEM_PROMPT =
   'Write two things: "summary"  a 2-3 sentence executive summary of the decision; and ' +
   '"rationale"  a short paragraph restating the given reasons in plain loan-officer ' +
   'prose. Use ONLY the supplied facts and reasons. Never invent a number, never change ' +
-  'or hedge the verdict, never contradict a compliance finding. Return ONLY a JSON ' +
-  'object: {"summary": "...", "rationale": "..."}.';
+  'or hedge the verdict, never contradict a compliance finding. ' +
+  'Write like a person, not a chatbot: no em dashes, no marketing adjectives, no "not just X, but Y" phrasing, and no three-item lists written for rhythm. ' +
+  'Return ONLY a JSON object: {"summary": "...", "rationale": "..."}.';
 
 export function buildMemoMessages(brief: MemoBrief): ChatMessage[] {
   const user = [

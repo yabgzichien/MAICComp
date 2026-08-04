@@ -39,7 +39,7 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   },
   apr: {
     term: 'APR',
-    short: 'Annual Percentage Rate — the yearly cost of borrowing, as a percentage.',
+    short: 'Annual Percentage Rate: the yearly cost of borrowing, as a percentage.',
     body: 'APR includes interest and standard fees, expressed as a yearly rate, so offers with different tenors or fee structures can be compared on equal footing.',
   },
   tenor: {

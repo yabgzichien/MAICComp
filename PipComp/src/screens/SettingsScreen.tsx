@@ -132,7 +132,7 @@ export function SettingsScreen({ onBack, onMigrate, onAdvancedImport, onOpenAtta
               role="docs"
               icon="receipt"
               name="Gemini · fallback"
-              sub="Used only if Groq fails — and for PDFs Groq can't read."
+              sub="Used only if Groq fails, and for PDFs Groq can't read."
               model={settings.geminiModel}
               apiKey={settings.geminiKey}
             />
@@ -220,7 +220,7 @@ export function SettingsScreen({ onBack, onMigrate, onAdvancedImport, onOpenAtta
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.providerName}>Attack Gallery</Text>
-            <Text style={styles.providerSub}>Run known fraud techniques against our own integrity rings. A live self-test.</Text>
+            <Text style={styles.providerSub}>Run known fraud techniques against our own integrity rings and watch what they catch.</Text>
           </View>
           <Icon name="chevronRight" size={18} color={colors.ink3} />
         </Pressable>
