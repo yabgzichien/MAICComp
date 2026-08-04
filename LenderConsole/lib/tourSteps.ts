@@ -10,7 +10,9 @@
 //
 // The officer never has their decision made for them. `do` steps wait for the officer's own
 // action and advance on the matching semantic signal; `handoff` steps hand the baton back to
-// the borrower app and stay put until the real record moves.
+// the borrower app and stay put until the real record moves, then clear themselves — the
+// officer is in the other tab when it happens, so there is nothing left for them to confirm
+// (see `ConsoleHandoffOnOpen`).
 
 export type ConsoleTourTab = 'verify' | 'servicing' | 'portfolio' | 'capital' | 'policy';
 export type ConsoleTourStepKind = 'explain' | 'do' | 'handoff';
@@ -29,13 +31,13 @@ export type ConsoleTourBranch = 'referred' | 'approved' | 'declined';
  *  no import in the signals direction. */
 export type ConsoleTourSignal =
   | 'pipeline-seeded'
-  | 'assessed'
   | 'memo-opened'
   | 'letter-generated'
   | 'flagged-loaded'
   | 'subject-opened'
   | 'application-approved'
-  | 'repayment-recorded';
+  | 'repayment-recorded'
+  | 'policy-published';
 
 /** What must be true of the real loan before a handoff's Continue enables.
  *
@@ -43,13 +45,25 @@ export type ConsoleTourSignal =
  *  none            nothing to wait for. */
 export type ConsoleHandoffGate = 'offer-answered' | 'none';
 
+/** What the gate opening MEANS for this handoff. `advance`  the record moving is itself the
+ *  officer's return, so the step clears itself and renders no button. `prompt`  the gate only
+ *  ENABLES a Continue the officer presses, which is the only sane setting for `gate: 'none'`.
+ *  Mirrors `TourHandoffOnOpen` in the borrower registry. */
+export type ConsoleHandoffOnOpen = 'advance' | 'prompt';
+
 export interface ConsoleHandoff {
   /** Where the judge is being sent. */
   target: 'borrower';
+  /** Button label. On an `onOpen: 'advance'` handoff this is never actually rendered  the step
+   *  advances itself the moment its gate reads open, so the `cta` only exists for `onOpen:
+   *  'prompt'` handoffs and to satisfy the type. */
   cta: string;
+  /** Status line while the gate is still closed. The whole card on a self-advancing handoff, so
+   *  it must name what is being waited ON. */
   waiting: string;
   ready: string;
   gate: ConsoleHandoffGate;
+  onOpen: ConsoleHandoffOnOpen;
 }
 
 export interface ConsoleTourStep {
@@ -66,6 +80,15 @@ export interface ConsoleTourStep {
   body: string;
   /** Which endings this step belongs to. Absent = all three. */
   branches?: ConsoleTourBranch[];
+  /** This beat cannot be skipped: the card renders no Skip, and the driver refuses one even if
+   *  something else asks for it. Reserved for the acts the rest of the script reads back —
+   *  opening the judge's own file (every later step operates on the selected application) and
+   *  the officer's own decision (a skipped approval means no offer, and the borrower half of
+   *  the script then waits forever on a gate that cannot open). Exit still ends the tour.
+   *
+   *  Only meaningful on `do` steps: explain steps advance on Next, and a handoff's Skip is the
+   *  officer's only way past a gate that never opens. */
+  required?: boolean;
   /** Optional TourAnchor id to spotlight on this step. Anchors are enhancement, never a
    *  dependency  a step with none (or a mismatched one) still renders card-only. */
   anchorId?: string;
@@ -101,7 +124,7 @@ export const CONSOLE_TOUR_STEPS: ConsoleTourStep[] = [
     actLabel: 'Run the desk',
     anchorId: 'trust-panel',
     title: 'Five trust checks',
-    body: 'Signature, issuer, freshness, consent, stacking. Five checks before any score is shown.',
+    body: 'Signature, issuer, freshness, consent, stacking. All five run before any score is shown.',
   },
   {
     id: 'seed',
@@ -134,21 +157,15 @@ export const CONSOLE_TOUR_STEPS: ConsoleTourStep[] = [
     anchorId: 'direct-file',
     advanceOn: 'subject-opened',
     persona: true,
+    // Every step after this one — the memo, the decision — acts on the SELECTED application.
+    // Skipping here would run the rest of act 7 on whatever file happened to be open, which is
+    // never the judge's own. Opening the file also RUNS the engine: the stored code is
+    // re-evaluated at the borrower's own requested amount, so there is no separate assess beat
+    // to narrate (the officer-typed amount and its Assess button were removed).
+    required: true,
     title: 'Open the file you sent',
-    body: 'Your turn: open {applicant}’s application — the one that arrived from the borrower app.',
-    celebrate: 'That is your own application.',
-  },
-  {
-    id: 'assess',
-    kind: 'do',
-    tab: 'verify',
-    act: 7,
-    actLabel: 'Run the desk',
-    anchorId: 'assess-button',
-    advanceOn: 'assessed',
-    title: 'Run the engine',
-    body: 'Your turn: set an amount and click Assess.',
-    celebrate: 'You ran the engine.',
+    body: 'Your turn: open {applicant}’s application, the one that arrived from the borrower app.',
+    celebrate: 'That is your own application — the engine has already run on it.',
   },
   // The verdict differs by ending, so the explanation does too. Same anchor, same beat  only
   // the honest reading of the result changes.
@@ -161,7 +178,7 @@ export const CONSOLE_TOUR_STEPS: ConsoleTourStep[] = [
     anchorId: 'decision-card',
     branches: ['referred'],
     title: 'The engine deferred to you',
-    body: 'Confidence sits below the automatic bar. Real income, only partly verifiable. Your call.',
+    body: 'Confidence sits below the automatic bar. The income is real but only partly verifiable, so it is your call.',
   },
   {
     id: 'decision-approved',
@@ -172,7 +189,7 @@ export const CONSOLE_TOUR_STEPS: ConsoleTourStep[] = [
     anchorId: 'decision-card',
     branches: ['approved'],
     title: 'The engine already decided',
-    body: 'Every gate cleared, so this approved on submission. You are reading, not deciding.',
+    body: 'Every gate cleared, so this approved on submission. You are here to read it, not to decide it.',
   },
   {
     id: 'decision-declined',
@@ -183,7 +200,7 @@ export const CONSOLE_TOUR_STEPS: ConsoleTourStep[] = [
     anchorId: 'decision-card',
     branches: ['declined'],
     title: 'Declined on the evidence',
-    body: 'The money looks fine. The evidence behind it does not. That distinction is the product.',
+    body: 'The money looks fine. The evidence behind it does not hold up, and that is what the engine decides on.',
   },
   {
     id: 'memo',
@@ -194,8 +211,8 @@ export const CONSOLE_TOUR_STEPS: ConsoleTourStep[] = [
     anchorId: 'memo-button',
     advanceOn: 'memo-opened',
     title: 'Open the audit memo',
-    body: 'Your turn: generate the audit memo — the writeup a regulator would ask for.',
-    celebrate: 'That is the paper trail.',
+    body: 'Your turn: generate the audit memo, the writeup a regulator would ask for.',
+    celebrate: 'The paper trail is written.',
   },
   // The one action that differs per ending.
   {
@@ -207,11 +224,14 @@ export const CONSOLE_TOUR_STEPS: ConsoleTourStep[] = [
     anchorId: 'resolve-action',
     advanceOn: 'application-approved',
     branches: ['referred'],
+    // The one action the whole cross-app script turns on: no approval, no offer, and the
+    // borrower's act-6 handoff waits on a gate that can never open.
+    required: true,
     title: 'Make the call',
     // Approving is gated on a written rationale — that field is the audit trail, and the tour
     // must not write it for the officer. So the copy names the rationale as part of the step
     // rather than pointing at a button that looks inexplicably dead.
-    body: 'Your turn: write a one-line rationale, then approve. The reason is the audit trail.',
+    body: 'Your turn: write a one-line rationale, then approve. That reason goes into the audit trail.',
     celebrate: 'The offer is out.',
   },
   {
@@ -262,7 +282,7 @@ export const CONSOLE_TOUR_STEPS: ConsoleTourStep[] = [
     actLabel: 'Catch a fraudster',
     anchorId: 'fraud-signals',
     title: 'The rings fired',
-    body: 'Round numbers, Benford breaks, an ML flag. Confidence collapses and the engine declines.',
+    body: 'Round numbers, Benford breaks and an ML flag. Confidence collapses and the engine declines.',
   },
   // Hand the baton back. On the declined branch there is no offer to answer, so that ending
   // closes here instead.
@@ -278,10 +298,13 @@ export const CONSOLE_TOUR_STEPS: ConsoleTourStep[] = [
     body: 'Your offer is standing. An approval is only an offer until {applicant} accepts it.',
     handoff: {
       target: 'borrower',
-      cta: 'They answered — continue',
+      cta: 'They have answered',
       waiting: 'Waiting for the borrower to answer…',
       ready: 'Answered. Come back and service the loan.',
       gate: 'offer-answered',
+      // The gate can only open because the judge went and accepted as the borrower, so the
+      // answer landing IS their return. Asking them to also confirm it was a dead click.
+      onOpen: 'advance',
     },
   },
   {
@@ -307,7 +330,7 @@ export const CONSOLE_TOUR_STEPS: ConsoleTourStep[] = [
     branches: ['referred', 'approved'],
     persona: true,
     title: 'A live loan',
-    body: '{applicant} accepted, so the loan is on your book with a schedule. Not a filing — a loan.',
+    body: '{applicant} accepted, so the loan is on your book with a schedule and real money at risk.',
   },
   {
     id: 'repayment',
@@ -330,8 +353,27 @@ export const CONSOLE_TOUR_STEPS: ConsoleTourStep[] = [
     actLabel: 'Service & structure',
     anchorId: 'policy-thresholds',
     branches: ['referred', 'approved'],
-    title: 'The flywheel',
+    title: 'Where the coaching comes from',
     body: 'These thresholds are exactly what borrowers are coached toward on the other app.',
+  },
+  {
+    // The other half of owning a policy: the products it lends through. Deliberately a `do` —
+    // the ladder editor is the only place in either app where the judge AUTHORS something a
+    // lender owns, and saving publishes it to the same GET /api/lenders the borrower's act-6
+    // lender picker reads. Naming and ranges are the lender's; the four tier slots are fixed
+    // because the engine's coverage gates key on them, which is why the copy says "shape a
+    // tier" rather than promising a fifth rung that validation would reject.
+    id: 'product',
+    kind: 'do',
+    tab: 'policy',
+    act: 10,
+    actLabel: 'Service & structure',
+    anchorId: 'product-ladder',
+    advanceOn: 'policy-published',
+    branches: ['referred', 'approved'],
+    title: 'Design a loan product',
+    body: 'Your turn: shape a tier (name, range, rate), then Save policy.',
+    celebrate: 'Published. Borrowers see it live.',
   },
   {
     id: 'portfolio',
@@ -342,7 +384,7 @@ export const CONSOLE_TOUR_STEPS: ConsoleTourStep[] = [
     anchorId: 'portfolio-bands',
     branches: ['referred', 'approved'],
     title: 'The approved book',
-    body: 'The approved book by band and purpose. Concentration risk, visible at a glance.',
+    body: 'Split by band and by purpose, so you can see where the exposure piles up.',
   },
   {
     id: 'capital',
@@ -353,7 +395,7 @@ export const CONSOLE_TOUR_STEPS: ConsoleTourStep[] = [
     anchorId: 'capital-tranches',
     branches: ['referred', 'approved'],
     title: 'Structure the book',
-    body: 'Bundle the book into rated tranches. Capital-markets AI funds the informal economy.',
+    body: 'Bundle the book into rated tranches, which is how institutional money reaches borrowers this small.',
   },
   {
     id: 'finale',
@@ -421,8 +463,19 @@ export function validateConsoleTourSteps(steps: ConsoleTourStep[], validTabs: re
     if (step.kind === 'do' && !step.advanceOn) problems.push(`do step ${step.id} has no advanceOn`);
     if (step.kind === 'handoff' && !step.handoff) problems.push(`handoff step ${step.id} has no handoff block`);
     if (step.kind === 'handoff' && step.advanceOn) problems.push(`handoff step ${step.id} must not have advanceOn`);
+    // An ungated handoff has no opening to ride, so self-advancing would strand the officer on
+    // a card with neither a button nor anything to wait for.
+    if (step.handoff?.gate === 'none' && step.handoff.onOpen === 'advance') {
+      problems.push(`handoff step ${step.id} is ungated, so it cannot self-advance`);
+    }
     if (step.kind === 'explain' && (step.advanceOn || step.handoff)) {
       problems.push(`explain step ${step.id} must not have advanceOn or handoff`);
+    }
+    // `required` withholds Skip, which only exists on do steps. On an explain step it would be a
+    // no-op that reads as a guarantee; on a handoff it would remove the officer's only way past
+    // a gate that never opens.
+    if (step.required && step.kind !== 'do') {
+      problems.push(`step ${step.id} is ${step.kind}, which cannot be required`);
     }
 
     if (step.act < 1) problems.push(`step ${step.id} has act ${step.act}, below 1`);

@@ -19,6 +19,7 @@ import { awaitingAcceptance, declinedByBorrower, type OfferBook } from '../lib/o
 import { formatAgo } from '../lib/presentment';
 import { currentStandingAcross } from '../lib/repaymentStanding';
 import { TourAnchor } from './TourAnchor';
+import { useTourLocked } from './tourContext';
 
 const BAND_COLOR: Record<string, string> = {
   Building: '#c0392b',
@@ -65,7 +66,12 @@ const STATUS_COLOR: Record<ApplicationStatus, string> = {
 
 const rm = (n: number): string => `RM${Math.round(n).toLocaleString('en-MY')}`;
 
-function QueueCard({ p, a, selected, onSelect, standingBucket }: { p: Palette; a: ApplicationRecord; selected: boolean; onSelect: () => void; standingBucket?: 'slipping' | 'arrears' | 'impaired' }) {
+/** Why a queue card is dead mid-tour. The script memos and decides on the SELECTED
+ *  application, so letting the judge pick a neighbouring file would silently re-point the rest
+ *  of act 7 at a file the narration is not about. */
+const QUEUE_LOCK_TITLE = 'The guided tour is following your own application.';
+
+function QueueCard({ p, a, selected, onSelect, standingBucket, locked = false }: { p: Palette; a: ApplicationRecord; selected: boolean; onSelect: () => void; standingBucket?: 'slipping' | 'arrears' | 'impaired'; locked?: boolean }) {
   // The cross-app tour spotlights the application the judge sent themselves, so act 7's "open
   // the file you sent" points at one card among a seeded deskful. TourAnchor renders
   // `display: contents`, so wrapping changes no layout; a card that is not the direct one is
@@ -73,6 +79,8 @@ function QueueCard({ p, a, selected, onSelect, standingBucket }: { p: Palette; a
   const card = (
     <button
       onClick={onSelect}
+      disabled={locked}
+      title={locked ? QUEUE_LOCK_TITLE : undefined}
       style={{
         display: 'block',
         width: '100%',
@@ -80,9 +88,10 @@ function QueueCard({ p, a, selected, onSelect, standingBucket }: { p: Palette; a
         padding: '7px 9px',
         marginBottom: 4,
         borderRadius: 8,
-        cursor: 'pointer',
+        cursor: locked ? 'not-allowed' : 'pointer',
         border: selected ? `1.5px solid ${p.primary}` : `1px solid ${p.hairline}`,
         background: selected ? p.accentTint : p.surface,
+        ...(locked ? { opacity: 0.45, filter: 'grayscale(0.5)' } : {}),
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
@@ -130,9 +139,9 @@ export default function QueueRail({
   selectedId,
   onSelect,
   onSeed,
-  onPasteNew,
   onLoadFlagged,
   forceSeedButton = false,
+  lockedToAppId = null,
 }: {
   p: Palette;
   apps: ApplicationRecord[];
@@ -143,16 +152,27 @@ export default function QueueRail({
   selectedId: string | null;
   onSelect: (app: ApplicationRecord) => void;
   onSeed: () => void;
-  onPasteNew: () => void;
   /** Loads the fabricated demo passport into the verifier, switching the console to its alert
    *  view. Optional so the rail still renders without it. */
   onLoadFlagged?: () => void;
   /** The console tour keeps the seed button visible even on a non-empty pipeline so the
    *  "seed the pipeline" step stays completable on a restart. */
   forceSeedButton?: boolean;
+  /** While the tour runs, the id of the one application it is about: every other card is
+   *  disabled so the rest of act 7 cannot be re-pointed at a file the narration is not about
+   *  (see `QUEUE_LOCK_TITLE`). Null when no tour is running — the rail is then a normal rail. */
+  lockedToAppId?: string | null;
 }) {
   const [search, setSearch] = useState('');
   const [archiveOpen, setArchiveOpen] = useState(false);
+  // Both are their own do-step's control, so the script holds them until it asks.
+  const seedLocked = useTourLocked('seed-button');
+  const flaggedLocked = useTourLocked('load-flagged');
+  const directFileLocked = useTourLocked('direct-file');
+  /** No tour → nothing locked. Otherwise the followed file opens when act 7 asks for it, and
+   *  every neighbouring file stays shut for the whole run. */
+  const cardLocked = (a: ApplicationRecord): boolean =>
+    lockedToAppId === null ? false : a.id === lockedToAppId ? directFileLocked : true;
   const q = search.trim().toLowerCase();
   const matches = (a: ApplicationRecord) => !q || a.applicantLabel.toLowerCase().includes(q) || a.id.toLowerCase().includes(q);
 
@@ -197,23 +217,18 @@ export default function QueueRail({
             style={{ width: '100%', padding: '6px 9px', borderRadius: 7, border: `1px solid ${p.hairline}`, fontFamily: FONT.ui, fontSize: 12, color: p.ink1, background: p.surface, outline: 'none', marginBottom: 8 }}
           />
         )}
-        <button
-          onClick={onPasteNew}
-          style={{ width: '100%', padding: '7px 0', borderRadius: 8, border: `1.5px dashed ${p.hairline}`, cursor: 'pointer', background: 'transparent', fontFamily: FONT.ui, fontSize: 12, fontWeight: 600, color: p.ink2 }}
-        >
-          + Paste new application
-        </button>
-        {/* Restores the entry point to the fabricated-passport demo. `onLoadFlagged` and the
-            whole alert view (AlertBanner / CenterAlert / RightAlert, and the `fraud-signals`
-            anchor inside it) were still in the code but unreachable — nothing called
-            setFlagged(true), so the "Catch a fraudster" act narrated a screen that could never
-            render. Sits next to Paste rather than in the header because it is the same kind of
-            action: load a passport into the verifier. */}
+        {/* Entry point to the fabricated-passport demo. `onLoadFlagged` and the whole alert view
+            (AlertBanner / CenterAlert / RightAlert, and the `fraud-signals` anchor inside it)
+            would otherwise be unreachable — nothing else calls setFlagged(true), so the "Catch a
+            fraudster" act would narrate a screen that could never render. Lives on the rail
+            because loading a passport into the verifier is a pipeline-level action. */}
         {onLoadFlagged && (
           <TourAnchor id="load-flagged">
             <button
               onClick={onLoadFlagged}
-              style={{ width: '100%', marginTop: 6, padding: '7px 0', borderRadius: 8, border: `1.5px dashed ${p.red}`, cursor: 'pointer', background: 'transparent', fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.red }}
+              disabled={flaggedLocked}
+              title={flaggedLocked ? QUEUE_LOCK_TITLE : undefined}
+              style={{ width: '100%', marginTop: 6, padding: '7px 0', borderRadius: 8, border: `1.5px dashed ${p.red}`, cursor: flaggedLocked ? 'not-allowed' : 'pointer', background: 'transparent', fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.red, ...(flaggedLocked ? { opacity: 0.45 } : {}) }}
             >
               ⚠ Load flagged applicant
             </button>
@@ -225,13 +240,15 @@ export default function QueueRail({
         <div style={{ padding: '14px 12px' }}>
           {apps.length === 0 && (
             <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink2, lineHeight: 1.55, marginBottom: 9 }}>
-              No applications yet. Verifying a passport files one automatically, or seed a demo pipeline:
+              No applications yet. Seed a demo pipeline:
             </p>
           )}
           <TourAnchor id="seed-button">
             <button
               onClick={onSeed}
-              style={{ width: '100%', padding: '8px 0', borderRadius: 8, border: 'none', cursor: 'pointer', background: p.accentInk, color: 'white', fontFamily: FONT.ui, fontSize: 12, fontWeight: 700 }}
+              disabled={seedLocked}
+              title={seedLocked ? QUEUE_LOCK_TITLE : undefined}
+              style={{ width: '100%', padding: '8px 0', borderRadius: 8, border: 'none', cursor: seedLocked ? 'not-allowed' : 'pointer', background: p.accentInk, color: 'white', fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, ...(seedLocked ? { opacity: 0.45 } : {}) }}
             >
               Seed demo pipeline
             </button>
@@ -259,10 +276,10 @@ export default function QueueRail({
             <span style={{ fontFamily: FONT.num, fontSize: 12, fontWeight: 700, color: p.ink1 }}>{offered.length}</span>
           </div>
           <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.45, padding: '0 4px 6px' }}>
-            Approved on policy, waiting on the borrower to accept. Nothing is disbursed yet.
+            Waiting on the borrower. Not disbursed yet.
           </p>
           {offered.map((a) => (
-            <QueueCard key={a.id} p={p} a={a} selected={a.id === selectedId} onSelect={() => onSelect(a)} standingBucket={standingByApp.get(a.id)} />
+            <QueueCard key={a.id} p={p} a={a} selected={a.id === selectedId} onSelect={() => onSelect(a)} standingBucket={standingByApp.get(a.id)} locked={cardLocked(a)} />
           ))}
         </div>
       )}
@@ -279,7 +296,7 @@ export default function QueueRail({
               <span style={{ fontFamily: FONT.num, fontSize: 12, fontWeight: 700, color: queue.length > 0 ? p.ink1 : p.ink3 }}>{queue.length}</span>
             </div>
             {queue.map((a) => (
-              <QueueCard key={a.id} p={p} a={a} selected={a.id === selectedId} onSelect={() => onSelect(a)} standingBucket={standingByApp.get(a.id)} />
+              <QueueCard key={a.id} p={p} a={a} selected={a.id === selectedId} onSelect={() => onSelect(a)} standingBucket={standingByApp.get(a.id)} locked={cardLocked(a)} />
             ))}
           </div>
         );
@@ -295,10 +312,10 @@ export default function QueueRail({
             <span style={{ fontFamily: FONT.num, fontSize: 12, fontWeight: 700, color: p.ink3 }}>{notTakenUp.length}</span>
           </div>
           <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.45, padding: '0 4px 6px' }}>
-            Approved, but the borrower turned the offer down. Off the book — not in Servicing or the portfolio.
+            Borrower declined. Off the book.
           </p>
           {notTakenUp.map((a) => (
-            <QueueCard key={a.id} p={p} a={a} selected={a.id === selectedId} onSelect={() => onSelect(a)} standingBucket={standingByApp.get(a.id)} />
+            <QueueCard key={a.id} p={p} a={a} selected={a.id === selectedId} onSelect={() => onSelect(a)} standingBucket={standingByApp.get(a.id)} locked={cardLocked(a)} />
           ))}
         </div>
       )}
@@ -322,7 +339,7 @@ export default function QueueRail({
               <span style={{ fontFamily: FONT.num, fontSize: 12, fontWeight: 700, color: p.ink3 }}>{archived.length}</span>
             </button>
             {expanded && archived.map((a) => (
-              <QueueCard key={a.id} p={p} a={a} selected={a.id === selectedId} onSelect={() => onSelect(a)} standingBucket={standingByApp.get(a.id)} />
+              <QueueCard key={a.id} p={p} a={a} selected={a.id === selectedId} onSelect={() => onSelect(a)} standingBucket={standingByApp.get(a.id)} locked={cardLocked(a)} />
             ))}
           </div>
         );
@@ -330,7 +347,7 @@ export default function QueueRail({
 
       <div style={{ marginTop: 'auto', padding: '10px 12px' }}>
         <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink2, lineHeight: 1.5 }}>
-          Age badges show time since filing.
+          Age badge: time since filing.
         </p>
       </div>
     </nav>

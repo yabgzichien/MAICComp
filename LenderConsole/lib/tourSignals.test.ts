@@ -7,9 +7,9 @@ describe('tour signal bus', () => {
     const b = vi.fn();
     const offA = onTourSignal(a);
     const offB = onTourSignal(b);
-    emitTourSignal('assessed');
-    expect(a).toHaveBeenCalledWith('assessed');
-    expect(b).toHaveBeenCalledWith('assessed');
+    emitTourSignal('memo-opened');
+    expect(a).toHaveBeenCalledWith('memo-opened');
+    expect(b).toHaveBeenCalledWith('memo-opened');
     offA();
     offB();
   });

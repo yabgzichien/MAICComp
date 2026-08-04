@@ -59,6 +59,20 @@ describe('CONSOLE_TOUR_STEPS (the console half of the unified script)', () => {
     expect(stepsForBranch(CONSOLE_TOUR_STEPS, 'declined').map((s) => s.id)).not.toContain('approve');
   });
 
+  // Act 10 is where the judge stops being a decision-maker and becomes the lender: the product
+  // ladder is the one place in either app where they author something a borrower will be offered,
+  // and saving it publishes to the same directory the borrower's lender picker reads.
+  it('act 10 has the judge author a loan product on the policy tab', () => {
+    const product = CONSOLE_TOUR_STEPS.find((s) => s.id === 'product')!;
+    expect(product.kind).toBe('do');
+    expect(product.tab).toBe('policy');
+    expect(product.act).toBe(10);
+    expect(product.advanceOn).toBe('policy-published');
+    // Ordered after the thresholds explainer: the flywheel line sets up why the ladder matters.
+    const ids = CONSOLE_TOUR_STEPS.map((s) => s.id);
+    expect(ids.indexOf('product')).toBeGreaterThan(ids.indexOf('policy'));
+  });
+
   it('only the declined branch issues an adverse-action letter', () => {
     expect(stepsForBranch(CONSOLE_TOUR_STEPS, 'declined').map((s) => s.id)).toContain('letter');
     expect(stepsForBranch(CONSOLE_TOUR_STEPS, 'referred').map((s) => s.id)).not.toContain('letter');
@@ -71,6 +85,27 @@ describe('CONSOLE_TOUR_STEPS (the console half of the unified script)', () => {
     expect(declined.map((s) => s.id)).not.toContain('handoff-answer');
     expect(declined.some((s) => s.act === 10)).toBe(false);
     expect(declined[declined.length - 1].id).toBe('finale-declined');
+  });
+
+  // The gate can only open because the judge went and accepted as the borrower, so the handoff
+  // clears itself and renders no Continue. Its waiting line is then the only thing on the card
+  // naming what is being waited on.
+  it('the hand-back to the borrower self-advances and says what it waits for', () => {
+    const handoff = CONSOLE_TOUR_STEPS.find((s) => s.id === 'handoff-answer')!.handoff!;
+    expect(handoff.onOpen).toBe('advance');
+    expect(handoff.gate).toBe('offer-answered');
+    expect(handoff.waiting.length).toBeGreaterThan(0);
+  });
+
+  // Opening the judge's own file (everything after it acts on the SELECTED application) and
+  // making the call (no approval, no offer, and the borrower half waits forever).
+  it('the two beats the rest of the script reads back cannot be skipped', () => {
+    const required = CONSOLE_TOUR_STEPS.filter((s) => s.required).map((s) => s.id);
+    expect(required).toEqual(['open-file', 'approve']);
+  });
+
+  it('every required step is one the officer acts on, never an explain or a handoff', () => {
+    for (const step of CONSOLE_TOUR_STEPS.filter((s) => s.required)) expect(step.kind).toBe('do');
   });
 
   it('the two offer branches hand back and then service the loan', () => {
@@ -144,7 +179,7 @@ describe('validateConsoleTourSteps', () => {
   });
 
   it('flags an explain-step that carries advanceOn', () => {
-    const steps = [base({ kind: 'explain', advanceOn: 'assessed' })];
+    const steps = [base({ kind: 'explain', advanceOn: 'memo-opened' })];
     expect(validateConsoleTourSteps(steps, ['verify'])).toContain('explain step a must not have advanceOn or handoff');
   });
 
@@ -152,10 +187,24 @@ describe('validateConsoleTourSteps', () => {
     expect(validateConsoleTourSteps([base({ kind: 'handoff' })], ['verify'])).toContain('handoff step a has no handoff block');
     const both = base({
       kind: 'handoff',
-      advanceOn: 'assessed',
-      handoff: { target: 'borrower', cta: 'Go', waiting: 'w', ready: 'r', gate: 'none' },
+      advanceOn: 'memo-opened',
+      handoff: { target: 'borrower', cta: 'Go', waiting: 'w', ready: 'r', gate: 'none', onOpen: 'prompt' },
     });
     expect(validateConsoleTourSteps([both], ['verify'])).toContain('handoff step a must not have advanceOn');
+  });
+
+  it('flags a required step that has no Skip to withhold', () => {
+    expect(validateConsoleTourSteps([base({ kind: 'explain', required: true })], ['verify'])).toContain(
+      'step a is explain, which cannot be required'
+    );
+  });
+
+  it('flags an ungated handoff that claims it will self-advance', () => {
+    const step = base({
+      kind: 'handoff',
+      handoff: { target: 'borrower', cta: 'Go', waiting: '', ready: 'r', gate: 'none', onOpen: 'advance' },
+    });
+    expect(validateConsoleTourSteps([step], ['verify'])).toContain('handoff step a is ungated, so it cannot self-advance');
   });
 
   it('flags an empty branches list', () => {
