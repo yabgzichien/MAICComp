@@ -141,7 +141,6 @@ export default function QueueRail({
   onSelect,
   onSeed,
   onLoadFlagged,
-  forceSeedButton = false,
   lockedToAppId = null,
   width = PIPELINE_PANEL.defaultWidth,
 }: {
@@ -157,9 +156,6 @@ export default function QueueRail({
   /** Loads the fabricated demo passport into the verifier, switching the console to its alert
    *  view. Optional so the rail still renders without it. */
   onLoadFlagged?: () => void;
-  /** The console tour keeps the seed button visible even on a non-empty pipeline so the
-   *  "seed the pipeline" step stays completable on a restart. */
-  forceSeedButton?: boolean;
   /** While the tour runs, the id of the one application it is about: every other card is
    *  disabled so the rest of act 7 cannot be re-pointed at a file the narration is not about
    *  (see `QUEUE_LOCK_TITLE`). Null when no tour is running — the rail is then a normal rail. */
@@ -241,13 +237,11 @@ export default function QueueRail({
         )}
       </div>
 
-      {(apps.length === 0 || forceSeedButton) && (
+      {apps.length === 0 && (
         <div style={{ padding: '14px 12px' }}>
-          {apps.length === 0 && (
-            <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink2, lineHeight: 1.55, marginBottom: 9 }}>
-              No applications yet. Seed a demo pipeline:
-            </p>
-          )}
+          <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink2, lineHeight: 1.55, marginBottom: 9 }}>
+            No applications yet. Seed a demo pipeline:
+          </p>
           <TourAnchor id="seed-button">
             <button
               onClick={onSeed}

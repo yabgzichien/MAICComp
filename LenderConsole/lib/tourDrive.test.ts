@@ -159,7 +159,7 @@ describe('tourControlledAnchors', () => {
   // missing here would be silently unguarded.
   it('is every do-step anchor in the script, deduplicated', () => {
     expect(tourControlledAnchors().sort()).toEqual(
-      ['direct-file', 'letter-button', 'load-flagged', 'memo-button', 'product-ladder', 'repayment-control', 'resolve-action', 'seed-button'].sort()
+      ['direct-file', 'letter-button', 'load-flagged', 'memo-button', 'product-ladder', 'repayment-control', 'resolve-action'].sort()
     );
   });
 });

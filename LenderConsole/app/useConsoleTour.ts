@@ -47,9 +47,6 @@ export interface ConsoleTourController {
   actLabel: string;
   activeAnchorId: string | null;
   celebrating: string | null;
-  /** True while the current step is the "seed the pipeline" do-step  the QueueRail keeps its
-   *  seed button visible even on a non-empty pipeline so the step stays completable. */
-  forceSeedButton: boolean;
   /** No application has arrived from the borrower app yet, so the script cannot start. The
    *  console renders a hold card pointing back at the borrower app instead of a step. */
   awaitingBorrower: boolean;
@@ -372,7 +369,6 @@ export function useConsoleTour({
     actLabel,
     activeAnchorId,
     celebrating,
-    forceSeedButton: visible && !paused && step?.id === 'seed',
     awaitingBorrower: visible && awaitingBorrower,
     directElsewhere,
     branch,

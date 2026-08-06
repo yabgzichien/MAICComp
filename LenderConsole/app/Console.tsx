@@ -2045,6 +2045,24 @@ export default function Console() {
       .then((sp: StoredPolicy | null) => {
         if (!sp) return;
         setStoredPolicy(sp);
+        if (ownApplications.length === 0) {
+          // Auto-seed (2026-08-06): a judge should never have to find and click "Seed demo
+          // pipeline" before the desk shows anything  the console arrives pre-stocked, via
+          // the exact same seedApplications/writeApplications path the manual button used
+          // (see onSeed below). Looked up from the registry by `lenderId`, not the `activeLender`
+          // closure  this runs from inside a fetch callback for a lender switch that may not
+          // have committed to state yet (same reasoning as openApplication's own doc comment).
+          const lenderProfile = LENDER_REGISTRY.find((l) => l.id === lenderId) ?? LENDER_REGISTRY[0];
+          const { apps: seeded, presentments } = seedApplications(ownApplications, sp.products, sp.policy, lenderProfile.name);
+          writeApplications(seeded, undefined, lenderId);
+          presentments.forEach((p) => recordPresentment(p, undefined, lenderId));
+          setApps(seeded);
+          const firstSeeded = seeded[0];
+          if (firstSeeded) {
+            openApplication(firstSeeded, sp, seeded, lenderId);
+            return;
+          }
+        }
         const first = ownApplications[0];
         if (!first) {
           setState({ status: 'empty' });
@@ -2531,7 +2549,7 @@ export default function Console() {
       <main aria-label={TAB_LABELS[tab]} style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
         {tab === 'verify' ? (
           <>
-            <QueueRail p={p} apps={apps} offerBook={offerBook} selectedId={selectedAppId} onSelect={onSelectApp} onSeed={onSeed} onLoadFlagged={onLoadFlagged} forceSeedButton={tour.forceSeedButton} lockedToAppId={tour.queueLockedToAppId} width={panelLayout.pipeline} />
+            <QueueRail p={p} apps={apps} offerBook={offerBook} selectedId={selectedAppId} onSelect={onSelectApp} onSeed={onSeed} onLoadFlagged={onLoadFlagged} lockedToAppId={tour.queueLockedToAppId} width={panelLayout.pipeline} />
             <PanelResizer p={p} spec={PIPELINE_PANEL} width={panelLayout.pipeline} otherWidth={panelLayout.decision} onResize={(w) => onPanelResize('pipeline', w)} />
             {showAlert ? <CenterAlert p={p} flagTime={flagTime} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} lapsedTiers={state.credential.verification.lapsedTiers} policy={storedPolicy.policy} /> : state.status === 'invalid' ? <InvalidCenter p={p} reasons={state.reasons} /> : <ServicingEmpty p={p} text="No application open. Pick a file from the pipeline to see the engine's verdict, or seed a demo pipeline to get started." />}
             <PanelResizer p={p} spec={DECISION_PANEL} width={panelLayout.decision} otherWidth={panelLayout.pipeline} onResize={(w) => onPanelResize('decision', w)} />
