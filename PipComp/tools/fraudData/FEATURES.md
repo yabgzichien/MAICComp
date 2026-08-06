@@ -1,6 +1,9 @@
 # Fraud Feature Vector  Canonical Format
 
-Used by: `tools/fraudData/generate.js` (generator) and `src/lib/fraudFeatures.ts` (Task A2, live extraction).
+Used by: `tools/fraudRealData/build.ts` (builds `dataset.json` from real Berka transactions)
+and `src/lib/fraudFeatures.ts` (live extraction). The original synthetic generator that also
+wrote this file was removed on 2026-08-04 — it produced perfectly separable classes (AUC 1.0),
+the credibility flaw the Berka rebuild replaced.
 
 The feature vector is a **fixed-length array of 9 numbers**, all values in [0, 1].
 The label is an integer: **0 = genuine, 1 = fabricated**.

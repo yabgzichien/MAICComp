@@ -69,12 +69,26 @@ export interface MemoCounterOffer {
   constraint: string;
 }
 
+/** The officer's own move off the assistant's suggestion (interest rate adjustment,
+ *  2026-08-06). Present only when a reason code was attached — which the console
+ *  requires for anything past the discretion band, so an undocumented exception can't
+ *  reach the memo. */
+export interface MemoRateAdjustment {
+  reasonCode: string;
+  reasonLabel: string;
+  note: string | null;
+  /** Signed bps off the suggested rate: negative = discounted further, positive = premium held. */
+  deviationBps: number;
+}
+
 /** Risk-based pricing note (Brief R): the ladder rate, the rate actually applied, and the
  *  assistant's rationale lines. Present only when a pricing suggestion was computed. */
 export interface MemoPricing {
   ladderApr: number;
   adoptedApr: number;
   reasons: string[];
+  /** Null when the applied rate is the engine's own — nobody overrode anything. */
+  adjustment?: MemoRateAdjustment | null;
 }
 
 export interface CreditMemo {
@@ -225,6 +239,17 @@ export function buildCreditMemo(
 
 // ── Downloadable artifact ───────────────────────────────────────────────────────
 
+/** The officer's move restated for a reviewer: how far off the suggestion, under which
+ *  code, in whose words. Shared by the markdown and PDF renderers so the audit line
+ *  can't drift between the two artifacts. */
+export function adjustmentLine(adj: MemoRateAdjustment): string {
+  const off =
+    adj.deviationBps === 0
+      ? 'at the suggested rate'
+      : `${Math.abs(adj.deviationBps)} bps ${adj.deviationBps < 0 ? 'below' : 'above'} the suggested rate`;
+  return `Officer adjustment: ${off} — ${adj.reasonLabel} (${adj.reasonCode}).${adj.note ? ` Note: ${adj.note}` : ''}`;
+}
+
 export function memoToMarkdown(memo: CreditMemo): string {
   const h = memo.header;
   const lines: string[] = [];
@@ -243,6 +268,7 @@ export function memoToMarkdown(memo: CreditMemo): string {
     const asPct = (x: number) => `${(x * 100).toFixed(1)}%`;
     lines.push(`**Pricing:** ladder rate ${asPct(pr.ladderApr)}, rate applied ${asPct(pr.adoptedApr)}${pr.adoptedApr < pr.ladderApr ? ' (risk-based discount)' : ''}.`);
     for (const r of pr.reasons) lines.push(`- ${r}`);
+    if (pr.adjustment) lines.push(`- ${adjustmentLine(pr.adjustment)}`);
     lines.push('');
   }
   lines.push('## Panel findings');
@@ -306,6 +332,7 @@ export function memoToPdfDoc(memo: CreditMemo): PdfDoc {
       lines: [
         `Ladder rate ${asPct(pr.ladderApr)}, rate applied ${asPct(pr.adoptedApr)}${pr.adoptedApr < pr.ladderApr ? ' (risk-based discount)' : ''}.`,
         ...pr.reasons.map((r) => `- ${r}`),
+        ...(pr.adjustment ? [`- ${adjustmentLine(pr.adjustment)}`] : []),
       ],
     });
   }

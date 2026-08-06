@@ -140,18 +140,32 @@ export const DEFAULT_POLICY: LenderPolicy = {
   fullLadderFromDays: 90,
   minCoverageRatioForFullLadder: 0.5,
   costOfFunds: 0.05,
-  targetReturn: 0.06,
+  // Lowered with the ladder (was 0.06). priceLoan clamps its suggestion to the tier APR, so
+  // the floor cost-of-funds + PD*LGD + targetReturn must stay under the ladder or every band
+  // clamps and the risk-based-pricing panel never shows a discount. At 0.04 the top three
+  // bands still price below their tier; Fair and Building clamp, which is the honest signal.
+  targetReturn: 0.04,
 };
 
 function rm(n: number): string {
   return `RM${Math.round(n).toLocaleString('en-MY')}`;
 }
 
+// Rates are bounded by the Moneylenders Act 1951 s.17A cap on unsecured lending (18% p.a.):
+// above it a moneylending agreement is void and unenforceable, so 18% is the Emergency tier's
+// ceiling rather than a competitive choice. The rest of the ladder steps down toward the
+// Malaysian microfinance market (BNM Skim Pembiayaan Mikro ~8.25% flat; AIM 10% service
+// charge; SC-licensed P2P 0.8-1.5%/month). Amounts stay inside the locked RM2k-RM20k
+// working-capital positioning; only Emergency moves, off a RM100-500 floor that sat below
+// BNM's RM1,000 microfinance entry point and read as a payday advance. Its minAmount stays
+// at RM500 deliberately: minAmount is a DECLINE threshold (see affordablePrincipal), so
+// raising it to BNM's RM1,000 would reject the thinnest files instead of offering them less.
+// See docs/market-aligned-ladder.md.
 export const DEFAULT_PRODUCTS: LoanProduct[] = [
-  { id: 'emergency', label: 'Emergency Micro', minScore: 300, minAmount: 100, maxAmount: 500, tenorMonths: 6, apr: 0.36 },
-  { id: 'starter', label: 'Starter Capital', minScore: 500, minAmount: 2000, maxAmount: 5000, tenorMonths: 12, apr: 0.28 },
-  { id: 'growth', label: 'Growth Capital', minScore: 620, minAmount: 4000, maxAmount: 10000, tenorMonths: 18, apr: 0.22 },
-  { id: 'scale', label: 'Scale Capital', minScore: 740, minAmount: 8000, maxAmount: 20000, tenorMonths: 24, apr: 0.16 },
+  { id: 'emergency', label: 'Emergency Micro', minScore: 300, minAmount: 500, maxAmount: 2000, tenorMonths: 6, apr: 0.18 },
+  { id: 'starter', label: 'Starter Capital', minScore: 500, minAmount: 2000, maxAmount: 5000, tenorMonths: 12, apr: 0.16 },
+  { id: 'growth', label: 'Growth Capital', minScore: 620, minAmount: 4000, maxAmount: 10000, tenorMonths: 18, apr: 0.14 },
+  { id: 'scale', label: 'Scale Capital', minScore: 740, minAmount: 8000, maxAmount: 20000, tenorMonths: 24, apr: 0.12 },
 ];
 
 export function installmentFor(principal: number, apr: number, tenorMonths: number): number {

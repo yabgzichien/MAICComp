@@ -113,7 +113,7 @@ export default function AgentPanel({ p, passport, decision, stacking, onInfo }: 
   return (
     <div style={{ background: p.surface2, borderRadius: 12, padding: '14px 15px', border: `1px solid ${p.hairline}` }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
-        <SectionLabel color={p.ink2}>AI Assessment Panel · advisory only</SectionLabel>
+        <SectionLabel color={p.ink2}>AI Assessment Panel</SectionLabel>
         <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: toneColor(p, panel.orchestrator.tone) }}>
           {panel.orchestrator.concurs ? '✓ Panel concurs with policy engine' : '⚠ Panel dissents. Recommends manual review'}
         </span>

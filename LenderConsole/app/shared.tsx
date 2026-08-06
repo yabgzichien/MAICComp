@@ -1,5 +1,6 @@
-import { useEffect, type ReactNode, type RefObject } from 'react';
+import React, { useEffect, useState, type ReactNode, type RefObject } from 'react';
 import { FONT, GLOSSARY, type Palette } from './tokens';
+import { ASSUMED_VIEWPORT_PX, resizePanel, type PanelSpec } from '../lib/panelLayout';
 
 const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -363,6 +364,111 @@ export function Toast({ message, onClose, p }: { message: string | null; onClose
       >
         ✕
       </button>
+    </div>
+  );
+}
+
+/**
+ * The drag handle between two workbench columns (2026-08-06). A 6px strip the officer can
+ * grab with the mouse, arrow with the keyboard, or double-click to reset — the panel is
+ * part of the desk, so it has to be reachable without one. All the arithmetic (floors,
+ * ceilings, protecting the centre column) lives in lib/panelLayout; this only turns
+ * gestures into a pixel delta and hands it over.
+ *
+ * The move/up listeners go on `window`, not the strip: the cursor leaves the 6px target
+ * the instant the drag starts (the panel edge moves out from under it), so anything
+ * element-scoped would drop the gesture on the first pixel.
+ */
+export function PanelResizer({
+  p,
+  spec,
+  width,
+  otherWidth,
+  onResize,
+}: {
+  p: Palette;
+  spec: PanelSpec;
+  width: number;
+  otherWidth: number;
+  onResize: (width: number) => void;
+}) {
+  const [active, setActive] = useState(false);
+  const [hover, setHover] = useState(false);
+
+  // A drag that leaves the strip must not select the page text it passes over, and the
+  // col-resize cursor has to survive the pointer crossing other elements.
+  useEffect(() => {
+    if (!active) return;
+    const { body } = document;
+    const priorCursor = body.style.cursor;
+    const priorSelect = body.style.userSelect;
+    body.style.cursor = 'col-resize';
+    body.style.userSelect = 'none';
+    return () => {
+      body.style.cursor = priorCursor;
+      body.style.userSelect = priorSelect;
+    };
+  }, [active]);
+
+  const viewport = () => (typeof window === 'undefined' ? ASSUMED_VIEWPORT_PX : window.innerWidth);
+  const nudge = (deltaPx: number) => onResize(resizePanel(spec, width, deltaPx, otherWidth, viewport()));
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = width;
+    setActive(true);
+
+    const move = (ev: PointerEvent) => onResize(resizePanel(spec, startWidth, ev.clientX - startX, otherWidth, viewport()));
+    const end = () => {
+      setActive(false);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+  };
+
+  const lit = active || hover;
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={spec.label}
+      aria-valuenow={width}
+      aria-valuemin={spec.min}
+      aria-valuemax={spec.max}
+      tabIndex={0}
+      title={`${spec.label} — drag, or double-click to reset`}
+      onPointerDown={onPointerDown}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
+      onDoubleClick={() => onResize(spec.defaultWidth)}
+      onKeyDown={(e) => {
+        const step = e.shiftKey ? 48 : 12;
+        if (e.key === 'ArrowLeft') { e.preventDefault(); nudge(-step); }
+        else if (e.key === 'ArrowRight') { e.preventDefault(); nudge(step); }
+        else if (e.key === 'Home') { e.preventDefault(); onResize(spec.defaultWidth); }
+      }}
+      style={{
+        width: 6,
+        flexShrink: 0,
+        cursor: 'col-resize',
+        alignSelf: 'stretch',
+        background: lit ? p.accentSoft : 'transparent',
+        transition: active ? 'none' : 'background 120ms ease',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        touchAction: 'none',
+      }}
+    >
+      {/* The grip only appears on approach: at rest this reads as the hairline between
+          two panels, not a third piece of chrome competing for attention. */}
+      <div style={{ width: 2, height: 26, borderRadius: 2, background: lit ? p.accentInk : 'transparent' }} />
     </div>
   );
 }

@@ -17,6 +17,33 @@ import { type CreditPassport, type VerifyResult, parsePassportCode, verifyPasspo
 import { DEFAULT_POLICY, REASON_CATEGORY_LABELS, decideLoan, type LenderPolicy, type LoanDecision, type LoanProduct } from '../lib/loans';
 import { DEFAULT_STORED_POLICY, type StoredPolicy } from '../lib/policyStore';
 import { priceLoan, repriceProducts, type PricingSuggestion } from '../lib/pricing';
+import {
+  DISCRETION_BAND_BPS,
+  RATE_STEP_BPS,
+  buildAppliedRate,
+  checkAdjustment,
+  deviationBps,
+  fromBps,
+  netMarginAt,
+  rateBounds,
+  ratePresets,
+  reasonCode,
+  reasonCodesFor,
+  toBps,
+  type AppliedRate,
+  type RateReasonId,
+} from '../lib/rateAdjustment';
+import {
+  DECISION_PANEL,
+  DEFAULT_PANEL_WIDTHS,
+  PIPELINE_PANEL,
+  ASSUMED_VIEWPORT_PX,
+  fitPanels,
+  parsePanelWidths,
+  serializePanelWidths,
+  type PanelKey,
+  type PanelWidths,
+} from '../lib/panelLayout';
 import { mergedStanding } from '../lib/repaymentStanding';
 import { structurePool, type CreditBand, type PoolLoan } from '../lib/securitization';
 import { SAMPLE_POOL } from '../lib/samplePool';
@@ -37,7 +64,6 @@ import { TourActiveAnchorContext, TourLockedControlsContext, TourRunningContext,
 import { emitTourSignal } from '../lib/tourSignals';
 import { LENDER_REGISTRY, type LenderProfile } from '../lib/lenderRegistry';
 import { buildCreditMemo } from '../lib/creditMemo';
-import { counterOfferFor } from '../lib/counterOffer';
 import { findRecentPresentments, formatAgo, presentmentKey, type Presentment } from '../lib/presentment';
 import { clearPresentmentLog, readPresentmentLog, recordPresentment } from '../lib/presentmentStore';
 import { acceptanceLabel, acceptanceStateFor, liveBook, parseOfferBook, type AcceptanceState, type OfferBook } from '../lib/offerAcceptance';
@@ -65,12 +91,12 @@ import { diffCheckIn, monitoringStatus, type EarlyWarningFlag, type MonitoringSt
 import { seedApplications } from '../lib/demoSeed';
 import { DEMO_APPLICANTS } from './demoApplicants';
 import QueueRail from './QueueRail';
-import { ConfirmModal, InfoButton, InfoModal, MiniBar, SectionLabel, Toast } from './shared';
+import { ConfirmModal, InfoButton, InfoModal, MiniBar, PanelResizer, SectionLabel, Toast } from './shared';
 import AgentPanel from './AgentPanel';
 import CreditMemoModal from './CreditMemo';
 import AdverseActionLetterModal from './AdverseActionLetter';
 import { buildAdverseActionLetter } from '../lib/adverseAction';
-import { BenfordChart, ConfidenceCeilingTick, CoverageStrip, DecisionWaterfall, HeadroomBar, MomentumSpark } from './DecisionViz';
+import { AffordabilityCheckCard, BenfordChart, ConfidenceCeilingTick, CoverageStrip, DecisionWaterfall, HeadroomBar, MomentumSpark } from './DecisionViz';
 
 type Tab = 'verify' | 'servicing' | 'portfolio' | 'capital' | 'policy';
 /** Which pool the Capital Markets tab structures (Brief Q): the synthetic sample or the live approved book. */
@@ -341,7 +367,7 @@ function StackingBanner({ p, priors }: { p: Palette; priors: Presentment[] }) {
   );
 }
 
-function VerifiedCenter({ p, passport, decision, priors, issuerVerified, stacking, lapsedTiers }: { p: Palette; passport: CreditPassport; decision: LoanDecision | null; priors: Presentment[]; issuerVerified: boolean; stacking?: StackingSignal; lapsedTiers?: import('../lib/passport').ConsentTier[] }) {
+function VerifiedCenter({ p, passport, decision, priors, issuerVerified, stacking, lapsedTiers, policy }: { p: Palette; passport: CreditPassport; decision: LoanDecision | null; priors: Presentment[]; issuerVerified: boolean; stacking?: StackingSignal; lapsedTiers?: import('../lib/passport').ConsentTier[]; policy?: LenderPolicy }) {
   const factors = passport.factorSummary;
   const avg = factors.length ? Math.round(factors.reduce((s, f) => s + f.subScore, 0) / factors.length) : 0;
   const confidencePct = passport.assessment ? Math.round(passport.assessment.confidence * 100) : null;
@@ -359,13 +385,6 @@ function VerifiedCenter({ p, passport, decision, priors, issuerVerified, stackin
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: p.primary, boxShadow: `0 0 0 3px ${p.accentSoft}` }} />
             <span style={{ fontFamily: FONT.ui, fontSize: 13, fontWeight: 700, color: p.accentInk }}>Verified ✓</span>
             <span style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink3 }}>· {passport.holder?.name ?? 'Applicant'}</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: 8, background: p.accentTint, border: `1.5px solid ${p.accentSoft}` }}>
-            <svg width="11" height="13" viewBox="0 0 11 13" fill="none">
-              <rect x="0.5" y="5.5" width="10" height="7" rx="1.5" fill={p.accentSoft} stroke={p.primary} strokeWidth="1" />
-              <path d="M2.5 5.5V3.5a3 3 0 016 0v2" stroke={p.primary} strokeWidth="1.1" strokeLinecap="round" />
-            </svg>
-            <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.accentInk }}>Privacy Locked. No raw transactions</span>
           </div>
         </div>
 
@@ -483,11 +502,23 @@ function VerifiedCenter({ p, passport, decision, priors, issuerVerified, stackin
           {evidenceShort && <span style={{ fontFamily: FONT.mono, fontSize: 12, color: p.ink3 }}>SHA-256: {evidenceShort}</span>}
         </div>
       </div>
+      {/* Capacity to repay, above the forensic checks: it decides more files than any
+          other gate, and it used to be visible only as one line of audit-trail prose. */}
+      {decision && (
+        <AffordabilityCheckCard
+          p={p}
+          assessment={passport.assessment}
+          breakdown={decision.breakdown}
+          installment={decision.installment}
+          policy={policy}
+          onInfo={setInfo}
+        />
+      )}
+
       {passport.digitHistogram && passport.digitHistogram.length === 9 && (
         <div style={{ background: p.surface, borderRadius: 12, padding: '12px 16px', boxShadow: p.shadow }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6, gap: 8 }}>
             <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink3, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Benford forensic check</span>
-            <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 600, color: p.accentInk, background: p.accentTint, border: `1px solid ${p.accentSoft}`, borderRadius: 5, padding: '2px 8px' }}>signed digit counts · no raw transactions</span>
           </div>
           <BenfordChart p={p} histogram={passport.digitHistogram} onInfo={setInfo} />
         </div>
@@ -551,7 +582,7 @@ function RicherBlocks({ p, passport, onInfo }: { p: Palette; passport: CreditPas
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
       {occupation && (
-        <BlockCard p={p} title="Occupation" tier="Tier 1 · self-declared">
+        <BlockCard p={p} title="Occupation" tier="Tier 1">
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontFamily: FONT.ui, fontSize: 14, fontWeight: 700, color: p.ink1 }}>{occupation.occupation}</span>
             <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>{occupation.sector}</span>
@@ -1070,12 +1101,43 @@ function ApplicationCard({ p, app, passport, acceptance, onResolve, onRecordRepa
   );
 }
 
-/** Risk-based pricing strip (Brief R): ladder rate vs the suggested rate, net margin at
- *  each, and an Adopt action. The suggestion only ever discounts (clamped to the ladder). */
-function PricingStrip({ p, pricing, adopted, onAdopt }: { p: Palette; pricing: PricingSuggestion; adopted: number | null; onAdopt?: (rate: number) => void }) {
+/** Interest rate adjustment (2026-08-06), replacing Brief R's single Adopt button. The
+ *  ladder and the assistant's suggestion stay as anchors, but the officer now moves a
+ *  bounded slider between the break-even floor and the ladder ceiling: one suggested rate
+ *  was never the whole space, and pretending it was pushed real judgment off-system.
+ *  Anything past the discretion band carries a reason code into the memo — discretion is
+ *  allowed, undocumented discretion is not. Every rate shown here is re-run through
+ *  decideLoan by `previewAt`, so the installment and offer on screen are the engine's,
+ *  never an extrapolation. */
+function RateAdjustmentStrip({ p, pricing, applied, onApply, previewAt }: {
+  p: Palette;
+  pricing: PricingSuggestion;
+  applied: AppliedRate | null;
+  onApply?: (a: AppliedRate) => void;
+  previewAt?: (rate: number) => { installment: number; maxAmount: number } | null;
+}) {
   const asPct = (x: number) => `${(x * 100).toFixed(1)}%`;
+  const rm = (n: number) => `RM${Math.round(n).toLocaleString('en-MY')}`;
+  const bounds = rateBounds(pricing);
   const hasDiscount = pricing.discountBps > 0;
-  const isAdopted = adopted !== null;
+  // The rate the current decision was computed at: the ladder until the officer applies one.
+  const inForce = applied?.rate ?? pricing.ladderApr;
+
+  // Draft lives in bps so dragging can never produce a rate the engine sees as 15.800000000000001.
+  const [draftBps, setDraftBps] = useState(toBps(applied?.rate ?? pricing.suggestedRate));
+  const [reasonId, setReasonId] = useState<RateReasonId | null>(applied?.reason?.code ?? null);
+  const [note, setNote] = useState(applied?.reason?.note ?? '');
+
+  const draft = fromBps(draftBps);
+  const deviation = deviationBps(pricing, draft);
+  const codes = reasonCodesFor(deviation);
+  // A code picked before the slider crossed the suggestion can be wrong for the new
+  // direction (a risk premium can't justify a discount), so it drops rather than lingers.
+  const reason = reasonId && codes.some((c) => c.id === reasonId) ? reasonId : null;
+  const check = checkAdjustment(pricing, { rate: draft, reasonCode: reason, note });
+  const preview = previewAt?.(draft) ?? null;
+  const unchanged = toBps(draft) === toBps(inForce);
+
   const RateCol = ({ title, rate, margin, highlight }: { title: string; rate: number; margin: number; highlight?: boolean }) => (
     <div style={{ flex: 1, padding: '8px 12px', borderRadius: 8, background: highlight ? p.accentTint : p.surface2, border: `1px solid ${highlight ? p.accentSoft : p.hairline}` }}>
       <p style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{title}</p>
@@ -1083,31 +1145,116 @@ function PricingStrip({ p, pricing, adopted, onAdopt }: { p: Palette; pricing: P
       <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>net margin {asPct(margin)}</p>
     </div>
   );
+
   return (
     <div style={{ padding: '14px 20px 0' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink3, letterSpacing: '0.10em', textTransform: 'uppercase' }}>Risk-based pricing</span>
+        <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink3, letterSpacing: '0.10em', textTransform: 'uppercase' }}>Interest rate adjustment</span>
         {hasDiscount && <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.accentInk, background: p.accentSoft, borderRadius: 5, padding: '2px 8px' }}>−{pricing.discountBps} bps for a lower-risk file</span>}
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
-        <RateCol title="Ladder rate" rate={pricing.ladderApr} margin={pricing.ladder.netMargin} highlight={!isAdopted && !hasDiscount} />
+        <RateCol title="Ladder rate" rate={pricing.ladderApr} margin={pricing.ladder.netMargin} highlight={!applied && !hasDiscount} />
         <RateCol title={hasDiscount ? 'Suggested rate' : 'Suggested = ladder'} rate={pricing.suggestedRate} margin={pricing.suggested.netMargin} highlight={hasDiscount} />
       </div>
-      {onAdopt && hasDiscount && (
-        <button
-          onClick={() => onAdopt(pricing.suggestedRate)}
-          disabled={isAdopted}
-          style={{ width: '100%', marginTop: 8, padding: '8px 0', borderRadius: 8, border: `1.5px solid ${p.primary}`, cursor: isAdopted ? 'default' : 'pointer', background: isAdopted ? p.accentSoft : 'transparent', color: p.accentInk, fontFamily: FONT.ui, fontSize: 12, fontWeight: 700 }}
-        >
-          {isAdopted ? `✓ Custom-priced at ${asPct(adopted!)}: re-checked for affordability` : `Adopt ${asPct(pricing.suggestedRate)}: re-prices the installment`}
-        </button>
+
+      {onApply && !bounds.locked && (
+        <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 8, background: p.surface2, border: `1px solid ${p.hairline}` }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+            <label htmlFor="officer-rate" style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink2 }}>Officer rate</label>
+            <span style={{ fontFamily: FONT.num, fontSize: 20, fontWeight: 700, color: p.accentInk, lineHeight: 1.2 }}>{asPct(draft)}</span>
+          </div>
+          <input
+            id="officer-rate"
+            type="range"
+            min={toBps(bounds.floorRate)}
+            max={toBps(bounds.ceilingRate)}
+            step={RATE_STEP_BPS}
+            value={draftBps}
+            onChange={(e) => setDraftBps(Number(e.target.value))}
+            aria-valuetext={`${asPct(draft)} annual`}
+            style={{ width: '100%', marginTop: 6, accentColor: p.primary, cursor: 'pointer' }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>
+            <span>break-even {asPct(bounds.floorRate)}</span>
+            <span>ladder {asPct(bounds.ceilingRate)}</span>
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+            {ratePresets(pricing).map((preset) => {
+              const on = toBps(preset.rate) === draftBps;
+              return (
+                <button
+                  key={preset.label}
+                  onClick={() => setDraftBps(toBps(preset.rate))}
+                  style={{ padding: '4px 9px', borderRadius: 999, border: `1.5px solid ${on ? p.primary : p.hairline}`, background: on ? p.accentSoft : p.surface, color: on ? p.accentInk : p.ink2, fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                >
+                  {preset.label} {asPct(preset.rate)}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* The engine's own numbers at the drafted rate: a discount frees affordability
+              headroom, a premium can shrink the offer. Officers should see which before applying. */}
+          <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink2, marginTop: 8, lineHeight: 1.5 }}>
+            At {asPct(draft)}: net margin {asPct(netMarginAt(pricing, draft))}
+            {preview && <> · {rm(preview.installment)}/mo · offer {rm(preview.maxAmount)}</>}
+            {deviation !== 0 && <span style={{ color: p.ink3 }}> · {Math.abs(deviation)} bps {deviation < 0 ? 'below' : 'above'} the suggestion</span>}
+          </p>
+
+          {check.trigger && (
+            <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${p.hairline}` }}>
+              <label htmlFor="rate-reason" style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink2, display: 'block', marginBottom: 4 }}>
+                Reason code {check.trigger === 'standing' ? '(arrears on file — pricing below the ladder is an exception)' : `(more than ${DISCRETION_BAND_BPS} bps off the suggestion)`}
+              </label>
+              <select
+                id="rate-reason"
+                value={reason ?? ''}
+                onChange={(e) => setReasonId((e.target.value || null) as RateReasonId | null)}
+                style={{ width: '100%', padding: '6px 8px', borderRadius: 7, border: `1.5px solid ${p.hairline}`, fontSize: 12, color: p.ink1, background: p.surface, fontFamily: FONT.ui, outline: 'none' }}
+              >
+                <option value="">— pick a reason —</option>
+                {codes.map((c) => (
+                  <option key={c.id} value={c.id}>{c.label}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={note}
+                maxLength={200}
+                placeholder={reason ? reasonCode(reason)?.hint : 'note (required for some codes)'}
+                onChange={(e) => setNote(e.target.value)}
+                style={{ width: '100%', marginTop: 6, padding: '6px 8px', borderRadius: 7, border: `1.5px solid ${p.hairline}`, fontSize: 12, color: p.ink1, background: p.surface, fontFamily: FONT.ui, outline: 'none' }}
+              />
+            </div>
+          )}
+
+          <button
+            onClick={() => {
+              const next = buildAppliedRate(pricing, { rate: draft, reasonCode: reason, note });
+              if (next) onApply(next);
+            }}
+            disabled={!check.ok || unchanged}
+            style={{ width: '100%', marginTop: 8, padding: '8px 0', borderRadius: 8, border: `1.5px solid ${!check.ok || unchanged ? p.hairline : p.primary}`, cursor: !check.ok || unchanged ? 'default' : 'pointer', background: 'transparent', color: !check.ok || unchanged ? p.ink3 : p.accentInk, fontFamily: FONT.ui, fontSize: 12, fontWeight: 700 }}
+          >
+            {unchanged ? `${asPct(draft)} is already in force` : `Apply ${asPct(draft)}: re-prices the installment`}
+          </button>
+          {check.blocker && <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.amber, marginTop: 5, lineHeight: 1.5 }}>{check.blocker}</p>}
+        </div>
+      )}
+
+      {applied && (
+        <p style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.accentInk, background: p.accentSoft, borderRadius: 8, padding: '7px 10px', marginTop: 8, lineHeight: 1.5 }}>
+          ✓ Custom-priced at {asPct(applied.rate)}: re-checked for affordability
+          {applied.reason && <span style={{ fontWeight: 500 }}> · {applied.reason.label}{applied.reason.note ? ` — ${applied.reason.note}` : ''}</span>}
+        </p>
       )}
       <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, marginTop: 5, lineHeight: 1.5 }}>{pricing.reasons[pricing.reasons.length - 1]}</p>
     </div>
   );
 }
 
-function RightDecision({ p, passport, decision, credential, amount, onCounterOffer, isCounterOffer, stacking, selectedApp, acceptance, onResolve, onRecordRepayment, onGenerateLetter, purpose, setPurpose, policy, policyUpdatedAt, pricing, adoptedRate, onAdoptRate, lenderName, ownApplications, storedPolicy }: { p: Palette; passport: CreditPassport | null; decision: LoanDecision | null; credential: Credential | null; amount: string; onCounterOffer?: (counterAmount: number) => void; isCounterOffer?: boolean; stacking?: StackingSignal; selectedApp?: ApplicationRecord | null; acceptance?: AcceptanceState | null; onResolve?: (outcome: 'approved' | 'declined', rationale: string) => void; onRecordRepayment?: (instalmentSeq: number, amount: number, outcome: RepaymentOutcome) => void; onGenerateLetter?: () => void; purpose?: DeclaredPurpose | null; setPurpose?: (p: DeclaredPurpose | null) => void; policy?: LenderPolicy; policyUpdatedAt?: string; pricing?: PricingSuggestion | null; adoptedRate?: number | null; onAdoptRate?: (rate: number) => void; lenderName: string; ownApplications: ApplicationRecord[]; storedPolicy: StoredPolicy }) {
+function RightDecision({ p, passport, decision, credential, amount, stacking, selectedApp, acceptance, onResolve, onRecordRepayment, onGenerateLetter, purpose, setPurpose, policy, policyUpdatedAt, pricing, appliedRate, onApplyRate, previewRate, lenderName, ownApplications, storedPolicy, width = DECISION_PANEL.defaultWidth }: { p: Palette; passport: CreditPassport | null; decision: LoanDecision | null; credential: Credential | null; amount: string; stacking?: StackingSignal; selectedApp?: ApplicationRecord | null; acceptance?: AcceptanceState | null; onResolve?: (outcome: 'approved' | 'declined', rationale: string) => void; onRecordRepayment?: (instalmentSeq: number, amount: number, outcome: RepaymentOutcome) => void; onGenerateLetter?: () => void; purpose?: DeclaredPurpose | null; setPurpose?: (p: DeclaredPurpose | null) => void; policy?: LenderPolicy; policyUpdatedAt?: string; pricing?: PricingSuggestion | null; appliedRate?: AppliedRate | null; onApplyRate?: (applied: AppliedRate) => void; previewRate?: (rate: number) => { installment: number; maxAmount: number } | null; lenderName: string; ownApplications: ApplicationRecord[]; storedPolicy: StoredPolicy; /** Officer-dragged width (2026-08-06); the spec width when no resizer owns it. */ width?: number }) {
   const [memoOpen, setMemoOpen] = useState(false);
   const [letterOpen, setLetterOpen] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
@@ -1119,7 +1266,23 @@ function RightDecision({ p, passport, decision, credential, amount, onCounterOff
   const letterLocked = useTourLocked('letter-button');
 
   // The pricing note for the memo/decision-file: ladder rate + the rate actually in force.
-  const memoPricing = pricing ? { ladderApr: pricing.ladderApr, adoptedApr: adoptedRate ?? pricing.ladderApr, reasons: pricing.reasons } : null;
+  const memoPricing = pricing
+    ? {
+        ladderApr: pricing.ladderApr,
+        adoptedApr: appliedRate?.rate ?? pricing.ladderApr,
+        reasons: pricing.reasons,
+        // Only an officer move that carried a reason code writes an adjustment line. A rate
+        // applied inside the discretion band is the engine's own suggestion, not an override.
+        adjustment: appliedRate?.reason
+          ? {
+              reasonCode: appliedRate.reason.code,
+              reasonLabel: appliedRate.reason.label,
+              note: appliedRate.reason.note,
+              deviationBps: appliedRate.reason.deviationBps,
+            }
+          : null,
+      }
+    : null;
 
   function downloadDecisionFile() {
     if (!passport || !decision || !credential) return;
@@ -1143,11 +1306,10 @@ function RightDecision({ p, passport, decision, credential, amount, onCounterOff
     URL.revokeObjectURL(url);
   }
   return (
-    <div ref={panelRef} style={{ width: 340, background: p.surface, borderLeft: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto' }}>
+    <div ref={panelRef} style={{ width, background: p.surface, borderLeft: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto' }}>
       <InfoModal entry={info} onClose={() => setInfo(null)} p={p} />
       <div style={{ padding: '14px 20px 11px', borderBottom: `1px solid ${p.hairline}`, flexShrink: 0 }}>
         <SectionLabel color={p.ink2}>Loan Decision Engine</SectionLabel>
-        <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>Deterministic · policy-enforced · audit-ready</p>
         {/* Which policy produced this verdict (Brief N)  an officer always knows. */}
         <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, marginTop: 3 }}>
           Evaluated under <strong style={{ color: p.ink2 }}>{lenderName} policy</strong>
@@ -1163,11 +1325,10 @@ function RightDecision({ p, passport, decision, credential, amount, onCounterOff
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, padding: '9px 12px', borderRadius: 8, background: p.surface2, border: `1.5px solid ${p.hairline}` }}>
           <span style={{ fontFamily: FONT.num, fontSize: 12, fontWeight: 600, color: p.ink3 }}>RM</span>
           <span style={{ fontFamily: FONT.num, fontSize: 14.5, fontWeight: 700, color: p.ink1 }}>{amount}</span>
-          {isCounterOffer && <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 600, color: p.ink3, marginLeft: 'auto' }}>counter-offer</span>}
         </div>
         {setPurpose && (
           <div style={{ marginTop: 8 }}>
-            <label style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 600, color: p.ink3, display: 'block', marginBottom: 4 }}>Declared purpose, as stated by the applicant · never a scoring input</label>
+            <label style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 600, color: p.ink3, display: 'block', marginBottom: 4 }}>Declared purpose</label>
             <div style={{ display: 'flex', gap: 6 }}>
               <select
                 value={purpose?.category ?? ''}
@@ -1196,7 +1357,10 @@ function RightDecision({ p, passport, decision, credential, amount, onCounterOff
         )}
       </div>
 
-      {selectedApp && onResolve && <ApplicationCard p={p} app={selectedApp} passport={passport} acceptance={acceptance} onResolve={onResolve} onRecordRepayment={onRecordRepayment} />}
+      {/* Declined apps have nothing actionable left in ApplicationCard (no resolve/overturn
+          controls) and its status/purpose/resolution summary just repeats the verdict banner,
+          the Declared purpose field, and the audit trail already shown on this same panel. */}
+      {selectedApp && onResolve && selectedApp.status !== 'declined' && <ApplicationCard p={p} app={selectedApp} passport={passport} acceptance={acceptance} onResolve={onResolve} onRecordRepayment={onRecordRepayment} />}
 
       {decision ? (
         <>
@@ -1257,45 +1421,6 @@ function RightDecision({ p, passport, decision, credential, amount, onCounterOff
             );
           })()}
 
-          {/* Counter-offer strip (Brief L): show when the engine found a positive supportable amount below the request. */}
-          {(() => {
-            const requestedAmount = parseAmount(amount);
-            const co = decision && counterOfferFor(decision, requestedAmount);
-            if (!co) return null;
-            return (
-              <div style={{ margin: '10px 20px 0', borderRadius: 10, border: `1.5px solid ${p.primary}`, background: p.accentTint, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-                    <path d="M6.5 1.5v4l2.5 1.5" stroke={p.primary} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    <circle cx="6.5" cy="6.5" r="5.5" stroke={p.primary} strokeWidth="1.3" />
-                  </svg>
-                  <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.accentInk, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Counter-offer available</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                  <span style={{ fontFamily: FONT.num, fontSize: 22, fontWeight: 700, color: p.ink1, letterSpacing: '-0.5px' }}>RM{Math.round(co.amount).toLocaleString('en-MY')}</span>
-                  <span style={{ fontFamily: FONT.num, fontSize: 12, fontWeight: 600, color: p.ink2 }}>RM{Math.round(co.installment).toLocaleString('en-MY')}/mo</span>
-                </div>
-                <p style={{ fontFamily: FONT.mono, fontSize: 12, color: p.ink2, lineHeight: 1.5, margin: 0 }}>{co.constraint.length > 120 ? co.constraint.slice(0, 117) + '…' : co.constraint}</p>
-                <button
-                  onClick={() => onCounterOffer?.(co.amount)}
-                  style={{ alignSelf: 'flex-start', padding: '7px 14px', borderRadius: 7, border: 'none', cursor: 'pointer', background: p.accentInk, color: 'white', fontFamily: FONT.ui, fontSize: 12, fontWeight: 700 }}
-                >
-                  Counter-offer at this amount
-                </button>
-              </div>
-            );
-          })()}
-
-          {/* Counter-offer result badge: shown when the current decision was triggered by a counter-offer action. */}
-          {isCounterOffer && decision && decision.maxAmount > 0 && (
-            <div style={{ margin: '6px 20px 0', borderRadius: 7, background: p.accentSoft, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0 }}>
-              <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                <path d="M2 5.5l2.5 2.5L9 3" stroke={p.primary} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.accentInk }}>Counter-offer assessment</span>
-            </div>
-          )}
-
           {passport?.assessment && (
             <div style={{ flexShrink: 0 }}>
               <HeadroomBar p={p} assessment={passport.assessment} installment={decision.installment} policy={policy} onInfo={setInfo} />
@@ -1308,7 +1433,16 @@ function RightDecision({ p, passport, decision, credential, amount, onCounterOff
           )}
           {pricing && (
             <div style={{ flexShrink: 0 }}>
-              <PricingStrip p={p} pricing={pricing} adopted={adoptedRate ?? null} onAdopt={onAdoptRate} />
+              {/* Keyed on the anchors + what's in force: a new file, a policy edit, or an
+                  applied rate all reset the draft slider rather than carrying a stale one over. */}
+              <RateAdjustmentStrip
+                key={`${toBps(pricing.ladderApr)}-${toBps(pricing.suggestedRate)}-${appliedRate ? toBps(appliedRate.rate) : 'ladder'}`}
+                p={p}
+                pricing={pricing}
+                applied={appliedRate ?? null}
+                onApply={onApplyRate}
+                previewAt={previewRate}
+              />
             </div>
           )}
 
@@ -1404,7 +1538,7 @@ function RightDecision({ p, passport, decision, credential, amount, onCounterOff
         </>
       ) : (
         <div style={{ padding: '20px', flex: 1 }}>
-          <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.6 }}>No automated decision. No affordability assessment on this passport.</p>
+          <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.6 }}>No automated decision.</p>
         </div>
       )}
 
@@ -1428,7 +1562,6 @@ function RightAlert({ p }: { p: Palette }) {
     <div style={{ width: 340, background: p.surface, borderLeft: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
       <div style={{ padding: '14px 20px 11px', borderBottom: `1px solid ${p.hairline}` }}>
         <SectionLabel color={p.ink2}>Loan Decision Engine</SectionLabel>
-        <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>Deterministic · policy-enforced · audit-ready</p>
       </div>
       <div style={{ padding: '14px 20px 0' }}>
         {/* No amount and no engine run on a passport that failed integrity: nothing about this
@@ -1554,10 +1687,6 @@ function CapitalMarkets({ p, book, source, setSource }: { p: Palette; book: Pool
             </div>
           ))}
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-          <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>← Senior absorbs losses last (safest)</span>
-          <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>(highest risk) Subordinated absorbs losses first →</span>
-        </div>
       </div>
 
       <TourAnchor id="capital-tranches">
@@ -1612,6 +1741,9 @@ function CapitalMarkets({ p, book, source, setSource }: { p: Palette; book: Pool
 // "signed in" as the chosen lender. The interactive judge tour (v2) lives in `TourCard.tsx`
 // + `useConsoleTour.ts`; its own localStorage keys are owned by that hook.
 const ACTIVE_LENDER_KEY = 'pip-console-active-lender';
+/** Panel widths are a per-machine preference, not per-lender: an officer's monitor is the
+ *  same monitor whichever tenancy they enter as. */
+const PANEL_WIDTHS_KEY = 'pip-console-panel-widths';
 const DEFAULT_LENDER_ID = 'tekun';
 
 /** Persona picker (Lender Tenancy spec, 2026-07-12): the console's entry screen. One click
@@ -1655,7 +1787,7 @@ function PersonaPicker({ onSelect }: { onSelect: (id: string) => void }) {
 // The approved book's operational home: watchlist pinned first, a performance/watchlist
 // status chip per card (never more than one, per lib/servicing.ts's priority rule), and a
 // detail pane that reuses ApplicationCard's resolve/monitoring/schedule/record-repayment
-// stack  read-and-service only, no counter-offer control (that stays a Verify-tab job).
+// stack  read-and-service only; resolution controls stay a Verify-tab job.
 
 const CHIP_STYLE: Record<import('../lib/servicing').ChipKind, { label: string; color: string; bg: string }> = {
   defaulted: { label: 'Defaulted', color: '#8a1f14', bg: '#f5d4cf' },
@@ -1769,7 +1901,7 @@ export default function Console() {
   const [code, setCode] = useState('');
   // The requested amount of the open application. Officer-set walk-in presentment was removed,
   // so this is never typed  it is always the amount the borrower actually asked for, carried
-  // on the application record, or the amount of a counter-offer the officer chose to test.
+  // on the application record.
   const [amount, setAmount] = useState('10,000');
   const [flagged, setFlagged] = useState(false);
   // Real timestamp captured the moment the flag was raised  the alert's flag time
@@ -1786,13 +1918,21 @@ export default function Console() {
   const [apps, setApps] = useState<ApplicationRecord[]>([]);
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
   const [purpose, setPurpose] = useState<DeclaredPurpose | null>(null);
-  // Tracks whether the currently-displayed decision is the result of a counter-offer action (Brief L).
-  const [isCounterOffer, setIsCounterOffer] = useState(false);
   // Capital Markets pool source (Brief Q): defaults to the live approved book, auto-falling
   // back to the sample pool while the book is empty (handled inside CapitalMarkets).
   const [poolSource, setPoolSource] = useState<PoolSource>('live');
-  // Adopted risk-based rate (Brief R): null = ladder rate in force; a number = custom-priced.
-  const [adoptedRate, setAdoptedRate] = useState<number | null>(null);
+  // The rate in force on the open file: null = the tier's ladder rate, a record = the officer
+  // applied one off the adjustment slider, carrying its reason code when it needed one.
+  const [appliedRate, setAppliedRate] = useState<AppliedRate | null>(null);
+  // Draggable column widths (2026-08-06). This is the officer's INTENT — what they dragged
+  // to, persisted — not what is on screen: `panelLayout` below fits it to the window every
+  // render. Keeping the two apart is what lets a panel squeezed by a narrow window come
+  // back to its full width when the window grows, instead of being permanently shrunk.
+  // Starts at the defaults on BOTH server and first client render (reading localStorage in
+  // the initializer would hydrate-mismatch); the saved layout swaps in from the boot effect.
+  const [panelIntent, setPanelIntent] = useState<PanelWidths>(DEFAULT_PANEL_WIDTHS);
+  const [viewportWidth, setViewportWidth] = useState(ASSUMED_VIEWPORT_PX);
+  const panelLayout = useMemo(() => fitPanels(panelIntent, viewportWidth), [panelIntent, viewportWidth]);
   // Interactive judge tour (v2): the driver hook owns visibility, the resumable step index,
   // tab-driving, the spotlight anchor, and the semantic-signal subscription. It only observes
   // and advances  it never performs the officer's actions (open a file, load flagged, seed, open
@@ -1922,6 +2062,14 @@ export default function Console() {
   // is not logged; it only reads any history a previous session already recorded. A saved
   // lender id skips straight to that lender's workbench; none saved shows the picker.
   useEffect(() => {
+    setViewportWidth(window.innerWidth);
+    try {
+      // Parsed against the panel specs alone, NOT this window: a layout saved on a wide
+      // monitor is still the officer's intent on a narrow one, and `panelLayout` fits it.
+      setPanelIntent(parsePanelWidths(window.localStorage.getItem(PANEL_WIDTHS_KEY)));
+    } catch {
+      // localStorage unavailable — the desk just opens at its default column widths.
+    }
     let lenderId = DEFAULT_LENDER_ID;
     try {
       const saved = window.localStorage.getItem(ACTIVE_LENDER_KEY);
@@ -1952,8 +2100,7 @@ export default function Console() {
     setTab('verify');
     setFlagged(false);
     setFlaggedAt(null);
-    setIsCounterOffer(false);
-    setAdoptedRate(null);
+    setAppliedRate(null);
     setSelectedAppId(null);
     setPurpose(null);
     loadForLender(lenderId);
@@ -2002,8 +2149,7 @@ export default function Console() {
       setTab('verify');
       setFlagged(false);
       setFlaggedAt(null);
-      setIsCounterOffer(false);
-      setAdoptedRate(null);
+        setAppliedRate(null);
       setSelectedAppId(null);
       setPurpose(null);
       setState({ status: 'empty' });
@@ -2021,8 +2167,7 @@ export default function Console() {
    *  is currently loaded so the Verify tab can never show a verdict from a stale policy. */
   const onPolicySaved = (sp: StoredPolicy) => {
     setStoredPolicy(sp);
-    setIsCounterOffer(false);
-    setAdoptedRate(null);
+    setAppliedRate(null);
     if (state.status === 'valid') setState(evaluate(code, amount, sp, apps));
   };
 
@@ -2197,31 +2342,50 @@ export default function Console() {
     emitTourSignal('flagged-loaded');
   };
 
-  /** Adopt the risk-based suggested rate (Brief R): re-run decideLoan with the applicant's
-   *  tier APR replaced by the adopted rate  the engine re-checks affordability at the new
-   *  installment. A discount frees headroom; the decision is tagged custom-priced. */
-  const onAdoptRate = (rate: number) => {
-    if (state.status !== 'valid' || !state.decision?.breakdown) return;
+  /** Commit a dragged (or arrowed) column width: it becomes the new intent, and is written
+   *  through so the desk opens the same way tomorrow. `resizePanel` has already clamped it
+   *  against the live viewport, so what lands here is always something that fits. */
+  const onPanelResize = (key: PanelKey, width: number) => {
+    const next = { ...panelIntent, [key]: width };
+    setPanelIntent(next);
+    try {
+      window.localStorage.setItem(PANEL_WIDTHS_KEY, serializePanelWidths(next));
+    } catch {
+      // Best-effort: a session that can't write localStorage still resizes, it just
+      // re-opens at the defaults next time.
+    }
+  };
+
+  /** Track the window so `panelLayout` can re-fit against it. Only the measurement is
+   *  tracked, never the intent — a window that shrinks borrows pixels from the panels, and
+   *  gives them back on the way out. */
+  useEffect(() => {
+    const onWindowResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener('resize', onWindowResize);
+    return () => window.removeEventListener('resize', onWindowResize);
+  }, []);
+
+  /** What the engine says at `rate` without committing to it — the slider's live readout.
+   *  Pure and cheap (decideLoan is a pure function), so it can run on every drag tick, and
+   *  it is the SAME call onApplyRate makes: what the officer previews is what they get. */
+  const previewRate = (rate: number): { installment: number; maxAmount: number } | null => {
+    if (state.status !== 'valid' || !state.decision?.breakdown) return null;
     const products = repriceProducts(storedPolicy.products, state.decision.breakdown.tierLabel, rate);
+    const decision = decisionFor(state.passport, amount, storedPolicy, apps, products);
+    return decision ? { installment: decision.installment, maxAmount: decision.maxAmount } : null;
+  };
+
+  /** Apply an officer rate off the adjustment slider (Brief R, widened 2026-08-06): re-run
+   *  decideLoan with the applicant's tier APR replaced by it  the engine re-checks
+   *  affordability at the new installment. A discount frees headroom, a premium can tighten
+   *  it. The reason code (when the move needed one) rides along to the memo. */
+  const onApplyRate = (applied: AppliedRate) => {
+    if (state.status !== 'valid' || !state.decision?.breakdown) return;
+    const products = repriceProducts(storedPolicy.products, state.decision.breakdown.tierLabel, applied.rate);
     const decision = decisionFor(state.passport, amount, storedPolicy, apps, products);
     const next: ViewState = { ...state, decision };
     setState(next);
-    setAdoptedRate(rate);
-    if (decision) fileAndSelect(code, next);
-  };
-
-  /** Counter-offer action (Brief L): sets the amount field to the engine's supportable amount,
-   *  re-runs the decision, and tags the result as a counter-offer in view state so the UI can
-   *  badge it clearly. Pure engine re-run  no new engine math. */
-  const onCounterOffer = (counterAmount: number) => {
-    if (state.status !== 'valid') return;
-    const amtStr = Math.round(counterAmount).toLocaleString('en-MY');
-    setAmount(amtStr);
-    setIsCounterOffer(true);
-    setAdoptedRate(null);
-    const decision = decisionFor(state.passport, String(counterAmount), storedPolicy, apps);
-    const next: ViewState = { ...state, decision };
-    setState(next);
+    setAppliedRate(applied);
     if (decision) fileAndSelect(code, next);
   };
 
@@ -2231,8 +2395,7 @@ export default function Console() {
    *  presentment (no log entry). */
   const onSelectApp = (app: ApplicationRecord) => {
     setFlagged(false);
-    setAdoptedRate(null);
-    setIsCounterOffer(false);
+    setAppliedRate(null);
     openApplication(app, storedPolicy, apps, activeLenderId);
     // Cross-app tour act 7: only opening the file that actually came from the borrower app
     // completes the step. Opening a seeded applicant is a perfectly reasonable thing for the
@@ -2368,9 +2531,11 @@ export default function Console() {
       <main aria-label={TAB_LABELS[tab]} style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
         {tab === 'verify' ? (
           <>
-            <QueueRail p={p} apps={apps} offerBook={offerBook} selectedId={selectedAppId} onSelect={onSelectApp} onSeed={onSeed} onLoadFlagged={onLoadFlagged} forceSeedButton={tour.forceSeedButton} lockedToAppId={tour.queueLockedToAppId} />
-            {showAlert ? <CenterAlert p={p} flagTime={flagTime} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} lapsedTiers={state.credential.verification.lapsedTiers} /> : state.status === 'invalid' ? <InvalidCenter p={p} reasons={state.reasons} /> : <ServicingEmpty p={p} text="No application open. Pick a file from the pipeline to see the engine's verdict, or seed a demo pipeline to get started." />}
-            {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} onCounterOffer={onCounterOffer} isCounterOffer={isCounterOffer} stacking={stackingSignal} selectedApp={selectedApp} acceptance={selectedAcceptance} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onGenerateLetter={onGenerateLetter} purpose={purpose} setPurpose={setPurpose} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} pricing={pricing} adoptedRate={adoptedRate} onAdoptRate={onAdoptRate} lenderName={activeLender.name} ownApplications={apps} storedPolicy={storedPolicy} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} lenderName={activeLender.name} ownApplications={apps} storedPolicy={storedPolicy} />}
+            <QueueRail p={p} apps={apps} offerBook={offerBook} selectedId={selectedAppId} onSelect={onSelectApp} onSeed={onSeed} onLoadFlagged={onLoadFlagged} forceSeedButton={tour.forceSeedButton} lockedToAppId={tour.queueLockedToAppId} width={panelLayout.pipeline} />
+            <PanelResizer p={p} spec={PIPELINE_PANEL} width={panelLayout.pipeline} otherWidth={panelLayout.decision} onResize={(w) => onPanelResize('pipeline', w)} />
+            {showAlert ? <CenterAlert p={p} flagTime={flagTime} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} lapsedTiers={state.credential.verification.lapsedTiers} policy={storedPolicy.policy} /> : state.status === 'invalid' ? <InvalidCenter p={p} reasons={state.reasons} /> : <ServicingEmpty p={p} text="No application open. Pick a file from the pipeline to see the engine's verdict, or seed a demo pipeline to get started." />}
+            <PanelResizer p={p} spec={DECISION_PANEL} width={panelLayout.decision} otherWidth={panelLayout.pipeline} onResize={(w) => onPanelResize('decision', w)} />
+            {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} stacking={stackingSignal} selectedApp={selectedApp} acceptance={selectedAcceptance} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onGenerateLetter={onGenerateLetter} purpose={purpose} setPurpose={setPurpose} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} pricing={pricing} appliedRate={appliedRate} onApplyRate={onApplyRate} previewRate={previewRate} lenderName={activeLender.name} ownApplications={apps} storedPolicy={storedPolicy} width={panelLayout.decision} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} lenderName={activeLender.name} ownApplications={apps} storedPolicy={storedPolicy} width={panelLayout.decision} />}
           </>
         ) : tab === 'servicing' ? (
           <>
@@ -2379,7 +2544,7 @@ export default function Console() {
               <ServicingEmpty p={p} text="No approved loans yet. Approved applications appear here." />
             ) : selectedApp && selectedApp.status === 'approved' && state.status === 'valid' ? (
               <>
-                <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} lapsedTiers={state.credential.verification.lapsedTiers} />
+                <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} lapsedTiers={state.credential.verification.lapsedTiers} policy={storedPolicy.policy} />
                 <ServicingDetail p={p} app={selectedApp} passport={state.passport} acceptance={selectedAcceptance} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onMarkDefault={onMarkDefault} />
               </>
             ) : (

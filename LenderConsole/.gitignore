@@ -2,8 +2,10 @@
 /.next
 /out
 /build
-# lender policy store (Brief N) — runtime data, never committed
+# lender policy store (Brief N) — runtime data, never committed.
+# The glob also covers the timestamped backups the reset flow leaves behind.
 /.data
+/.data.backup-*
 .DS_Store
 *.pem
 npm-debug.log*

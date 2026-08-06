@@ -83,9 +83,19 @@ Not wired into the decision engine. `decideLoan`, the passport schema, and the c
 
 Kept in the repo:
 
-- `src/lib/cashflowForecast.ts`  the method, pure and unit-tested (13 tests). Retained as the reference implementation the negative result refers to.
+- `tools/cashflowForecast/METRICS.md`  the full result tables this document summarises.
+
+Removed on 2026-08-04, in the dead-code sweep. The implementation had been retained as the
+reference the negative result refers to, but nothing in either app imported it, so it was
+carrying maintenance cost for a feature that was decided against. The evidence above and the
+METRICS tables are the durable part; the code is recoverable from git history:
+
+- `src/lib/cashflowForecast.ts`  the method, pure and unit-tested (13 tests).
 - `__tests__/cashflowForecast.test.ts`
-- `tools/cashflowForecast/evaluate.ts` + `METRICS.md`  the harness and the full tables.
+- `tools/cashflowForecast/evaluate.ts`  the harness that produced METRICS.md.
+
+Recover with `git log --diff-filter=D -- PipComp/src/lib/cashflowForecast.ts` to find the
+deleting commit, then `git checkout <commit>^ -- <path>`.
 
 ## 9. What the evidence does support
 

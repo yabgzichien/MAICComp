@@ -39,7 +39,7 @@ export type DemoPersona = {
 
 /** Ordered best → worst outcome, so the picker reads as a range rather than a list.
  *  Names/ICs are clearly synthetic (format-valid MyKad structure, matching each persona's
- *  seeded story) — see `src/data/sampleIdentity.ts` for the same "clearly demo" convention. */
+ *  seeded story) — the same "clearly demo" convention the eKYC screens follow. */
 export const DEMO_PROFILES: ReadonlyArray<DemoPersona> = [
   {
     id: 'ravi',

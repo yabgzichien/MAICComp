@@ -56,9 +56,10 @@ npx expo start --go -c
 > the previous key was found committed/public) — generate your own local one with the
 > command above before running the app, or the passport/loan demo screens won't verify.
 > After regenerating, copy the new `ISSUER_PUBLIC_KEY` into
-> `LenderConsole/lib/passport.ts`'s `ISSUER_PUBLIC_KEY_HEX`, and copy the regenerated
-> `src/data/samplePassport.ts` code into `LenderConsole/app/tokens.ts`'s `SAMPLE_CODE`
-> (manual — see that file's own comment).
+> `LenderConsole/lib/passport.ts`'s `ISSUER_PUBLIC_KEY_HEX`. Then paste the
+> `SAMPLE_CODE` line that `tools/demoPassport/generate.js` prints into
+> `LenderConsole/app/tokens.ts` (manual — see that file's own comment).
+> `generateApplicants.js` writes `LenderConsole/app/demoApplicants.ts` directly.
 
 Then:
 

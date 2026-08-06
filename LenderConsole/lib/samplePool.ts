@@ -1,9 +1,11 @@
 // lib/samplePool.ts
-// Runtime port of PipComp/tools/securitizationData/generate.js (seed 1337)  instead
-// of committing the 9,000-line generated data file, the console reproduces the IDENTICAL
-// 1,000-loan demo pool deterministically at module load. Used as the Capital Markets
-// "sample" source and the empty-book fallback (Brief Q). xorshift32 + the exact rand()
-// call order per loan reproduce PipComp's SAMPLE_POOL byte-for-byte (asserted in tests).
+// Runtime generator for the demo pool (xorshift32, seed 1337)  instead of committing a
+// 9,000-line generated data file, the console reproduces the same 1,000-loan pool
+// deterministically at module load. Used as the Capital Markets "sample" source and the
+// empty-book fallback (Brief Q). Originally a port of a borrower-app generator that wrote
+// a committed data file; that generator and its output were removed on 2026-08-04 when the
+// borrower app's securitization engine turned out to be unreachable. This is now the only
+// copy  the console is where capital-markets logic lives.
 
 import type { CreditBand, PoolLoan } from './securitization';
 
@@ -17,12 +19,16 @@ const BANDS: { band: CreditBand; weight: number; scoreLo: number; scoreHi: numbe
   { band: 'Excellent', weight: 0.08, scoreLo: 820, scoreHi: 900 },
 ];
 
+// APRs track DEFAULT_PRODUCTS via each band's score range, so the sample book describes a
+// pool the console could actually originate: Building (380-499) -> Emergency, Fair -> Starter,
+// Good -> Growth, Strong/Excellent -> Scale. Tenors are unchanged. TERMS is a lookup, not a
+// rand() call, so the pool's principal/fraudProb sequence is untouched by this repricing.
 const TERMS: Record<CreditBand, { apr: number; tenorMonths: number }> = {
-  Building: { apr: 0.28, tenorMonths: 12 },
-  Fair: { apr: 0.28, tenorMonths: 12 },
-  Good: { apr: 0.22, tenorMonths: 18 },
-  Strong: { apr: 0.16, tenorMonths: 24 },
-  Excellent: { apr: 0.16, tenorMonths: 24 },
+  Building: { apr: 0.18, tenorMonths: 12 },
+  Fair: { apr: 0.16, tenorMonths: 12 },
+  Good: { apr: 0.14, tenorMonths: 18 },
+  Strong: { apr: 0.12, tenorMonths: 24 },
+  Excellent: { apr: 0.12, tenorMonths: 24 },
 };
 
 const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));

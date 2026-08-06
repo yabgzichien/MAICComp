@@ -44,6 +44,11 @@ export interface PricingSuggestion {
   ladderApr: number;
   /** ladderApr − suggestedRate, in basis points (0 when clamped at the ceiling). */
   discountBps: number;
+  /** Echo of the `standingClean` input: false means arrears on file already ruled the
+   *  loyalty discount out, so the suggestion sits at the ladder for a policy reason
+   *  rather than an arithmetic one. The console's rate adjuster reads this to tell the
+   *  two apart — pricing below the ladder here is an exception, not a discount. */
+  discountEligible: boolean;
   ladder: UnitEconomics;
   suggested: UnitEconomics;
   reasons: string[];
@@ -84,6 +89,7 @@ export function priceLoan(inputs: PricingInputs): PricingSuggestion {
     suggestedRate,
     ladderApr: inputs.ladderApr,
     discountBps,
+    discountEligible: standingClean,
     ladder: econ(inputs.ladderApr),
     suggested: econ(suggestedRate),
     reasons,

@@ -1,7 +1,7 @@
 // Pure layout helpers for the decision visuals (Brief K) — tested before the SVG exists.
 import { describe, expect, it } from 'vitest';
-import { benfordChart, confidenceCeilingNotch, coverageStrip, headroomLayout, waterfallSteps } from './decisionViz';
-import type { DecisionBreakdown } from './loans';
+import { affordabilityCheck, benfordChart, confidenceCeilingNotch, coverageStrip, headroomLayout, waterfallSteps } from './decisionViz';
+import { DEFAULT_POLICY, type DecisionBreakdown } from './loans';
 
 describe('headroomLayout', () => {
   const assessment = { avgIncome: 2540, avgMonthlySurplus: 520, monthlyDebtService: 120 };
@@ -73,6 +73,89 @@ describe('waterfallSteps', () => {
     const w = waterfallSteps({ ...base, requestedAmount: 5000, tierCeiling: 5000, surplusCapPrincipal: 9000, dsrCapPrincipal: 9000, offered: 5000 });
     expect(w.steps.filter((s) => s.bit)).toHaveLength(0);
     expect(w.steps[4].amount).toBe(5000);
+  });
+});
+
+describe('affordabilityCheck', () => {
+  // The reported figures: RM2,540 income, RM520 surplus, RM120 debt service, Growth Capital.
+  const assessment = { avgIncome: 2540, avgMonthlySurplus: 520, monthlyDebtService: 120 };
+  const declined: DecisionBreakdown = {
+    requestedAmount: 10000,
+    tierLabel: 'Growth Capital',
+    tierMinAmount: 4000,
+    tierCeiling: 10000,
+    surplusCapPrincipal: 2783,
+    dsrCapPrincipal: 13700,
+    offered: 0,
+  };
+
+  it('derives both caps from policy and marks the tighter one as binding', () => {
+    const c = affordabilityCheck(assessment, declined, 0);
+    expect(c.caps.map((x) => x.key)).toEqual(['surplus', 'dsr']);
+    expect(c.caps[0].installment).toBeCloseTo(0.35 * 520, 9); // RM182
+    expect(c.caps[1].installment).toBeCloseTo(0.4 * 2540 - 120, 9); // RM896
+    expect(c.caps[0].binding).toBe(true);
+    expect(c.caps[1].binding).toBe(false);
+    expect(c.room).toBeCloseTo(182, 9);
+  });
+
+  it('fails with the tier-minimum shortfall when the room buys less than the tier allows', () => {
+    const c = affordabilityCheck(assessment, declined, 0);
+    expect(c.passed).toBe(false);
+    expect(c.outcome).toBe('below-tier-minimum');
+    expect(c.supportable).toBe(2783);
+    expect(c.shortfall).toBe(4000 - 2783);
+    expect(c.usedShare).toBeNull();
+    expect(c.headline).toContain('RM1,217'); // the gap, in the same wording the letter uses
+    expect(c.headline).toContain('Growth Capital');
+  });
+
+  it('reports no headroom at all when neither cap leaves room for an installment', () => {
+    const c = affordabilityCheck(
+      { avgIncome: 2540, avgMonthlySurplus: 0, monthlyDebtService: 1200 },
+      { ...declined, surplusCapPrincipal: 0, dsrCapPrincipal: 0 },
+      0,
+    );
+    expect(c.outcome).toBe('no-headroom');
+    expect(c.room).toBe(0);
+    expect(c.headline.toLowerCase()).toContain('no room');
+  });
+
+  it('lets the DSR cap bind when existing debt service is the constraint', () => {
+    const c = affordabilityCheck({ avgIncome: 2540, avgMonthlySurplus: 1800, monthlyDebtService: 900 }, declined, 0);
+    expect(c.caps[1].binding).toBe(true);
+    expect(c.caps[0].binding).toBe(false);
+    expect(c.room).toBeCloseTo(0.4 * 2540 - 900, 9); // RM116
+  });
+
+  it('passes with the share of the room the offered installment consumes', () => {
+    const c = affordabilityCheck(assessment, { ...declined, tierMinAmount: 2000, offered: 2400 }, 91);
+    expect(c.passed).toBe(true);
+    expect(c.outcome).toBe('fits');
+    expect(c.usedShare).toBeCloseTo(91 / 182, 9);
+    expect(c.shortfall).toBe(0);
+    expect(c.headline).toContain('50%');
+  });
+
+  it('cites the lender’s own caps when policy is customised', () => {
+    const custom = { ...DEFAULT_POLICY, maxInstallmentShareOfSurplus: 0.25, maxDsr: 0.3 };
+    const c = affordabilityCheck(assessment, declined, 0, custom);
+    expect(c.caps[0].label).toContain('25%');
+    expect(c.caps[1].label).toContain('30%');
+    expect(c.caps[0].installment).toBeCloseTo(0.25 * 520, 9);
+    expect(c.caps[1].installment).toBeCloseTo(0.3 * 2540 - 120, 9);
+  });
+
+  it('never reports a negative cap, room, or supportable principal', () => {
+    const c = affordabilityCheck(
+      { avgIncome: 1000, avgMonthlySurplus: -50, monthlyDebtService: 900 },
+      { ...declined, surplusCapPrincipal: -10, dsrCapPrincipal: 5 },
+      0,
+    );
+    expect(c.caps.every((x) => x.installment >= 0)).toBe(true);
+    expect(c.room).toBe(0);
+    expect(c.supportable).toBe(0);
+    expect(c.surplus).toBe(0);
   });
 });
 

@@ -20,6 +20,7 @@ import { formatAgo } from '../lib/presentment';
 import { currentStandingAcross } from '../lib/repaymentStanding';
 import { TourAnchor } from './TourAnchor';
 import { useTourLocked } from './tourContext';
+import { PIPELINE_PANEL } from '../lib/panelLayout';
 
 const BAND_COLOR: Record<string, string> = {
   Building: '#c0392b',
@@ -142,6 +143,7 @@ export default function QueueRail({
   onLoadFlagged,
   forceSeedButton = false,
   lockedToAppId = null,
+  width = PIPELINE_PANEL.defaultWidth,
 }: {
   p: Palette;
   apps: ApplicationRecord[];
@@ -162,6 +164,9 @@ export default function QueueRail({
    *  disabled so the rest of act 7 cannot be re-pointed at a file the narration is not about
    *  (see `QUEUE_LOCK_TITLE`). Null when no tour is running — the rail is then a normal rail. */
   lockedToAppId?: string | null;
+  /** Officer-dragged width (2026-08-06). Defaults to the spec width so any caller that
+   *  doesn't own a resizer still gets the layout this rail always had. */
+  width?: number;
 }) {
   const [search, setSearch] = useState('');
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -205,7 +210,7 @@ export default function QueueRail({
 
   return (
     <TourAnchor id="queue-rail">
-    <nav aria-label="Applicant pipeline" style={{ width: 212, background: p.surface2, borderRight: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto' }}>
+    <nav aria-label="Applicant pipeline" style={{ width, background: p.surface2, borderRight: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto' }}>
       <div style={{ padding: '14px 12px 10px', borderBottom: `1px solid ${p.hairline}` }}>
         <p role="heading" aria-level={2} style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink2, letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: 8 }}>Pipeline</p>
         {apps.length > 0 && (
@@ -345,11 +350,6 @@ export default function QueueRail({
         );
       })()}
 
-      <div style={{ marginTop: 'auto', padding: '10px 12px' }}>
-        <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink2, lineHeight: 1.5 }}>
-          Age badge: time since filing.
-        </p>
-      </div>
     </nav>
     </TourAnchor>
   );

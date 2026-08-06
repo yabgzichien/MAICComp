@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FONT, type Palette } from './tokens';
 import { InfoButton, InfoModal, SectionLabel, useModalA11y } from './shared';
 import { runAgentPanel, type StackingSignal } from '../lib/agents';
-import { buildCreditMemo, memoToMarkdown, memoToPdfDoc, fallbackNarrative, type CreditMemo, type MemoPricing, type MemoResolution } from '../lib/creditMemo';
+import { adjustmentLine, buildCreditMemo, memoToMarkdown, memoToPdfDoc, fallbackNarrative, type CreditMemo, type MemoPricing, type MemoResolution } from '../lib/creditMemo';
 import { downloadPdf } from '../lib/pdfExport';
 import type { CreditPassport } from '../lib/passport';
 import type { LenderPolicy, LoanDecision } from '../lib/loans';
@@ -166,6 +166,11 @@ export default function CreditMemoModal({
               <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink2, marginTop: 5 }}>
                 <strong>Pricing:</strong> ladder rate {(memo.pricing.ladderApr * 100).toFixed(1)}%, rate applied {(memo.pricing.adoptedApr * 100).toFixed(1)}%
                 {memo.pricing.adoptedApr < memo.pricing.ladderApr && <span style={{ color: p.accentInk, fontWeight: 700 }}> (risk-based discount)</span>}
+              </p>
+            )}
+            {memo.pricing?.adjustment && (
+              <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink2, marginTop: 3 }}>
+                {adjustmentLine(memo.pricing.adjustment)}
               </p>
             )}
           </Section>

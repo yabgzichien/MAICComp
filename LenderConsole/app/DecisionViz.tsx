@@ -23,7 +23,7 @@ import {
   YAxis,
 } from 'recharts';
 import { FONT, type Palette } from './tokens';
-import { benfordChart, confidenceCeilingNotch, coverageStrip, headroomLayout, waterfallSteps } from '../lib/decisionViz';
+import { affordabilityCheck, benfordChart, confidenceCeilingNotch, coverageStrip, headroomLayout, waterfallSteps } from '../lib/decisionViz';
 import type { DecisionBreakdown, LenderPolicy } from '../lib/loans';
 import type { PassportAssessment, PassportMomentum } from '../lib/passport';
 import { InfoButton } from './shared';
@@ -56,7 +56,7 @@ export function HeadroomBar({ p, assessment, installment, policy, onInfo }: { p:
         </span>
       </div>
       <ResponsiveContainer width="100%" height={54}>
-        <BarChart data={[{ name: 'income', ...row }]} layout="vertical" margin={{ top: 16, right: 2, bottom: 0, left: 2 }}>
+        <BarChart data={[{ name: 'income', ...row }]} layout="vertical" margin={{ top: 30, right: 2, bottom: 0, left: 2 }}>
           <XAxis type="number" domain={[0, 1]} hide />
           <YAxis type="category" dataKey="name" hide />
           <Tooltip
@@ -67,7 +67,7 @@ export function HeadroomBar({ p, assessment, installment, policy, onInfo }: { p:
           {layout.segments.map((s) => (
             <Bar key={s.key} dataKey={s.key} stackId="income" fill={colors[s.key]} isAnimationActive={false} barSize={16} />
           ))}
-          {layout.ticks.map((t) => (
+          {layout.ticks.map((t, i) => (
             <ReferenceLine
               key={t.key}
               x={t.frac}
@@ -81,13 +81,20 @@ export function HeadroomBar({ p, assessment, installment, policy, onInfo }: { p:
               // left half clipped by the chart's 2px margin  found live, a clipped "35%"
               // read as "85%". Anchor from the edge instead of the middle whenever the tick
               // is close enough that a centered label would overrun it.
+              //
+              // The two ticks (DSR cap, surplus-share cap) can land at nearly the same x  a
+              // low-surplus borrower's surplus tick often sits right next to the DSR tick
+              // so a shared baseline lets the two labels run into each other, e.g. "35%40%DSR
+              // cap". Stacking them on alternating rows (by tick identity, not by position)
+              // guarantees separation regardless of how close the two fracs land.
               label={(props: { viewBox?: { x?: number; y?: number } }) => {
                 const x = props.viewBox?.x ?? 0;
                 const y = props.viewBox?.y ?? 0;
                 const anchor = t.frac < 0.15 ? 'start' : t.frac > 0.85 ? 'end' : 'middle';
                 const dx = anchor === 'start' ? 3 : anchor === 'end' ? -3 : 0;
+                const dy = i === 0 ? -5 : -19;
                 return (
-                  <text x={x + dx} y={y - 5} textAnchor={anchor} fontSize={12} fontFamily={FONT.ui} fill={p.ink2}>
+                  <text x={x + dx} y={y + dy} textAnchor={anchor} fontSize={12} fontFamily={FONT.ui} fill={p.ink2}>
                     {t.label}
                   </text>
                 );
@@ -244,6 +251,179 @@ export function CoverageStrip({ p, daysCovered, windowDays = 90 }: { p: Palette;
 // caps the displayed score  hides entirely once confidence is high enough (≥60%)
 // that nothing is capped. Positioned by the caller inside a `position: relative`
 // wrapper around the band bar, matching its exact width.
+
+// ── 7. Affordability check card ────────────────────────────────────────────────
+// Affordability is the single most common reason a file gets no offer, and until now
+// it existed only as one line of audit-trail prose on the right-hand panel  next to a
+// headroom bar that goes blank on a decline (installment 0 → nothing to plot), i.e. it
+// disappeared exactly when it mattered. This card sits in the centre column above the
+// Benford check and shows the test itself: the two installment caps, the tighter one
+// that binds, and the principal that buys against the tier's minimum. Carries its own
+// card chrome so a failed check can turn red without the caller re-wrapping it.
+
+function Figure({ p, label, value, bg }: { p: Palette; label: string; value: string; bg: string }) {
+  return (
+    <div style={{ background: bg, borderRadius: 9, padding: '7px 10px', border: `1px solid ${p.hairline}` }}>
+      <div style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{label}</div>
+      <div style={{ fontFamily: FONT.num, fontSize: 15, fontWeight: 700, color: p.ink1, marginTop: 2 }}>{value}</div>
+    </div>
+  );
+}
+
+function CheckHeader({ p, chip, chipColor, chipBg, onInfo }: { p: Palette; chip: string; chipColor: string; chipBg: string; onInfo?: (entry: string) => void }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 7 }}>
+      <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink3, letterSpacing: '0.08em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 5 }}>
+        Affordability check
+        {onInfo && <InfoButton entry="affordability_check" onOpen={onInfo} />}
+      </span>
+      <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', color: chipColor, background: chipBg, borderRadius: 5, padding: '2px 9px' }}>{chip}</span>
+    </div>
+  );
+}
+
+export function AffordabilityCheckCard({
+  p,
+  assessment,
+  breakdown,
+  installment,
+  policy,
+  onInfo,
+}: {
+  p: Palette;
+  assessment: PassportAssessment | undefined;
+  breakdown: DecisionBreakdown | undefined;
+  installment: number;
+  policy?: LenderPolicy;
+  onInfo?: (entry: string) => void;
+}) {
+  if (!assessment) return null;
+
+  // No breakdown = no tier was ever selected, so decideLoan returned before the
+  // affordability step. Say that outright rather than hiding the card: a missing
+  // card reads as "the check passed quietly", which is the opposite of the truth.
+  if (!breakdown) {
+    return (
+      <div style={{ background: p.surface, borderRadius: 12, padding: '12px 16px', boxShadow: p.shadow }}>
+        <CheckHeader p={p} chip="NOT REACHED" chipColor={p.ink2} chipBg="rgba(20,40,30,0.06)" onInfo={onInfo} />
+        <p style={{ fontFamily: FONT.ui, fontSize: 12.5, color: p.ink2, lineHeight: 1.55 }}>
+          This file stopped at an earlier gate, so capacity to repay was never tested. The audit trail carries the reason it stopped.
+        </p>
+      </div>
+    );
+  }
+
+  const c = affordabilityCheck(assessment, breakdown, installment, policy);
+  const fail = !c.passed;
+  const accent = fail ? p.red : p.primary;
+  const tileBg = fail ? '#ffffff' : p.surface2;
+  const binding = c.caps.find((cap) => cap.binding) ?? c.caps[0];
+  const capData = c.caps.map((cap) => ({ name: cap.label, amount: cap.installment, binding: cap.binding }));
+  // Headroom above the taller of the bar and the tier line, so neither the value label
+  // nor the dashed minimum ever sits flush against the right edge of the plot.
+  const axisMax = Math.max(c.supportable, c.tierMinAmount, 1) * 1.15;
+  const minFrac = c.tierMinAmount / axisMax;
+
+  return (
+    <div
+      style={{
+        background: fail ? '#fdf6f6' : p.surface,
+        borderRadius: 12,
+        padding: '12px 16px',
+        boxShadow: p.shadow,
+        borderLeft: `4px solid ${accent}`,
+      }}
+    >
+      <CheckHeader
+        p={p}
+        chip={fail ? 'NO CAPACITY' : 'WITHIN CAPACITY'}
+        chipColor={fail ? p.red : p.accentInk}
+        chipBg={fail ? '#fde8e8' : p.accentSoft}
+        onInfo={onInfo}
+      />
+
+      <p style={{ fontFamily: FONT.ui, fontSize: 13, fontWeight: 700, color: fail ? '#922b21' : p.ink1, lineHeight: 1.45 }}>{c.headline}</p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 7, marginTop: 9 }}>
+        <Figure p={p} label="Income" value={`${rm(c.income)}/mo`} bg={tileBg} />
+        <Figure p={p} label="Debt service" value={`${rm(c.debtService)}/mo`} bg={tileBg} />
+        <Figure p={p} label="Surplus" value={`${rm(c.surplus)}/mo`} bg={tileBg} />
+      </div>
+
+      <p style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink3, letterSpacing: '0.06em', textTransform: 'uppercase', marginTop: 11 }}>
+        Most it can repay each month
+      </p>
+      <ResponsiveContainer width="100%" height={62}>
+        <BarChart data={capData} layout="vertical" margin={{ top: 6, right: 66, bottom: 0, left: 0 }}>
+          <XAxis type="number" hide />
+          <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 12, fontFamily: FONT.ui, fill: p.ink2 }} axisLine={false} tickLine={false} />
+          <Tooltip
+            formatter={(value: unknown) => [`${rm(Number(value ?? 0))}/mo`, 'Allowed']}
+            contentStyle={{ fontFamily: FONT.ui, fontSize: 12, borderRadius: 8, border: `1px solid ${p.hairline}` }}
+          />
+          <Bar dataKey="amount" isAnimationActive={false} barSize={11} radius={3}>
+            <LabelList dataKey="amount" position="right" formatter={(v: unknown) => `${rm(Number(v))}/mo`} style={{ fontSize: 12, fontFamily: FONT.num, fill: p.ink1 }} />
+            {capData.map((d, i) => (
+              <Cell key={i} fill={d.binding ? accent : 'rgba(20,40,30,0.16)'} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+      <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink2, lineHeight: 1.5, marginTop: 2 }}>
+        The tighter cap binds: {binding.basis} = <strong style={{ color: accent, fontFamily: FONT.num }}>{rm(c.room)}/mo</strong>.
+      </p>
+
+      <p style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink3, letterSpacing: '0.06em', textTransform: 'uppercase', marginTop: 11 }}>
+        What {rm(c.room)}/mo buys at {c.tierLabel}
+      </p>
+      <ResponsiveContainer width="100%" height={58}>
+        <BarChart data={[{ name: 'Principal', amount: c.supportable }]} layout="vertical" margin={{ top: 22, right: 66, bottom: 0, left: 0 }}>
+          <XAxis type="number" domain={[0, axisMax]} hide />
+          <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 12, fontFamily: FONT.ui, fill: p.ink2 }} axisLine={false} tickLine={false} />
+          <Tooltip
+            formatter={(value: unknown) => [rm(Number(value ?? 0)), 'Affordability supports']}
+            contentStyle={{ fontFamily: FONT.ui, fontSize: 12, borderRadius: 8, border: `1px solid ${p.hairline}` }}
+          />
+          <Bar dataKey="amount" isAnimationActive={false} barSize={13} radius={3} fill={accent}>
+            <LabelList dataKey="amount" position="right" formatter={(v: unknown) => rm(Number(v))} style={{ fontSize: 12, fontFamily: FONT.num, fill: p.ink1 }} />
+          </Bar>
+          {/* Same edge-anchoring rule as the headroom ticks: the tier minimum can land
+              anywhere on the axis, and a centred label near either end gets clipped. */}
+          <ReferenceLine
+            x={c.tierMinAmount}
+            stroke={p.ink2}
+            strokeDasharray="4 3"
+            strokeWidth={1.5}
+            label={(props: { viewBox?: { x?: number; y?: number } }) => {
+              const x = props.viewBox?.x ?? 0;
+              const y = props.viewBox?.y ?? 0;
+              const anchor = minFrac < 0.2 ? 'start' : minFrac > 0.8 ? 'end' : 'middle';
+              const dx = anchor === 'start' ? 3 : anchor === 'end' ? -3 : 0;
+              return (
+                <text x={x + dx} y={y - 7} textAnchor={anchor} fontSize={12} fontFamily={FONT.ui} fill={p.ink2}>
+                  tier minimum {rm(c.tierMinAmount)}
+                </text>
+              );
+            }}
+          />
+        </BarChart>
+      </ResponsiveContainer>
+      <p style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 600, color: fail ? p.red : p.accentInk, lineHeight: 1.5, marginTop: 2 }}>
+        {fail
+          ? `Short by ${rm(c.shortfall)} — no amount in this tier is affordable on these numbers.`
+          : `Clears the tier minimum by ${rm(Math.max(0, c.supportable - c.tierMinAmount))}.`}
+      </p>
+      {/* What affordability allows is not what gets offered: the tier ceiling and the
+          amount actually requested still cut it down (the decision waterfall shows that
+          step). Say so, or a supportable figure above the offer reads as a missed offer. */}
+      {!fail && (
+        <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5, marginTop: 2 }}>
+          Capacity only — the amount offered is then capped by the tier range and the amount requested.
+        </p>
+      )}
+    </div>
+  );
+}
 
 export function ConfidenceCeilingTick({ p, confidence }: { p: Palette; confidence: number }) {
   const notch = confidenceCeilingNotch(confidence);
