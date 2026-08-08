@@ -113,6 +113,10 @@ export async function POST(req: Request) {
   const { priced, pricing } = priceDecision(parsed.passport, assessment, requestedAmount, stored, lenderApps);
 
   const purpose = parsePurpose(b.purpose);
+  // The tier the engine actually priced on: its term is the loan's own schedule length, and it
+  // is filed onto the record (not just published in the offer below) so the console services
+  // this loan against the very same schedule the borrower app books from it.
+  const tier = stored.products.find((pr) => pr.label === priced.breakdown?.tierLabel);
   const result = await appendServerApplication(
     undefined,
     {
@@ -124,6 +128,7 @@ export async function POST(req: Request) {
       offeredAmount: priced.maxAmount,
       installment: priced.installment,
       ...(priced.breakdown?.tierLabel ? { tierLabel: priced.breakdown.tierLabel } : {}),
+      ...(tier ? { tenorMonths: tier.tenorMonths } : {}),
       ...(purpose ? { purpose } : {}),
       source: 'direct',
     },
@@ -141,10 +146,10 @@ export async function POST(req: Request) {
   // queue. Idempotent by writeOffer's same-terms rule, so a repeat apply can't un-accept.
   if (priced.decision === 'approve' && priced.maxAmount > 0 && parsed.passport.subject) {
     try {
-      // Carry the tenor of the tier the engine actually priced on. Without it the borrower app
-      // re-derives a tier from the amount alone and can land on a longer one — booking a term
-      // and a total this lender never approved.
-      const tier = stored.products.find((pr) => pr.label === priced.breakdown?.tierLabel);
+      // Carry the tenor of the tier the engine actually priced on (resolved above, and filed
+      // onto the application record itself). Without it the borrower app re-derives a tier from
+      // the amount alone and can land on a longer one — booking a term and a total this lender
+      // never approved.
       await writeOffer(
         undefined,
         lenderId,

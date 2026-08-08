@@ -8,7 +8,7 @@
 
 import type { ApplicationRecord, RepaymentEvent } from './applications';
 import { monthsElapsed } from './performance';
-import type { AdverseRecord } from './loans';
+import { tenorForTier, type AdverseRecord } from './loans';
 import type { CreditPassport } from './passport';
 import type { StoredPolicy } from './policyStore';
 
@@ -156,7 +156,10 @@ export function mergedStanding(passport: CreditPassport, ownApplications: Applic
   const ownLoans = ownApplications
     .filter((a) => a.subject === passport.subject && a.status === 'approved')
     .map((a) => {
-      const tenorMonths = stored.products.find((p) => p.label === a.tierLabel)?.tenorMonths ?? 12;
+      // The loan's own decided term first (stamped at filing); the ladder only for a record
+      // that predates it, and 12 as the last resort. Same precedence mapBook applies, so a
+      // loan's standing is measured against the very schedule Servicing shows.
+      const tenorMonths = a.tenorMonths ?? tenorForTier(stored.products, a.tierLabel) ?? 12;
       return { app: a, tenorMonths };
     });
   const ownStanding = computeRepaymentStanding(ownLoans);

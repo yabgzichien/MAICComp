@@ -105,9 +105,48 @@ describe('affordabilityCheck', () => {
     expect(c.outcome).toBe('below-tier-minimum');
     expect(c.supportable).toBe(2783);
     expect(c.shortfall).toBe(4000 - 2783);
-    expect(c.usedShare).toBeNull();
-    expect(c.headline).toContain('RM1,217'); // the gap, in the same wording the letter uses
     expect(c.headline).toContain('Growth Capital');
+  });
+
+  it('reports the repayment ÷ net cash flow ratio and the cap it is measured against', () => {
+    const c = affordabilityCheck(assessment, { ...declined, tierMinAmount: 2000, offered: 2400 }, 91);
+    expect(c.surplusShare).toBeCloseTo(91 / 520, 9); // 17.5% of net cash flow
+    expect(c.shareCap).toBe(0.35);
+    expect(c.headline).toContain('18%');
+    expect(c.headline).toContain('net cash flow');
+  });
+
+  it('scales the tier minimum into the installment it would demand when nothing was offered', () => {
+    const c = affordabilityCheck(assessment, declined, 0);
+    // Installment is linear in principal at a fixed rate/tenor: RM182/mo buys RM2,783,
+    // so the RM4,000 minimum needs 4000/2783 of that installment.
+    expect(c.requiredInstallment).toBeCloseTo((182 * 4000) / 2783, 6);
+    expect(c.requiredSurplusShare).toBeCloseTo((182 * 4000) / 2783 / 520, 6);
+    expect(c.requiredSurplusShare!).toBeGreaterThan(c.shareCap); // it is precisely why it failed
+    expect(c.headline).toContain('past the 35% cap');
+  });
+
+  it('leaves the required-installment fields null on an approval', () => {
+    const c = affordabilityCheck(assessment, { ...declined, tierMinAmount: 2000, offered: 2400 }, 91);
+    expect(c.requiredInstallment).toBeNull();
+    expect(c.requiredSurplusShare).toBeNull();
+  });
+
+  it('reports a ratio above 100% rather than clamping it', () => {
+    // A file whose tier minimum needs more than the whole surplus: the number has to
+    // survive intact, because "112% of net cash flow" is the point being made.
+    const c = affordabilityCheck(assessment, { ...declined, tierMinAmount: 20000 }, 0);
+    expect(c.requiredSurplusShare!).toBeGreaterThan(1);
+  });
+
+  it('has no ratio to report when there is no net cash flow to divide by', () => {
+    const c = affordabilityCheck(
+      { avgIncome: 2540, avgMonthlySurplus: 0, monthlyDebtService: 100 },
+      { ...declined, surplusCapPrincipal: 0, dsrCapPrincipal: 0 },
+      0,
+    );
+    expect(c.surplusShare).toBeNull();
+    expect(c.requiredSurplusShare).toBeNull();
   });
 
   it('reports no headroom at all when neither cap leaves room for an installment', () => {
@@ -128,13 +167,12 @@ describe('affordabilityCheck', () => {
     expect(c.room).toBeCloseTo(0.4 * 2540 - 900, 9); // RM116
   });
 
-  it('passes with the share of the room the offered installment consumes', () => {
+  it('passes when the tier minimum is within reach', () => {
     const c = affordabilityCheck(assessment, { ...declined, tierMinAmount: 2000, offered: 2400 }, 91);
     expect(c.passed).toBe(true);
     expect(c.outcome).toBe('fits');
-    expect(c.usedShare).toBeCloseTo(91 / 182, 9);
     expect(c.shortfall).toBe(0);
-    expect(c.headline).toContain('50%');
+    expect(c.headline).toContain('inside the 35% cap');
   });
 
   it('cites the lender’s own caps when policy is customised', () => {

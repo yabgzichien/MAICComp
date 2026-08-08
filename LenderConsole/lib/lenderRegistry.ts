@@ -4,10 +4,15 @@
 // app's engine consumes. A known hackathon simplification: three profiles from one
 // console stand in for a real multi-lender directory (see the flywheel design spec).
 //
-// Product `id`s are CANONICAL TIER SLOTS ('emergency' | 'starter' | 'growth' | 'scale'),
-// not free-form names  the borrower engine's coverage gates keep products by these ids
-// (loans.ts applyCoverageTierFilter), so a ladder using other ids would silently fall out
-// of thin-coverage eligibility. Lender-specific naming belongs in `label`.
+// The SEEDED profiles below use only the CANONICAL TIER SLOTS ('emergency' | 'starter' |
+// 'growth' | 'scale'), because the borrower engine's coverage gates keep products by these ids
+// (loans.ts applyCoverageTierFilter) and a canonical ladder is therefore reachable at every
+// coverage level. Lender-specific naming belongs in `label`.
+//
+// A lender editing their own policy may add rungs beyond the four (see
+// `policyStore.isValidTierId`); such a tier is filtered out for thin-coverage borrowers and
+// available to everyone else. That is why this file's ids stay canonical while a published
+// ladder's need not be.
 
 import { DEFAULT_POLICY, DEFAULT_PRODUCTS, type LenderPolicy, type LoanProduct } from './loans';
 import type { StoredPolicy } from './policyStore';

@@ -31,6 +31,7 @@ export type ConsoleTourBranch = 'referred' | 'approved' | 'declined';
  *  no import in the signals direction. */
 export type ConsoleTourSignal =
   | 'pipeline-seeded'
+  | 'product-slot-added'
   | 'memo-opened'
   | 'letter-generated'
   | 'flagged-loaded'
@@ -94,6 +95,11 @@ export interface ConsoleTourStep {
   anchorId?: string;
   /** Required on `do` steps: the semantic signal the officer's own action fires. */
   advanceOn?: ConsoleTourSignal;
+  /** `do` steps only, optional: a signal that does NOT complete the step but does reveal a plain
+   *  Next on the card. For a step with more than one honest way to satisfy it — act 10's ladder
+   *  is finished either by publishing a policy or simply by adding a slot — this lets the shorter
+   *  route hand control back to the officer instead of auto-advancing on their behalf. */
+  unlockNextOn?: ConsoleTourSignal;
   /** Required on `handoff` steps: the cross-app baton. */
   handoff?: ConsoleHandoff;
   /** Short line for the checkmark beat when a do-step completes. */
@@ -126,16 +132,9 @@ export const CONSOLE_TOUR_STEPS: ConsoleTourStep[] = [
     title: 'Five trust checks',
     body: 'Signature, issuer, freshness, consent, stacking. All five run before any score is shown.',
   },
-  {
-    id: 'seed',
-    kind: 'explain',
-    tab: 'verify',
-    act: 7,
-    actLabel: 'Run the desk',
-    anchorId: 'queue-rail',
-    title: 'Not an empty desk',
-    body: 'Your file already sits among a real day’s work — the pipeline arrives pre-stocked, nothing to seed.',
-  },
+  // The 'seed' beat ("Not an empty desk") was cut on 2026-08-06: the very next step already
+  // spotlights the same queue rail and says something the officer can act on, so this one was a
+  // second stop on one control that only restated what they could see.
   {
     id: 'queues',
     kind: 'explain',
@@ -162,7 +161,7 @@ export const CONSOLE_TOUR_STEPS: ConsoleTourStep[] = [
     // to narrate (the officer-typed amount and its Assess button were removed).
     required: true,
     title: 'Open the file you sent',
-    body: 'Your turn: open {applicant}’s application, the one that arrived from the borrower app.',
+    body: 'Your task: open {applicant}’s application, the one that arrived from the borrower app.',
     celebrate: 'That is your own application — the engine has already run on it.',
   },
   // The verdict differs by ending, so the explanation does too. Same anchor, same beat  only
@@ -209,7 +208,7 @@ export const CONSOLE_TOUR_STEPS: ConsoleTourStep[] = [
     anchorId: 'memo-button',
     advanceOn: 'memo-opened',
     title: 'Open the audit memo',
-    body: 'Your turn: generate the audit memo, the writeup a regulator would ask for.',
+    body: 'Your task: generate the audit memo, the writeup a regulator would ask for.',
     celebrate: 'The paper trail is written.',
   },
   // The one action that differs per ending.
@@ -229,7 +228,7 @@ export const CONSOLE_TOUR_STEPS: ConsoleTourStep[] = [
     // Approving is gated on a written rationale — that field is the audit trail, and the tour
     // must not write it for the officer. So the copy names the rationale as part of the step
     // rather than pointing at a button that looks inexplicably dead.
-    body: 'Your turn: write a one-line rationale, then approve. That reason goes into the audit trail.',
+    body: 'Your task: write a one-line rationale, then approve. That reason goes into the audit trail.',
     celebrate: 'The offer is out.',
   },
   {
@@ -253,7 +252,7 @@ export const CONSOLE_TOUR_STEPS: ConsoleTourStep[] = [
     advanceOn: 'letter-generated',
     branches: ['declined'],
     title: 'Issue the notice',
-    body: 'Your turn: generate the adverse-action letter. A decline owes the borrower a reason.',
+    body: 'Your task: generate the adverse-action letter. A decline owes the borrower a reason.',
     celebrate: 'Compliant notice issued.',
   },
   // ── Act 8 · Catch a fraudster ───────────────────────────────────────────────
@@ -269,7 +268,7 @@ export const CONSOLE_TOUR_STEPS: ConsoleTourStep[] = [
     anchorId: 'load-flagged',
     advanceOn: 'flagged-loaded',
     title: 'Load a fabricated file',
-    body: 'Your turn: click Load flagged applicant, below the pipeline search.',
+    body: 'Your task: click Load flagged applicant, below the pipeline search.',
     celebrate: 'The rings caught it.',
   },
   {
@@ -340,7 +339,7 @@ export const CONSOLE_TOUR_STEPS: ConsoleTourStep[] = [
     advanceOn: 'repayment-recorded',
     branches: ['referred', 'approved'],
     title: 'Collect an instalment',
-    body: 'Your turn: record the first repayment and watch the loan’s standing update.',
+    body: 'Your task: record the first repayment and watch the loan’s standing update.',
     celebrate: 'Standing updated.',
   },
   {
@@ -358,9 +357,13 @@ export const CONSOLE_TOUR_STEPS: ConsoleTourStep[] = [
     // The other half of owning a policy: the products it lends through. Deliberately a `do` —
     // the ladder editor is the only place in either app where the judge AUTHORS something a
     // lender owns, and saving publishes it to the same GET /api/lenders the borrower's act-6
-    // lender picker reads. Naming and ranges are the lender's; the four tier slots are fixed
-    // because the engine's coverage gates key on them, which is why the copy says "shape a
-    // tier" rather than promising a fifth rung that validation would reject.
+    // lender picker reads. Naming, ranges and the number of rungs are the lender's: the four
+    // CANONICAL slots carry the engine's coverage gates, and any slot added beyond them is a
+    // full-ladder-only tier (see `policyStore.validateStoredPolicy`).
+    //
+    // Adding a slot unlocks Next rather than completing the step. Publishing is still the beat
+    // worth celebrating, but a judge who only wants to prove the ladder is theirs to extend
+    // should not be held on this card until they save.
     id: 'product',
     kind: 'do',
     tab: 'policy',
@@ -368,9 +371,10 @@ export const CONSOLE_TOUR_STEPS: ConsoleTourStep[] = [
     actLabel: 'Service & structure',
     anchorId: 'product-ladder',
     advanceOn: 'policy-published',
+    unlockNextOn: 'product-slot-added',
     branches: ['referred', 'approved'],
     title: 'Design a loan product',
-    body: 'Your turn: shape a tier (name, range, rate), then Save policy.',
+    body: 'Your task: add a loan slot, or reshape a tier, then Save policy.',
     celebrate: 'Published. Borrowers see it live.',
   },
   {
@@ -468,6 +472,14 @@ export function validateConsoleTourSteps(steps: ConsoleTourStep[], validTabs: re
     }
     if (step.kind === 'explain' && (step.advanceOn || step.handoff)) {
       problems.push(`explain step ${step.id} must not have advanceOn or handoff`);
+    }
+    // Next is already the whole control on an explain step, and on a handoff it is the gate's to
+    // enable — an unlock signal on either would be a promise nothing reads.
+    if (step.unlockNextOn && step.kind !== 'do') {
+      problems.push(`step ${step.id} is ${step.kind}, which cannot carry unlockNextOn`);
+    }
+    if (step.unlockNextOn && step.unlockNextOn === step.advanceOn) {
+      problems.push(`step ${step.id}: unlockNextOn duplicates advanceOn, so the step would complete before the button could be used`);
     }
     // `required` withholds Skip, which only exists on do steps. On an explain step it would be a
     // no-op that reads as a guarantee; on a handoff it would remove the officer's only way past

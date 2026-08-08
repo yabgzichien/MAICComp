@@ -270,6 +270,76 @@ function Figure({ p, label, value, bg }: { p: Palette; label: string; value: str
   );
 }
 
+/**
+ * The headline ratio: repayment ÷ net cash flow, against the policy cap that governs it.
+ * The track runs 0→100% of net cash flow (not 0→cap), so the cap marker sits where the
+ * policy actually puts it and a file that overshoots is visibly PAST a line rather than
+ * merely full. The fill clamps at 100%; the printed number never does, because "112% of
+ * net cash flow" is exactly the fact a declined file needs to communicate.
+ */
+function RepaymentShareMeter({
+  p,
+  share,
+  cap,
+  amount,
+  surplus,
+  tone,
+  caption,
+  onInfo,
+}: {
+  p: Palette;
+  share: number;
+  cap: number;
+  amount: number;
+  surplus: number;
+  tone: 'ok' | 'bad';
+  caption: string;
+  onInfo?: (entry: string) => void;
+}) {
+  const color = tone === 'bad' ? p.red : p.primary;
+  const fill = Math.max(0, Math.min(1, share));
+  const capFrac = Math.max(0, Math.min(1, cap));
+  return (
+    <div style={{ marginTop: 10, padding: '9px 11px', borderRadius: 10, background: tone === 'bad' ? '#fdecea' : p.accentTint, border: `1px solid ${tone === 'bad' ? '#f5c6c2' : p.accentSoft}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
+        <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          Repayment ÷ net cash flow
+        </span>
+        {onInfo && <InfoButton entry="repayment_share" onOpen={onInfo} />}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 9, flexWrap: 'wrap' }}>
+        <span style={{ fontFamily: FONT.num, fontSize: 30, fontWeight: 700, color, lineHeight: 1, letterSpacing: '-0.5px' }}>{pctLabel(share)}</span>
+        <span style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink2 }}>
+          {rm(amount)}/mo of {rm(surplus)}/mo
+        </span>
+      </div>
+      {/* Cap marker rides the track itself rather than a legend: the question is always
+          "which side of the line is the fill on", and a separate legend makes the reader
+          do that comparison in their head. */}
+      <div style={{ position: 'relative', height: 10, borderRadius: 5, background: 'rgba(20,40,30,0.10)', overflow: 'hidden', marginTop: 7 }}>
+        <div style={{ position: 'absolute', inset: 0, width: `${fill * 100}%`, background: color, borderRadius: 5 }} />
+        <div style={{ position: 'absolute', top: -1, bottom: -1, left: `${capFrac * 100}%`, width: 2, background: p.ink1, transform: 'translateX(-1px)' }} />
+      </div>
+      <div style={{ position: 'relative', height: 15, marginTop: 1 }}>
+        <span
+          style={{
+            position: 'absolute',
+            left: `${capFrac * 100}%`,
+            transform: capFrac > 0.8 ? 'translateX(-100%)' : capFrac < 0.08 ? 'none' : 'translateX(-50%)',
+            fontFamily: FONT.ui,
+            fontSize: 12,
+            color: p.ink2,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {pctLabel(cap)} cap
+        </span>
+      </div>
+      <p style={{ fontFamily: FONT.ui, fontSize: 12, color: tone === 'bad' ? '#922b21' : p.ink2, lineHeight: 1.5, marginTop: 1 }}>{caption}</p>
+    </div>
+  );
+}
+
 function CheckHeader({ p, chip, chipColor, chipBg, onInfo }: { p: Palette; chip: string; chipColor: string; chipBg: string; onInfo?: (entry: string) => void }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 7 }}>
@@ -344,10 +414,38 @@ export function AffordabilityCheckCard({
 
       <p style={{ fontFamily: FONT.ui, fontSize: 13, fontWeight: 700, color: fail ? '#922b21' : p.ink1, lineHeight: 1.45 }}>{c.headline}</p>
 
+      {/* On an offer this is the real ratio; on a decline the offered installment is 0, so
+          the honest figure is what the tier's smallest loan WOULD demand — a "0%" meter on
+          a declined file would read as the most affordable case on the screen. */}
+      {c.passed && c.surplusShare !== null && (
+        <RepaymentShareMeter
+          p={p}
+          share={c.surplusShare}
+          cap={c.shareCap}
+          amount={c.installment}
+          surplus={c.surplus}
+          tone={c.surplusShare > c.shareCap ? 'bad' : 'ok'}
+          caption={`Leaves ${rm(Math.max(0, c.surplus - c.installment))}/mo of net cash flow after the repayment.`}
+          onInfo={onInfo}
+        />
+      )}
+      {!c.passed && c.requiredSurplusShare !== null && (
+        <RepaymentShareMeter
+          p={p}
+          share={c.requiredSurplusShare}
+          cap={c.shareCap}
+          amount={c.requiredInstallment ?? 0}
+          surplus={c.surplus}
+          tone="bad"
+          caption={`Would need ${rm(c.requiredInstallment ?? 0)}/mo for the smallest loan in this tier — the cap allows ${rm(c.room)}/mo.`}
+          onInfo={onInfo}
+        />
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 7, marginTop: 9 }}>
         <Figure p={p} label="Income" value={`${rm(c.income)}/mo`} bg={tileBg} />
         <Figure p={p} label="Debt service" value={`${rm(c.debtService)}/mo`} bg={tileBg} />
-        <Figure p={p} label="Surplus" value={`${rm(c.surplus)}/mo`} bg={tileBg} />
+        <Figure p={p} label="Net cash flow" value={`${rm(c.surplus)}/mo`} bg={tileBg} />
       </div>
 
       <p style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink3, letterSpacing: '0.06em', textTransform: 'uppercase', marginTop: 11 }}>

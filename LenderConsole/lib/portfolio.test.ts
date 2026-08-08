@@ -85,10 +85,24 @@ describe('bookToPool', () => {
     expect(pool[0].fraudProb).toBe(0);
   });
 
-  it('assigns apr/tenor by band from the display term table', () => {
+  it('assigns apr/tenor by band from the display term table when the record carries no decided tenor', () => {
     const pool = bookToPool([approved({ subject: 'x', band: 'Excellent' })]);
     expect(pool[0].apr).toBe(0.16);
     expect(pool[0].tenorMonths).toBe(24);
+  });
+
+  // The console/borrower-app schedule disagreement: band and tier only agree while the priced
+  // tier IS the band's own rung. A Good-band borrower who took a 6-month Emergency Micro was
+  // scheduled here as an 18-month loan, so a loan the app showed as 6 of 6 paid read as a year
+  // behind in Servicing. The loan's own decided term always wins over the band table.
+  it('schedules a loan on its own decided tenor, not the one its credit band would imply', () => {
+    const pool = bookToPool([approved({ subject: 'x', band: 'Good', tierLabel: 'Emergency Micro', tenorMonths: 6 })]);
+    expect(pool[0].tenorMonths).toBe(6);
+  });
+
+  it('ignores a non-positive stored tenor and falls back to the band table', () => {
+    const pool = bookToPool([approved({ subject: 'x', band: 'Good', tenorMonths: 0 })]);
+    expect(pool[0].tenorMonths).toBe(18);
   });
 
   // ── settled-loan exclusion (2026-07-18 stats/advisor design) ────────────────────

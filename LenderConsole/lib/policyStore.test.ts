@@ -87,9 +87,18 @@ describe('validateStoredPolicy', () => {
       expect(errorsOf({ ...good(), products: [] }).join(' ')).toMatch(/at least one tier/i);
     });
 
-    it('rejects a product id outside the four canonical tier slots', () => {
-      const errs = errorsOf({ ...good(), products: [{ ...DEFAULT_PRODUCTS[0], id: 'custom-tier' }] });
-      expect(errs.some((e) => e.includes('.id') && CANONICAL_TIER_IDS.every((id) => e.includes(id)))).toBe(true);
+    // Lender-authored rungs beyond the canonical four are allowed (2026-08-06). They are
+    // full-ladder-only — the engine's coverage gates name the canonical ids and nothing else —
+    // but they are a legal ladder, not a rejected one.
+    it('accepts a lender-authored tier slug alongside the canonical slots', () => {
+      expect(errorsOf({ ...good(), products: [{ ...DEFAULT_PRODUCTS[0], id: 'custom-tier' }] })).toEqual([]);
+    });
+
+    it('rejects a tier id that is not a usable slug', () => {
+      for (const id of ['', 'X', 'Has Spaces', 'UPPER', 'way-too-long-a-slug-for-one-tier-slot']) {
+        const errs = errorsOf({ ...good(), products: [{ ...DEFAULT_PRODUCTS[0], id }] });
+        expect(errs.some((e) => e.includes('.id'))).toBe(true);
+      }
     });
 
     it('rejects duplicate tier ids in the same ladder', () => {

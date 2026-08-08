@@ -4,6 +4,7 @@
 // the orchestrator's escalation-only asymmetry made operational.
 import { describe, expect, it } from 'vitest';
 import {
+  backfillTenor,
   fileApplication,
   isApplicationRecord,
   markDefault,
@@ -459,6 +460,49 @@ describe('recordLetterGenerated', () => {
     const before = JSON.parse(JSON.stringify(base));
     recordLetterGenerated(base, base[0].id, 'refer', NOW);
     expect(base).toEqual(before);
+  });
+});
+
+// ── backfillTenor: stamp the decided term onto records filed before ApplicationRecord
+// carried it, so they stop being scheduled off their borrower's credit band ───────────
+describe('backfillTenor', () => {
+  const PRODUCTS = [
+    { label: 'Emergency Micro', tenorMonths: 6 },
+    { label: 'Growth Capital', tenorMonths: 18 },
+  ];
+
+  it('stamps the term of the tier the record was priced on', () => {
+    const { apps } = file([], { tierLabel: 'Emergency Micro' });
+    const result = backfillTenor(apps, PRODUCTS);
+    expect(result.changed).toBe(true);
+    expect(result.apps[0].tenorMonths).toBe(6);
+  });
+
+  it('leaves a record that already carries a decided term untouched, even if the ladder was repriced since', () => {
+    const { apps } = file([], { tierLabel: 'Emergency Micro', tenorMonths: 6 });
+    const result = backfillTenor(apps, [{ label: 'Emergency Micro', tenorMonths: 12 }]);
+    expect(result.changed).toBe(false);
+    expect(result.apps[0].tenorMonths).toBe(6);
+  });
+
+  it('leaves a record whose tier is not in the ladder alone rather than guessing a term', () => {
+    const { apps } = file([], { tierLabel: 'Retired Tier' });
+    const result = backfillTenor(apps, PRODUCTS);
+    expect(result.changed).toBe(false);
+    expect(result.apps[0].tenorMonths).toBeUndefined();
+  });
+
+  it('returns the same array when nothing needs stamping, so the caller can skip re-persisting', () => {
+    const { apps } = file([], { tierLabel: 'Retired Tier' });
+    expect(backfillTenor(apps, PRODUCTS).apps).toBe(apps);
+  });
+
+  it('stamps only the records that need it, leaving the rest identical', () => {
+    const stale = file([], { subject: 's'.repeat(64), tierLabel: 'Growth Capital' }).apps[0];
+    const fresh = file([], { subject: 'f'.repeat(64), tierLabel: 'Emergency Micro', tenorMonths: 6 }).apps[0];
+    const result = backfillTenor([stale, fresh], PRODUCTS);
+    expect(result.apps[0].tenorMonths).toBe(18);
+    expect(result.apps[1]).toBe(fresh);
   });
 });
 

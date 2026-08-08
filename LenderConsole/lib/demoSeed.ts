@@ -7,7 +7,7 @@
 import { DEMO_APPLICANTS } from '../app/demoApplicants';
 import { SAMPLE_CODE } from '../app/tokens';
 import { parsePassportCode, verifyPassport, type CreditPassport } from './passport';
-import { decideLoan, type LenderPolicy, type LoanDecision, type LoanProduct } from './loans';
+import { decideLoan, tenorForTier, type LenderPolicy, type LoanDecision, type LoanProduct } from './loans';
 import {
   fileApplication,
   recordCheckIn,
@@ -49,7 +49,10 @@ function decisionFor(passport: CreditPassport, requestedAmount: number, products
   });
 }
 
-function filingInputFor(code: string, passport: CreditPassport, decision: LoanDecision, amount: number, purpose: DeclaredPurpose): FileApplicationInput {
+function filingInputFor(code: string, passport: CreditPassport, decision: LoanDecision, amount: number, purpose: DeclaredPurpose, products: LoanProduct[]): FileApplicationInput {
+  // The tier's own term, so a seeded loan is serviced on the schedule it was priced on (the
+  // same rule the live filing paths follow  see ApplicationRecord.tenorMonths).
+  const tenorMonths = tenorForTier(products, decision.breakdown?.tierLabel);
   return {
     passportCode: code,
     subject: passport.subject,
@@ -59,6 +62,7 @@ function filingInputFor(code: string, passport: CreditPassport, decision: LoanDe
     offeredAmount: decision.maxAmount,
     installment: decision.installment,
     ...(decision.breakdown?.tierLabel ? { tierLabel: decision.breakdown.tierLabel } : {}),
+    ...(tenorMonths ? { tenorMonths } : {}),
     purpose,
     band: passport.band,
     ...(passport.assessment ? { confidencePct: Math.round(passport.assessment.confidence * 100) } : {}),
@@ -120,7 +124,7 @@ export function seedApplications(
     const decision = decisionFor(parsed.passport, seed.amount, products, policy);
     if (!decision) return;
     const at = new Date(now.getTime() - (seeds.length - i) * 5_400_000); // 1.5h apart, oldest first
-    const result = fileApplication(apps, filingInputFor(seed.code, parsed.passport, decision, seed.amount, seed.purpose), at);
+    const result = fileApplication(apps, filingInputFor(seed.code, parsed.passport, decision, seed.amount, seed.purpose, products), at);
     apps = result.apps;
     if (result.filed && result.id) filedIdByLabel.set(seed.label, result.id);
   });
@@ -168,7 +172,7 @@ export function seedApplications(
     const decision = decisionFor(parsed.passport, entry.amount, products, policy);
     if (!decision) continue;
     const at = new Date(now.getTime() - 20 * 60_000); // arrived minutes ago
-    const result = fileApplication(apps, filingInputFor(applicant.code, parsed.passport, decision, entry.amount, entry.purpose), at);
+    const result = fileApplication(apps, filingInputFor(applicant.code, parsed.passport, decision, entry.amount, entry.purpose, products), at);
     if (result.filed && result.id) {
       apps = result.apps.map((a) => (a.id === result.id ? { ...a, status: 'new' as const } : a));
     }

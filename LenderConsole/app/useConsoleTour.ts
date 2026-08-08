@@ -62,6 +62,13 @@ export interface ConsoleTourController {
   /** Handoff steps only: this step is watching the real loan and will advance by itself, so the
    *  card renders no Continue button. */
   handoffSelfAdvancing: boolean;
+  /** The officer has already been past this step and pressed Back onto it. The card then offers a
+   *  plain Next and drops Skip: the work is done, so there is nothing to wait for and nothing
+   *  left worth skipping. */
+  completed: boolean;
+  /** This do-step's `unlockNextOn` signal has fired, so the card offers Next even though the step
+   *  has not completed. Reset on every step change. */
+  nextUnlocked: boolean;
   /** Anchor ids whose real controls must not be usable yet — see `isConsoleControlLocked`. Read
    *  through `TourLockedControlsContext` by the control sites themselves. Empty whenever no
    *  script is running, so a console with no tour on it behaves exactly as it always did. */
@@ -99,6 +106,11 @@ export function useConsoleTour({
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [celebrating, setCelebrating] = useState<string | null>(null);
+  // Furthest step this run has reached, and whether the current step's optional unlock signal has
+  // fired. Both in-memory: a reload has no idea what the officer actually did, and handing out a
+  // Next they never earned would let them walk past the desk's one real decision.
+  const [maxIndex, setMaxIndex] = useState(0);
+  const [nextUnlocked, setNextUnlocked] = useState(false);
 
   // The file the judge sent from the borrower app. `source: 'direct'` is what distinguishes it
   // from every seeded applicant; the most recently filed one wins if they ran the loop twice.
@@ -214,6 +226,8 @@ export function useConsoleTour({
     setIndex(0);
     setPaused(false);
     setCelebrating(null);
+    setMaxIndex(0);
+    setNextUnlocked(false);
     setVisible(true);
   }, [followed]);
 
@@ -253,12 +267,17 @@ export function useConsoleTour({
   }, [persist, steps.length]);
 
   // Subscribe once: an officer's own action fires a signal; if it completes the current
-  // do-step, flash the celebration then advance.
+  // do-step, flash the celebration then advance. A signal that only UNLOCKS the step (act 10's
+  // "add a loan slot") reveals Next instead and leaves the move to the officer.
   useEffect(() => {
     return onTourSignal((signal) => {
       const s = stateRef.current;
       if (!s.visible || s.paused || s.celebrating) return;
       const current = steps[clampConsoleTourStep(s.index, steps.length)] ?? null;
+      if (current?.kind === 'do' && current.unlockNextOn === signal) {
+        setNextUnlocked(true);
+        return;
+      }
       if (classifyConsoleSignal(current, signal) !== 'advance') return;
       setCelebrating(current?.celebrate ?? null);
       window.setTimeout(() => {
@@ -267,6 +286,12 @@ export function useConsoleTour({
       }, CELEBRATE_MS);
     });
   }, [advance, steps]);
+
+  // The unlock belongs to one step only, and the high-water mark only ever grows.
+  useEffect(() => {
+    setNextUnlocked(false);
+    setMaxIndex((m) => Math.max(m, index));
+  }, [index]);
 
   /** Whether the current handoff's gate is open — the real loan has moved far enough for the
    *  script to continue. */
@@ -337,6 +362,8 @@ export function useConsoleTour({
   const restart = useCallback(() => {
     setPaused(false);
     setCelebrating(null);
+    setMaxIndex(0);
+    setNextUnlocked(false);
     persist(0);
     setVisible(true);
     try {
@@ -375,6 +402,8 @@ export function useConsoleTour({
     applicant: followed?.applicantLabel ?? null,
     handoffReady,
     handoffSelfAdvancing,
+    completed: index < maxIndex,
+    nextUnlocked,
     lockedControls,
     running,
     queueLockedToAppId: running ? followed?.id ?? null : null,

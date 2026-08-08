@@ -63,6 +63,14 @@ export interface ApplicationRecord {
   offeredAmount: number;
   installment: number;
   tierLabel?: string;
+  /** The decided term, in months, of the product tier this file was actually priced on  the
+   *  loan's own schedule length. Stored on the record rather than re-derived downstream
+   *  because the borrower's booked schedule is this number (the offer carries it across to
+   *  the app), and a tenor guessed from the credit band instead can disagree with it: a
+   *  Good-band borrower taking a 6-month Emergency Micro read as an 18-month loan in the
+   *  console while the app showed 6 instalments, all paid. Optional so records filed before
+   *  this field stay valid  see `backfillTenor`, and lib/portfolio.ts's band fallback. */
+  tenorMonths?: number;
   status: ApplicationStatus;
   filedAt: string;
   resolvedAt?: string;
@@ -93,6 +101,8 @@ export interface FileApplicationInput {
   offeredAmount: number;
   installment: number;
   tierLabel?: string;
+  /** The priced tier's term in months  see ApplicationRecord.tenorMonths. */
+  tenorMonths?: number;
   purpose?: DeclaredPurpose;
   source?: 'direct' | 'officer';
   band?: string;
@@ -138,6 +148,7 @@ export function fileApplication(
     offeredAmount: decisionOutcome(input.engineDecision, input.offeredAmount),
     installment: decisionOutcome(input.engineDecision, input.installment),
     ...(input.tierLabel ? { tierLabel: input.tierLabel } : {}),
+    ...(input.tenorMonths && input.tenorMonths > 0 ? { tenorMonths: input.tenorMonths } : {}),
     ...(input.band ? { band: input.band } : {}),
     ...(input.confidencePct !== undefined ? { confidencePct: input.confidencePct } : {}),
     status,
@@ -180,6 +191,33 @@ export function mergeServerApplications(
     additions.push(rec);
   }
   return additions.length > 0 ? { apps: [...local, ...additions], changed: true } : { apps: local, changed: false };
+}
+
+/**
+ * Stamp the decided term onto records filed before ApplicationRecord carried `tenorMonths`,
+ * resolved from the tier they were priced on (`tierLabel`) against the lender's own product
+ * ladder  the same lookup the offer-publishing path already does before telling the borrower
+ * app what term to book. Without this an already-stored loan keeps being scheduled off its
+ * borrower's credit band, which is exactly the console/app disagreement this field exists to
+ * end. Records that already carry a tenor are left untouched (the term is decided once, at
+ * filing, and a later product repricing must not silently re-term a live loan); so are ones
+ * with no tierLabel, or a tierLabel no longer in the ladder  a band-derived schedule is a
+ * worse answer than the console's existing one, not a better one. Pure: returns `changed:
+ * false` and the SAME array when there is nothing to stamp, so a caller can skip re-persisting.
+ */
+export function backfillTenor(
+  apps: ApplicationRecord[],
+  products: { label: string; tenorMonths: number }[],
+): { apps: ApplicationRecord[]; changed: boolean } {
+  let changed = false;
+  const next = apps.map((a) => {
+    if (a.tenorMonths && a.tenorMonths > 0) return a;
+    const tenorMonths = products.find((p) => p.label === a.tierLabel)?.tenorMonths;
+    if (!tenorMonths || tenorMonths <= 0) return a;
+    changed = true;
+    return { ...a, tenorMonths };
+  });
+  return changed ? { apps: next, changed } : { apps, changed: false };
 }
 
 function decisionOutcome(verdict: Decision, value: number): number {

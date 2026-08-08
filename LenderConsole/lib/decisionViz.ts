@@ -245,8 +245,25 @@ export interface AffordabilityCheck {
   shortfall: number;
   /** The installment actually offered; 0 on a decline. */
   installment: number;
-  /** Share of `room` the offered installment consumes; null when nothing was offered. */
-  usedShare: number | null;
+  /**
+   * The headline ratio: monthly repayment ÷ monthly net cash flow (surplus). This is
+   * the figure the surplus cap is written against, so it and `shareCap` are directly
+   * comparable. Null when there is no surplus to divide by  a 0-surplus file has no
+   * meaningful ratio, and 0/0 shown as "0%" would read as "comfortable".
+   */
+  surplusShare: number | null;
+  /** The policy ceiling `surplusShare` is measured against (0..1). */
+  shareCap: number;
+  /**
+   * On a decline, the installment the tier's SMALLEST loan would demand  the number
+   * that has to fit and doesn't. Derived from the room→principal ratio the engine
+   * already computed (installment is linear in principal at a fixed rate and tenor),
+   * so it needs no second annuity calculation. Null when nothing was declined, or
+   * when the breakdown carries no supportable principal to scale from.
+   */
+  requiredInstallment: number | null;
+  /** `requiredInstallment` as a share of net cash flow; null on the same conditions. */
+  requiredSurplusShare: number | null;
   /** One-line verdict, citing the same figures as the audit-trail reason. */
   headline: string;
 }
@@ -276,7 +293,10 @@ export function affordabilityCheck(
       // carries the full derivation, so the axis only has to name the cap.
       key: 'surplus',
       label: `Surplus ${Math.round(policy.maxInstallmentShareOfSurplus * 100)}%`,
-      basis: `${Math.round(policy.maxInstallmentShareOfSurplus * 100)}% of ${rm(surplus)} monthly surplus`,
+      // Says "net cash flow" where the axis label says "Surplus": the axis mirrors the
+      // Policy tab's field name, this sentence mirrors the ratio above it, and having the
+      // two words meet in one line is what tells the reader they are the same figure.
+      basis: `${Math.round(policy.maxInstallmentShareOfSurplus * 100)}% of ${rm(surplus)} monthly net cash flow`,
       installment: surplusCap,
       binding: surplusBinds,
     },
@@ -295,14 +315,25 @@ export function affordabilityCheck(
   const passed = b.offered > 0;
   const outcome: AffordabilityOutcome = passed ? 'fits' : room <= 0 ? 'no-headroom' : 'below-tier-minimum';
   const shortfall = Math.max(0, b.tierMinAmount - supportable);
-  const usedShare = passed && room > 0 ? clamp(installment / room, 0, 1) : null;
+  const surplusShare = surplus > 0 ? Math.max(0, installment) / surplus : null;
+  // Not clamped to the cap or to 1: the whole point of the declined case is that the
+  // required share OVERSHOOTS, and a ratio above 100% of net cash flow is a real (and
+  // very legible) state. The meter clamps its fill; the number stays honest.
+  const requiredInstallment = !passed && supportable > 0 ? (room * b.tierMinAmount) / supportable : null;
+  const requiredSurplusShare = requiredInstallment !== null && surplus > 0 ? requiredInstallment / surplus : null;
+  const pct = (x: number): string => `${Math.round(x * 100)}%`;
+  const capPct = pct(policy.maxInstallmentShareOfSurplus);
 
   const headline =
     outcome === 'fits'
-      ? `${rm(installment)}/mo fits — it uses ${Math.round((usedShare ?? 0) * 100)}% of the ${rm(room)} a month this file can service.`
+      ? surplusShare !== null
+        ? `${rm(installment)}/mo is ${pct(surplusShare)} of monthly net cash flow — inside the ${capPct} cap.`
+        : `${rm(installment)}/mo fits inside both caps.`
       : outcome === 'no-headroom'
-        ? `No room for any installment: ${rm(surplus)} monthly surplus and ${rm(debtService)} of existing debt service leave nothing to repay from.`
-        : `${rm(room)} a month is all this file can service. That buys ${rm(supportable)} — ${rm(shortfall)} short of the ${rm(b.tierMinAmount)} ${b.tierLabel} minimum.`;
+        ? `No room for any installment: ${rm(surplus)} monthly net cash flow and ${rm(debtService)} of existing debt service leave nothing to repay from.`
+        : requiredSurplusShare !== null
+          ? `The ${rm(b.tierMinAmount)} ${b.tierLabel} minimum needs ${rm(requiredInstallment!)}/mo — ${pct(requiredSurplusShare)} of monthly net cash flow, past the ${capPct} cap.`
+          : `${rm(room)} a month is all this file can service. That buys ${rm(supportable)} — ${rm(shortfall)} short of the ${rm(b.tierMinAmount)} ${b.tierLabel} minimum.`;
 
   return {
     passed,
@@ -317,7 +348,10 @@ export function affordabilityCheck(
     tierMinAmount: b.tierMinAmount,
     shortfall,
     installment,
-    usedShare,
+    surplusShare,
+    shareCap: policy.maxInstallmentShareOfSurplus,
+    requiredInstallment,
+    requiredSurplusShare,
     headline,
   };
 }

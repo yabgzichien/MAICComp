@@ -14,7 +14,8 @@ export const CONCENTRATION_THRESHOLD = 0.4;
 /** Canonical low→high band order for the breakdown, mirrors tokens.BAND_ORDER. */
 const BAND_ORDER: CreditBand[] = ['Building', 'Fair', 'Good', 'Strong', 'Excellent'];
 
-/** Display apr/tenor by band (from the DEFAULT_PRODUCTS ladder). These do NOT affect the
+/** Display apr/tenor by band (from the DEFAULT_PRODUCTS ladder)  the FALLBACK only, for a
+ *  record that carries no decided tenor of its own (see mapBook). These do NOT affect the
  *  risk math  securitization.ts weights by band/fraud/principal only  they are carried
  *  for parity with the sample pool's shape and any later per-loan display. */
 const BAND_TERMS: Record<CreditBand, { apr: number; tenorMonths: number }> = {
@@ -78,7 +79,15 @@ const isCreditBand = (b: string): b is CreditBand => (BAND_ORDER as string[]).in
 /** Map the approved book to internal loans, parsing each stored passport defensively.
  *  Approved rows with no offer, or an unparseable code, are skipped rather than throwing.
  *  Exported so other modules (e.g. lib/performance.ts) reuse this one parse-and-map pass
- *  instead of duplicating passport parsing. */
+ *  instead of duplicating passport parsing.
+ *
+ *  Tenor comes from the loan's OWN decided term (`app.tenorMonths`, the tier it was priced
+ *  on  the same number the offer carried to the borrower app, so both sides schedule the
+ *  identical loan). BAND_TERMS is only the fallback for a record filed before that field
+ *  existed and never backfilled: band and tier agree on the default ladder, but they part
+ *  company whenever the priced tier isn't the band's own rung  a Good-band borrower on a
+ *  6-month Emergency Micro scheduled as an 18-month loan here while their app showed 6 of 6
+ *  paid, so the console kept showing a settled loan as a year behind. */
 export function mapBook(apps: ApplicationRecord[]): BookLoan[] {
   const out: BookLoan[] = [];
   for (const a of apps) {
@@ -96,7 +105,7 @@ export function mapBook(apps: ApplicationRecord[]): BookLoan[] {
         id: a.subject,
         principal: a.offeredAmount,
         apr: terms.apr,
-        tenorMonths: terms.tenorMonths,
+        tenorMonths: a.tenorMonths && a.tenorMonths > 0 ? a.tenorMonths : terms.tenorMonths,
         score: passport.score,
         band,
         // Approved loans already cleared the ML fraud + confidence gates at underwriting;

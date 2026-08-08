@@ -112,6 +112,40 @@ const PRICING_FIELDS: { key: keyof ThresholdForm; label: string; suffix: string;
   { key: 'targetReturnPct', label: 'Target net return', suffix: '% p.a.', glossaryKey: 'target_return' },
 ];
 
+/** Canonical slots keep their fixed order (the engine's coverage gates read them that way);
+ *  lender-authored rungs sort after them, in the order they were added. `Array.sort` is stable,
+ *  so equal ranks keep their relative order without a tiebreak. */
+const slotRank = (id: string): number => {
+  const i = (CANONICAL_TIER_IDS as readonly string[]).indexOf(id);
+  return i < 0 ? CANONICAL_TIER_IDS.length : i;
+};
+const sortLadder = (rows: LadderRow[]): LadderRow[] => [...rows].sort((a, b) => slotRank(a.id) - slotRank(b.id));
+
+const numOr = (s: string, fallback: number): number => (Number.isFinite(Number(s.trim())) && s.trim() !== '' ? Number(s.trim()) : fallback);
+
+/** A rung of the lender's own, stacked on top of whatever ladder they already have. Both id and
+ *  label are made unique here because validation rejects a duplicate of either — a new row that
+ *  arrives already invalid would read as the editor being broken rather than as a blank to fill.
+ *
+ *  Seeded from the current top rung so the numbers start somewhere defensible; every field is
+ *  then the lender's to edit. */
+function newCustomRow(rows: LadderRow[]): LadderRow {
+  let n = rows.length + 1;
+  while (rows.some((r) => r.id === `tier-${n}`) || rows.some((r) => r.label === `New tier ${n}`)) n += 1;
+  const topAmount = rows.reduce((m, r) => Math.max(m, numOr(r.maxAmount, 0)), 0);
+  const topScore = rows.reduce((m, r) => Math.max(m, numOr(r.minScore, 300)), 300);
+  const top = rows[rows.length - 1];
+  return {
+    id: `tier-${n}`,
+    label: `New tier ${n}`,
+    minScore: String(Math.min(900, topScore + 20)),
+    minAmount: String(topAmount > 0 ? topAmount : 1000),
+    maxAmount: String(topAmount > 0 ? topAmount * 2 : 5000),
+    tenorMonths: top?.tenorMonths ?? '12',
+    aprPct: top?.aprPct ?? '18',
+  };
+}
+
 const LADDER_COLS = [
   { key: 'label' as const, label: 'Tier name', width: '1.6fr' },
   { key: 'minScore' as const, label: 'Min score', width: '1fr' },
@@ -175,6 +209,18 @@ export default function PolicyTab({
   const setThreshold = (key: keyof ThresholdForm, v: string) => setThresholds((t) => ({ ...t, [key]: v }));
   const setRow = (i: number, key: keyof LadderRow, v: string) =>
     setRows((rs) => rs.map((r, j) => (j === i ? { ...r, [key]: v } : r)));
+
+  /** Add a rung. `slot` refills one of the canonical four that was removed; no argument adds a
+   *  lender-authored tier of the lender's own. Either way the tour's act-10 step hears about it:
+   *  adding a slot is enough to satisfy "design a loan product", so the card reveals Next rather
+   *  than holding the officer until they publish. */
+  const addSlot = (slot?: string) => {
+    setRows((rs) => {
+      const seed = slot ? DEFAULT_PRODUCTS.find((d) => d.id === slot) : undefined;
+      return sortLadder([...rs, seed ? toLadderRows([seed])[0] : newCustomRow(rs)]);
+    });
+    emitTourSignal('product-slot-added');
+  };
 
   const resetToDefaults = () => {
     if (!window.confirm('Discard your unsaved edits and reset every threshold and tier back to the defaults?')) return;
@@ -298,8 +344,9 @@ export default function PolicyTab({
         <div style={{ background: p.surface, borderRadius: 12, padding: '14px 18px', boxShadow: p.shadow }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
             <SectionLabel color={p.ink2}>Product ladder</SectionLabel>
-            <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>
-              Tier slots are fixed (emergency · starter · growth · scale). The coverage gates key on them. Naming is yours.
+            <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, maxWidth: 520, lineHeight: 1.45 }}>
+              Four canonical slots (emergency · starter · growth · scale) carry the coverage gates. Slots you add
+              beyond them lend to full-coverage borrowers only. Naming and ranges are yours.
             </p>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: `0.9fr ${LADDER_COLS.map((c) => c.width).join(' ')} 34px`, gap: '6px 10px', alignItems: 'center', marginTop: 10 }}>
@@ -324,27 +371,27 @@ export default function PolicyTab({
               </React.Fragment>
             ))}
           </div>
-          {unusedSlots.length > 0 && (
-            <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
-              <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>Add tier:</span>
-              {unusedSlots.map((slot) => (
-                <button
-                  key={slot}
-                  onClick={() => {
-                    const seed = DEFAULT_PRODUCTS.find((d) => d.id === slot)!;
-                    setRows((rs) =>
-                      [...rs, toLadderRows([seed])[0]].sort(
-                        (a, b) => CANONICAL_TIER_IDS.indexOf(a.id as (typeof CANONICAL_TIER_IDS)[number]) - CANONICAL_TIER_IDS.indexOf(b.id as (typeof CANONICAL_TIER_IDS)[number]),
-                      ),
-                    );
-                  }}
-                  style={{ padding: '4px 12px', borderRadius: 7, border: `1.5px solid ${p.accentSoft}`, background: p.accentTint, color: p.accentInk, cursor: 'pointer', fontFamily: FONT.ui, fontSize: 12, fontWeight: 600 }}
-                >
-                  + {slot}
-                </button>
-              ))}
-            </div>
-          )}
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>Add tier:</span>
+            {unusedSlots.map((slot) => (
+              <button
+                key={slot}
+                onClick={() => addSlot(slot)}
+                style={{ padding: '4px 12px', borderRadius: 7, border: `1.5px solid ${p.accentSoft}`, background: p.accentTint, color: p.accentInk, cursor: 'pointer', fontFamily: FONT.ui, fontSize: 12, fontWeight: 600 }}
+              >
+                + {slot}
+              </button>
+            ))}
+            {/* Always available, unlike the canonical refills above: a lender whose four slots are
+                all in use can still author a fifth rung of their own. */}
+            <button
+              onClick={() => addSlot()}
+              title="Add a loan slot of your own. It lends to full-coverage borrowers only — the coverage gates name the four canonical slots and nothing else."
+              style={{ padding: '4px 12px', borderRadius: 7, border: `1.5px solid ${p.accentInk}`, background: 'transparent', color: p.accentInk, cursor: 'pointer', fontFamily: FONT.ui, fontSize: 12, fontWeight: 700 }}
+            >
+              + New loan slot
+            </button>
+          </div>
           {warnings.map((w, i) => (
             <div key={i} style={{ marginTop: 10, padding: '8px 12px', borderRadius: 8, background: '#fdf3dc', border: '1px solid #f5d990', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
               <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 800, color: p.amber, lineHeight: 1.4 }}>!</span>

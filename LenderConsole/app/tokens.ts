@@ -204,6 +204,11 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     short: 'One month of income, split into debt service, the proposed installment, and what is left over.',
     body: "The bar is the borrower's monthly income. Two dashed caps mark the policy limits: total debt service can't cross one line, and surplus after all obligations can't cross the other. The installment segment must land inside both, or the engine won't offer it.",
   },
+  repayment_share: {
+    term: 'Repayment ÷ Net Cash Flow',
+    short: 'The monthly repayment as a share of what is actually left over each month after expenses.',
+    body: "Net cash flow (surplus) is income minus everything the applicant already spends, so this ratio asks the question a debt-service ratio can't: of the money genuinely free at month end, how much would the new installment take? An installment can sit comfortably inside a DSR limit and still swallow most of a thin surplus, which is how a borrower ends up current on paper and one bad week from missing a payment. The cap marked on the track is the lender's own ceiling on this ratio, editable on the Policy tab. On a declined file the figure shown is what the tier's smallest loan would have demanded, since no installment was offered.",
+  },
   affordability_check: {
     term: 'Affordability Check',
     short: 'Whether this file can service any installment large enough to reach the tier it qualifies for.',

@@ -168,6 +168,17 @@ export const DEFAULT_PRODUCTS: LoanProduct[] = [
   { id: 'scale', label: 'Scale Capital', minScore: 740, minAmount: 8000, maxAmount: 20000, tenorMonths: 24, apr: 0.12 },
 ];
 
+/** The term of the tier a decision was priced on, or undefined when the label matches nothing
+ *  in this lender's ladder (an unpriced decline, or a tier renamed since filing). The one
+ *  lookup every "what schedule is this loan on" caller shares  the filing paths that stamp
+ *  ApplicationRecord.tenorMonths, the offer publisher that tells the borrower app what term to
+ *  book, and lib/applications.ts's backfill  so a loan's term has a single definition. */
+export function tenorForTier(products: LoanProduct[], tierLabel: string | undefined): number | undefined {
+  if (!tierLabel) return undefined;
+  const tenorMonths = products.find((p) => p.label === tierLabel)?.tenorMonths;
+  return tenorMonths && tenorMonths > 0 ? tenorMonths : undefined;
+}
+
 export function installmentFor(principal: number, apr: number, tenorMonths: number): number {
   if (tenorMonths <= 0) return 0;
   const r = apr / 12;

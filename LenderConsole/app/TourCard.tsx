@@ -8,7 +8,6 @@
 import React, { useEffect, useState } from 'react';
 import { FONT, type Palette } from './tokens';
 import { fillPersona } from '../lib/tourSteps';
-import { LENDER_REGISTRY } from '../lib/lenderRegistry';
 import { onTourAnchor, type AnchorReport } from '../lib/tourAnchorRect';
 import type { ConsoleTourController } from './useConsoleTour';
 
@@ -179,7 +178,7 @@ export function TourCard({ p, c, officer, lender }: { p: Palette; c: ConsoleTour
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 7, padding: '3px 9px', borderRadius: 6, background: p.accentTint, border: `1px solid ${p.accentSoft}` }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: p.primary, display: 'inline-block' }} />
               <span style={{ fontFamily: FONT.ui, fontSize: 10.5, fontWeight: 800, color: p.accentInk, letterSpacing: '0.08em' }}>
-                {isHandoff ? 'SWITCH APPS' : 'YOUR TURN'}
+                {isHandoff ? 'SWITCH APPS' : c.completed ? 'DONE' : 'YOUR TASK'}
               </span>
             </div>
           )}
@@ -212,7 +211,12 @@ export function TourCard({ p, c, officer, lender }: { p: Palette; c: ConsoleTour
             {c.index > 0 && (
               <button onClick={c.back} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: p.ink2, fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, padding: '7px 4px' }}>Back</button>
             )}
-            {isDo ? (
+            {c.completed || c.nextUnlocked ? (
+              // Already cleared (the officer pressed Back onto it), or satisfied by this step's
+              // own unlock signal. Either way the work is behind them: one plain Next, and no
+              // Skip — skipping something already done is a control with no meaning.
+              <button onClick={c.next} style={primaryBtn(p)}>Next</button>
+            ) : isDo ? (
               // A required do-step (opening the judge's own file, making the call) offers no
               // Skip: everything after it reads what it produces. Exit still ends the tour.
               step.required ? null : (
@@ -244,14 +248,14 @@ export function TourCard({ p, c, officer, lender }: { p: Palette; c: ConsoleTour
   );
 }
 
-/** Closing invitation, on both endings' finale card. The script the judge just played is one of
- *  three, chosen by the engine from the borrower's real data — so the most useful thing to hand
- *  them at the end is the door to the other two.
+/** Closing invitation, on both endings' finale card: one route back to the borrower app for a
+ *  judge who wants to run a different demo borrower.
  *
- *  Names no personas on purpose. The demo borrowers live in the borrower app's own registry
- *  (`PipComp/src/data/demoPersonas.ts`), which this console cannot see; hardcoding "Ravi, Aina,
- *  Faizal" here would be three facts free to drift. The three VERDICTS are this registry's own
- *  `ConsoleTourBranch` union, so naming those instead is both concrete and self-checking. */
+ *  The instruction is the BORROWER app's, because the script starts there — the ⟳ badge in this
+ *  header restarts the console half alone, which would drop the judge into act 7 with no
+ *  application of their own. It routes through the full reset rather than a profile swap: the
+ *  setup screen is where every demo borrower can be picked, and starting from it leaves no
+ *  half-state from the run just finished. */
 function AnotherEnding({ p }: { p: Palette }) {
   return (
     <div style={{ marginTop: 12, paddingTop: 11, borderTop: `1px solid ${p.hairline}` }}>
@@ -259,8 +263,9 @@ function AnotherEnding({ p }: { p: Palette }) {
         Try another ending
       </p>
       <p style={{ fontFamily: FONT.ui, fontSize: 12.5, color: p.ink2, lineHeight: 1.5 }}>
-        Three demo borrowers ship with the app, and the engine gives each a different answer:
-        approved outright, referred to you, or declined on the evidence. You have seen one.
+        In the borrower app, go to <strong style={{ color: p.ink1 }}>Profile</strong>, tap{' '}
+        <strong style={{ color: p.ink1 }}>Reset &amp; go to setup</strong>, then pick one of the
+        other demo accounts on the setup screen.
       </p>
       <a
         href={BORROWER_APP_URL}
@@ -268,17 +273,8 @@ function AnotherEnding({ p }: { p: Palette }) {
         rel="noreferrer"
         style={{ display: 'block', textAlign: 'center', marginTop: 10, padding: '9px 0', borderRadius: 8, border: `1.5px solid ${p.accentInk}`, color: p.accentInk, fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, textDecoration: 'none' }}
       >
-        Load another borrower →
+        Open the borrower app →
       </a>
-      {/* Both instructions are the BORROWER app's, because the script starts there — the ⟳
-          badge in this header restarts the console half alone, which would drop the judge into
-          act 7 with no application of their own. */}
-      <p style={{ fontFamily: FONT.ui, fontSize: 11.5, color: p.ink3, lineHeight: 1.5, marginTop: 7 }}>
-        In the app: <strong style={{ color: p.ink2 }}>Profile → Demo profiles</strong>, load
-        another, then <strong style={{ color: p.ink2 }}>Restart judge tour</strong> on the same
-        screen. {LENDER_REGISTRY.length} lender desks sit behind this header’s switcher too, each
-        running its own published policy.
-      </p>
     </div>
   );
 }

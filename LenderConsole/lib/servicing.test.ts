@@ -98,6 +98,15 @@ describe('isSettled', () => {
     expect(isSettled(approved({ status: 'declined', offeredAmount: 0, repayments: paidEvents(18) }))).toBe(false);
   });
 
+  // The console/borrower-app disagreement this field exists to end: a Good-band borrower on a
+  // 6-month Emergency Micro finished paying in the app, while Servicing still measured them
+  // against the 18-month schedule their band implies and showed a settled loan as far behind.
+  it('settles a short-tenor loan on its own decided term, not the one its band implies', () => {
+    const shortLoan = approved({ tierLabel: 'Emergency Micro', tenorMonths: 6, repayments: paidEvents(6) });
+    expect(isSettled(shortLoan)).toBe(true);
+    expect(orderServicingSections([shortLoan]).settled.map((a) => a.id)).toEqual([shortLoan.id]);
+  });
+
   it('a missed instalment can never let the loan reach settled (one slot is permanently unpaid)', () => {
     const events: RepaymentEvent[] = [
       { at: '2026-02-01T00:00:00.000Z', instalmentSeq: 1, amount: 0, outcome: 'missed' },

@@ -19,10 +19,26 @@ export const DEFAULT_STORED_POLICY: StoredPolicy = {
   products: DEFAULT_PRODUCTS,
 };
 
-/** The engine's coverage gates keep products by these ids (applyCoverageTierFilter),
- *  so a ladder using any other id would silently fall out of thin-coverage eligibility 
- *  same rule lenderRegistry.ts documents. Lender-specific naming belongs in `label`. */
+/** The engine's coverage gates keep products by these ids (applyCoverageTierFilter), so these
+ *  four slots — and only these four — carry thin-coverage eligibility. Lender-specific naming
+ *  belongs in `label`, not here. */
 export const CANONICAL_TIER_IDS = ['emergency', 'starter', 'growth', 'scale'] as const;
+
+/** Shape of a lender-authored slot id: a short slug, so it stays readable in the stored JSON and
+ *  in adverse-action letters that quote the tier. */
+const CUSTOM_TIER_ID_RE = /^[a-z][a-z0-9-]{1,23}$/;
+
+/** May a ladder carry a tier under this id?
+ *
+ *  Since 2026-08-06 a lender can add rungs of their own beyond the canonical four. The engine's
+ *  coverage gates still name only the canonical ids, which means a custom tier is a
+ *  FULL-LADDER-ONLY tier: it is filtered out for borrowers with thin coverage and available to
+ *  everyone else. That is a real and honest consequence, not a bug — a lender inventing a fifth
+ *  rung has not told the engine what thin-coverage risk it carries, so it does not get to be an
+ *  answer for the thinnest files. */
+export function isValidTierId(id: string): boolean {
+  return (CANONICAL_TIER_IDS as readonly string[]).includes(id) || CUSTOM_TIER_ID_RE.test(id);
+}
 
 export type PolicyValidation = { ok: true; value: StoredPolicy } | { ok: false; errors: string[] };
 
@@ -144,8 +160,10 @@ function validateProducts(raw: unknown, errors: string[]): LoanProduct[] | undef
       return;
     }
     const id = t.id;
-    if (typeof id !== 'string' || !(CANONICAL_TIER_IDS as readonly string[]).includes(id)) {
-      errors.push(`${at}.id: must be one of ${CANONICAL_TIER_IDS.join(' | ')} (the engine's coverage gates key on these).`);
+    if (typeof id !== 'string' || !isValidTierId(id)) {
+      errors.push(
+        `${at}.id: must be one of ${CANONICAL_TIER_IDS.join(' | ')} (the slots the engine's coverage gates key on), or a lender-authored slug of your own — lowercase letters, digits and hyphens, 2-24 characters.`,
+      );
     } else if (seen.has(id)) {
       errors.push(`${at}.id: duplicate tier "${id}". Each slot may appear once.`);
     } else {

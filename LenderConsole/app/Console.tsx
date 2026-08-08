@@ -14,7 +14,7 @@ import {
   type Palette,
 } from './tokens';
 import { type CreditPassport, type VerifyResult, parsePassportCode, verifyPassport } from '../lib/passport';
-import { DEFAULT_POLICY, REASON_CATEGORY_LABELS, decideLoan, type LenderPolicy, type LoanDecision, type LoanProduct } from '../lib/loans';
+import { DEFAULT_POLICY, REASON_CATEGORY_LABELS, decideLoan, tenorForTier, type LenderPolicy, type LoanDecision, type LoanProduct } from '../lib/loans';
 import { DEFAULT_STORED_POLICY, type StoredPolicy } from '../lib/policyStore';
 import { priceLoan, repriceProducts, type PricingSuggestion } from '../lib/pricing';
 import {
@@ -69,6 +69,7 @@ import { clearPresentmentLog, readPresentmentLog, recordPresentment } from '../l
 import { acceptanceLabel, acceptanceStateFor, liveBook, parseOfferBook, type AcceptanceState, type OfferBook } from '../lib/offerAcceptance';
 import { deriveTrustRows, type TrustRowState } from '../lib/trustPanel';
 import {
+  backfillTenor,
   fileApplication,
   markDefault,
   mergeServerApplications,
@@ -1975,8 +1976,13 @@ export default function Console() {
       if (!Array.isArray(server) || server.length === 0) return;
       const merged = mergeServerApplications(readApplications(undefined, lenderId), server);
       if (merged.changed) {
-        writeApplications(merged.apps, undefined, lenderId);
-        if (lenderId === activeLenderId) setApps(merged.apps);
+        // Stamp any adopted row that predates ApplicationRecord.tenorMonths, so it is serviced
+        // on the term it was priced on from the moment it lands. Only when this IS the active
+        // lender: `storedPolicy` still holds the previous lender's ladder mid-switch, and the
+        // wrong ladder's terms are worse than leaving the backfill to loadForLender's own pass.
+        const stamped = lenderId === activeLenderId ? backfillTenor(merged.apps, storedPolicy.products) : { apps: merged.apps };
+        writeApplications(stamped.apps, undefined, lenderId);
+        if (lenderId === activeLenderId) setApps(stamped.apps);
       }
     } catch {
       // offline/malformed  the pipeline just stays whatever it was locally.
@@ -2045,7 +2051,19 @@ export default function Console() {
       .then((sp: StoredPolicy | null) => {
         if (!sp) return;
         setStoredPolicy(sp);
-        if (ownApplications.length === 0) {
+        // Stamp the decided term onto any loan filed before ApplicationRecord carried it, now
+        // that this lender's ladder is in hand: until it is stamped, that loan is scheduled off
+        // its borrower's credit band and can disagree with the schedule the borrower app booked.
+        // Re-read from storage rather than reusing `ownApplications`  the direct-apply pull
+        // above may already have written newly adopted rows (pullServicing's own reasoning).
+        const stamped = backfillTenor(readApplications(undefined, lenderId), sp.products);
+        if (stamped.changed) {
+          writeApplications(stamped.apps, undefined, lenderId);
+          setApps(stamped.apps);
+        }
+        // Everything below opens a file out of the pipeline as it now stands, stamping included.
+        const pipeline = stamped.changed ? stamped.apps : ownApplications;
+        if (pipeline.length === 0) {
           // Auto-seed (2026-08-06): a judge should never have to find and click "Seed demo
           // pipeline" before the desk shows anything  the console arrives pre-stocked, via
           // the exact same seedApplications/writeApplications path the manual button used
@@ -2053,7 +2071,7 @@ export default function Console() {
           // closure  this runs from inside a fetch callback for a lender switch that may not
           // have committed to state yet (same reasoning as openApplication's own doc comment).
           const lenderProfile = LENDER_REGISTRY.find((l) => l.id === lenderId) ?? LENDER_REGISTRY[0];
-          const { apps: seeded, presentments } = seedApplications(ownApplications, sp.products, sp.policy, lenderProfile.name);
+          const { apps: seeded, presentments } = seedApplications(pipeline, sp.products, sp.policy, lenderProfile.name);
           writeApplications(seeded, undefined, lenderId);
           presentments.forEach((p) => recordPresentment(p, undefined, lenderId));
           setApps(seeded);
@@ -2063,7 +2081,7 @@ export default function Console() {
             return;
           }
         }
-        const first = ownApplications[0];
+        const first = pipeline[0];
         if (!first) {
           setState({ status: 'empty' });
           setSelectedAppId(null);
@@ -2071,7 +2089,7 @@ export default function Console() {
           setPriors([]);
           return;
         }
-        openApplication(first, sp, ownApplications, lenderId);
+        openApplication(first, sp, pipeline, lenderId);
       })
       .catch(() => {});
   };
@@ -2214,7 +2232,9 @@ export default function Console() {
     if (!app.subject || !(app.offeredAmount > 0)) return;
     // Tenor of the tier this file was priced on, so the borrower books the term we approved
     // rather than re-deriving one from the amount (which can pick a different, longer tier).
-    const tier = storedPolicy.products.find((pr) => pr.label === app.tierLabel);
+    // The record's own decided term first: it was stamped at filing, so it stays right even if
+    // the tier has since been repriced or renamed out of the ladder.
+    const tenorMonths = app.tenorMonths ?? tenorForTier(storedPolicy.products, app.tierLabel);
     fetch('/api/offers', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2223,7 +2243,7 @@ export default function Console() {
         lenderId,
         maxAmount: app.offeredAmount,
         installment: app.installment,
-        ...(tier ? { tenorMonths: tier.tenorMonths } : {}),
+        ...(tenorMonths ? { tenorMonths } : {}),
         ...(app.purpose ? { purpose: app.purpose } : {}),
       }),
     }).catch(() => {});
@@ -2309,19 +2329,25 @@ export default function Console() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, activeLenderId]);
 
-  const filingInput =(codeUsed: string, passport: CreditPassport, decision: LoanDecision, amountNum: number, declared?: DeclaredPurpose | null): FileApplicationInput => ({
-    passportCode: codeUsed,
-    subject: passport.subject,
-    applicantLabel: passport.holder?.name ?? 'Applicant',
-    requestedAmount: amountNum,
-    engineDecision: decision.decision,
-    offeredAmount: decision.maxAmount,
-    installment: decision.installment,
-    ...(decision.breakdown?.tierLabel ? { tierLabel: decision.breakdown.tierLabel } : {}),
-    ...(declared ? { purpose: declared } : {}),
-    band: passport.band,
-    ...(passport.assessment ? { confidencePct: Math.round(passport.assessment.confidence * 100) } : {}),
-  });
+  const filingInput = (codeUsed: string, passport: CreditPassport, decision: LoanDecision, amountNum: number, declared?: DeclaredPurpose | null): FileApplicationInput => {
+    // The priced tier's term, filed alongside the offer terms: this loan's schedule is the one
+    // the borrower books, not one re-derived from their credit band (ApplicationRecord.tenorMonths).
+    const tenorMonths = tenorForTier(storedPolicy.products, decision.breakdown?.tierLabel);
+    return {
+      passportCode: codeUsed,
+      subject: passport.subject,
+      applicantLabel: passport.holder?.name ?? 'Applicant',
+      requestedAmount: amountNum,
+      engineDecision: decision.decision,
+      offeredAmount: decision.maxAmount,
+      installment: decision.installment,
+      ...(decision.breakdown?.tierLabel ? { tierLabel: decision.breakdown.tierLabel } : {}),
+      ...(tenorMonths ? { tenorMonths } : {}),
+      ...(declared ? { purpose: declared } : {}),
+      band: passport.band,
+      ...(passport.assessment ? { confidencePct: Math.round(passport.assessment.confidence * 100) } : {}),
+    };
+  };
 
   /** File a successful verify+assessment as an application (deduped) and select it. Subject-
    *  matching (Brief S): a passport whose subject matches an already-approved loan is a
