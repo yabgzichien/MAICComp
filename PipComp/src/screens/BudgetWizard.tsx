@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AddCategoryModal } from '../components/AddCategoryModal';
 import { BenchmarkPicker } from '../components/BenchmarkPicker';
 import { Icon } from '../components/Icon';
+import { InfoButton } from '../components/InfoButton';
 import { Amount, BtnLabel, Card, CategoryChip, Eyebrow, PrimaryButton, ProgressTrack, TopBar } from '../components/ui';
 import { CatBadge } from '../components/ui';
 import { getBenchmark } from '../lib/belanjawanku';
@@ -92,7 +93,7 @@ export function BudgetWizard({ onDone }: { onDone: () => void }) {
     setSavingsText(String(template.savings));
     setGuideNotice(
       template.belowGuideIncome
-        ? `Your income is RM ${fmt(template.shortfall)} short of what the guide says this household needs, so every essential has been scaled down to fit. This is a real gap, not a budgeting mistake.`
+        ? `Your income is RM ${fmt(template.shortfall)} short of what the guide says this household needs, so every essential has been scaled down to fit. That shortfall comes from your income, not a mistake in the budget.`
         : `Essentials are set at the guide, with RM ${fmt(template.savings)} kept back for savings first.`
     );
   };
@@ -190,6 +191,10 @@ export function BudgetWizard({ onDone }: { onDone: () => void }) {
         {step === 2 && (
           <>
             <Eyebrow style={{ marginBottom: 10 }}>Allocate amounts</Eyebrow>
+            <View style={styles.guideInfoRow}>
+              <Text style={styles.guideInfoLabel}>Belanjawanku</Text>
+              <InfoButton entry="belanjawanku" />
+            </View>
             <PrimaryButton onPress={fillFromGuide} height={44}>
               <Icon name="scale" size={16} color={colors.accentInk} />
               <BtnLabel>Start from Belanjawanku</BtnLabel>
@@ -348,6 +353,8 @@ const styles = StyleSheet.create({
   guideRowText: { flex: 1, fontFamily: uiFont(600), fontSize: 13, color: colors.ink2 },
   guideRowChange: { fontFamily: uiFont(700), fontSize: 12.5, color: colors.accent },
   guideNotice: { fontFamily: uiFont(500), fontSize: 12.5, lineHeight: 18, color: colors.ink2, marginTop: 10 },
+  guideInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  guideInfoLabel: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2 },
   secondaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 999, borderWidth: 1, borderColor: colors.accentSoft, backgroundColor: colors.surface },
   secondaryText: { fontFamily: uiFont(700), fontSize: 13, color: colors.accent },
   allocInputWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.surface2, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 10 },

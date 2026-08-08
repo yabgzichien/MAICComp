@@ -113,4 +113,8 @@ describe('judge-facing explanation', () => {
   it('states plainly that the safe income figure is not used for credit', () => {
     expect(GLOSSARY.safe_income.body).toContain('budgeting figure only');
   });
+
+  it('explains pay-yourself-first as a habit, not a credit signal', () => {
+    expect(GLOSSARY.pay_yourself_first.body).toContain('habit tracker');
+  });
 });

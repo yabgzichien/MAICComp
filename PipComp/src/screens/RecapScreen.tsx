@@ -297,7 +297,7 @@ export function RecapScreen({ onBack, onOpenCalendar }: { onBack: () => void; on
       const TREND_SUFFIX: Record<typeof trend, string> = {
         new: '',
         unchanged: ' About the same as last month.',
-        improving: ' Closer than last month, so it is moving the right way.',
+        improving: ' Closer than last month.',
         worsening: ' Wider than last month.',
       };
       out.push({

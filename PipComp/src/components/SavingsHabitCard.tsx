@@ -39,7 +39,7 @@ export function SavingsHabitCard({
         <View style={{ flex: 1 }}>
           <View style={styles.eyebrowRow}>
             <Eyebrow>Pay yourself first</Eyebrow>
-            <InfoButton entry="belanjawanku" />
+            <InfoButton entry="pay_yourself_first" />
           </View>
           <Text style={styles.target}>RM {fmt(habit.target)} a month</Text>
         </View>

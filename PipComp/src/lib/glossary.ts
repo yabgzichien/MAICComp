@@ -25,12 +25,17 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   belanjawanku: {
     term: 'Belanjawanku',
     short: "Malaysia's official reference budget: what a decent standard of living costs per month.",
-    body: 'Published annually by the Social Wellbeing Research Centre at Universiti Malaya together with the EPF, with a separate figure for each household type in twelve cities. Pip uses it so a comparison of your spending points at a published national reference rather than a number this app invented. Its essential figures are a minimum, not a target, so spending above them is only worth acting on where the spending is genuinely discretionary.',
+    body: 'Published annually by the Social Wellbeing Research Centre at Universiti Malaya together with the EPF, with a separate figure for each household type in twelve cities. Pip compares your spending against this published figure instead of a number the app made up. The essential categories are a minimum, not a target, so spending above them only matters when the category is discretionary.',
+  },
+  pay_yourself_first: {
+    term: 'Pay yourself first',
+    short: 'Set aside savings the moment income arrives, before spending on anything else.',
+    body: "The habit this app tracks: keep a fixed amount back each month, ideally as soon as you get paid. Belanjawanku's own recommendation is a starting point, but the target is yours to set and raise. This is a habit tracker, not a credit signal; it does not feed your score.",
   },
   safe_income: {
     term: 'Safe monthly income',
     short: 'A conservative floor to budget against when your earnings swing month to month.',
-    body: 'Taken from the lower end of your recent months rather than the average, because a budget built on an average income is unaffordable in every below-average month. Planning against the floor turns a good month into surplus instead of turning a bad month into a shortfall. This is a budgeting figure only: your credit score and affordability still use your real income.',
+    body: 'Taken from the lower end of your recent months, not the average, because a budget built on the average fails in every month you earn less than that. Planning against the floor turns a good month into savings instead of turning a bad month into a shortfall. This is a budgeting figure only: your credit score and affordability still use your real income.',
   },
   net_cash_flow: {
     term: 'Net cash flow',
