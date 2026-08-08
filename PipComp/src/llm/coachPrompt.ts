@@ -29,7 +29,9 @@ function actionLine(a: CoachAction): string {
     `loan ${s.decisionFrom} ${rm(s.maxAmountFrom)} → ${s.decisionTo} ${rm(s.maxAmountTo)}` +
     (a.survivesDipPct !== undefined
       ? ` (that offer survives a ${a.survivesDipPct}% income dip).`
-      : '.')
+      : '.') +
+    // Grounds a "free up RM x" step in a published benchmark instead of a bare instruction.
+    (a.sourceHint ? ` ${a.sourceHint}` : '')
   );
 }
 
@@ -75,5 +77,6 @@ export function coachPlanFallback(plan: CoachPlan): string {
   }
   const s = top.sim;
   const unlock = s.maxAmountTo > s.maxAmountFrom ? ` and unlock up to ${rm(s.maxAmountTo)}` : '';
-  return `${top.label} to lift your score ${s.scoreFrom}→${s.scoreTo}${unlock}.`;
+  const where = top.sourceHint ? ` ${top.sourceHint}` : '';
+  return `${top.label} to lift your score ${s.scoreFrom}→${s.scoreTo}${unlock}.${where}`;
 }

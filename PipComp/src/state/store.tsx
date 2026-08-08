@@ -78,6 +78,9 @@ import { MockEkycProvider } from '../ekyc/mock';
 import type { EkycResult } from '../ekyc/types';
 import { BORROWER_TOUR_STEPS, clampTourStep, stepsForBranch, type TourBranch } from '../lib/tourSteps';
 import { emitTourSignal } from '../lib/tourSignals';
+import { DEFAULT_GUIDE_CITY, DEFAULT_HOUSEHOLD_PROFILE } from '../lib/belanjawanku';
+import { DEFAULT_SAVINGS_TARGET } from '../lib/savingsHabit';
+import { GUIDE_CITIES, HOUSEHOLD_PROFILES, type GuideCityId, type HouseholdProfileId } from '../data/belanjawanku';
 
 const ONBOARDING_KEY = 'onboarding_complete';
 const TOUR_ACTIVE_KEY = 'tour_active';
@@ -86,6 +89,12 @@ const TOUR_BRANCH_KEY = 'tour_branch';
 // Which demo persona (if any) is currently loaded — lets the KYC screen prefill identity +
 // work & income for a zero-typing demo run (see loadDemoData below). Null for a real user.
 const ACTIVE_DEMO_PROFILE_KEY = 'active_demo_profile';
+// Which Belanjawanku household category and city the borrower's budget is benchmarked against,
+// and the monthly amount they committed to keeping back. Preferences, not ledger data, so they
+// live in app_meta rather than earning a table of their own.
+const HOUSEHOLD_PROFILE_KEY = 'belanjawanku_household';
+const GUIDE_CITY_KEY = 'belanjawanku_city';
+const SAVINGS_TARGET_KEY = 'savings_target';
 import { applyEffect, currentValue, type LinkEffect } from '../lib/networth';
 import { holdingValue, isHolding, mergeAccountValues } from '../lib/prices';
 import { merchantKey } from '../lib/normalize';
@@ -202,6 +211,13 @@ interface AppData {
   /** Which demo persona is currently loaded (null for a real user's own data). Drives the KYC
    *  screen's identity + work & income prefill so a demo run needs zero typing. */
   activeDemoProfile: DemoProfileId | null;
+  /** Which Belanjawanku household category and city the budget is benchmarked against. */
+  householdProfile: HouseholdProfileId;
+  guideCity: GuideCityId;
+  setBenchmarkProfile: (profile: HouseholdProfileId, city: GuideCityId) => Promise<void>;
+  /** Monthly pay-yourself-first commitment. Motivation only, never a credit signal. */
+  savingsTarget: number;
+  setSavingsTarget: (amount: number) => Promise<void>;
   addAccount: (name: string, kind: AccountKind, cls: string, openingValue: number, asOf: string, icon?: string | null) => Promise<void>;
   /** Returns a default account id for the add flows, creating a "Cash" account if none exist. */
   ensureDefaultAccount: () => Promise<string>;
@@ -316,6 +332,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [occupation, setOccupationState] = useState<Occupation | null>(null);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [activeDemoProfile, setActiveDemoProfileState] = useState<DemoProfileId | null>(null);
+  const [householdProfile, setHouseholdProfileState] = useState<HouseholdProfileId>(DEFAULT_HOUSEHOLD_PROFILE);
+  const [guideCity, setGuideCityState] = useState<GuideCityId>(DEFAULT_GUIDE_CITY);
+  const [savingsTarget, setSavingsTargetState] = useState<number>(DEFAULT_SAVINGS_TARGET);
   const [tourActive, setTourActive] = useState(false);
   const [tourPaused, setTourPaused] = useState(false);
   const [tourStepIndex, setTourStepIndexState] = useState(0);
@@ -324,7 +343,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const tourBranchRef = useRef<TourBranch | null>(null);
 
   const refreshAll = useCallback(async () => {
-    const [cats, txns, mem, income, alloc, snaps, accts, entries, cache, products, applications, allRepayments, repSummary, kycRow, onboardingFlag, tourActiveFlag, tourStepRaw, activeDemoProfileRaw, tourBranchRaw] =
+    const [cats, txns, mem, income, alloc, snaps, accts, entries, cache, products, applications, allRepayments, repSummary, kycRow, onboardingFlag, tourActiveFlag, tourStepRaw, activeDemoProfileRaw, tourBranchRaw, householdRaw, cityRaw, savingsTargetRaw] =
       await Promise.all([
         listCategories(),
         listTransactions(),
@@ -345,7 +364,23 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         getMeta(TOUR_STEP_KEY),
         getMeta(ACTIVE_DEMO_PROFILE_KEY),
         getMeta(TOUR_BRANCH_KEY),
+        getMeta(HOUSEHOLD_PROFILE_KEY),
+        getMeta(GUIDE_CITY_KEY),
+        getMeta(SAVINGS_TARGET_KEY),
       ]);
+    // A stale or hand-edited preference falls back to the default rather than breaking Budget.
+    setHouseholdProfileState(
+      HOUSEHOLD_PROFILES.some((p) => p.id === householdRaw)
+        ? (householdRaw as HouseholdProfileId)
+        : DEFAULT_HOUSEHOLD_PROFILE
+    );
+    setGuideCityState(
+      GUIDE_CITIES.some((c) => c.id === cityRaw) ? (cityRaw as GuideCityId) : DEFAULT_GUIDE_CITY
+    );
+    const parsedTarget = savingsTargetRaw === null ? NaN : Number(savingsTargetRaw);
+    setSavingsTargetState(
+      Number.isFinite(parsedTarget) && parsedTarget >= 0 ? parsedTarget : DEFAULT_SAVINGS_TARGET
+    );
     setOccupationState(await getOccupation());
     setKycState(kycRow);
     setOnboardingComplete(onboardingFlag === 'true');
@@ -518,6 +553,19 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setSnapshots((prev) => ({ ...prev, [cur]: { income, allocations: alloc } }));
   }, []);
 
+  const setBenchmarkProfile = useCallback(async (profile: HouseholdProfileId, city: GuideCityId) => {
+    await setMeta(HOUSEHOLD_PROFILE_KEY, profile);
+    await setMeta(GUIDE_CITY_KEY, city);
+    setHouseholdProfileState(profile);
+    setGuideCityState(city);
+  }, []);
+
+  const setSavingsTarget = useCallback(async (amount: number) => {
+    const clean = Math.max(0, Math.round(amount));
+    await setMeta(SAVINGS_TARGET_KEY, String(clean));
+    setSavingsTargetState(clean);
+  }, []);
+
   const resetBudget = useCallback(async () => {
     await clearBudget();
     setIncome(0);
@@ -567,6 +615,13 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     await loadDemoProfile(id);
     await setMeta(ACTIVE_DEMO_PROFILE_KEY, id);
     setActiveDemoProfileState(id);
+    // Budgeting preferences are per-person too, so they follow the wipe. Leaving the previous
+    // persona's household, city and savings target behind is the same leak `rotateKeypair` above
+    // exists to prevent: a "clean" persona would silently be measured against someone else's
+    // household and judged against a target they never set.
+    await setMeta(HOUSEHOLD_PROFILE_KEY, DEFAULT_HOUSEHOLD_PROFILE);
+    await setMeta(GUIDE_CITY_KEY, DEFAULT_GUIDE_CITY);
+    await setMeta(SAVINGS_TARGET_KEY, String(DEFAULT_SAVINGS_TARGET));
     await refreshAll();
   }, [refreshAll]);
 
@@ -1190,6 +1245,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     resetToOnboarding,
     loadDemoData,
     activeDemoProfile,
+    householdProfile,
+    guideCity,
+    setBenchmarkProfile,
+    savingsTarget,
+    setSavingsTarget,
     addAccount,
     ensureDefaultAccount,
     updateAccount,

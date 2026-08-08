@@ -7,6 +7,7 @@ import { computeCreditScore, type CreditBand, type CreditProfile } from './credi
 import type { Coverage } from './coverage';
 import { computeDataConfidence, type ConfidenceTxn } from './dataConfidence';
 import { decideLoan, type AdverseRecord, type Decision, type LenderPolicy, type LoanDecision, type LoanProduct } from './loans';
+import type { BenchmarkGap } from './belanjawankuBudget';
 
 const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
 
@@ -19,6 +20,12 @@ export interface CoachPlanInput {
   adverseRecord?: AdverseRecord;
   /** The lender's published thresholds (Brief N flywheel). Omitted → engine defaults. */
   policy?: LenderPolicy;
+  /**
+   * Where this borrower outspends Malaysia's national reference budget, biggest gap first.
+   * Used ONLY to tell them where the money plausibly is; it never changes a simulated figure.
+   * Omitted → the surplus lever behaves exactly as it did before benchmarks existed.
+   */
+  benchmarkGaps?: BenchmarkGap[];
 }
 
 export interface CoachSim {
@@ -49,6 +56,8 @@ export interface CoachAction {
   changed: boolean;
   /** When it doesn't move the offer, the honest reason why (e.g. blocked by the coverage gate). */
   note?: string;
+  /** Where the money plausibly is, cited against the national reference budget. Advice, not maths. */
+  sourceHint?: string;
   /** For an action that yields an approved offer: the largest income dip (%) that offer survives. */
   survivesDipPct?: number;
 }
@@ -67,6 +76,9 @@ export interface CoachPlan {
   actions: CoachAction[];
   /** Preset what-if chips the borrower can tap; stable order, may include flat results. */
   whatIfs: CoachAction[];
+  /** Where this borrower most exceeds the national reference budget, phrased standalone.
+   *  Undefined when no discretionary line is over the guide. */
+  benchmarkNote?: string;
 }
 
 export interface Evaluation {
@@ -406,6 +418,53 @@ function surplusPresets(profile: CreditProfile): number[] {
   return uniq.length > 0 ? uniq : [50];
 }
 
+/**
+ * Names where a surplus step could plausibly come from, by pointing at the FLEXIBLE category this
+ * borrower most exceeds Malaysia's national reference budget on.
+ *
+ * This is advice, not arithmetic: the simulated numbers are unchanged, and the wording never
+ * promises the gap alone covers the step unless it actually does. "Free up RM300" is easy to
+ * ignore; "your recreation runs RM340 a month above the national guide" is something a person can
+ * act on, and it is checkable against a published source rather than asserted by this app.
+ *
+ * Essential lines are skipped deliberately, and this is not a detail. The guide's essential
+ * figures are minimums, so a borrower managing a chronic condition sits above the healthcare line
+ * every month by necessity. Ranking gaps by size alone would make "spend less on healthcare" this
+ * app's headline advice to exactly the person who can least afford to take it. When no flexible
+ * line is over the guide, the honest answer is to say nothing at all rather than reach for the
+ * next-biggest number.
+ */
+export function surplusSourceHint(
+  gaps: BenchmarkGap[] | undefined,
+  reduction: number
+): string | undefined {
+  const top = topFlexibleGap(gaps);
+  if (!top) return undefined;
+  const over = overLine(top);
+  return top.overBy >= reduction ? `Most of that could come from here: ${over}.` : `${over}, which covers part of it.`;
+}
+
+function topFlexibleGap(gaps: BenchmarkGap[] | undefined): BenchmarkGap | undefined {
+  const top = gaps?.find((g) => g.kind === 'flexible');
+  return top && top.overBy > 0 ? top : undefined;
+}
+
+function overLine(gap: BenchmarkGap): string {
+  return `${gap.label} runs ${rm(gap.overBy)}/mo above the national Belanjawanku guide for your household`;
+}
+
+/**
+ * The bare benchmark fact, with no reference to a spending step.
+ *
+ * Needed because the same finding has to be sayable in a context where there is no step to attach
+ * it to: a borrower whose offer is gated on coverage cannot improve it by trimming, but knowing
+ * where their money goes is still the thing they can act on today.
+ */
+export function benchmarkGapNote(gaps: BenchmarkGap[] | undefined): string | undefined {
+  const top = topFlexibleGap(gaps);
+  return top ? `${overLine(top)}.` : undefined;
+}
+
 /** How many on-time repayments the track-record what-if models. */
 const TRACK_RECORD_COUNT = 3;
 
@@ -506,6 +565,7 @@ export function buildCoachPlan(input: CoachPlanInput): CoachPlan {
       impact: impactOf(sim),
       changed,
       note,
+      sourceHint: surplusSourceHint(input.benchmarkGaps, reduction),
       survivesDipPct: stressOf(input, sim, {
         coverageDays: input.coverage.daysCovered,
         coverageRatio: input.coverage.ratio,
@@ -542,5 +602,6 @@ export function buildCoachPlan(input: CoachPlanInput): CoachPlan {
     diagnosis: diagnoseConstraint(input),
     actions,
     whatIfs: [...coverageActions, ...surpluses, ...(track ? [track] : []), ...stresses],
+    benchmarkNote: benchmarkGapNote(input.benchmarkGaps),
   };
 }

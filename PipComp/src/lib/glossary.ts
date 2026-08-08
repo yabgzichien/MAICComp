@@ -22,6 +22,16 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     short: 'How much verified data backs your score.',
     body: 'Based on how many days of transaction history are covered and how many sources are verified. Low confidence can cap your band even if your raw score is high, since there is not enough evidence yet to trust it fully.',
   },
+  belanjawanku: {
+    term: 'Belanjawanku',
+    short: "Malaysia's official reference budget: what a decent standard of living costs per month.",
+    body: 'Published annually by the Social Wellbeing Research Centre at Universiti Malaya together with the EPF, with a separate figure for each household type in twelve cities. Pip uses it so a comparison of your spending points at a published national reference rather than a number this app invented. Its essential figures are a minimum, not a target, so spending above them is only worth acting on where the spending is genuinely discretionary.',
+  },
+  safe_income: {
+    term: 'Safe monthly income',
+    short: 'A conservative floor to budget against when your earnings swing month to month.',
+    body: 'Taken from the lower end of your recent months rather than the average, because a budget built on an average income is unaffordable in every below-average month. Planning against the floor turns a good month into surplus instead of turning a bad month into a shortfall. This is a budgeting figure only: your credit score and affordability still use your real income.',
+  },
   net_cash_flow: {
     term: 'Net cash flow',
     short: 'What is left after expenses are subtracted from income, over a period.',
@@ -66,6 +76,19 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     term: 'Credit Passport',
     short: 'A signed, portable credential summarizing your verified credit profile.',
     body: 'Generated from your score, factors, and verified data sources, then cryptographically signed so a lender can trust it without re-collecting your raw financial data themselves.',
+  },
+  income_floor: {
+    term: 'Income floor',
+    short: 'The monthly income that held up, rather than the one an average implies.',
+    body: 'Your monthly income totals are ranked and a low one is taken as the floor, so it is a level you actually reached in most months rather than a midpoint between good and bad ones. An average can be dragged around by a single unusual month; the floor is what a lender can rely on being there.',
+  },
+  committed_spend: {
+    term: 'Committed, essential & flexible',
+    short: 'Three tiers of spending, ordered by how much choice you have over each one.',
+    body:
+      'Committed: recurring outflows at a steady amount, like rent or an instalment. Fixed; cannot be cut this month.\n\n' +
+      'Essential: necessary spending that still moves, like food or fuel. Can compress, but never disappears.\n\n' +
+      'Flexible: everything else. The part you could genuinely redirect if a month came in weak.',
   },
   micro_sukuk: {
     term: 'AI-Structured Micro-Sukuk',

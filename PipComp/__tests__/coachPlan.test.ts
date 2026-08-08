@@ -6,6 +6,7 @@ import {
   simulateSurplus,
   simulateTrackRecord,
   stressIncome,
+  surplusSourceHint,
   survivesDipPct,
   type CoachPlanInput,
 } from '../src/lib/coachPlan';
@@ -360,5 +361,97 @@ describe('lender policy pass-through', () => {
       products: DEFAULT_PRODUCTS,
     };
     expect(buildCoachPlan(input)).toEqual(buildCoachPlan({ ...input, policy: undefined }));
+  });
+});
+
+describe('benchmark-grounded surplus hint', () => {
+  const gaps = [
+    { lineId: 'lifestyle', label: 'Recreation & Social', kind: 'flexible' as const, categoryIds: ['recreation'], guideAmount: 310, actualAmount: 710, overBy: 400 },
+    { lineId: 'food', label: 'Food & Dining', kind: 'essential' as const, categoryIds: ['food', 'dining'], guideAmount: 660, actualAmount: 760, overBy: 100 },
+  ];
+  /** A borrower over the guide only on essentials: healthcare need, a long commute. */
+  const essentialOnlyGaps = [
+    { lineId: 'healthcare', label: 'Healthcare', kind: 'essential' as const, categoryIds: ['healthcare'], guideAmount: 30, actualAmount: 400, overBy: 370 },
+    { lineId: 'transport', label: 'Transport & Fuel', kind: 'essential' as const, categoryIds: ['transport'], guideAmount: 840, actualAmount: 990, overBy: 150 },
+  ];
+
+  function inputWith(over: Partial<CoachPlanInput> = {}): CoachPlanInput {
+    return {
+      profile: baseProfile(),
+      coverage: coverageOf(45),
+      confidenceTxns: txns(),
+      expenseRatio: 0.6,
+      products: DEFAULT_PRODUCTS,
+      ...over,
+    };
+  }
+
+  it('names the biggest over-guide category on every surplus lever', () => {
+    const plan = buildCoachPlan(inputWith({ benchmarkGaps: gaps }));
+    const surpluses = plan.whatIfs.filter((a) => a.lever === 'surplus');
+    expect(surpluses.length).toBeGreaterThan(0);
+    for (const s of surpluses) {
+      expect(s.sourceHint).toContain('Recreation & Social');
+      expect(s.sourceHint).toContain('Belanjawanku');
+    }
+  });
+
+  it('claims the gap covers the step only when it actually does', () => {
+    expect(surplusSourceHint(gaps, 300)).toContain('Most of that could come from here');
+    expect(surplusSourceHint(gaps, 900)).toContain('covers part of it');
+    expect(surplusSourceHint(gaps, 900)).not.toContain('Most of that');
+  });
+
+  it('quotes the guide figure rather than inventing one', () => {
+    expect(surplusSourceHint(gaps, 100)).toContain('RM400/mo above');
+  });
+
+  it('never tells someone to spend less on an essential, however big the gap', () => {
+    // The biggest number here is healthcare. Ranking by size alone would make "cut your
+    // healthcare" the app's headline advice to someone managing a real condition.
+    expect(surplusSourceHint(essentialOnlyGaps, 300)).toBeUndefined();
+    const plan = buildCoachPlan(inputWith({ benchmarkGaps: essentialOnlyGaps }));
+    expect(plan.whatIfs.every((a) => a.sourceHint === undefined)).toBe(true);
+  });
+
+  it('skips past a bigger essential gap to reach the flexible one it can act on', () => {
+    const mixed = [essentialOnlyGaps[0], gaps[0]]; // healthcare 370 over, recreation 400 over
+    expect(surplusSourceHint(mixed, 300)).toContain('Recreation & Social');
+    expect(surplusSourceHint(mixed, 300)).not.toContain('Healthcare');
+  });
+
+  it('says nothing at all when the borrower is within the guide everywhere', () => {
+    expect(surplusSourceHint([], 300)).toBeUndefined();
+    expect(surplusSourceHint(undefined, 300)).toBeUndefined();
+    const plan = buildCoachPlan(inputWith({ benchmarkGaps: [] }));
+    expect(plan.whatIfs.every((a) => a.sourceHint === undefined)).toBe(true);
+  });
+
+  it('carries a standalone benchmark note for contexts with no spending step to attach to', () => {
+    const plan = buildCoachPlan(inputWith({ benchmarkGaps: gaps }));
+    expect(plan.benchmarkNote).toBe(
+      'Recreation & Social runs RM400/mo above the national Belanjawanku guide for your household.'
+    );
+    // The bare fact must not trail a clause about covering a step that was never mentioned.
+    expect(plan.benchmarkNote).not.toContain('covers part of it');
+    expect(plan.benchmarkNote).not.toContain('Most of that');
+  });
+
+  it('has no standalone note when only essentials are over the guide', () => {
+    expect(buildCoachPlan(inputWith({ benchmarkGaps: essentialOnlyGaps })).benchmarkNote).toBeUndefined();
+    expect(buildCoachPlan(inputWith()).benchmarkNote).toBeUndefined();
+  });
+
+  it('never lets a hint change a simulated number', () => {
+    const withGaps = buildCoachPlan(inputWith({ benchmarkGaps: gaps }));
+    const without = buildCoachPlan(inputWith());
+    expect(withGaps.baseline).toEqual(without.baseline);
+    expect(withGaps.actions.map((a) => a.sim)).toEqual(without.actions.map((a) => a.sim));
+    expect(withGaps.whatIfs.map((a) => a.sim)).toEqual(without.whatIfs.map((a) => a.sim));
+  });
+
+  it('omitted gaps keep the plan byte-identical to before benchmarks existed', () => {
+    const input = inputWith();
+    expect(buildCoachPlan(input)).toEqual(buildCoachPlan({ ...input, benchmarkGaps: undefined }));
   });
 });

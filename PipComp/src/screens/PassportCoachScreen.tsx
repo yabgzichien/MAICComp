@@ -104,6 +104,12 @@ function SimCard({
       <DeltaRow label="Policy outcome" from={decisionLabel(s.decisionFrom)} to={decisionLabel(s.decisionTo)} highlight />
       <DeltaRow label="Amount" from={rm(s.maxAmountFrom)} to={rm(s.maxAmountTo)} highlight />
       {!action.changed && action.note && <Text style={styles.flatNote}>{action.note}</Text>}
+      {action.sourceHint && (
+        <View style={styles.hintRow}>
+          <Icon name="scale" size={13} color={colors.ink2} stroke={2} />
+          <Text style={styles.hintText}>{action.sourceHint}</Text>
+        </View>
+      )}
       {action.survivesDipPct !== undefined && (
         <View style={styles.stressRow}>
           <Icon name="alert" size={13} color={action.survivesDipPct >= 20 ? colors.accent : colors.amber} stroke={2} />
@@ -290,17 +296,19 @@ export function PassportCoachScreen({
             {/* The bars the plan below is coaching toward, with the borrower's own standing
                 marked against each one. Open by default: "what am I short of" is the question
                 this whole screen exists to answer. */}
-            <LenderRequirements
-              lender={selectedLender}
-              you={{
-                score: b.score,
-                confidence: b.confidence,
-                daysCovered: coachInput.coverage.daysCovered,
-                coverageRatio: coachInput.coverage.ratio,
-              }}
-              initiallyOpen
-              style={{ marginTop: 10 }}
-            />
+            <TourAnchor id="lender-criteria" activeId={activeTourAnchor} remeasureKey={selectedLender.id}>
+              <LenderRequirements
+                lender={selectedLender}
+                you={{
+                  score: b.score,
+                  confidence: b.confidence,
+                  daysCovered: coachInput.coverage.daysCovered,
+                  coverageRatio: coachInput.coverage.ratio,
+                }}
+                initiallyOpen
+                style={{ marginTop: 10 }}
+              />
+            </TourAnchor>
           </>
         )}
 
@@ -370,7 +378,21 @@ export function PassportCoachScreen({
                   ))}
                 </View>
               </TourAnchor>
-              {surplusAllFlat && <Text style={styles.blockedNote}>{surplusWhatIfs[0].note}</Text>}
+              {surplusAllFlat && (
+                <>
+                  <Text style={styles.blockedNote}>{surplusWhatIfs[0].note}</Text>
+                  {/* The benchmark comparison stays useful even when trimming cannot move today's
+                      offer: it is about where the money is going, not what a lender would lend.
+                      Suppressing it here would hide the one piece of advice this borrower can
+                      still act on. */}
+                  {plan.benchmarkNote && (
+                    <View style={styles.hintRow}>
+                      <Icon name="scale" size={13} color={colors.ink2} stroke={2} />
+                      <Text style={styles.hintText}>Worth knowing either way. {plan.benchmarkNote}</Text>
+                    </View>
+                  )}
+                </>
+              )}
               {activeWhatIf && <SimCard action={activeWhatIf} tone="whatif" />}
             </TourAnchor>
           </>
@@ -433,6 +455,8 @@ const styles = StyleSheet.create({
   deltaFrom: { fontFamily: numFont(600), fontSize: 12.5, color: colors.ink2 },
   deltaTo: { fontFamily: numFont(700), fontSize: 13, color: colors.ink },
   flatNote: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, marginTop: 8, fontStyle: 'italic' },
+  hintRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 8 },
+  hintText: { flex: 1, fontFamily: uiFont(500), fontSize: 11.5, lineHeight: 16, color: colors.ink2 },
   stressRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
   stressText: { fontFamily: uiFont(600), fontSize: 11.5, flex: 1, lineHeight: 15 },
   startBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: colors.accentInk, borderRadius: 12, paddingVertical: 11, marginTop: 12 },

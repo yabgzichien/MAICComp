@@ -17,6 +17,7 @@ import { greeting, longDate, monthName } from '../lib/dates';
 import { fmt } from '../lib/format';
 import { netWorth } from '../lib/networth';
 import { computeStreak } from '../lib/streak';
+import { computeIncomeBaseline } from '../lib/incomeBaseline';
 import { BORROWER_TOUR_STEPS, clampTourStep } from '../lib/tourSteps';
 import type { Category } from '../lib/types';
 import { useAppData } from '../state/store';
@@ -103,6 +104,7 @@ export function DashboardScreen({
 
   const empty = transactions.length === 0;
   const streak = useMemo(() => computeStreak(transactions), [transactions]);
+  const incomeBaseline = useMemo(() => computeIncomeBaseline(transactions), [transactions]);
 
   // Last-7-day activity tracker for the streak card.
   const dots = useMemo(() => {
@@ -164,6 +166,31 @@ export function DashboardScreen({
               liabilities={nw.liabilities}
               onOpenNetWorth={onOpenNetWorth}
             />
+
+            {/* Safe monthly income — only for borrowers whose earnings actually swing, since a
+                steady salary needs no separate planning figure. */}
+            {incomeBaseline.irregular && (
+              <Pressable
+                onPress={onOpenBudget}
+                style={({ pressed }) => [styles.safeIncome, { opacity: pressed ? 0.9 : 1 }]}
+                accessibilityRole="button"
+              >
+                <Icon name="shield" size={17} color={colors.accent} />
+                <View style={{ flex: 1 }}>
+                  <View style={styles.safeIncomeTitleRow}>
+                    <Text style={styles.safeIncomeTitle}>
+                      Safe monthly income RM {fmt(incomeBaseline.baseline)}
+                    </Text>
+                    <InfoButton entry="safe_income" />
+                  </View>
+                  <Text style={styles.safeIncomeSub}>
+                    Your months range RM {fmt(incomeBaseline.low)} to RM {fmt(incomeBaseline.high)}. Plan
+                    against the floor, not the average.
+                  </Text>
+                </View>
+                <Icon name="chevronRight" size={16} color={colors.ink3} />
+              </Pressable>
+            )}
 
             {/* 3  Compact credit card */}
             <TourAnchor id="credit-hero-card" activeId={activeTourAnchor}>
@@ -637,8 +664,12 @@ const styles = StyleSheet.create({
   eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   seeAll: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.accent },
 
+  safeIncome: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginTop: 10, padding: 13, backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.line2 },
+  safeIncomeTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  safeIncomeTitle: { fontFamily: uiFont(700), fontSize: 14, color: colors.ink },
+  safeIncomeSub: { fontFamily: uiFont(500), fontSize: 11.5, lineHeight: 16, color: colors.ink2, marginTop: 2 },
   /* streak */
-  streakCard: { marginHorizontal: 16, marginTop: 2, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  streakCard:{ marginHorizontal: 16, marginTop: 2, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
   streakLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   flameTile: { width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(217,138,0,0.10)', alignItems: 'center', justifyContent: 'center' },
   streakNum: { fontFamily: numFont(700), fontSize: 24, color: colors.ink, lineHeight: 26 },

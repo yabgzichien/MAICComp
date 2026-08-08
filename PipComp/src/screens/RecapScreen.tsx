@@ -4,11 +4,17 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { Icon } from '../components/Icon';
+import { MonthVsNormalCard } from '../components/CashflowStructure';
 import { Card, CatBadge } from '../components/ui';
-import { categoryStatus, monthKey, type CategoryBudgetStatus } from '../lib/budget';
+import { categoryStatus, monthKey, txnMonthKey, type CategoryBudgetStatus } from '../lib/budget';
+import { computeIncomeFloor } from '../lib/incomeFloor';
+import { detectObligations } from '../lib/obligations';
+import { computeExpenseStructure } from '../lib/spendingProfile';
 import { monthLabel } from '../lib/dates';
 import { fmt } from '../lib/format';
 import { availableMonths, computeAdherence, monthlyIncomeStatement, spentByCategory } from '../lib/recap';
+import { getBenchmark } from '../lib/belanjawanku';
+import { benchmarkGaps, gapTrend } from '../lib/belanjawankuBudget';
 import { netWorthSeries } from '../lib/networth';
 import type { Category } from '../lib/types';
 import { useAppData } from '../state/store';
@@ -208,7 +214,7 @@ function InsightRow({ type, text, isLast }: { type: InsightType; text: string; i
 
 export function RecapScreen({ onBack, onOpenCalendar }: { onBack: () => void; onOpenCalendar?: (month: string) => void }) {
   const insets = useSafeAreaInsets();
-  const { transactions, catById, snapshots, accounts, balanceEntries } = useAppData();
+  const { transactions, catById, snapshots, accounts, balanceEntries, householdProfile, guideCity } = useAppData();
 
   const snapshotMonths = useMemo(() => Object.keys(snapshots), [snapshots]);
   const months = useMemo(
@@ -226,12 +232,32 @@ export function RecapScreen({ onBack, onOpenCalendar }: { onBack: () => void; on
   const snapshot = snapshots[month];
   const allocations = snapshot?.allocations ?? {};
   const adherence = useMemo(() => computeAdherence(allocations, spentByCat), [allocations, spentByCat]);
+  const benchmark = useMemo(() => getBenchmark(householdProfile, guideCity), [householdProfile, guideCity]);
+  const monthGaps = useMemo(() => benchmarkGaps(benchmark, spentByCat), [benchmark, spentByCat]);
+  /** The same comparison a month earlier, so a standing gap can be reported as tracking. */
+  const prevMonthGaps = useMemo(
+    () => benchmarkGaps(benchmark, spentByCategory(transactions, prevMonthKey(month))),
+    [benchmark, transactions, month]
+  );
   const hasBudget = Object.keys(allocations).length > 0;
   const budgetedIds = useMemo(() => Object.keys(allocations), [allocations]);
   const unbudgetedSpent = useMemo(
     () => Object.entries(spentByCat).filter(([id]) => !budgetedIds.includes(id)).reduce((s, [, v]) => s + v, 0),
     [spentByCat, budgetedIds]
   );
+
+  // "Against your normal": the floor comes from ALL history (a single month cannot establish
+  // what is normal), while the spend split is scoped to the selected month. Obligations are
+  // likewise detected across the full ledger — one month can never prove something recurs —
+  // and then applied to the month, which is why computeExpenseStructure takes them as an arg.
+  const incomeFloor = useMemo(() => computeIncomeFloor(transactions), [transactions]);
+  const monthStructure = useMemo(() => {
+    const obligations = detectObligations(transactions).obligations;
+    return computeExpenseStructure(
+      transactions.filter((t) => txnMonthKey(t) === month),
+      obligations
+    );
+  }, [transactions, month]);
 
   // Month-end net worth for the selected month and the one before it.
   const networth = useMemo(() => {
@@ -258,8 +284,29 @@ export function RecapScreen({ onBack, onOpenCalendar }: { onBack: () => void; on
         });
       }
     }
+    // One line against the national reference budget, so the recap measures the month against
+    // more than a target the borrower set for themselves. Flexible lines only: the guide's
+    // essential figures are minimums, so exceeding those is not a finding worth a warning.
+    const worst = monthGaps.find((g) => g.kind === 'flexible');
+    if (worst) {
+      // A gap that has been there for months is tracking, not news. Repeating the identical
+      // warning every month is how a real signal turns into something the reader skips, so the
+      // wording follows the trend and only the first month reads as a fresh finding.
+      const trend = gapTrend(worst, prevMonthGaps.find((g) => g.lineId === worst.lineId));
+      const headline = `${worst.label} ran RM ${fmt(worst.overBy)} above the national Belanjawanku guide for your household: RM ${fmt(worst.actualAmount)} against RM ${fmt(worst.guideAmount)}.`;
+      const TREND_SUFFIX: Record<typeof trend, string> = {
+        new: '',
+        unchanged: ' About the same as last month.',
+        improving: ' Closer than last month, so it is moving the right way.',
+        worsening: ' Wider than last month.',
+      };
+      out.push({
+        type: trend === 'improving' ? 'caution' : 'warn',
+        text: headline + TREND_SUFFIX[trend],
+      });
+    }
     return out;
-  }, [adherence, catById]);
+  }, [adherence, catById, monthGaps, prevMonthGaps]);
 
   const stripRef = useRef<ScrollView>(null);
 
@@ -322,6 +369,10 @@ export function RecapScreen({ onBack, onOpenCalendar }: { onBack: () => void; on
           net={statement.net}
           networth={networth}
         />
+
+        {/* How this month sat against the borrower's own baseline. Independent of the budget,
+            so it renders whether or not one has been set. */}
+        <MonthVsNormalCard monthIncome={statement.income} floor={incomeFloor} structure={monthStructure} />
 
         {hasBudget ? (
           <>

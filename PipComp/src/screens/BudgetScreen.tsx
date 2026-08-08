@@ -2,11 +2,17 @@
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BenchmarkCard } from '../components/BenchmarkCard';
+import { BenchmarkPicker } from '../components/BenchmarkPicker';
 import { BudgetProgressList } from '../components/BudgetProgressList';
 import { Icon } from '../components/Icon';
 import { InfoButton } from '../components/InfoButton';
 import { Pip } from '../components/Pip';
+import { SavingsHabitCard } from '../components/SavingsHabitCard';
 import { Amount, BtnLabel, Card, CatBadge, Eyebrow, PrimaryButton, ProgressTrack, TopBar } from '../components/ui';
+import { getBenchmark } from '../lib/belanjawanku';
+import { benchmarkGaps } from '../lib/belanjawankuBudget';
+import { computeSavingsHabit } from '../lib/savingsHabit';
 import { allocatedTotal, averageMonthlySpend, budgetHash, categoryStatus, currentMonthKey, leftover, txnMonthKey } from '../lib/budget';
 import { monthName } from '../lib/dates';
 import { fmt } from '../lib/format';
@@ -22,8 +28,22 @@ const STATUS_COLOR = { ok: '#1f8a5b', warn: '#d98a00', over: '#c5402f' } as cons
 
 export function BudgetScreen({ onBack, onOpenRecap = () => {} }: { onBack: () => void; onOpenRecap?: () => void }) {
   const insets = useSafeAreaInsets();
-  const { transactions, catById, expectedIncome, allocations, hasBudget, getCachedAdvice, saveAdvice } = useAppData();
+  const {
+    transactions,
+    catById,
+    expectedIncome,
+    allocations,
+    hasBudget,
+    getCachedAdvice,
+    saveAdvice,
+    householdProfile,
+    guideCity,
+    setBenchmarkProfile,
+    savingsTarget,
+    setSavingsTarget,
+  } = useAppData();
   const [editing, setEditing] = useState(false);
+  const [pickingHousehold, setPickingHousehold] = useState(false);
   const [advice, setAdvice] = useState<string | null>(null);
   const [adviceBusy, setAdviceBusy] = useState(false);
   const [adviceErr, setAdviceErr] = useState('');
@@ -37,6 +57,18 @@ export function BudgetScreen({ onBack, onOpenRecap = () => {} }: { onBack: () =>
     for (const t of monthExpenses) m[t.categoryId ?? 'other'] = (m[t.categoryId ?? 'other'] ?? 0) + t.amount;
     return m;
   }, [monthExpenses]);
+
+  const benchmark = useMemo(() => getBenchmark(householdProfile, guideCity), [householdProfile, guideCity]);
+  // Three-month average, the same window `useCreditProfile` feeds the coach, so the gaps quoted
+  // here and the ones Pip narrates are always the same numbers.
+  const gaps = useMemo(
+    () => benchmarkGaps(benchmark, averageMonthlySpend(transactions, new Date(), 3)),
+    [benchmark, transactions]
+  );
+  const habit = useMemo(
+    () => computeSavingsHabit(transactions, savingsTarget),
+    [transactions, savingsTarget]
+  );
 
   const allocated = allocatedTotal(allocations);
   const left = leftover(expectedIncome, allocations);
@@ -128,9 +160,22 @@ export function BudgetScreen({ onBack, onOpenRecap = () => {} }: { onBack: () =>
           </Pressable>
         </Card>
 
-        {/* per-category */}
+        {/* per-category. Kept directly under the summary: "how is this month going" is the
+            screen's core job, and the benchmark and habit cards below are the deeper read. */}
         <Eyebrow style={{ marginTop: 22, marginBottom: 10 }}>This month · {monthName()}</Eyebrow>
         <BudgetProgressList allocations={allocations} spentByCat={spentByCat} catById={catById} />
+
+        <BenchmarkCard
+          benchmark={benchmark}
+          gaps={gaps}
+          onChangeHousehold={() => setPickingHousehold(true)}
+        />
+
+        <SavingsHabitCard
+          habit={habit}
+          guideSuggestion={benchmark.savings}
+          onSetTarget={(amount) => void setSavingsTarget(amount)}
+        />
 
         <Pressable onPress={onOpenRecap} style={({ pressed }) => [styles.recapLink, { opacity: pressed ? 0.9 : 1 }]}>
           <Icon name="trending" size={18} color={colors.accent} />
@@ -148,6 +193,17 @@ export function BudgetScreen({ onBack, onOpenRecap = () => {} }: { onBack: () =>
           </PrimaryButton>
         </View>
       </ScrollView>
+
+      <BenchmarkPicker
+        visible={pickingHousehold}
+        profile={householdProfile}
+        city={guideCity}
+        onClose={() => setPickingHousehold(false)}
+        onSave={(p, c) => {
+          void setBenchmarkProfile(p, c);
+          setPickingHousehold(false);
+        }}
+      />
     </View>
   );
 }

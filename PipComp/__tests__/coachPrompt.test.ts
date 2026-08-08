@@ -1,5 +1,5 @@
 import { buildCoachPrompt, coachPlanFallback, COACH_SYSTEM_PROMPT } from '../src/llm/coachPrompt';
-import { buildCoachPlan, type CoachPlanInput } from '../src/lib/coachPlan';
+import { buildCoachPlan, type CoachPlan, type CoachPlanInput } from '../src/lib/coachPlan';
 import { DEFAULT_PRODUCTS } from '../src/lib/loans';
 import type { CreditProfile } from '../src/lib/creditScore';
 import type { Coverage } from '../src/lib/coverage';
@@ -60,5 +60,37 @@ describe('COACH_SYSTEM_PROMPT', () => {
   it('constrains length and sets the Pip persona', () => {
     expect(COACH_SYSTEM_PROMPT).toMatch(/sentences/i);
     expect(COACH_SYSTEM_PROMPT).toMatch(/pip/i);
+  });
+});
+
+describe('benchmark hint in narration', () => {
+  function planWithHint(): CoachPlan {
+    const base = {
+      scoreFrom: 700, scoreTo: 720, bandFrom: 'Good' as const, bandTo: 'Good' as const,
+      confidenceFrom: 0.6, confidenceTo: 0.65, decisionFrom: 'refer' as const,
+      decisionTo: 'approve' as const, maxAmountFrom: 500, maxAmountTo: 3000,
+    };
+    return {
+      baseline: { score: 700, band: 'Good', confidence: 0.6, decision: 'refer', maxAmount: 500 },
+      diagnosis: { constraint: 'affordability', label: 'A tight monthly surplus', sim: base, gain: 1 },
+      actions: [{
+        lever: 'surplus', label: 'Free up RM300/mo of spending', magnitude: '-RM300/mo',
+        sim: base, impact: 1, changed: true,
+        sourceHint: 'Most of that could come from here: Recreation & Social runs RM400/mo above the national Belanjawanku guide for your household.',
+      }],
+      whatIfs: [],
+    } as unknown as CoachPlan;
+  }
+
+  it('passes the hint to the model so its prose can be specific about where the money is', () => {
+    const prompt = buildCoachPrompt(planWithHint());
+    expect(prompt).toContain('Recreation & Social');
+    expect(prompt).toContain('Belanjawanku');
+  });
+
+  it('keeps the hint in the deterministic fallback, so it survives with no AI at all', () => {
+    const line = coachPlanFallback(planWithHint());
+    expect(line).toContain('Recreation & Social');
+    expect(line).toContain('RM400/mo above');
   });
 });
