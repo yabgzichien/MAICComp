@@ -203,6 +203,12 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
   const [missionPhase, setMissionPhase] = useState<number | null>(null);
   const [celebrateText, setCelebrateText] = useState<string | null>(null);
   const [coverageBefore, setCoverageBefore] = useState<number | null>(null);
+  // The furthest step this run has reached. Anything behind it is a beat the judge has already
+  // played, so pressing Back onto it should offer a plain Next rather than re-asking for work
+  // that is already done (and rather than a Skip, which would be a control with no meaning).
+  // In-memory on purpose: a resume after an app kill has no idea what was done before, and
+  // claiming otherwise would hand out a Next the judge never earned.
+  const [tourMaxIndex, setTourMaxIndex] = useState(0);
   const recapRef = useRef(new Map<string, boolean>());
   const celebrateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The script the judge is actually on. Before the application is sent there is no ending yet,
@@ -281,6 +287,10 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
     if (celebrateTimer.current) clearTimeout(celebrateTimer.current);
   }, []);
 
+  useEffect(() => {
+    setTourMaxIndex((m) => Math.max(m, tourStepIndex));
+  }, [tourStepIndex]);
+
   // Tour-driven navigation: every step opens on its own screen. The ref is only set when
   // the screen really changes  setScreen to the same value never fires the change effect,
   // and a stale ref would swallow the judge's next real tap.
@@ -358,14 +368,23 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
     void startTour();
   };
   /** Deep-link off the current step's optional action (UI/UX P3.18: surface the Attack
-   *  Gallery from the tour, not only Settings). Ends the tour and jumps straight there. */
+   *  Gallery from the tour, not only Settings).
+   *
+   *  PAUSES the tour rather than exiting it (2026-08-06): this used to call `tourExit`, which
+   *  wiped the step index and the branch, so a judge who took the "See the fraud defences work"
+   *  detour in act 5 had no way back into the script at all. Pausing leaves the Resume chip on
+   *  screen, and resuming re-opens the same step. */
   const tourAction = () => {
     if (!currentTourStep?.actionScreen) return;
     // Back out of the gallery to the step the judge left, not to Settings  on the guided path
     // they never opened Settings, so landing there reads as being dumped somewhere strange.
     const from = currentTourStep.screen as Screen;
-    tourExit();
+    resetMission();
+    setCelebrateText(null);
+    advancingRef.current = false;
     setAttacksOrigin(from);
+    void pauseTour();
+    tourDrivenRef.current = true;
     setScreen(currentTourStep.actionScreen as Screen);
   };
   /** The mission CTA: remember today's coverage for the delta beat, then open the REAL add
@@ -593,6 +612,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
           topInset={insets.top}
           placement={tourCardPlacement}
           persona={tourPersona}
+          completed={tourStepIndex < tourMaxIndex}
           handoffReady={handoffReady}
           handoffSelfAdvancing={handoffSelfAdvancing}
           onNext={tourNext}

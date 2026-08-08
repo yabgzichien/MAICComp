@@ -8,6 +8,7 @@ import { FadeIn } from '../components/Motion';
 import { CreditGauge } from '../components/CreditGauge';
 import { Icon } from '../components/Icon';
 import { InfoButton } from '../components/InfoButton';
+import { ExpenseStructureCard, IncomeFloorCard } from '../components/CashflowStructure';
 import { Card, TopBar } from '../components/ui';
 import { TourAnchor } from '../components/TourAnchor';
 import { BORROWER_TOUR_STEPS, clampTourStep } from '../lib/tourSteps';
@@ -42,7 +43,7 @@ export function CreditScreen({
   onOpenCoach?: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const { score, dataConfidence, coverage, momentum } = useCreditProfile();
+  const { score, dataConfidence, coverage, momentum, incomeFloor, expenseStructure, incomeQuality, obligations } = useCreditProfile();
   const { tourActive, tourStepIndex } = useAppData();
   const capped = score.confidenceCapped;
   const confidence = dataConfidence.confidence;
@@ -161,6 +162,11 @@ export function CreditScreen({
           </Pressable>
         </TourAnchor>
 
+        {/* How they earn and how much of the month is already spoken for. Sits above the score
+            factors so the story reads: this is your cash flow → this is what it scores. */}
+        <IncomeFloorCard floor={incomeFloor} sourceCount={incomeQuality.sourceCount} />
+        <ExpenseStructureCard structure={expenseStructure} floor={incomeFloor} obligations={obligations.obligations} />
+
         {/* Factors */}
         <Card style={styles.factorsCard}>
           <View style={styles.factorsHead}>
@@ -225,7 +231,14 @@ const styles = StyleSheet.create({
 
   gaugeCard: { borderRadius: 26, padding: 0, paddingTop: 18, overflow: 'hidden' },
   gaugeInfoRow: { flexDirection: 'row', gap: 8, marginTop: 6 },
-  confBadge: { margin: 16, marginTop: 8, borderRadius: 16, backgroundColor: colors.accentSoft, padding: 14 },
+  // Neutral panel, not accentSoft: this section holds ~10 lines of text plus green/red icons and
+  // an accent-colored progress bar. Filling that much area with accentSoft (a light MINT tint)
+  // put every accent-green element on a same-hue background, which reads as washed out even
+  // where individual pairs still pass AA (ink2-on-accentSoft measures ~4.57:1, barely over the
+  // 4.5:1 floor) — same-hue-on-same-hue-tint loses perceptual contrast that the numeric ratio
+  // doesn't capture. surface2 is background-neutral, so the accent/red content pops instead of
+  // blending in, and ink2-on-surface2 measures ~5.2:1.
+  confBadge: { margin: 16, marginTop: 8, borderRadius: 16, backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line2, padding: 14 },
   confHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   confTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   confTitleGroup: { flexDirection: 'row', alignItems: 'center', gap: 6 },

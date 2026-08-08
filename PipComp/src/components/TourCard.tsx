@@ -1,9 +1,13 @@
 // Judge guided tour  bottom-pinned step card, v2 (Interactive Judge Tour spec,
 // 2026-07-16). Non-modal: it never traps focus or blocks taps on the real app underneath.
-// v2 adds the act meter, Pip as narrator, the "your turn" treatment for do/mission steps
+// v2 adds the act meter, Pip as narrator, the "your task" treatment for do/mission steps
 // (Skip replaces Next  the judge's own tap is the way forward), a transient celebration
 // flash, the mission's slim banner variant, and the finale recap. Focus jumps to the card
 // on step change (web) so screen readers hear each step announced.
+//
+// Back is on every step kind, and a step the judge has already cleared (`completed`, i.e. they
+// pressed Back onto it) swaps its "your task" affordances for a plain Next: the work is done, so
+// there is nothing to wait for and nothing left worth skipping.
 import React, { useEffect, useRef } from 'react';
 import { AccessibilityInfo, Animated, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, shadowCard, uiFont } from '../theme';
@@ -69,6 +73,7 @@ export function TourCard({
   topInset = 0,
   placement = 'bottom',
   persona,
+  completed = false,
   handoffReady = false,
   handoffSelfAdvancing = false,
   onNext,
@@ -96,6 +101,10 @@ export function TourCard({
   placement?: 'bottom' | 'top';
   /** Fills the copy's `{name}` / `{role}` tokens with the loaded demo borrower. */
   persona?: { name?: string; role?: string };
+  /** The judge has already been past this step and pressed Back onto it. The task is done, so
+   *  the card offers a plain Next (there is nothing left to wait for) and drops Skip — skipping
+   *  work that is already finished is a control with no meaning. */
+  completed?: boolean;
   /** Handoff steps only: whether the real loan has moved far enough for the script to go on. */
   handoffReady?: boolean;
   /** Handoff steps only: this step is watching the real loan and will advance by itself, so it
@@ -151,7 +160,7 @@ export function TourCard({
         <ActMeter progress={progress} persona={persona} />
         {interactive && (
           <View style={styles.turnPill}>
-            <Text style={styles.turnPillText}>{isHandoff ? 'SWITCH APPS' : 'YOUR TURN'}</Text>
+            <Text style={styles.turnPillText}>{isHandoff ? 'SWITCH APPS' : completed ? 'DONE' : 'YOUR TASK'}</Text>
           </View>
         )}
         <Text style={styles.title} accessibilityRole="header" accessibilityLiveRegion="polite">
@@ -211,7 +220,20 @@ export function TourCard({
             <Text style={styles.exit}>Exit</Text>
           </Pressable>
           <View style={{ flex: 1 }} />
-          {isHandoff ? (
+          {/* Back sits on EVERY step kind, not only the explain ones. A judge who wants to re-read
+              the beat they just cleared should not have to restart the tour to do it. */}
+          {index > 0 && (
+            <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Previous step" style={styles.secondaryBtn} hitSlop={8}>
+              <Text style={styles.secondaryText}>Back</Text>
+            </Pressable>
+          )}
+          {completed ? (
+            // Already done, reached by pressing Back. Nothing to wait for and nothing to skip —
+            // one plain Next returns the judge to where they were.
+            <Pressable onPress={onNext} accessibilityRole="button" accessibilityLabel={index === total - 1 ? 'Finish tour' : 'Next step'} style={styles.nextBtn} hitSlop={8}>
+              <Text style={styles.nextText}>{index === total - 1 ? 'Done' : 'Next'}</Text>
+            </Pressable>
+          ) : isHandoff ? (
             <>
               <Pressable onPress={onSkip} accessibilityRole="button" accessibilityLabel="Skip this step" style={styles.secondaryBtn} hitSlop={8}>
                 <Text style={styles.secondaryText}>Skip</Text>
@@ -245,16 +267,9 @@ export function TourCard({
               </Pressable>
             )
           ) : (
-            <>
-              {index > 0 && (
-                <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Previous step" style={styles.secondaryBtn} hitSlop={8}>
-                  <Text style={styles.secondaryText}>Back</Text>
-                </Pressable>
-              )}
-              <Pressable onPress={onNext} accessibilityRole="button" accessibilityLabel={index === total - 1 ? 'Finish tour' : 'Next step'} style={styles.nextBtn} hitSlop={8}>
-                <Text style={styles.nextText}>{index === total - 1 ? 'Done' : 'Next'}</Text>
-              </Pressable>
-            </>
+            <Pressable onPress={onNext} accessibilityRole="button" accessibilityLabel={index === total - 1 ? 'Finish tour' : 'Next step'} style={styles.nextBtn} hitSlop={8}>
+              <Text style={styles.nextText}>{index === total - 1 ? 'Done' : 'Next'}</Text>
+            </Pressable>
           )}
         </View>
       </View>

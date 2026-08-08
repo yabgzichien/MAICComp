@@ -4,12 +4,10 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../components/Icon';
 import { InfoButton } from '../components/InfoButton';
-import { LenderRequirements } from '../components/LenderRequirements';
 import { TourAnchor } from '../components/TourAnchor';
 import { Amount, Card, Eyebrow, ProgressTrack, TopBar } from '../components/ui';
 import { shortDate } from '../lib/dates';
 import { DEFAULT_PRODUCTS, type LoanProduct } from '../lib/loans';
-import { type BorrowerStanding } from '../lib/lenderCriteria';
 import { productForOffer } from '../lib/acceptOffer';
 import { buildLoanPackages, financingTotals, type LoanPackage } from '../lib/loanSummary';
 import { overdueRowsFor } from '../lib/repaymentStanding';
@@ -107,14 +105,11 @@ function OfferCard({
   onDecline,
   restrictToAccept,
   activeTourAnchor,
-  you,
 }: {
   p: PendingOffer;
   busy: boolean;
   onAccept: () => void;
   onDecline: () => void;
-  /** The borrower's standing, so the lender's published bars can be marked against it. */
-  you?: BorrowerStanding;
   /** The guided tour's script only has one ending once an offer exists: the judge accepts it.
    *  Declining here strands the tour on the acceptance step forever (no signal it listens for
    *  ever fires), so while the tour is driving this screen "No thanks" stays visible but
@@ -168,9 +163,10 @@ function OfferCard({
           </Text>
         )}
 
-        {/* The criteria behind this offer, collapsed: an approval is exactly the moment a
-            borrower wants to check what the rate is tied to before they accept it. */}
-        <LenderRequirements lender={lender} you={you} style={{ marginTop: 14 }} />
+        {/* Deliberately no published-criteria panel here (2026-08-06). By the time an offer is
+            standing, the bars are behind the borrower: the only rate that matters on this card is
+            the one they were actually approved at, shown above. Comparing lenders is the Credit
+            Passport's and Build my score's job. */}
 
         <View style={styles.offerActions}>
           <TourAnchor id="offer-accept-btn" activeId={activeTourAnchor}>
@@ -243,7 +239,7 @@ export function LoansScreen({
     tourRunning,
     tourStepIndex,
   } = useAppData();
-  const { score, coverage } = useCreditProfile();
+  const { score } = useCreditProfile();
   // Mirrors the pattern in DashboardScreen/CreditScreen/PassportCoachScreen: which anchor, if
   // any, the tour wants spotlit right now on THIS screen.
   const activeTourAnchor = tourActive ? BORROWER_TOUR_STEPS[clampTourStep(tourStepIndex, BORROWER_TOUR_STEPS.length)].anchorId ?? null : null;
@@ -287,18 +283,6 @@ export function LoansScreen({
   // ...and keep checking while the borrower waits here: an officer approving or resetting
   // mid-demo should land in this list without needing to navigate away and back.
   useLenderSyncPoll();
-
-  // Same figures the loan engine is fed elsewhere, so a bar marked met here is met by the check
-  // that actually runs on the lender's console.
-  const criteriaStanding = useMemo<BorrowerStanding>(
-    () => ({
-      score: score.score,
-      confidence: score.confidence,
-      daysCovered: coverage.daysCovered,
-      coverageRatio: coverage.ratio,
-    }),
-    [score, coverage]
-  );
 
   // One accept/decline in flight at a time, keyed by lender id so only the tapped card spins.
   const [offerBusy, setOfferBusy] = useState<string | null>(null);
@@ -664,7 +648,6 @@ export function LoansScreen({
                 onDecline={() => onDeclineOffer(p)}
                 restrictToAccept={tourRunning}
                 activeTourAnchor={activeTourAnchor}
-                you={criteriaStanding}
               />
             ))}
           </>

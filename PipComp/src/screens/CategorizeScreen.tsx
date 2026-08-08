@@ -32,6 +32,12 @@ export function CategorizeScreen({
 }) {
   const insets = useSafeAreaInsets();
   const { transactions, accounts } = useAppData();
+  // The ledger as it stood when this batch opened. Deliberately frozen: `commitCategorized`
+  // writes the batch on the last Finish tap, the store's `transactions` then updates while this
+  // screen is still mounted, and every row suddenly matches ITSELF — which is what flashed the
+  // yellow "possible duplicate" banner for one frame before the parent swapped in All sorted.
+  // A row can only duplicate something that was already there when the judge started sorting.
+  const ledgerAtOpen = useRef(transactions).current;
   const linkedAccount = useMemo(() => (linkId ? accounts.find((a) => a.id === linkId) ?? null : null), [linkId, accounts]);
   const theme = useAccent();
   const { setAlert } = useAccentAlert();
@@ -72,7 +78,7 @@ export function CategorizeScreen({
   const isLast = safeStep === stepIndices.length - 1;
   const confirming = !!sel && sel === suggestion;
 
-  const dup = item ? findDuplicate(transactions, { merchant: item.merchant, amount: item.amount, date: item.date }, today) : null;
+  const dup = item ? findDuplicate(ledgerAtOpen, { merchant: item.merchant, amount: item.amount, date: item.date }, today) : null;
   const showBanner = !!dup && !acked[originalIndex];
   const dupDay = dup ? shortDate(dup.date ?? dup.createdAt) : '';
   const keptCount = stepIndices.filter((i) => assignments[i] !== DROP).length;

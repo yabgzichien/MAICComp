@@ -11,7 +11,7 @@ export type IconName =
   | 'camera' | 'image' | 'plus' | 'check' | 'sparkles' | 'x' | 'chevronRight' | 'chevronLeft'
   | 'chevronDown' | 'scan' | 'trending' | 'clock' | 'arrowRight' | 'search' | 'gallery' | 'wallet'
   | 'trash' | 'sliders' | 'gear' | 'alert' | 'pencil' | 'gift' | 'return' | 'percent'
-  | 'home' | 'scale';
+  | 'home' | 'scale' | 'signal' | 'book' | 'shield' | 'store';
 
 type RenderFn = (stroke: string, sw: number) => React.ReactNode;
 
@@ -247,6 +247,33 @@ const ICONS: Record<IconName, RenderFn> = {
       <Path d="M6 7l-3 6a3 3 0 006 0z" />
       <Path d="M18 7l-3 6a3 3 0 006 0z" />
       <Path d="M8 20h8" />
+    </G>
+  ),
+  signal: (s, w) => (
+    <G fill="none" stroke={s} strokeWidth={w}>
+      <Path d="M5.5 15.5a9 9 0 0113 0" />
+      <Path d="M8.5 18.5a5 5 0 017 0" />
+      <Path d="M2.5 12.5a13 13 0 0119 0" />
+      <Circle cx={12} cy={20.5} r={0.9} fill={s} stroke="none" />
+    </G>
+  ),
+  book: (s, w) => (
+    <G fill="none" stroke={s} strokeWidth={w}>
+      <Path d="M4 4.5h6a2.5 2.5 0 012.5 2.5v12A2 2 0 0010.5 17.5H4V4.5z" />
+      <Path d="M20 4.5h-6A2.5 2.5 0 0011.5 7v12a2 2 0 012-1.5H20V4.5z" />
+    </G>
+  ),
+  shield: (s, w) => (
+    <G fill="none" stroke={s} strokeWidth={w}>
+      <Path d="M12 3l7 2.8v5.6c0 4.3-2.9 7.6-7 9.1-4.1-1.5-7-4.8-7-9.1V5.8L12 3z" />
+      <Path d="M9 12l2.2 2.2L15.5 10" />
+    </G>
+  ),
+  store: (s, w) => (
+    <G fill="none" stroke={s} strokeWidth={w}>
+      <Path d="M4 4.5h16l1.2 4.2a3 3 0 01-5.8 1.1 3 3 0 01-5.8 0 3 3 0 01-5.8-1.1L4 4.5z" />
+      <Path d="M5 10.5V20h14v-9.5" />
+      <Path d="M9.5 20v-5h5v5" />
     </G>
   ),
 };

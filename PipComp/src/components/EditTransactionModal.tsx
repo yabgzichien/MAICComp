@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { DEFAULT_EXPENSE_ID, DEFAULT_INCOME_ID } from '../data/categories';
 import type { Transaction, TxnType } from '../lib/types';
 import { todayISO } from '../lib/duplicates';
 import { defaultLinkEffect, type LinkEffect } from '../lib/networth';
@@ -60,7 +61,7 @@ export function EditTransactionModal({ txn, onClose }: { txn: Transaction | null
     setType(t);
     setCat((prev) => {
       const c = categories.find((x) => x.id === prev);
-      return c && c.kind === t ? prev : t === 'income' ? 'income' : 'other';
+      return c && c.kind === t ? prev : t === 'income' ? DEFAULT_INCOME_ID : DEFAULT_EXPENSE_ID;
     });
     if (linkId) {
       const a = accounts.find((x) => x.id === linkId);
@@ -71,7 +72,7 @@ export function EditTransactionModal({ txn, onClose }: { txn: Transaction | null
   const save = async () => {
     const n = parseFloat(amountText.replace(/[^0-9.]/g, ''));
     const amount = Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : txn.amount;
-    const categoryId = cat ?? (type === 'income' ? 'income' : 'other');
+    const categoryId = cat ?? (type === 'income' ? DEFAULT_INCOME_ID : DEFAULT_EXPENSE_ID);
     await saveTransactionEdits(txn, { amount, type, categoryId });
     if (linkId) await recordBalanceLink(linkId, amount, linkEffect, txn.date ?? todayISO());
     onClose();

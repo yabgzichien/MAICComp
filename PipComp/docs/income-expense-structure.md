@@ -1,6 +1,81 @@
 # Spec: Income & Expense Structure (dependable vs variable, committed vs flexible)
 
-Status: **proposed**. Audience: an implementing agent with no prior conversation context.
+Status: **Phases 1–2 shipped** (engine + borrower UI). Phase 3 (coach) and Phase 4 (scoring) are
+not built. §5.4 (passport/consent plumbing) and §9 (LenderConsole tiles) were deliberately cut
+from the first pass — see "First cut" below.
+
+## First cut: what shipped, and what was cut on purpose
+
+Built:
+- [incomeFloor.ts](../src/lib/incomeFloor.ts) — `computeIncomeFloor`, `dependableSurplus`,
+  `serviceableCapacity`. Pure, 30 unit tests.
+- `computeExpenseStructure` in [spendingProfile.ts](../src/lib/spendingProfile.ts).
+- Wiring in [useCreditProfile.ts](../src/state/useCreditProfile.ts) (local composition only).
+- [CashflowStructure.tsx](../src/components/CashflowStructure.tsx) — the two borrower cards, on
+  CreditScreen above Score Factors.
+- **Monthly Recap**: `MonthVsNormalCard` on [RecapScreen.tsx](../src/screens/RecapScreen.tsx),
+  between the income hero and the spending breakdown. Deliberately a *different* card from the
+  credit-screen pair: the recap already reports this month's totals, so what it adds is the
+  comparison the screen previously could not make — was this a good month *for this person*
+  ("RM494, ▼RM1,521 below your usual RM2,015"), and how much of it was ever theirs to move.
+  The floor comes from all history; the spend split is scoped to the selected month. Obligations
+  are detected across the full ledger and then applied to the month, which works only because
+  `computeExpenseStructure` takes them as an argument rather than detecting internally.
+- Glossary entries `income_floor` and `committed_spend`.
+
+Cut, so the first pass carries **zero** risk to signed credentials or to any pinned outcome:
+- **No passport/consent changes.** `buildPassport` takes explicit named args, so not passing the
+  new fields leaves minted passports byte-identical. Verification, old credentials, the Attack
+  Gallery and the pinned persona outcomes are all untouched.
+- **No score or affordability changes** (Phase 4 stays deferred — see §8).
+- **No LenderConsole changes**, so the lender does not yet see the floor. This is the one thing
+  given up: the "borrower is coached toward the number the underwriter decides on" half of the
+  flywheel. Adding §5.4 + §9 later needs no rework of the UI built here.
+
+### Three findings from building it
+
+1. **The floor can legitimately exceed the average.** Ravi's floor is RM5,070 against a RM4,714
+   average, because one RM963 month drags the mean below every other month. This is not clamped —
+   it is the sharpest demonstration of why averaging misdescribes an uneven earner, and the card
+   has dedicated copy for it.
+2. **`dependableSurplus` had to be split in two.** The original single definition (floor minus
+   *unavoidable* outflows) is not universally more conservative than `avgMonthlySurplus`, because
+   it silently excludes flexible spend. It is now `dependableSurplus` (floor − *all* spending, the
+   honest headline, always ≤ avg-minus-avg) and `serviceableCapacity` (floor − unavoidable, the
+   "if you redirected the flexible part" figure). The card shows both.
+3. **`detectObligations` is liberal.** Any merchant recurring 3+ months at a near-constant amount
+   counts, so unusually steady groceries would register as committed. Real ledgers vary enough
+   that this rarely fires — Aina gets 3 sensible obligations, Ravi and Faizal get none — but test
+   fixtures must use realistic variance or they test nothing.
+4. **Bucket colours must separate by LIGHTNESS, not hue.** Two attempts failed here and both
+   needed measuring to catch: `ink2`/`ink3` are near-identical grey-greens, and the replacement
+   pair `ink3` vs `accent` measured a **1.08:1** luminance ratio — clearly different in hue, but
+   identical in weight, so adjacent segments still blurred together (and would be invisible to a
+   colour-blind reader). The shipped ramp is one hue family running dark→light
+   (`ink` → `accentInk` → `#3ab07a`) at roughly 2.6:1 and 2.4:1 between neighbours. Verify any
+   future change by measuring rendered luminance, not by eye.
+5. **The recap card is deliberately terser than the credit-screen pair.** It carries the kicker,
+   the month's income against the floor, the bar, and a compact figure-only legend — no per-bucket
+   notes and no closing paragraph. An earlier draft's narrative line also had to handle empty
+   buckets (it once read "so the flexible RM0 is where the pressure lands"); trimming the card
+   removed that copy, and the now-dead `monthNarrative()` helper and its tests were deleted with
+   it. The fuller reading lives on CreditScreen.
+
+### Verified against the real seed
+
+| Persona | Floor | Average | Weak-month surplus | Case exercised |
+|---|---|---|---|---|
+| Aina | RM2,015 (5/6 cleared) | RM2,173 | +RM581 | 3 obligations, 26% committed |
+| Ravi | RM5,070 (7/8 cleared) | RM4,714 | +RM3,317 | **floor > average**; zero obligations |
+| Faizal | RM500 (4/4) | RM4,625 | **−RM507** | negative surplus; zero obligations |
+
+Faizal is the sharpest demo beat: Score Factors reports "avg surplus RM3,618/mo" while the new
+card reports "RM507 short in a weak month" — and he is the declined persona. The average says he
+is comfortable; the floor says he is not.
+
+---
+
+Audience: an implementing agent with no prior conversation context.
 Repo area: `PipComp/` (Expo / React Native), with one additive change in `LenderConsole/`.
 Run tests with `npm test` from `PipComp/`; typecheck with `npx tsc --noEmit`.
 

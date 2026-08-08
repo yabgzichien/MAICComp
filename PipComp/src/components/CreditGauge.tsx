@@ -15,13 +15,35 @@ const CY = 164;
 const R = 124;
 const SW = 16;
 
-const BANDS: { f1: number; f2: number; color: string }[] = [
-  { f1: 0.003, f2: 0.331, color: bandColors.Building },
-  { f1: 0.335, f2: 0.498, color: bandColors.Fair },
-  { f1: 0.503, f2: 0.664, color: bandColors.Good },
-  { f1: 0.669, f2: 0.83, color: bandColors.Strong },
-  { f1: 0.835, f2: 0.997, color: bandColors.Excellent },
+// The real score boundaries, mirroring bandFor() in lib/creditScore.ts (500/620/740/820).
+// Segment widths MUST derive from these, not be hand-tuned: an earlier version hardcoded
+// approximate f1/f2 fractions that drifted out of sync with bandFor(), leaving small gaps
+// between segments. A score landing in one of those gaps (e.g. 699, at the Good/Strong seam)
+// matched no band, so `activeIdx` came back -1 and every segment fell to the 0.13 "future"
+// opacity at once  the whole arc read as uniformly pale. Worse, because the fractions were
+// only approximate, scores well inside a real band (e.g. 720, solidly Good) could land under
+// the WRONG neighbouring segment even when they didn't hit a literal gap.
+const SCORE_BAND_BOUNDS: { key: CreditBand; lo: number; hi: number }[] = [
+  { key: 'Building', lo: SCORE_MIN, hi: 499 },
+  { key: 'Fair', lo: 500, hi: 619 },
+  { key: 'Good', lo: 620, hi: 739 },
+  { key: 'Strong', lo: 740, hi: 819 },
+  { key: 'Excellent', lo: 820, hi: SCORE_MAX },
 ];
+/** Fractional seam between adjacent arc segments, purely visual  same magnitude the old
+ *  hardcoded gaps used, but now applied on top of the real boundary rather than replacing it. */
+const SEAM = 0.004;
+const toFraction = (score: number): number => (score - SCORE_MIN) / (SCORE_MAX - SCORE_MIN);
+
+/** Exported for the regression test only: the whole point of keying the arc off `band` (not a
+ *  numeric range) is that a mismatch here can no longer make a segment vanish, but the segments
+ *  could still silently drift out of visual sync with bandFor() without the test below. */
+export const BANDS: { key: CreditBand; f1: number; f2: number; color: string }[] = SCORE_BAND_BOUNDS.map(({ key, lo, hi }) => ({
+  key,
+  f1: toFraction(lo) + (key === 'Building' ? 0.003 : SEAM),
+  f2: toFraction(hi) - (key === 'Excellent' ? 0.003 : SEAM),
+  color: bandColors[key],
+}));
 
 function toXY(f: number) {
   const rad = ((180 - f * 180) * Math.PI) / 180;
@@ -56,7 +78,10 @@ export function CreditGauge({
   const display = Math.round(shown);
   const p = Math.max(0.01, Math.min(0.99, (shown - SCORE_MIN) / (SCORE_MAX - SCORE_MIN)));
   const ind = toXY(p);
-  const activeIdx = BANDS.findIndex((b) => p >= b.f1 && p <= b.f2);
+  // Keyed off the `band` prop  the same CreditBand bandFor() already computed upstream  rather
+  // than re-derived from the needle's own fraction. That is what makes this immune to the gap/
+  // mismatch bug above: there is no numeric range for a score to fall between.
+  const activeIdx = BANDS.findIndex((b) => b.key === band);
 
   // Needle tip just inside the arc inner edge.
   const nr = R - SW / 2 - 4;

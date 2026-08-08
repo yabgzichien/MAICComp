@@ -1,4 +1,5 @@
 import { getDb } from './db';
+import { DEFAULT_EXPENSE_ID, DEFAULT_INCOME_ID } from '../data/categories';
 import type { Category } from '../lib/types';
 
 interface CatRow {
@@ -74,7 +75,7 @@ export async function addCategory(
  * The two generic categories that can never be deleted  they are the
  * reassignment targets when other categories are removed.
  */
-export const PROTECTED_CATEGORY_IDS = ['other', 'income'];
+export const PROTECTED_CATEGORY_IDS = [DEFAULT_EXPENSE_ID, DEFAULT_INCOME_ID];
 
 /**
  * Delete a category (defaults allowed, except the protected generics). Any
@@ -85,7 +86,7 @@ export async function deleteCategory(id: string): Promise<void> {
   if (PROTECTED_CATEGORY_IDS.includes(id)) return;
   const db = await getDb();
   const row = await db.getFirstAsync<{ kind: string }>('SELECT kind FROM categories WHERE id = ?', id);
-  const fallbackId = row?.kind === 'income' ? 'income' : 'other';
+  const fallbackId = row?.kind === 'income' ? DEFAULT_INCOME_ID : DEFAULT_EXPENSE_ID;
   await db.withTransactionAsync(async () => {
     await db.runAsync('UPDATE transactions SET category_id = ? WHERE category_id = ?', fallbackId, id);
     await db.runAsync('DELETE FROM merchant_memory WHERE category_id = ?', id);

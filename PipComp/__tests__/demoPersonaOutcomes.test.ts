@@ -183,12 +183,14 @@ describe('front-door tour-path labels', () => {
     expect(RECOMMENDED_DEMO_PROFILE).toBe(recommended[0].id);
   });
 
-  // The front door lets exactly one ending be the opening move, and it has to be the badged one:
-  // a screen that recommends Aina but only lets you start as Ravi is worse than either rule alone.
-  it('allows exactly one opening move, and it is the recommended one', () => {
+  // Every ending is startable from the front door (2026-08-06). The console's finale card sends
+  // a judge who wants another ending through Profile → Reset & go to setup, which lands them
+  // right back here — so a row that could not be picked would make that instruction a dead end.
+  // The badge still names where to start; it no longer gates it.
+  it('lets any ending be the opening move, with the recommended one still badged', () => {
     const startable = DEMO_PROFILES.filter(canStartWith);
-    expect(startable).toHaveLength(1);
-    expect(startable[0].id).toBe(RECOMMENDED_DEMO_PROFILE);
+    expect(startable).toHaveLength(DEMO_PROFILES.length);
+    expect(startable.map((p) => p.id)).toContain(RECOMMENDED_DEMO_PROFILE);
   });
 
   // The point of the badge is "this one plays the whole story". An ending that never reaches

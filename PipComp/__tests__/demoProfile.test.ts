@@ -189,12 +189,16 @@ describe('buildDemoSeed', () => {
     expect(netWorthFactorSubScore).toBeGreaterThan(0);
   });
 
-  it('sets a budget across 4-5 categories with no category over-allocated relative to itself', () => {
+  it('sets a budget across 4-6 categories with no category over-allocated relative to itself', () => {
     const seed = buildDemoSeed(NOW);
     const entries = Object.entries(seed.budget.allocations);
     expect(entries.length).toBeGreaterThanOrEqual(4);
-    expect(entries.length).toBeLessThanOrEqual(5);
+    // 6 since the bookkeeping retune: the single `bills` envelope split into housing and
+    // debt service, which is the whole point of pulling loan repayment out of consumption.
+    expect(entries.length).toBeLessThanOrEqual(6);
     for (const [, amount] of entries) expect(amount).toBeGreaterThan(0);
     expect(seed.budget.expectedIncome).toBeCloseTo(2595, 0);
+    // The retune redistributed envelopes without changing the total allocated.
+    expect(entries.reduce((s, [, amount]) => s + amount, 0)).toBe(1130);
   });
 });

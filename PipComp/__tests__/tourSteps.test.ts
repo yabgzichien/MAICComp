@@ -34,6 +34,7 @@ describe('BORROWER_TOUR_STEPS (the borrower half of the unified script)', () => 
       'scan-mission',
       'coverage-delta',
       'open-coach',
+      'coach-criteria',
       'coach-plan',
       'whatif',
       'whatif-explore',

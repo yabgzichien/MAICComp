@@ -6,6 +6,7 @@ import {
   assignImported,
   applyDedup,
 } from '../src/lib/import';
+import { DEFAULT_EXPENSE_ID, DEFAULT_INCOME_ID } from '../src/data/categories';
 import { DROP, type Category, type ExtractedTxn, type MemoryMap, type Transaction } from '../src/lib/types';
 
 function cat(over: Partial<Category>): Category {
@@ -80,11 +81,11 @@ describe('assignImported', () => {
   it('ignores a learned category whose kind mismatches the item, using the fallback', () => {
     const memory: MemoryMap = { acme: 'dining' }; // expense category on an income row
     const out = assignImported([item({ merchant: 'Acme', type: 'income' })], memory, cats, catById);
-    expect(out).toEqual(['income']); // DEFAULT_INCOME_ID
+    expect(out).toEqual([DEFAULT_INCOME_ID]);
   });
   it('falls back to Other for an uncategorizable expense', () => {
     const out = assignImported([item({ merchant: 'Mystery', categoryHint: null })], {}, cats, catById);
-    expect(out).toEqual(['other']); // DEFAULT_EXPENSE_ID
+    expect(out).toEqual([DEFAULT_EXPENSE_ID]);
   });
 });
 

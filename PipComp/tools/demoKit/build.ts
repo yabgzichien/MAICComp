@@ -103,10 +103,10 @@ function buildTngKit(rng: () => number, now: Date): Kit {
 
 function buildMaeKit(rng: () => number, now: Date): Kit {
   const merchants: { name: string; category: string; band: [number, number]; type: 'expense' | 'income' }[] = [
-    { name: 'GrabFood Payout', category: 'income', band: [280, 620], type: 'income' },
+    { name: 'GrabFood Payout', category: 'gig income', band: [280, 620], type: 'income' },
     { name: 'Kedai Kopi Ah Seng', category: 'coffee', band: [4, 18], type: 'expense' }, // learning beat: repeats from Kit 1
-    { name: 'TNB', category: 'bills', band: [60, 95], type: 'expense' },
-    { name: 'Unifi', category: 'bills', band: [80, 110], type: 'expense' },
+    { name: 'TNB', category: 'utilities', band: [60, 95], type: 'expense' },
+    { name: 'Unifi', category: 'internet', band: [80, 110], type: 'expense' },
     { name: 'Pasar Mini Aziz', category: 'groceries', band: [25, 180], type: 'expense' },
     { name: 'Petronas RON95', category: 'fuel', band: [30, 150], type: 'expense' },
     { name: 'Klinik Famili', category: 'health', band: [35, 220], type: 'expense' },
@@ -128,7 +128,7 @@ function buildGrabPayoutKit(rng: () => number, now: Date): Kit {
   const days = spreadDays(now, count);
   const rows: KitRow[] = days.map((d, i) => ({
     merchant: 'GrabFood Payout',
-    category: 'income',
+    category: 'gig income',
     amount: Math.round(logUniform(rng, 220, 640) * 100) / 100 + i * 0.03, // + tiny per-row jitter, never two equal
     type: 'income',
     date: displayDate(d),
@@ -138,11 +138,11 @@ function buildGrabPayoutKit(rng: () => number, now: Date): Kit {
 
 function buildMixedMonthKit(rng: () => number, now: Date): Kit {
   const merchants: { name: string; category: string; band: [number, number]; type: 'expense' | 'income' }[] = [
-    { name: 'GrabFood Payout', category: 'income', band: [300, 700], type: 'income' },
-    { name: 'Air Selangor', category: 'bills', band: [20, 70], type: 'expense' },
+    { name: 'GrabFood Payout', category: 'gig income', band: [300, 700], type: 'income' },
+    { name: 'Air Selangor', category: 'utilities', band: [20, 70], type: 'expense' },
     { name: 'Foodpanda', category: 'dining', band: [15, 90], type: 'expense' },
     { name: 'Pasar Malam', category: 'dining', band: [10, 60], type: 'expense' },
-    { name: 'Maxis Prepaid', category: 'bills', band: [15, 75], type: 'expense' },
+    { name: 'Maxis Prepaid', category: 'mobile', band: [15, 75], type: 'expense' },
     { name: 'Watsons', category: 'health', band: [15, 140], type: 'expense' },
     { name: 'Touch n Go Reload', category: 'transport', band: [30, 150], type: 'expense' },
     { name: 'Shopee', category: 'shopping', band: [35, 300], type: 'expense' },
@@ -167,7 +167,7 @@ function buildFabricatedKit(now: Date): Kit {
   const days = spreadDays(now, amounts.length);
   const rows: KitRow[] = amounts.map((amount, i) => ({
     merchant: 'Client Payment',
-    category: 'income',
+    category: 'gig income',
     amount,
     type: 'income',
     date: displayDate(days[i]),

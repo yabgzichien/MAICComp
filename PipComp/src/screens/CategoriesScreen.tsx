@@ -11,8 +11,8 @@ import type { TxnType } from '../lib/types';
 import { useAppData } from '../state/store';
 import { colors, radius, shadowToggle, uiFont } from '../theme';
 
-const EXPENSE_ICONS: IconName[] = ['cart', 'utensils', 'coffee', 'car', 'bag', 'heart', 'receipt', 'play', 'fuel', 'dots'];
-const INCOME_ICONS: IconName[] = ['wallet', 'gift', 'sparkles', 'return', 'trending', 'percent', 'dots'];
+const EXPENSE_ICONS: IconName[] = ['home', 'cart', 'utensils', 'car', 'signal', 'heart', 'book', 'bag', 'play', 'shield', 'receipt', 'dots'];
+const INCOME_ICONS: IconName[] = ['wallet', 'store', 'car', 'gift', 'trending', 'percent', 'sparkles', 'return', 'dots'];
 const HUE_CHOICES = [12, 42, 70, 120, 162, 200, 248, 286, 330];
 
 export function CategoriesScreen({ onBack }: { onBack: () => void }) {

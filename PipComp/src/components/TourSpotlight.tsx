@@ -20,6 +20,30 @@ function rectStyle(r: SpotlightRect) {
   return { left: r.x, top: r.y, width: r.width, height: r.height };
 }
 
+/** Web only. Does this gesture belong to a scroller that the spotlight is actually pointing at?
+ *
+ *  The scroll lock below is a blunt "the page does not move", which is what the judge asked for
+ *  — but a cutout can frame something that scrolls in its own right (a horizontal picker, a long
+ *  list), and killing that would break the very control the step is asking them to use. So a
+ *  scrollable ancestor of the event's target is honoured when it overlaps the cutout, and
+ *  everything else is held still. `rect` is in window coordinates, same space as
+ *  `getBoundingClientRect`. */
+function scrollsInsideCutout(target: EventTarget | null, rect: SpotlightRect): boolean {
+  if (typeof document === 'undefined') return false;
+  let el = target as HTMLElement | null;
+  while (el && el !== document.body && el !== document.documentElement) {
+    const style = window.getComputedStyle(el);
+    const scrollsY = /(auto|scroll)/.test(style.overflowY) && el.scrollHeight > el.clientHeight + 1;
+    const scrollsX = /(auto|scroll)/.test(style.overflowX) && el.scrollWidth > el.clientWidth + 1;
+    if (scrollsY || scrollsX) {
+      const r = el.getBoundingClientRect();
+      return r.left < rect.x + rect.width && r.right > rect.x && r.top < rect.y + rect.height && r.bottom > rect.y;
+    }
+    el = el.parentElement;
+  }
+  return false;
+}
+
 export function TourSpotlight({ onDimPress }: { onDimPress: () => void }) {
   const [report, setReport] = useState<AnchorReport | null>(() => getTourAnchor());
   const [frameSize, setFrameSize] = useState<{ width: number; height: number } | null>(null);
@@ -76,6 +100,47 @@ export function TourSpotlight({ onDimPress }: { onDimPress: () => void }) {
     ? { x: report.rect.x - frameOffset.x, y: report.rect.y - frameOffset.y, width: report.rect.width, height: report.rect.height }
     : null;
   const frames = frameSize ? spotlightFrames(frameSize, local, CUTOUT_PADDING) : null;
+  const locked = frames !== null;
+
+  // While a section is spotlit, the app underneath does not scroll. Found live: after tapping
+  // Next (or finishing a task), a flick of the wheel slid the highlighted control clean out of
+  // the cutout, leaving a lit hole over empty background and the instruction pointing at
+  // nothing. The cutout is anchored to a measured rect, so freezing the page is what keeps the
+  // two together — the tour's own `scrollIntoView` still positions the target, because that is
+  // programmatic and unaffected by these handlers.
+  //
+  // Web-only by feature detection, and only while there IS a cutout: a step with no anchor
+  // (eKYC, the mint, the scan mission) spotlights nothing and must stay freely scrollable, since
+  // its controls sit at the foot of a long form.
+  const cutout = frames?.cutout ?? null;
+  const cutoutWindow = cutout ? { x: cutout.x + frameOffset.x, y: cutout.y + frameOffset.y, width: cutout.width, height: cutout.height } : null;
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !cutoutWindow || typeof window === 'undefined') return;
+    const block = (e: Event) => {
+      if (scrollsInsideCutout(e.target, cutoutWindow) || !e.cancelable) return;
+      e.preventDefault();
+    };
+    // Keyboard scrolling is the same bypass by another route  but never steal a key from a
+    // field the judge is actually typing in (the KYC form).
+    const SCROLL_KEYS = new Set([' ', 'PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown']);
+    const blockKey = (e: KeyboardEvent) => {
+      const el = e.target as { tagName?: string; isContentEditable?: boolean } | null;
+      const tag = el?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return;
+      if (SCROLL_KEYS.has(e.key) && e.cancelable) e.preventDefault();
+    };
+    const opts = { passive: false, capture: true } as AddEventListenerOptions;
+    window.addEventListener('wheel', block, opts);
+    window.addEventListener('touchmove', block, opts);
+    window.addEventListener('keydown', blockKey, { capture: true });
+    return () => {
+      window.removeEventListener('wheel', block, opts);
+      window.removeEventListener('touchmove', block, opts);
+      window.removeEventListener('keydown', blockKey, { capture: true } as AddEventListenerOptions);
+    };
+    // Rect identity changes on every anchor report; the values are what matter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cutoutWindow?.x, cutoutWindow?.y, cutoutWindow?.width, cutoutWindow?.height]);
 
   return (
     <View

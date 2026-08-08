@@ -107,8 +107,8 @@ describe('computeSpendingProfile', () => {
   it('splits essentials from discretionary and computes savings rate', () => {
     const txns = [
       ...months.map((mk) => income(mk, 3000)),
-      ...months.map((mk) => expense(mk, 800, 'Groceries', 'groceries')), // essential
-      ...months.map((mk) => expense(mk, 200, 'Boutique', 'shopping')), // discretionary
+      ...months.map((mk) => expense(mk, 800, 'Groceries', 'food')), // essential
+      ...months.map((mk) => expense(mk, 200, 'Boutique', 'household')), // discretionary
     ];
     const p = computeSpendingProfile(txns);
     expect(p.essentialsRatio).toBeCloseTo(800 / 1000, 6);

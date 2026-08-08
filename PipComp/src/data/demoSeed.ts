@@ -4,7 +4,6 @@
 import type { NewTxn } from '../db/txnRepo';
 import type { AccountKind } from '../lib/types';
 import { merchantKey } from '../lib/normalize';
-import { DEFAULT_INCOME_ID } from './categories';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -81,26 +80,32 @@ interface Merchant {
   band: [number, number];
 }
 
-/** ~17 Malaysian merchants across every real expense category (never `other`)  see
- *  src/data/categories.ts for the category ids. */
+/** ~17 Malaysian merchants spread across the COICOP-aligned expense categories (never
+ *  `other`)  see src/data/categories.ts for the category ids.
+ *
+ *  Category ids only: the merchant ORDER, bands, cluster days and stableBand flags are
+ *  load-bearing, because the amount generator draws from `rng` in this exact sequence.
+ *  Re-ordering or adding a merchant reshuffles every amount downstream and silently
+ *  re-tunes the Benford / round-number / obligation-detection characteristics this seed
+ *  is pinned to. The bookkeeping retune changed nothing but the categoryId column. */
 const AINA_MERCHANTS: Merchant[] = [
-  { name: 'TNB', categoryId: 'bills', cluster: 0, stableBand: [65, 75], band: [65, 75] },
-  { name: 'Unifi', categoryId: 'bills', cluster: 0, stableBand: [85, 93], band: [85, 93] },
-  { name: 'Motorbike Installment', categoryId: 'bills', cluster: 0, stableBand: [245, 255], band: [245, 255] },
-  { name: 'Air Selangor', categoryId: 'bills', cluster: 1, band: [32, 112] },
-  { name: 'Maxis Prepaid', categoryId: 'bills', cluster: 3, band: [24, 120] },
-  { name: 'Pasar Mini Aziz', categoryId: 'groceries', cluster: 1, band: [40, 416] },
-  { name: '99 Speedmart', categoryId: 'groceries', cluster: 3, band: [15, 416] },
+  { name: 'TNB', categoryId: 'housing', cluster: 0, stableBand: [65, 75], band: [65, 75] },
+  { name: 'Unifi', categoryId: 'communications', cluster: 0, stableBand: [85, 93], band: [85, 93] },
+  { name: 'Motorbike Installment', categoryId: 'debt-service', cluster: 0, stableBand: [245, 255], band: [245, 255] },
+  { name: 'Air Selangor', categoryId: 'housing', cluster: 1, band: [32, 112] },
+  { name: 'Maxis Prepaid', categoryId: 'communications', cluster: 3, band: [24, 120] },
+  { name: 'Pasar Mini Aziz', categoryId: 'food', cluster: 1, band: [40, 416] },
+  { name: '99 Speedmart', categoryId: 'food', cluster: 3, band: [15, 416] },
   { name: 'Grab', categoryId: 'transport', cluster: 2, band: [8, 112] },
   { name: 'Touch n Go Reload', categoryId: 'transport', cluster: 4, band: [36, 190] },
-  { name: 'Petronas RON95', categoryId: 'fuel', cluster: 2, band: [36, 205] },
+  { name: 'Petronas RON95', categoryId: 'transport', cluster: 2, band: [36, 205] },
   { name: 'Mamak Corner', categoryId: 'dining', cluster: 1, band: [18, 175] },
   { name: 'Foodpanda', categoryId: 'dining', cluster: 3, band: [18, 185] },
   { name: 'Pasar Malam', categoryId: 'dining', cluster: 4, band: [18, 130] },
-  { name: 'Kopi O Kedai', categoryId: 'coffee', cluster: 2, band: [3, 72] },
-  { name: 'Shopee', categoryId: 'shopping', cluster: 4, band: [56, 1280] },
-  { name: 'Klinik Famili', categoryId: 'health', cluster: 0, band: [56, 512] },
-  { name: 'Watsons', categoryId: 'health', cluster: 3, band: [24, 224] },
+  { name: 'Kopi O Kedai', categoryId: 'dining', cluster: 2, band: [3, 72] },
+  { name: 'Shopee', categoryId: 'household', cluster: 4, band: [56, 1280] },
+  { name: 'Klinik Famili', categoryId: 'healthcare', cluster: 0, band: [56, 512] },
+  { name: 'Watsons', categoryId: 'healthcare', cluster: 3, band: [24, 224] },
 ];
 
 /**
@@ -150,7 +155,7 @@ export function buildAinaSeed(now: Date = new Date()): DemoSeed {
         amount,
         type: 'income',
         date: iso(d),
-        categoryId: DEFAULT_INCOME_ID,
+        categoryId: 'gig-income',
         source: 'extracted',
       });
     });
@@ -222,16 +227,21 @@ export function buildAinaSeed(now: Date = new Date()): DemoSeed {
     },
   ];
 
-  // ── Budget: expected income matches the seeded average, allocations across 4-5 categories
-  // with Shopping deliberately tight (reads as "near its limit" in the demo). ──────────────
+  // ── Budget: expected income matches the seeded average, allocations across a handful of
+  // categories with Household & Personal deliberately tight (reads as "near its limit" in the
+  // demo). The old single `bills` envelope of 430 is split into the three lines it actually
+  // covered  housing 180, and the motorbike installment standing on its own as debt service
+  // 250  so the total allocated (1130) and every other envelope are unchanged. Aina does not
+  // budget Communications; that spend shows as uncategorised headroom exactly as before. ────
   const budget = {
     expectedIncome: 2595,
     allocations: {
-      bills: 430,
-      groceries: 220,
+      housing: 180,
+      'debt-service': 250,
+      food: 220,
       transport: 180,
       dining: 160,
-      shopping: 140,
+      household: 140,
     },
   };
 
@@ -251,25 +261,26 @@ const RAVI_SEED = 137;
  *  within ±15% of median, MIN_MONTHS=3). Only genuinely utility-sized entries may appear stable,
  *  and even those have wide enough variation to avoid classification as debt obligations. */
 const RAVI_MERCHANTS: Merchant[] = [
-  // Bills — vary amounts so they are clearly non-stable:
-  { name: 'Air Selangor', categoryId: 'bills', cluster: 1, band: [28, 165] },
-  { name: 'Maxis Postpaid', categoryId: 'bills', cluster: 2, band: [55, 310] },
-  // Groceries — wide ranges, alternating hi/lo so monthly amounts swing >15%:
-  { name: 'Mydin Hypermarket', categoryId: 'groceries', cluster: 1, band: [55, 680] },
-  { name: '99 Speedmart', categoryId: 'groceries', cluster: 3, band: [18, 380] },
-  { name: 'Tesco Extra', categoryId: 'groceries', cluster: 4, band: [80, 820] },
-  // Transport:
+  // Housing & utilities — vary amounts so they are clearly non-stable:
+  { name: 'Air Selangor', categoryId: 'housing', cluster: 1, band: [28, 165] },
+  // Communications:
+  { name: 'Maxis Postpaid', categoryId: 'communications', cluster: 2, band: [55, 310] },
+  // Food & groceries — wide ranges, alternating hi/lo so monthly amounts swing >15%:
+  { name: 'Mydin Hypermarket', categoryId: 'food', cluster: 1, band: [55, 680] },
+  { name: '99 Speedmart', categoryId: 'food', cluster: 3, band: [18, 380] },
+  { name: 'Tesco Extra', categoryId: 'food', cluster: 4, band: [80, 820] },
+  // Transport & fuel (COICOP 07 folds personal-vehicle fuel into transport):
   { name: 'Grab', categoryId: 'transport', cluster: 2, band: [9, 110] },
   { name: 'Touch n Go Reload', categoryId: 'transport', cluster: 4, band: [40, 260] },
-  // Fuel:
-  { name: 'Petronas RON95', categoryId: 'fuel', cluster: 0, band: [42, 340] },
+  { name: 'Petronas RON95', categoryId: 'transport', cluster: 0, band: [42, 340] },
   // Small items (spans many orders of magnitude):
-  { name: 'Kopi O Kedai', categoryId: 'coffee', cluster: 3, band: [4, 24] },
+  { name: 'Kopi O Kedai', categoryId: 'dining', cluster: 3, band: [4, 24] },
   { name: 'Mamak Corner', categoryId: 'dining', cluster: 1, band: [12, 120] },
-  // Shopping — extremely wide, monthly amounts swing wildly:
-  { name: 'Shopee', categoryId: 'shopping', cluster: 4, band: [48, 1200] },
-  { name: 'Guardian', categoryId: 'health', cluster: 2, band: [28, 340] },
-  { name: 'BookXcess', categoryId: 'shopping', cluster: 0, band: [35, 480] },
+  // Household & personal — extremely wide, monthly amounts swing wildly:
+  { name: 'Shopee', categoryId: 'household', cluster: 4, band: [48, 1200] },
+  { name: 'Guardian', categoryId: 'healthcare', cluster: 2, band: [28, 340] },
+  // Books sit in COICOP 09 (recreation and culture), not with general retail:
+  { name: 'BookXcess', categoryId: 'recreation', cluster: 0, band: [35, 480] },
 ];
 
 /** Gig platforms Ravi works across — all in VERIFIED_PAYER_TOKENS so p2pIncomeValueRatio = 0. */
@@ -319,7 +330,7 @@ export function buildRaviSeed(now: Date = new Date()): DemoSeed {
         amount,
         type: 'income',
         date: iso(d),
-        categoryId: DEFAULT_INCOME_ID,
+        categoryId: 'gig-income',
         // Gig platform payouts from GrabFood/Foodpanda/Shopee all pass through the
         // verified pipeline in production (platform-verified payroll exports),
         // which lifts provenanceTrust from 0.70 to the 0.80–0.90 range.
@@ -385,16 +396,21 @@ export function buildRaviSeed(now: Date = new Date()): DemoSeed {
     },
   ];
 
+  // The old `bills` 520 splits into housing 240 + communications 280, and the separate
+  // `fuel` 200 folds into transport (280 + 200 = 480), matching how those merchants are
+  // now filed. `shopping` 320 splits the same way its merchants did: household 220
+  // (Shopee) + recreation 100 (BookXcess). Total allocated is unchanged at 2100.
   const budget = {
     expectedIncome: 4000,
     allocations: {
-      bills: 520,
-      groceries: 380,
-      transport: 280,
+      housing: 240,
+      communications: 280,
+      food: 380,
+      transport: 480,
       dining: 220,
-      shopping: 320,
-      health: 180,
-      fuel: 200,
+      household: 220,
+      recreation: 100,
+      healthcare: 180,
     },
   };
 
@@ -408,11 +424,11 @@ const FAIZAL_SEED = 271;
 
 /** Thin merchant list — few unique merchants drives low merchant_entropy (ML fraud signal). */
 const FAIZAL_MERCHANTS = [
-  { name: 'Giant Hypermarket', categoryId: 'groceries', day: 5 },
+  { name: 'Giant Hypermarket', categoryId: 'food', day: 5 },
   { name: 'Grab', categoryId: 'transport', day: 10 },
   { name: 'Mamak Corner', categoryId: 'dining', day: 15 },
-  { name: 'Shopee', categoryId: 'shopping', day: 20 },
-  { name: 'TNB', categoryId: 'bills', day: 25 },
+  { name: 'Shopee', categoryId: 'household', day: 20 },
+  { name: 'TNB', categoryId: 'housing', day: 25 },
 ];
 
 /** Round income amounts — triggers round_ratio and poor Benford (ML fraud signals). */
@@ -449,7 +465,7 @@ export function buildFaizalSeed(now: Date = new Date()): DemoSeed {
         amount,
         type: 'income',
         date: iso(d),
-        categoryId: DEFAULT_INCOME_ID,
+        categoryId: 'business-income',
         source: 'manual', // manual provenance — lowers provenance trust
       });
     }
@@ -483,7 +499,7 @@ export function buildFaizalSeed(now: Date = new Date()): DemoSeed {
           amount: 200, // round duplicate
           type: 'expense',
           date: iso(d),
-          categoryId: 'groceries',
+          categoryId: 'food',
           source: 'manual',
         });
       }
@@ -506,10 +522,10 @@ export function buildFaizalSeed(now: Date = new Date()): DemoSeed {
   const budget = {
     expectedIncome: 3000,
     allocations: {
-      groceries: 400,
+      food: 400,
       transport: 200,
       dining: 300,
-      shopping: 300,
+      household: 300,
     },
   };
 

@@ -120,18 +120,16 @@ export const TOUR_PATH: Record<DemoOutcome['decision'], { line: string; recommen
 export const RECOMMENDED_DEMO_PROFILE: DemoProfileId =
   DEMO_PROFILES.find((p) => TOUR_PATH[p.outcome.decision].recommended)?.id ?? DEMO_PROFILES[0].id;
 
-/** Can this persona be picked as the FIRST run, on the front door?
+/** Can this persona be picked on the front door?
  *
- *  Only the recommended one. A judge's first pass through a ten-act cross-app script should be
- *  the ending that plays all of it and hands them the lending decision; the two short paths land
- *  much better as "now see what changes" than as an opening move.
+ *  All three, since 2026-08-06. This used to withhold everything but the recommended ending, so
+ *  a judge who finished one run, hit Profile → Reset & go to setup, and came back to try another
+ *  borrower found the other two rows dead — which is exactly the route the console's finale card
+ *  now sends them down. The badge and the "start here" copy still steer the opening move; they
+ *  no longer bar it.
  *
- *  Scoped to the front door on purpose, and deliberately NOT backed by any persisted "tour
- *  finished" flag. The other two endings stay one screen away for the whole session (Profile →
- *  Demo profiles, which the console's finale card points at), so this steers the opening move
- *  without ever being a door that can get stuck shut — and the rows stay visible and labelled,
- *  because three verdicts on screen at once is the front door's own proof that one engine
- *  produces three answers. */
-export function canStartWith(persona: DemoPersona): boolean {
-  return TOUR_PATH[persona.outcome.decision].recommended;
+ *  Kept as a function rather than deleted: the front door asks a question ("is this row
+ *  startable?") that is worth having one answer to, and the rows already read it. */
+export function canStartWith(_persona: DemoPersona): boolean {
+  return true;
 }

@@ -6,27 +6,15 @@
 // loudest control on the first screen it read as a real identity wall. It stays reachable from
 // the Credit Passport screen (App.tsx routes to 'kyc') and the guided tour still walks through
 // it in act 5, so nothing is lost.
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Animated,
-  Easing,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../components/Icon';
 import { Pip } from '../components/Pip';
 import { canStartWith, DEMO_PROFILES, RECOMMENDED_DEMO_PROFILE, TOUR_PATH, type DemoPersona, type DemoProfileId } from '../data/demoPersonas';
 import { VERDICT_STYLE } from '../lib/verdictStyle';
 import { useAppData } from '../state/store';
-import { colors, platformShadow, radius, shadowCard, uiFont } from '../theme';
+import { colors, radius, shadowCard, uiFont } from '../theme';
 
 export function OnboardingScreen() {
   const insets = useSafeAreaInsets();
@@ -53,135 +41,50 @@ export function OnboardingScreen() {
     }
   }
 
-  // ── Front-door spotlight ────────────────────────────────────────────────────
-  // The same dim-and-cutout language as the guided tour itself (TourSpotlight), applied one
-  // screen early: before any tour step exists, the judge still needs to be pointed at exactly
-  // one card and exactly one button. Two measured rects  the recommended persona's row and the
-  // primary CTA  carve the only two lit holes; everything else (hero, thesis, the two withheld
-  // rows, the secondary/skip buttons) sits under a uniform dim and cannot be tapped through it.
-  //
-  // Rects are window-relative (measureInWindow), the same technique `TourAnchor`/`TourSpotlight`
-  // use for the real tour, rather than `onLayout`  RN-web's `onLayout` never fired for a plain
-  // `View` in this build (confirmed live: a bare debug logger on the hero block never ran), so
-  // this sticks to the measuring approach already proven to work elsewhere in this app. The
-  // overlay is fixed over the whole viewport (outside the ScrollView) and re-measures on scroll,
-  // exactly like the real spotlight.
-  const rootRef = useRef<View>(null);
-  const scrollRef = useRef<ScrollView>(null);
-  const startRowRef = useRef<View>(null);
-  const ctaRef = useRef<View>(null);
-  const [spot, setSpot] = useState<{ start: SpotRect | null; cta: SpotRect | null }>({ start: null, cta: null });
-  const rafRef = useRef<number | null>(null);
-  const scrolledRef = useRef(false);
-
-  const measure = useCallback(() => {
-    rootRef.current?.measureInWindow((rx, ry) => {
-      const capture = (ref: React.RefObject<View | null>, key: 'start' | 'cta') => {
-        ref.current?.measureInWindow((x, y, w, h) => {
-          if (w <= 0 || h <= 0) return;
-          const rect = { top: y - ry, bottom: y - ry + h };
-          setSpot((s) => (s[key] && s[key]!.top === rect.top && s[key]!.bottom === rect.bottom ? s : { ...s, [key]: rect }));
-          // Below the fold at a typical laptop window height otherwise: the CTA sits well past
-          // the picker, and a spotlight pointing at an off-screen button defeats the whole
-          // point. `ScrollView`'s own imperative `scrollTo` proved unreliable here (found live:
-          // it never moved the underlying web scroll container), so this scrolls the DOM node
-          // directly  the same feature-detected technique `TourAnchor` already uses for the
-          // real tour's spotlight targets, which IS proven to work in this app.
-          if (key === 'start' && !scrolledRef.current) {
-            scrolledRef.current = true;
-            const node = ref.current as unknown as { scrollIntoView?: (opts: object) => void } | null;
-            node?.scrollIntoView?.({ behavior: 'auto', block: 'start' });
-          }
-        });
-      };
-      capture(startRowRef, 'start');
-      capture(ctaRef, 'cta');
-    });
-  }, []);
-
-  const scheduleMeasure = useCallback(() => {
-    if (rafRef.current != null) return;
-    rafRef.current = requestAnimationFrame(() => {
-      rafRef.current = null;
-      measure();
-    });
-  }, [measure]);
-
-  // Settle retries on mount (fonts/layout can still be resolving on the first paint), a resize
-  // listener on web, and a scroll handler so the two holes track their targets  including the
-  // scroll the effect above just triggered.
-  useEffect(() => {
-    const timers = [50, 150, 300, 450, 650, 900].map((ms) => setTimeout(measure, ms));
-    return () => timers.forEach(clearTimeout);
-  }, [measure]);
-
-  useEffect(() => {
-    if (Platform.OS !== 'web') return;
-    window.addEventListener('resize', scheduleMeasure);
-    return () => window.removeEventListener('resize', scheduleMeasure);
-  }, [scheduleMeasure]);
-
-  const onScroll = useCallback((_e: NativeSyntheticEvent<NativeScrollEvent>) => scheduleMeasure(), [scheduleMeasure]);
-
   return (
-    <View style={styles.root} ref={rootRef}>
-      <ScrollView
-        ref={scrollRef}
-        contentContainerStyle={{ padding: 22, paddingTop: insets.top + 28, paddingBottom: insets.bottom + 28 }}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-      >
+    <View style={styles.root}>
+      <ScrollView contentContainerStyle={{ padding: 22, paddingTop: insets.top + 28, paddingBottom: insets.bottom + 28 }}>
         <View style={styles.hero}>
           <Pip size={76} expr={selected.expr} float />
           <Text style={styles.title}>Pip Credit</Text>
           <Text style={styles.subtitle}>Credit for people the system can't see.</Text>
         </View>
 
-        <Text style={styles.thesis}>One engine, three borrowers, three different answers.</Text>
+        <PipGreeting />
+
+        <Text style={styles.thesis}>Please proceed with the Aina demo account walkthrough first.</Text>
 
         <View style={styles.rows}>
-          {DEMO_PROFILES.map((persona) => {
-            const row = (
-              <PersonaRow
-                persona={persona}
-                selected={persona.id === selectedId}
-                startable={canStartWith(persona)}
-                onSelect={() => setSelectedId(persona.id)}
-              />
-            );
-            // Only the recommended row gets a measuring wrapper  the same pattern
-            // TourAnchor uses for the real tour's own spotlight targets.
-            return persona.id === RECOMMENDED_DEMO_PROFILE ? (
-              <View key={persona.id} ref={startRowRef} collapsable={false}>
-                {row}
-              </View>
-            ) : (
-              <View key={persona.id}>{row}</View>
-            );
-          })}
+          {DEMO_PROFILES.map((persona) => (
+            <PersonaRow
+              key={persona.id}
+              persona={persona}
+              selected={persona.id === selectedId}
+              startable={canStartWith(persona)}
+              onSelect={() => setSelectedId(persona.id)}
+            />
+          ))}
         </View>
 
         {/* The one instruction on the screen, pointing at the one button that matters. The rows
             above have already said WHO is loaded and why; this says what to do next. */}
         <TourNudge name={selected.name} />
 
-        <View ref={ctaRef} collapsable={false}>
-          <Pressable
-            style={[styles.primaryBtn, busy && styles.btnBusy]}
-            onPress={() => void enter(true)}
-            disabled={busy}
-            accessibilityRole="button"
-          >
-            {busy ? (
-              <ActivityIndicator size="small" color={colors.onAccent} />
-            ) : (
-              <>
-                <Icon name="sparkles" size={16} color={colors.onAccent} />
-                <Text style={styles.primaryBtnText}>Take the hands-on tour</Text>
-              </>
-            )}
-          </Pressable>
-        </View>
+        <Pressable
+          style={[styles.primaryBtn, busy && styles.btnBusy]}
+          onPress={() => void enter(true)}
+          disabled={busy}
+          accessibilityRole="button"
+        >
+          {busy ? (
+            <ActivityIndicator size="small" color={colors.onAccent} />
+          ) : (
+            <>
+              <Icon name="sparkles" size={16} color={colors.onAccent} />
+              <Text style={styles.primaryBtnText}>Take the tour</Text>
+            </>
+          )}
+        </Pressable>
 
         <Pressable
           style={[styles.secondaryBtn, busy && styles.btnBusy]}
@@ -201,58 +104,27 @@ export function OnboardingScreen() {
           <Text style={styles.skipText}>Start empty instead</Text>
         </Pressable>
       </ScrollView>
-
-      {spot.start && spot.cta && <FrontDoorSpotlight start={spot.start} cta={spot.cta} />}
     </View>
   );
 }
 
-interface SpotRect {
-  /** Window-relative, in the overlay's own local space (root offset already subtracted). */
-  top: number;
-  bottom: number;
-}
-
-/** Dims everything except the recommended persona's card and the primary CTA  three full-width
- *  panes (above, between, below the two holes) plus a pulsing halo ring on each hole, the same
- *  visual language as the real guided tour's `TourSpotlight`. Both targets share the picker's
- *  full content width, so a hole never needs left/right dimming of its own.
- *
- *  Absorbs taps on the dimmed panes (the two withheld rows are already disabled buttons, but the
- *  secondary/skip buttons underneath the bottom pane are real controls and must not fire through
- *  a screen that is supposed to read as "only these two things are available"). Tapping a dim
- *  pane does nothing  there is no tour yet to pause, so it simply reads as inert. */
-function FrontDoorSpotlight({ start, cta }: { start: SpotRect; cta: SpotRect }) {
-  const pulse = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    const useNative = Platform.OS !== 'web';
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 0.55, duration: 900, useNativeDriver: useNative }),
-        Animated.timing(pulse, { toValue: 1, duration: 900, useNativeDriver: useNative }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [pulse]);
-
-  const PAD = 8;
-  const startHole = { top: start.top - PAD, bottom: start.bottom + PAD };
-  const ctaHole = { top: cta.top - PAD, bottom: cta.bottom + PAD };
-  const noop = () => {};
-
+/** Pip's own hello, styled exactly like the guided tour's step card (`TourCard`)  Pip seated
+ *  atop the left corner of a bordered speech card  so the mascot the judge is about to spend
+ *  ten acts with says hi in its own voice before the picker below ever appears. Static (no act
+ *  meter, no Next/Skip): the tour proper hasn't started yet, this is only the front door. */
+function PipGreeting() {
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      <Pressable onPress={noop} accessible={false} focusable={false} style={[styles.dim, { top: 0, height: Math.max(0, startHole.top) }]} />
-      <Pressable
-        onPress={noop}
-        accessible={false}
-        focusable={false}
-        style={[styles.dim, { top: startHole.bottom, height: Math.max(0, ctaHole.top - startHole.bottom) }]}
-      />
-      <Pressable onPress={noop} accessible={false} focusable={false} style={[styles.dim, { top: ctaHole.bottom, bottom: 0 }]} />
-      <Animated.View pointerEvents="none" style={[styles.halo, styles.haloCard, { top: startHole.top, height: startHole.bottom - startHole.top, opacity: pulse }]} />
-      <Animated.View pointerEvents="none" style={[styles.halo, styles.haloPill, { top: ctaHole.top, height: ctaHole.bottom - ctaHole.top, opacity: pulse }]} />
+    <View style={styles.greetingWrap}>
+      <View style={styles.pipSeat} pointerEvents="none">
+        <Pip size={46} expr="happy" />
+      </View>
+      <View style={styles.greetingCard}>
+        <Text style={styles.greetingTitle}>Hi, I'm Pip. Welcome, judge.</Text>
+        <Text style={styles.greetingBody}>
+          I read the messy income proof formal lenders can't, so people with no paper trail can
+          still get scored.
+        </Text>
+      </View>
     </View>
   );
 }
@@ -345,8 +217,8 @@ function TourNudge({ name }: { name: string }) {
   return (
     <View style={styles.nudge}>
       <Text style={styles.nudgeText}>
-        <Text style={styles.nudgeName}>{name}</Text> is loaded. Take the hands-on tour to play it
-        out, first as them and then as their lender.
+        <Text style={styles.nudgeName}>{name}</Text> is loaded. Take the tour to play it out,
+        first as them and then as their lender.
       </Text>
       <Animated.View
         style={{ transform: [{ translateY: bob.interpolate({ inputRange: [0, 1], outputRange: [0, 4] }) }] }}
@@ -365,6 +237,22 @@ const styles = StyleSheet.create({
   hero: { alignItems: 'center' },
   title: { fontFamily: uiFont(800), fontSize: 27, color: colors.ink, marginTop: 14 },
   subtitle: { fontFamily: uiFont(500), fontSize: 14.5, color: colors.ink2, marginTop: 6 },
+
+  // Mirrors TourCard's own pipSeat + card: the mascot perches on the card's top-left corner,
+  // overlapping its border, exactly as it does throughout the guided tour.
+  greetingWrap: { marginTop: 44, marginBottom: 8 },
+  pipSeat: { position: 'absolute', top: -34, left: 22, zIndex: 1 },
+  greetingCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.accentSoft,
+    padding: 16,
+    paddingTop: 14,
+    ...shadowCard,
+  },
+  greetingTitle: { fontFamily: uiFont(800), fontSize: 15, color: colors.ink, marginBottom: 4 },
+  greetingBody: { fontFamily: uiFont(500), fontSize: 13.5, color: colors.ink2, lineHeight: 19 },
 
   thesis: {
     fontFamily: uiFont(700),
@@ -418,19 +306,4 @@ const styles = StyleSheet.create({
   btnBusy: { opacity: 0.6 },
   skipBtn: { alignItems: 'center', justifyContent: 'center', height: 40, marginTop: 12 },
   skipText: { fontFamily: uiFont(500), fontSize: 13, color: colors.ink3, textDecorationLine: 'underline' },
-
-  dim: { position: 'absolute', left: 0, right: 0, backgroundColor: colors.ink, opacity: 0.45 },
-  halo: {
-    position: 'absolute',
-    // Matches the ScrollView's own horizontal padding (22): the overlay is fixed over the whole
-    // viewport (outside that ScrollView), so it has to restate the inset rather than inherit it
-    // — otherwise the ring would float past the card's actual left/right edges.
-    left: 22,
-    right: 22,
-    borderWidth: 2.5,
-    borderColor: colors.accent,
-    ...platformShadow(colors.accent, 0.5, 10, { width: 0, height: 0 }, 0),
-  },
-  haloCard: { borderRadius: radius.lg },
-  haloPill: { borderRadius: 999 },
 });

@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { ALL_SEED_CATEGORIES, INCOME_SEED_IDS } from '../data/categories';
+import { ALL_SEED_CATEGORIES, CATEGORY_ID_REMAP, INCOME_SEED_IDS } from '../data/categories';
 import { DEFAULT_PRODUCTS } from '../lib/loans';
 
 const DB_NAME = 'pip.db';
@@ -211,9 +211,52 @@ async function init(): Promise<SQLite.SQLiteDatabase> {
     }
   }
 
+  await migrateCategoryIds(db);
   await ensureSeedCategories(db);
   await seedProducts(db);
   return db;
+}
+
+/**
+ * Migration (bookkeeping retune, 2026-08-07): move every reference to a retired
+ * default category id onto its replacement, then drop the retired default rows.
+ *
+ * Runs before the seed so the new defaults are inserted into a table that no longer
+ * carries the old ones. A no-op on a fresh database  none of the old ids exist  and
+ * idempotent on an upgraded one, because after the first pass nothing references them.
+ *
+ * Custom categories are untouched: only rows with is_default = 1 are dropped, and an
+ * old default id can never have been handed to a custom category (slugify would have
+ * collided with the seeded row and appended a suffix).
+ */
+async function migrateCategoryIds(db: SQLite.SQLiteDatabase): Promise<void> {
+  const pairs = Object.entries(CATEGORY_ID_REMAP);
+  const stale = await db.getFirstAsync<{ id: string }>(
+    `SELECT id FROM categories WHERE is_default = 1 AND id IN (${pairs.map(() => '?').join(',')}) LIMIT 1`,
+    ...pairs.map(([oldId]) => oldId)
+  );
+  if (!stale) return;
+
+  await db.withTransactionAsync(async () => {
+    for (const [oldId, newId] of pairs) {
+      await db.runAsync('UPDATE transactions SET category_id = ? WHERE category_id = ?', newId, oldId);
+      await db.runAsync('UPDATE merchant_memory SET category_id = ? WHERE category_id = ?', newId, oldId);
+      // budget_allocation is keyed on category_id, so a remap that lands on an
+      // existing row has to fold the two envelopes together rather than collide.
+      await db.runAsync(
+        `INSERT INTO budget_allocation (category_id, amount, updated_at)
+           SELECT ?, amount, updated_at FROM budget_allocation WHERE category_id = ?
+         ON CONFLICT(category_id) DO UPDATE SET amount = amount + excluded.amount, updated_at = excluded.updated_at`,
+        newId,
+        oldId
+      );
+      await db.runAsync('DELETE FROM budget_allocation WHERE category_id = ?', oldId);
+    }
+    await db.runAsync(
+      `DELETE FROM categories WHERE is_default = 1 AND id IN (${pairs.map(() => '?').join(',')})`,
+      ...pairs.map(([oldId]) => oldId)
+    );
+  });
 }
 
 /**
@@ -233,8 +276,15 @@ async function ensureSeedCategories(db: SQLite.SQLiteDatabase): Promise<void> {
 async function seedCategories(db: SQLite.SQLiteDatabase): Promise<void> {
   for (let i = 0; i < ALL_SEED_CATEGORIES.length; i++) {
     const c = ALL_SEED_CATEGORIES[i];
+    // Upsert rather than INSERT OR IGNORE: the ids that survived the bookkeeping
+    // retune ('dining', 'transport', 'other') carry stale labels and sort order on
+    // an upgraded database, and defaults are never user-editable, so refreshing
+    // them in place is safe. Custom rows (is_default = 0) are left alone.
     await db.runAsync(
-      'INSERT OR IGNORE INTO categories (id, label, icon, hue, kind, is_default, sort) VALUES (?, ?, ?, ?, ?, 1, ?)',
+      `INSERT INTO categories (id, label, icon, hue, kind, is_default, sort) VALUES (?, ?, ?, ?, ?, 1, ?)
+       ON CONFLICT(id) DO UPDATE SET label = excluded.label, icon = excluded.icon, hue = excluded.hue,
+         kind = excluded.kind, sort = excluded.sort
+       WHERE categories.is_default = 1`,
       c.id,
       c.label,
       c.icon,

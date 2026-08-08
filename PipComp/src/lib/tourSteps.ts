@@ -181,7 +181,7 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     actLabel: 'See the score',
     pip: 'curious',
     title: 'Open the score',
-    body: 'Your turn: tap the Credit card below.',
+    body: 'Your task: tap the Credit card below.',
     anchorId: 'credit-hero-card',
     advanceOn: { screen: 'credit' },
     celebrate: 'You opened the score.',
@@ -240,10 +240,24 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     actLabel: 'Get the plan',
     pip: 'curious',
     title: 'Ask Pip for the plan',
-    body: 'Your turn: tap Build my score.',
+    body: 'Your task: tap Build my score.',
     anchorId: 'build-score-cta',
     advanceOn: { screen: 'coach' },
     celebrate: 'Coach opened.',
+  },
+  {
+    // Opens on the lender's published bars, which sit at the top of Build my score with the
+    // borrower's own standing marked against each one. Body is deliberately one short line:
+    // it names what the whole screen is for before the plan below it starts arguing detail.
+    id: 'coach-criteria',
+    kind: 'explain',
+    screen: 'coach',
+    act: 4,
+    actLabel: 'Get the plan',
+    pip: 'think',
+    title: 'What this lender asks for',
+    body: 'This screen shows what they want, and how to reach it.',
+    anchorId: 'lender-criteria',
   },
   {
     // Copy deliberately carries NO specific before/after figures. The coverage-only-unlock
@@ -338,7 +352,8 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     body: 'Signed aggregates only, plus how the score has moved. Lenders can verify it offline.',
     anchorId: 'passport-card',
     // The one place in the script where a judge can leave and watch the fraud defences run
-    // live. Ends the tour, so it sits on an explain step rather than mid-mission.
+    // live. PAUSES the tour (the Resume chip brings them straight back to this step), so it sits
+    // on an explain step rather than mid-mission.
     actionLabel: 'See the fraud defences work',
     actionScreen: 'attacks',
   },
@@ -362,7 +377,7 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     actLabel: 'Ask for the money',
     pip: 'curious',
     title: 'Send the request',
-    body: 'Your turn: send the passport to the lender you picked.',
+    body: 'Your task: send the passport to the lender you picked.',
     // The send is what decides the ending and what puts a file on the console's desk: skip it
     // and the remaining four acts have nothing real to narrate. The button itself is locked
     // until this step for the same reason from the other side — see `isControlLocked`.
@@ -450,7 +465,7 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     pip: 'happy',
     branches: ['referred', 'approved'],
     title: 'The terms came back',
-    body: 'The amount, instalment and rate all came from the lender’s own engine. Take it or refuse it.',
+    body: 'The amount, instalment and rate all came from the lender’s own engine. Accept it.',
     anchorId: 'offer-card',
   },
   {
@@ -464,7 +479,7 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     title: 'Answer the offer',
     // Names the button by its real label: this step is where the auto-advancing act-6 handoff
     // now lands the judge, so it must point at the control rather than at the idea.
-    body: 'Your turn: tap Accept financing. An approval is an offer until you say yes.',
+    body: 'Your task: tap Accept financing. An approval is an offer until you say yes.',
     // Narrower than 'offer-arrived's card-wide anchor: this step's own action is one button,
     // and "No thanks" stays visible-but-disabled beside it (declining strands the tour), so the
     // spotlight should land on the control the judge can actually press.
