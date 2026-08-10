@@ -156,6 +156,11 @@ export function AllTransactionsScreen({
                       <Text style={styles.sub}>
                         {cat.label} · {shortDate(t.date ?? t.createdAt)}
                       </Text>
+                      {t.remark ? (
+                        <Text style={styles.remark} numberOfLines={1}>
+                          {t.remark}
+                        </Text>
+                      ) : null}
                     </View>
                     <Amount value={t.amount} size={15} weight={600} color={income ? colors.accent : colors.ink} />
                     {!selectMode && <Icon name="pencil" size={15} color={colors.ink3} />}
@@ -198,6 +203,7 @@ const styles = StyleSheet.create({
   divider: { borderTopWidth: 1, borderTopColor: colors.line2 },
   merchant: { fontFamily: uiFont(600), fontSize: 14.5, color: colors.ink },
   sub: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, marginTop: 1 },
+  remark: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, marginTop: 1, fontStyle: 'italic' },
   emptyTitle: { fontFamily: uiFont(700), fontSize: 17, color: colors.ink },
   emptySub: { fontFamily: uiFont(500), fontSize: 13.5, color: colors.ink2, marginTop: 6, textAlign: 'center' },
   checkbox: { width: 22, height: 22, borderRadius: 999, borderWidth: 2, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },

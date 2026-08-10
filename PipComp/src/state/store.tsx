@@ -198,7 +198,7 @@ interface AppData {
   ) => Promise<{ created: Transaction[]; newLearned: NewLearned[] }>;
   saveTransactionEdits: (
     txn: Transaction,
-    edits: { amount: number; type: TxnType; categoryId: string }
+    edits: { amount: number; type: TxnType; categoryId: string; remark?: string | null }
   ) => Promise<void>;
   removeTransaction: (id: string) => Promise<void>;
   removeMany: (ids: string[]) => Promise<void>;
@@ -506,6 +506,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           date: it.date,
           categoryId,
           source,
+          remark: it.remark,
         });
       }
 
@@ -521,8 +522,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   );
 
   const saveTransactionEdits = useCallback(
-    async (txn: Transaction, edits: { amount: number; type: TxnType; categoryId: string }) => {
-      await updateTransactionFields(txn.id, edits.amount, edits.type, edits.categoryId);
+    async (
+      txn: Transaction,
+      edits: { amount: number; type: TxnType; categoryId: string; remark?: string | null }
+    ) => {
+      await updateTransactionFields(txn.id, edits.amount, edits.type, edits.categoryId, edits.remark);
       // Correcting a category re-teaches Pip for that merchant (expense or income).
       await upsertMemory(txn.merchantKey, edits.categoryId);
       const [txns, mem] = await Promise.all([listTransactions(), getMemoryMap()]);

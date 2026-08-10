@@ -12,6 +12,7 @@ interface TxnRow {
   category_id: string | null;
   created_at: string;
   source: string;
+  remark: string | null;
 }
 
 function toTxn(r: TxnRow): Transaction {
@@ -26,6 +27,7 @@ function toTxn(r: TxnRow): Transaction {
     categoryId: r.category_id,
     createdAt: r.created_at,
     source: (r.source as TxnSource) ?? 'manual',
+    remark: r.remark,
   };
 }
 
@@ -37,6 +39,7 @@ export interface NewTxn {
   date: string | null;
   categoryId: string | null;
   source?: TxnSource;
+  remark?: string | null;
 }
 
 export async function listTransactions(limit?: number): Promise<Transaction[]> {
@@ -49,6 +52,12 @@ export async function listTransactions(limit?: number): Promise<Transaction[]> {
   return rows.map(toTxn);
 }
 
+/** Blank input reads as "no remark", never an empty string sitting in the DB. */
+function cleanRemark(remark: string | null | undefined): string | null {
+  const trimmed = remark?.trim();
+  return trimmed ? trimmed : null;
+}
+
 export async function addTransactions(items: NewTxn[]): Promise<Transaction[]> {
   const db = await getDb();
   const created: Transaction[] = [];
@@ -56,10 +65,11 @@ export async function addTransactions(items: NewTxn[]): Promise<Transaction[]> {
     for (const it of items) {
       const id = genId();
       const createdAt = new Date().toISOString();
+      const remark = cleanRemark(it.remark);
       await db.runAsync(
         `INSERT INTO transactions
-           (id, merchant_raw, merchant_key, amount, currency, type, txn_date, category_id, created_at, source)
-         VALUES (?, ?, ?, ?, 'MYR', ?, ?, ?, ?, ?)`,
+           (id, merchant_raw, merchant_key, amount, currency, type, txn_date, category_id, created_at, source, remark)
+         VALUES (?, ?, ?, ?, 'MYR', ?, ?, ?, ?, ?, ?)`,
         id,
         it.merchantRaw,
         it.merchantKey,
@@ -68,7 +78,8 @@ export async function addTransactions(items: NewTxn[]): Promise<Transaction[]> {
         it.date,
         it.categoryId,
         createdAt,
-        it.source ?? 'manual'
+        it.source ?? 'manual',
+        remark
       );
       created.push({
         id,
@@ -81,6 +92,7 @@ export async function addTransactions(items: NewTxn[]): Promise<Transaction[]> {
         categoryId: it.categoryId,
         createdAt,
         source: it.source ?? 'manual',
+        remark,
       });
     }
   });
@@ -109,19 +121,21 @@ export async function deleteTransactions(ids: string[]): Promise<void> {
   await db.runAsync(`DELETE FROM transactions WHERE id IN (${placeholders})`, ...ids);
 }
 
-/** Update amount, type, and category together (used by the edit sheet). */
+/** Update amount, type, category, and remark together (used by the edit sheet). */
 export async function updateTransactionFields(
   id: string,
   amount: number,
   type: TxnType,
-  categoryId: string
+  categoryId: string,
+  remark?: string | null
 ): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    'UPDATE transactions SET amount = ?, type = ?, category_id = ? WHERE id = ?',
+    'UPDATE transactions SET amount = ?, type = ?, category_id = ?, remark = ? WHERE id = ?',
     amount,
     type,
     categoryId,
+    cleanRemark(remark),
     id
   );
 }

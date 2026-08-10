@@ -14,6 +14,9 @@ export interface ExtractedTxn {
   date: string | null; // ISO date (YYYY-MM-DD) or null
   method: string | null; // optional sub-label, e.g. "DuitNow QR"
   categoryHint?: string | null; // a category label the source document carried, if any
+  /** A short user-written note, e.g. "lunch with client". Never extracted from the
+   *  screenshot itself; the user adds it during review or manual entry. */
+  remark?: string | null;
 }
 
 /** A category. `id` is a stable slug (also used as the memory value). `kind`
@@ -39,6 +42,10 @@ export interface Transaction {
   categoryId: string | null;
   createdAt: string;
   source: TxnSource;
+  /** A short user-written note. Optional so existing test fixtures and callers built before
+   *  this field existed keep working unchanged; the DB and repo always resolve it to a real
+   *  value (string or null), it is only "possibly absent" from the type's point of view. */
+  remark?: string | null;
 }
 
 /** merchantKey -> categoryId, the learned memory. */

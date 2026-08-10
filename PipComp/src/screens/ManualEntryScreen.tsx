@@ -28,6 +28,7 @@ export function ManualEntryScreen({
   const [dateText, setDateText] = useState(todayISO());
   const [type, setType] = useState<TxnType>('expense');
   const [cat, setCat] = useState<string | null>(null);
+  const [remark, setRemark] = useState('');
   const [adding, setAdding] = useState(false);
 
   // Every transaction is tied to an account. Default to a cash account (prefer an
@@ -79,6 +80,7 @@ export function ManualEntryScreen({
       type,
       date: validDate,
       method: null,
+      remark: remark.trim() || null,
     };
     if (linkId) await recordBalanceLink(linkId, amt, linkEffect, validDate);
     onComplete(item, cat);
@@ -157,6 +159,16 @@ export function ManualEntryScreen({
             </Pressable>
           </View>
         </View>
+
+        <Eyebrow style={{ marginTop: 18, marginBottom: 8 }}>Remark (optional)</Eyebrow>
+        <TextInput
+          value={remark}
+          onChangeText={setRemark}
+          placeholder="e.g. Lunch with a supplier"
+          placeholderTextColor={colors.ink3}
+          style={styles.textInput}
+          multiline
+        />
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>

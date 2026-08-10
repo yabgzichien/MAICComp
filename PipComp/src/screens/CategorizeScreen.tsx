@@ -122,6 +122,14 @@ export function CategorizeScreen({
 
   // Flip an item between expense and income; clears the category pick since the
   // available categories change with the kind.
+  const setRemark = (remark: string | null) => {
+    setItems((prev) => {
+      const next = [...prev];
+      next[originalIndex] = { ...next[originalIndex], remark };
+      return next;
+    });
+  };
+
   const setType = (t: TxnType) => {
     if (!item || t === item.type) return;
     setItems((prev) => {
@@ -224,6 +232,7 @@ export function CategorizeScreen({
                 <Text style={styles.focusSub}>{item!.method}</Text>
               ) : null}
               <DateEditor value={item!.date} onChange={setDate} />
+              <RemarkEditor value={item!.remark ?? null} onChange={setRemark} />
             </View>
             <AmountEditor value={item!.amount} income={isIncome} onChange={setAmount} />
           </Card>
@@ -407,6 +416,45 @@ function DateEditor({ value, onChange }: { value: string | null; onChange: (d: s
   );
 }
 
+/** Tap to add or edit a short free-text remark (mirrors DateEditor). Never extracted from the
+ *  screenshot; purely something the user types during review. */
+function RemarkEditor({ value, onChange }: { value: string | null; onChange: (r: string | null) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(value ?? '');
+
+  useEffect(() => {
+    if (!editing) setText(value ?? '');
+  }, [value, editing]);
+
+  const commit = () => {
+    const trimmed = text.trim();
+    onChange(trimmed || null);
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <TextInput
+        value={text}
+        onChangeText={setText}
+        placeholder="Add a remark"
+        placeholderTextColor={colors.ink3}
+        autoFocus
+        onBlur={commit}
+        onSubmitEditing={commit}
+        style={styles.remarkInput}
+      />
+    );
+  }
+
+  return (
+    <Pressable onPress={() => setEditing(true)} hitSlop={8} style={styles.dateTap}>
+      <Icon name="pencil" size={13} color={colors.ink3} />
+      <Text style={styles.dateText} numberOfLines={1}>{value || 'Add a remark'}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   counter: { fontFamily: uiFont(700), fontSize: 13, color: colors.ink2 },
@@ -421,8 +469,21 @@ const styles = StyleSheet.create({
   focusMerchant: { fontFamily: uiFont(700), fontSize: 16, color: colors.ink },
   focusSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 2, flexShrink: 1 },
   acctRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
-  dateTap: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6, alignSelf: 'flex-start' },
-  dateText: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2 },
+  dateTap: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6, alignSelf: 'flex-start', maxWidth: '100%' },
+  dateText: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2, flexShrink: 1 },
+  remarkInput: {
+    fontFamily: uiFont(600),
+    fontSize: 12.5,
+    color: colors.ink,
+    marginTop: 6,
+    minWidth: 160,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: colors.surface2,
+    borderWidth: 1,
+    borderColor: colors.accent,
+  },
   dateInput: {
     fontFamily: uiFont(600),
     fontSize: 12.5,

@@ -36,6 +36,7 @@ async function init(): Promise<SQLite.SQLiteDatabase> {
       category_id  TEXT,
       created_at   TEXT NOT NULL
       ,source       TEXT NOT NULL DEFAULT 'manual'
+      ,remark       TEXT
     );
     CREATE TABLE IF NOT EXISTS merchant_memory (
       merchant_key TEXT PRIMARY KEY NOT NULL,
@@ -162,6 +163,13 @@ async function init(): Promise<SQLite.SQLiteDatabase> {
   // Migration: provenance source on transactions (data-confidence weighting).
   try {
     await db.execAsync("ALTER TABLE transactions ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'");
+  } catch {
+    // column already present
+  }
+
+  // Migration: a free-text remark the user can attach to a transaction.
+  try {
+    await db.execAsync('ALTER TABLE transactions ADD COLUMN remark TEXT');
   } catch {
     // column already present
   }

@@ -21,6 +21,7 @@ export function EditTransactionModal({ txn, onClose }: { txn: Transaction | null
   const [amountText, setAmountText] = useState('');
   const [type, setType] = useState<TxnType>('expense');
   const [cat, setCat] = useState<string | null>(null);
+  const [remark, setRemark] = useState('');
   const [adding, setAdding] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [linkId, setLinkId] = useState<string | null>(null);
@@ -32,6 +33,7 @@ export function EditTransactionModal({ txn, onClose }: { txn: Transaction | null
       setAmountText(txn.amount.toFixed(2));
       setType(txn.type);
       setCat(txn.categoryId);
+      setRemark(txn.remark ?? '');
       setExpanded(false);
       setLinkId(null);
       setLinkEffect('subtract');
@@ -73,7 +75,7 @@ export function EditTransactionModal({ txn, onClose }: { txn: Transaction | null
     const n = parseFloat(amountText.replace(/[^0-9.]/g, ''));
     const amount = Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : txn.amount;
     const categoryId = cat ?? (type === 'income' ? DEFAULT_INCOME_ID : DEFAULT_EXPENSE_ID);
-    await saveTransactionEdits(txn, { amount, type, categoryId });
+    await saveTransactionEdits(txn, { amount, type, categoryId, remark: remark.trim() || null });
     if (linkId) await recordBalanceLink(linkId, amount, linkEffect, txn.date ?? todayISO());
     onClose();
   };
@@ -148,6 +150,16 @@ export function EditTransactionModal({ txn, onClose }: { txn: Transaction | null
               </View>
             </Pressable>
           )}
+
+          <Text style={[styles.fieldLabel, { marginTop: 18 }]}>Remark (optional)</Text>
+          <TextInput
+            value={remark}
+            onChangeText={setRemark}
+            placeholder="e.g. Lunch with a supplier"
+            placeholderTextColor={colors.ink3}
+            style={styles.remarkInput}
+            multiline
+          />
 
           <View style={{ marginTop: 18 }}>
             <AccountLinkField accounts={accounts} selectedId={linkId} effect={linkEffect} onSelect={selectLink} onEffect={setLinkEffect} label="Link to account (optional)" />
@@ -224,6 +236,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.line,
+  },
+  remarkInput: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontFamily: uiFont(600),
+    fontSize: 14.5,
+    color: colors.ink,
   },
   grid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -5 },
   gridCell: { width: '50%', paddingHorizontal: 5, paddingBottom: 10 },
