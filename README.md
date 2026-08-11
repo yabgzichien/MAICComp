@@ -9,6 +9,8 @@ product: a friendly mobile app that helps a hawker, gig driver, or online seller
 professional web console that lets a licensed lender **verify that score and make an
 auditable loan decision** without ever seeing the borrower's raw transactions.
 
+**Live demo:** [Borrower app](https://pip-expenses-tracker.vercel.app) · [Lender console](https://pip-lender-console.vercel.app)
+
 ---
 
 ## The problem
