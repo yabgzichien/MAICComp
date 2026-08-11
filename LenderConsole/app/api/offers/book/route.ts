@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server';
 import { readOfferBook } from '../../../../lib/offersStore';
 import { LENDER_REGISTRY } from '../../../../lib/lenderRegistry';
+import { isOfficer, unauthorized } from '../../../../lib/officerAuth';
 
 const DEFAULT_LENDER_ID = 'tekun';
 
@@ -21,6 +22,10 @@ function resolveLenderId(raw: unknown): string | null {
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
+  // Officer-only. The header above already reasoned that handing the whole book out would let
+  // a caller enumerate every applicant this lender has; the mistake was resting that on the
+  // absence of CORS headers, which a non-browser client simply ignores. This is the check.
+  if (!isOfficer(req)) return unauthorized();
   const lenderId = resolveLenderId(new URL(req.url).searchParams.get('lender'));
   // An unknown lender reads as empty rather than erroring  the console must never fail to load.
   return NextResponse.json(lenderId === null ? {} : await readOfferBook(undefined, lenderId));

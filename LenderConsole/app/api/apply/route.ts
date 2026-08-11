@@ -14,6 +14,7 @@ import { readLenderPolicy } from '../../../lib/policyFile';
 import { appendServerApplication, clearServerApplications, readServerApplications } from '../../../lib/applicationsFile';
 import { writeOffer } from '../../../lib/offersStore';
 import { LENDER_REGISTRY } from '../../../lib/lenderRegistry';
+import { isOfficer, unauthorized } from '../../../lib/officerAuth';
 import type { DeclaredPurpose, PurposeCategory } from '../../../lib/applications';
 
 const DEFAULT_LENDER_ID = 'tekun';
@@ -185,11 +186,15 @@ export async function POST(req: Request) {
   );
 }
 
-// Same-origin only  Console.tsx pulls this per lender on load to merge that lender's direct
-// submissions into its own queue. Not part of the public surface (unlike GET /api/lenders).
+// Officer-only  Console.tsx pulls this per lender on load to merge that lender's direct
+// submissions into its own queue. This is the console's applicant queue, not a public surface:
+// it carries every submitter's name, subject hash, and full passportCode. It used to be
+// "protected" by carrying no CORS headers, which stopped no non-browser caller at all; against
+// the live deployment a plain curl returned the whole mailbox.
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
+  if (!isOfficer(req)) return unauthorized();
   const lenderId = resolveLenderId(new URL(req.url).searchParams.get('lender'));
   // An unknown lender reads as empty rather than erroring  the console must never fail to load.
   return NextResponse.json(lenderId === null ? [] : await readServerApplications(undefined, lenderId));
@@ -199,10 +204,9 @@ export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
 
-// Same-origin only, like GET  the console's own "Reset to defaults" action empties its
-// mailbox. Demo-only: this console has no authentication, so the mailbox holds only test
-// submissions from the paired borrower app, never a real lender's live pipeline.
+// Officer-only, like GET  the console's own "Reset to defaults" action empties its mailbox.
 export async function DELETE(req: Request) {
+  if (!isOfficer(req)) return unauthorized();
   const lenderId = resolveLenderId(new URL(req.url).searchParams.get('lender'));
   if (lenderId === null) {
     return NextResponse.json({ cleared: false, errors: ['Unknown lender.'] }, { status: 400 });

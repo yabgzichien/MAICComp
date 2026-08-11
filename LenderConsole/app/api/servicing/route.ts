@@ -13,6 +13,7 @@
 import { NextResponse } from 'next/server';
 import { clearServicingBook, readServicingRecord, writeServicingEvent } from '../../../lib/servicingStore';
 import { LENDER_REGISTRY } from '../../../lib/lenderRegistry';
+import { isOfficer, unauthorized } from '../../../lib/officerAuth';
 import type { ServicingOutcome, ServicingSource } from '../../../lib/mergeServicing';
 
 const DEFAULT_LENDER_ID = 'tekun';
@@ -176,10 +177,12 @@ export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
 
-// Same-origin only (no CORS headers), mirrors DELETE /api/apply: the console's own
-// "Reset to defaults" empties this lender's servicing ledger  a record for an application
-// the same reset just deleted is orphaned data with no reason to survive.
+// Officer-only, mirrors DELETE /api/apply: the console's own "Reset to defaults" empties this
+// lender's servicing ledger  a record for an application the same reset just deleted is
+// orphaned data with no reason to survive. GET/POST stay public: they are the borrower's own
+// half of the shared repayment ledger, keyed by the subject hash both sides already hold.
 export async function DELETE(req: Request) {
+  if (!isOfficer(req)) return unauthorized();
   const lenderId = resolveLenderId(new URL(req.url).searchParams.get('lender'));
   if (lenderId === null) {
     return NextResponse.json({ cleared: false, errors: ['Unknown lender.'] }, { status: 400 });

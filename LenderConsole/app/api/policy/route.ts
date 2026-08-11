@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server';
 import { readLenderPolicy, writeStoredPolicy } from '../../../lib/policyFile';
 import { LENDER_REGISTRY } from '../../../lib/lenderRegistry';
+import { isOfficer, unauthorized } from '../../../lib/officerAuth';
 
 // The GET must re-read the store on every request  never prerendered at build time.
 export const dynamic = 'force-dynamic';
@@ -31,6 +32,9 @@ export async function GET(req: Request) {
 }
 
 export async function PUT(req: Request) {
+  // Officer-only. GET stays public: /api/lenders republishes the same ladder to borrowers, so
+  // reading a policy is a published fact, while editing one is a lender action.
+  if (!isOfficer(req)) return unauthorized();
   const lender = lenderIdFrom(req);
   if ('error' in lender) return lender.error;
   let body: unknown;

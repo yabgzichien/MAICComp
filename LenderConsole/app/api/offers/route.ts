@@ -13,6 +13,7 @@
 import { NextResponse } from 'next/server';
 import { clearOfferBook, readOffer, recordOfferResponse, writeOffer } from '../../../lib/offersStore';
 import { LENDER_REGISTRY } from '../../../lib/lenderRegistry';
+import { isOfficer, unauthorized } from '../../../lib/officerAuth';
 import type { DeclaredPurpose, PurposeCategory } from '../../../lib/applications';
 
 const DEFAULT_LENDER_ID = 'tekun';
@@ -81,9 +82,11 @@ export async function GET(req: Request) {
   return NextResponse.json(offer, { headers: CORS_HEADERS });
 }
 
-// Same-origin only (no CORS headers): the console publishes an approved offer here when an
-// officer resolves a referred application to approved. Defensively parsed, body-capped.
+// Officer-only: the console publishes an approved offer here when an officer resolves a
+// referred application to approved. Defensively parsed, body-capped. GET and PATCH stay
+// public and CORS-open  those are the borrower's own per-subject read and answer.
 export async function POST(req: Request) {
+  if (!isOfficer(req)) return unauthorized();
   const raw = await req.text();
   if (raw.length > MAX_BODY_BYTES) {
     return NextResponse.json({ ok: false, errors: ['Request too large.'] }, { status: 413 });
@@ -169,10 +172,11 @@ export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
 
-// Same-origin only (no CORS headers), mirrors DELETE /api/apply: the console's own
-// "Reset to defaults" empties this lender's offer book so a stale offer can't re-book a loan
-// whose application the same reset just wiped.
+// Officer-only, mirrors DELETE /api/apply: the console's own "Reset to defaults" empties this
+// lender's offer book so a stale offer can't re-book a loan whose application the same reset
+// just wiped.
 export async function DELETE(req: Request) {
+  if (!isOfficer(req)) return unauthorized();
   const lenderId = resolveLenderId(new URL(req.url).searchParams.get('lender'));
   if (lenderId === null) {
     return NextResponse.json({ cleared: false, errors: ['Unknown lender.'] }, { status: 400 });
