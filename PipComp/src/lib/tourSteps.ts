@@ -487,9 +487,17 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     // and "No thanks" stays visible-but-disabled beside it (declining strands the tour), so the
     // spotlight should land on the control the judge can actually press.
     anchorId: 'offer-accept-btn',
+    // No live loan exists until the judge actually accepts: act 10 (servicing, structuring)
+    // narrates a real loan on the book, which a skipped acceptance leaves nothing to point at.
+    required: true,
     advanceOn: { signal: 'offer-accepted' },
     celebrate: 'You took the loan.',
   },
+  // Referred only: that ending's officer already had to come back to the console once (act 6's
+  // handoff waited on their decision), so sending them back again to service the loan closes the
+  // loop they opened. The approved ending never needed the officer at all — the engine cleared
+  // every gate on its own — so for that branch the script now ends the moment the judge accepts,
+  // right where `accept-offer` leaves off, rather than manufacturing one more console trip.
   {
     id: 'loan-live',
     kind: 'handoff',
@@ -497,7 +505,7 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
     act: 9,
     actLabel: 'Take the offer',
     pip: 'happy',
-    branches: ['referred', 'approved'],
+    branches: ['referred'],
     title: 'It is a live loan',
     body: 'The schedule, balance and standing all start now, and the lender sees the same thing.',
     handoff: {

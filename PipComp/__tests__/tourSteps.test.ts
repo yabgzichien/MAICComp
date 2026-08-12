@@ -152,12 +152,13 @@ describe('BORROWER_TOUR_STEPS (the borrower half of the unified script)', () => 
     }
   });
 
-  // The four beats that MAKE what the rest of the script reads: the scan the coverage delta is
+  // The five beats that MAKE what the rest of the script reads: the scan the coverage delta is
   // measured against, the identity the passport needs, the passport the application carries,
-  // and the send that decides the ending and puts a file on the console's desk.
+  // the send that decides the ending and puts a file on the console's desk, and the acceptance
+  // that turns a standing offer into the live loan act 10 services and structures.
   it('the artefact-making steps cannot be skipped', () => {
     const required = BORROWER_TOUR_STEPS.filter((s) => s.required).map((s) => s.id);
-    expect(required).toEqual(['scan-mission', 'kyc-verify', 'mint-passport', 'send-request']);
+    expect(required).toEqual(['scan-mission', 'kyc-verify', 'mint-passport', 'send-request', 'accept-offer']);
   });
 
   it('every required step is one the judge acts on, never an explain or a handoff', () => {
