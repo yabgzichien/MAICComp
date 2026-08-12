@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { isOfficer, unauthorized } from '../../../lib/officerAuth';
 
 export const runtime = 'nodejs';
 
@@ -32,9 +31,6 @@ function buildUserPrompt(agents: AgentBrief[]): string {
 }
 
 export async function POST(req: Request) {
-  // Officer-only: this route spends the server's Groq quota, and only this console
-  // calls it. It was previously open to anonymous callers.
-  if (!isOfficer(req)) return unauthorized();
   const body = await req.json().catch(() => null);
   const agents: AgentBrief[] | undefined = body?.agents;
   if (!Array.isArray(agents) || agents.length === 0) {

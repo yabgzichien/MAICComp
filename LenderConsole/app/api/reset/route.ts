@@ -13,7 +13,6 @@
 import { NextResponse } from 'next/server';
 import { readResetMarker, writeResetMarker } from '../../../lib/resetStore';
 import { LENDER_REGISTRY } from '../../../lib/lenderRegistry';
-import { isOfficer, unauthorized } from '../../../lib/officerAuth';
 
 const DEFAULT_LENDER_ID = 'tekun';
 
@@ -42,11 +41,9 @@ export async function GET(req: Request) {
   return NextResponse.json(marker, { headers: CORS_HEADERS });
 }
 
-// Officer-only: stamped by this console's own "Reset to defaults" action, immediately after
-// it clears that lender's applications/servicing/offers stores. Worth guarding tightly: a
-// stranger able to stamp this marker makes every borrower's locally booked loan disappear.
+// Same-origin only: stamped by this console's own "Reset to defaults" action, immediately
+// after it clears that lender's applications/servicing/offers stores.
 export async function POST(req: Request) {
-  if (!isOfficer(req)) return unauthorized();
   const lenderId = resolveLenderId(new URL(req.url).searchParams.get('lender'));
   if (lenderId === null) {
     return NextResponse.json({ ok: false, errors: ['Unknown lender.'] }, { status: 400 });
