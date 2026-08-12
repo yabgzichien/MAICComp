@@ -22,7 +22,7 @@ import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { Pip } from './src/components/Pip';
 import { MissionBanner, TourCard, TourResumeChip, type TourRecapItem } from './src/components/TourCard';
 import { TourSpotlight } from './src/components/TourSpotlight';
-import { actProgress, BORROWER_TOUR_STEPS, TOUR_TOTAL_ACTS, clampTourStep, fillPersona, stepsForBranch, type TourStep } from './src/lib/tourSteps';
+import { actProgress, BORROWER_TOUR_STEPS, TOUR_TOTAL_ACTS, clampTourStep, fillPersona, stepsForBranch, type TourSignalName, type TourStep } from './src/lib/tourSteps';
 import { classifyHandoffGate, classifyScreenChange, classifySignal } from './src/lib/tourDrive';
 import { onTourSignal } from './src/lib/tourSignals';
 import { AddFlow } from './src/screens/AddFlow';
@@ -217,6 +217,16 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
   // index into THIS list, never into the raw registry.
   const tourRun = useMemo(() => stepsForBranch(BORROWER_TOUR_STEPS, tourBranch), [tourBranch]);
   const currentTourStep = tourActive ? tourRun[clampTourStep(tourStepIndex, tourRun.length)] ?? null : null;
+  // Earliest index Back is allowed to land on: one past the last required step the judge has
+  // already completed (`i < tourMaxIndex` on a required step only holds once it is done  a
+  // required step has no Skip, so passing it means it was actually played). A required step
+  // builds an artefact the rest of the script reads (the scan, eKYC, the mint, the send); once
+  // built, re-entering that step reads as an invitation to redo or skip it, neither of which
+  // should be on offer. Back still works freely among the non-required steps above this floor.
+  const requiredFloor = useMemo(
+    () => tourRun.reduce((floor, step, i) => (step.required && i < tourMaxIndex ? i + 1 : floor), 0),
+    [tourRun, tourMaxIndex]
+  );
   // Mirrors `tourRun`, updated unconditionally every render (not just when effects
   // re-subscribe). Sending the application latches the branch and emits 'application-sent' in
   // the SAME synchronous tick, before React has re-run the signal-listener effect below (whose
@@ -227,6 +237,19 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
   // — found live, the tour vanished the instant the application was sent.
   const tourRunRef = useRef(tourRun);
   tourRunRef.current = tourRun;
+  // Mirrors `tourStepIndex` the same way, for the same reason: `completeStep`'s celebration
+  // delay (below) needs the index a signal actually belongs to, and a plain state closure goes
+  // stale the moment a second signal lands before the first celebration's setTimeout has fired.
+  const tourStepIndexRef = useRef(tourStepIndex);
+  tourStepIndexRef.current = tourStepIndex;
+  // A signal that arrives while `advancingRef` is set (the previous step's ~1.4s celebration is
+  // still playing) would otherwise be dropped silently and forever  found live by minting the
+  // passport fast enough after KYC's "Done" that `passport-minted` fired before "Identity
+  // verified" finished its flash. The KYC screen navigates to the passport screen the instant
+  // Done is pressed (not gated on the tour's own celebration timer), so a quick judge can reach
+  // and press Mint before the tour driver has advanced off the KYC step and re-subscribed its
+  // listener for the mint step  the real passport gets minted, but the tour never hears it.
+  const pendingSignalRef = useRef<TourSignalName | null>(null);
 
   /** Persona the copy's `{name}` / `{role}` tokens fill from. */
   const tourPersona = useMemo(() => {
@@ -259,20 +282,41 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
 
   /** Wrap up a do/mission step: record it for the recap, flash the celebration on the
    *  current card so the judge sees their action land, then move on. Skips advance
-   *  immediately and are honestly recorded as skipped. */
-  const completeStep = (step: TourStep, skipped: boolean) => {
+   *  immediately and are honestly recorded as skipped.
+   *
+   *  `fromIndex` lets the replay below (see `pendingSignalRef`) chain a second completion off
+   *  the index it computed a moment ago, rather than re-reading `tourStepIndex`  the state
+   *  closure is still the PRE-advance value at that point (React hasn't re-rendered yet), so
+   *  reading it here would repeat the same step instead of moving past it. */
+  const completeStep = (step: TourStep, skipped: boolean, fromIndex?: number) => {
     if (advancingRef.current) return;
     recapRef.current.set(step.id, !skipped);
     if (step.kind === 'mission') resetMission();
+    const startIndex = fromIndex ?? tourStepIndexRef.current;
     const advance = () => {
       advancingRef.current = false;
       setCelebrateText(null);
-      const next = tourStepIndex + 1;
+      const next = startIndex + 1;
       if (next >= tourRunRef.current.length) {
         void exitTour();
         return;
       }
       void setTourStep(next);
+      tourStepIndexRef.current = next;
+      // Replay a signal that landed while this step's celebration was still playing (the
+      // listener effect below queues it into `pendingSignalRef` instead of matching it, since
+      // `currentTourStep` still pointed at the step that just finished). The real action already
+      // happened  check it against the step we just landed on rather than losing it.
+      const pending = pendingSignalRef.current;
+      pendingSignalRef.current = null;
+      if (pending) {
+        const nextStep = tourRunRef.current[next];
+        if (nextStep) {
+          const outcome = classifySignal(nextStep, missionPhase ?? 0, pending);
+          if (outcome === 'advance') completeStep(nextStep, false, next);
+          else if (outcome === 'phase') setMissionPhase((p) => (p ?? 0) + 1);
+        }
+      }
     };
     if (skipped || !step.celebrate) {
       advance();
@@ -324,7 +368,13 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
   useEffect(() => {
     if (!tourActive || !currentTourStep) return;
     return onTourSignal((name) => {
-      if (advancingRef.current) return;
+      // Mid-celebration for the PREVIOUS step: `currentTourStep` hasn't moved on yet, so this
+      // signal cannot be matched against the step it actually belongs to. Queue it rather than
+      // drop it  `completeStep`'s `advance()` replays it against the step once it lands.
+      if (advancingRef.current) {
+        pendingSignalRef.current = name;
+        return;
+      }
       const outcome = classifySignal(currentTourStep, missionPhase ?? 0, name);
       if (outcome === 'advance') completeStep(currentTourStep, false);
       else if (outcome === 'phase') setMissionPhase((p) => (p ?? 0) + 1);
@@ -351,7 +401,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tourActive, tourStepIndex, handoffReady]);
 
-  const tourBack = () => void setTourStep(Math.max(0, tourStepIndex - 1));
+  const tourBack = () => void setTourStep(Math.max(requiredFloor, tourStepIndex - 1));
   // Required steps have no Skip control, and refuse one here too: the card is not the only
   // thing that can reach this (the mission banner calls it as well), and a step whose artefact
   // the rest of the script reads must not be skippable by any route.
@@ -613,6 +663,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
           placement={tourCardPlacement}
           persona={tourPersona}
           completed={tourStepIndex < tourMaxIndex}
+          backFloor={requiredFloor}
           handoffReady={handoffReady}
           handoffSelfAdvancing={handoffSelfAdvancing}
           onNext={tourNext}

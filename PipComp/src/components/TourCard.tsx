@@ -7,7 +7,9 @@
 //
 // Back is on every step kind, and a step the judge has already cleared (`completed`, i.e. they
 // pressed Back onto it) swaps its "your task" affordances for a plain Next: the work is done, so
-// there is nothing to wait for and nothing left worth skipping.
+// there is nothing to wait for and nothing left worth skipping. Back itself stops at `backFloor`
+// (App.tsx), one past the last required step already completed  a required beat's artefact
+// exists once and for all, so it is never something Back walks the judge back into.
 import React, { useEffect, useRef } from 'react';
 import { AccessibilityInfo, Animated, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, shadowCard, uiFont } from '../theme';
@@ -74,6 +76,7 @@ export function TourCard({
   placement = 'bottom',
   persona,
   completed = false,
+  backFloor = 0,
   handoffReady = false,
   handoffSelfAdvancing = false,
   onNext,
@@ -105,6 +108,11 @@ export function TourCard({
    *  the card offers a plain Next (there is nothing left to wait for) and drops Skip — skipping
    *  work that is already finished is a control with no meaning. */
   completed?: boolean;
+  /** Earliest index Back is allowed to reach  one past the last required step already
+   *  completed. The Back button disappears once the judge is standing right on this floor, so a
+   *  required beat (the scan, eKYC, the mint, the send) can never be re-entered once its
+   *  artefact exists, whether to redo it or to wave a stray Next past it. */
+  backFloor?: number;
   /** Handoff steps only: whether the real loan has moved far enough for the script to go on. */
   handoffReady?: boolean;
   /** Handoff steps only: this step is watching the real loan and will advance by itself, so it
@@ -222,7 +230,7 @@ export function TourCard({
           <View style={{ flex: 1 }} />
           {/* Back sits on EVERY step kind, not only the explain ones. A judge who wants to re-read
               the beat they just cleared should not have to restart the tour to do it. */}
-          {index > 0 && (
+          {index > backFloor && (
             <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Previous step" style={styles.secondaryBtn} hitSlop={8}>
               <Text style={styles.secondaryText}>Back</Text>
             </Pressable>

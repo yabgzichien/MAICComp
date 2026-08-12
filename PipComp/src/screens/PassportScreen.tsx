@@ -3,6 +3,7 @@
 // then the signed passport card. Regenerate routes back through the ceremony.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { PipEmblem } from '../components/CoinMascot';
@@ -89,6 +90,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
   const [signature, setSignature] = useState<string | null>(null);
   const [issuerSignature, setIssuerSignature] = useState<string | null>(null);
   const [shared, setShared] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // Direct-apply send (spec 2026-07-11; multi-lender 2026-07-16): the passport goes straight
   // to the chosen lender console's POST /api/apply. The borrower picks one of the published
@@ -172,8 +174,16 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
       }),
     [supportable, ladderMax, repaymentSummary, outstandingPrincipal]
   );
-  const requestCeiling = Math.max(0, Math.min(ladderMax, borrowing.available));
-  const requestFloor = Math.min(ladderMin, requestCeiling);
+  // `borrowing.available` answers "how much MORE can this borrower draw", which collapses to 0
+  // for anyone the engine won't approve at any amount (e.g. Faizal: below the confidence floor).
+  // That correctly caps what an APPROVABLE borrower can ask for, but it must not also block a
+  // categorically-declined borrower from asking at all — declineing happens before the amount is
+  // even considered (see the confidence/integrity floor checks in decideLoan), so the amount
+  // requested doesn't change the answer. Without this carve-out the stepper locks to RM0–0 and
+  // Send always 400s on `requestedAmount must be a positive number`, so a declined borrower can
+  // never actually file and see the real decline come back from the lender.
+  const requestCeiling = supportable > 0 ? Math.max(0, Math.min(ladderMax, borrowing.available)) : ladderMax;
+  const requestFloor = supportable > 0 ? Math.min(ladderMin, requestCeiling) : ladderMin;
   const defaultAmount = Math.min(supportable > 0 ? supportable : ladderMin, requestCeiling);
   const effectiveAmount = amount ?? defaultAmount;
 
@@ -228,9 +238,11 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
   };
 
   const sharedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     return () => {
       if (sharedTimerRef.current) clearTimeout(sharedTimerRef.current);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
     };
   }, []);
 
@@ -330,6 +342,14 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
       const msg = e instanceof Error ? e.message : String(e);
       if (msg && msg.toLowerCase().includes('error')) console.error('Share error:', msg);
     }
+  };
+
+  const handleCopy = async () => {
+    if (!pasteCode) return;
+    await Clipboard.setStringAsync(pasteCode);
+    setCopied(true);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
   };
 
   const stepAmount = (delta: number) => {
@@ -778,6 +798,9 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
               </Svg>
               <Text style={styles.codeText} numberOfLines={1}>{shortCode}</Text>
             </View>
+            <Pressable onPress={handleCopy} style={[styles.copyBtn, styles.copyBtnOutline, copied && styles.copyBtnDone]}>
+              <Text style={[styles.copyText, styles.copyTextOutline, copied && styles.copyTextDone]}>{copied ? '✓ Copied' : 'Copy'}</Text>
+            </Pressable>
             <Pressable onPress={handleShare} style={[styles.copyBtn, shared && styles.copyBtnDone]}>
               <Text style={[styles.copyText, shared && styles.copyTextDone]}>{shared ? '✓ Shared' : 'Share'}</Text>
             </Pressable>
@@ -825,8 +848,10 @@ const styles = StyleSheet.create({
   codeField: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surface2, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: colors.line },
   codeText: { flex: 1, fontFamily: numFont(500), fontSize: 12, color: colors.ink2 },
   copyBtn: { borderRadius: 10, paddingHorizontal: 16, justifyContent: 'center', backgroundColor: colors.accentInk },
+  copyBtnOutline: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.line },
   copyBtnDone: { backgroundColor: colors.accentSoft },
   copyText: { fontFamily: uiFont(700), fontSize: 12.5, color: '#fff' },
+  copyTextOutline: { color: colors.ink },
   copyTextDone: { color: colors.accentInk },
 
   perfRow: { height: 26, justifyContent: 'center' },

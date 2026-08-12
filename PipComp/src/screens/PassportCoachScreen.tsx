@@ -220,6 +220,20 @@ export function PassportCoachScreen({
     .map((w, i) => ({ w, i }))
     .filter(({ w }) => !(w.lever === 'surplus' && surplusAllFlat));
 
+  // Act 4 of the guided tour asks the judge to tap a what-if chip, but a borrower this
+  // constrained (e.g. blocked by the coverage gate, with no live offer to stress-test) can
+  // have zero tappable chips — the surplus row collapses to a blocked note instead. Asking
+  // them to tap a chip that isn't there strands the tour on a step it can never see satisfied,
+  // so this clears it itself: there is genuinely nothing to test, which is a valid outcome.
+  // Deferred a tick: this effect and App.tsx's tour-signal-listener effect can land in the same
+  // commit (this step becoming active), and effects fire child-before-parent — emitting inline
+  // here would race App's listener re-subscription and get dropped by the stale one underneath.
+  useEffect(() => {
+    if (activeTourAnchor !== 'whatif-chips' || chips.length !== 0) return;
+    const t = setTimeout(() => emitTourSignal('coach-chip-tapped'), 0);
+    return () => clearTimeout(t);
+  }, [activeTourAnchor, chips.length]);
+
   return (
     <FadeIn style={styles.root}>
       <View style={{ paddingTop: insets.top + 4 }}>

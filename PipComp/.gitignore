@@ -48,3 +48,5 @@ yarn-error.*
 *.pdf
 ryttestpdf.pdf
 Testpdfscan.pdf
+.vercel
+.env*
