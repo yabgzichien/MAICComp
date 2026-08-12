@@ -131,13 +131,15 @@ describe('BORROWER_TOUR_STEPS (the borrower half of the unified script)', () => 
     }
   });
 
-  // Only the referred handoff may clear itself. Its gate can open for exactly one reason — the
-  // judge approved the file in the console — whereas the approved ending's offer exists at send
-  // time and merely takes a poll to arrive, so riding that would skip acts 7 and 8.
-  it('only the referred handoff self-advances when its gate opens', () => {
+  // The referred and approved handoffs both self-advance: referred because the gate can only
+  // open once the judge approved the file in the console, approved because the offer already
+  // exists at send time and the gate is open on arrival either way — a manual click there added
+  // no enforcement a plain Skip didn't already undo. declined and loan-live stay on prompt: the
+  // first has nothing to ride (`gate: 'none'`), the second wants a deliberate click.
+  it('the referred and approved handoffs self-advance when their gate opens', () => {
     const onOpen = (id: string) => BORROWER_TOUR_STEPS.find((s) => s.id === id)!.handoff!.onOpen;
     expect(onOpen('handoff-referred')).toBe('advance');
-    expect(onOpen('handoff-approved')).toBe('prompt');
+    expect(onOpen('handoff-approved')).toBe('advance');
     expect(onOpen('handoff-declined')).toBe('prompt');
     expect(onOpen('loan-live')).toBe('prompt');
   });

@@ -408,11 +408,17 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
   const tourSkip = () => {
     if (currentTourStep && !currentTourStep.required) completeStep(currentTourStep, true);
   };
+  // "Exit" reads as leaving for good, but the judge should be able to walk back in later at the
+  // same step rather than face a full restart  so this pauses (same as tapping the dimmed
+  // spotlight) rather than calling `exitTour`, which wipes the step index and branch. The Resume
+  // chip picks it back up. `exitTour` itself is reserved for the tour actually finishing
+  // (`completeStep`'s advance() at the end of the script) and the explicit "Restart judge tour"
+  // action, both of which mean the run is genuinely over.
   const tourExit = () => {
     resetMission();
     setCelebrateText(null);
     advancingRef.current = false;
-    void exitTour();
+    void pauseTour();
   };
   const tourResume = () => {
     void startTour();

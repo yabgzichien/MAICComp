@@ -71,14 +71,15 @@ export type TourHandoffGate = 'offer-pending' | 'none';
 
 /** What the gate opening MEANS for this particular handoff.
  *
- *  advance  the record moving IS the judge coming back, so the step clears itself and no
- *            Continue button is ever rendered. Right when the gate can only open because the
- *            judge did the work in the other app (act 6 referred: an officer approved it).
- *  prompt   the gate merely ENABLES a Continue button the judge presses themselves. Right when
- *            the record can move without the judge having done anything yet: on the `approved`
- *            ending the offer is published at send time and simply takes a poll to arrive, so
- *            self-advancing would carry them past the console and they would never play the
- *            officer. Also the only sane setting for `gate: 'none'`, which has nothing to ride. */
+ *  advance  the step clears itself the moment the gate reads open, no Continue button ever
+ *            rendered. Right for a gate that will open on its own regardless of any button  act
+ *            6 referred (the judge did the work in the other app, so the offer landing IS them
+ *            coming back) and act 6 approved (the offer is published at send time, so the gate is
+ *            already open by the time the judge arrives; a manual click added no enforcement a
+ *            plain Skip right next to it didn't already undo).
+ *  prompt   the gate merely ENABLES a Continue button the judge presses themselves. Right for a
+ *            step that should hold on a deliberate click even though nothing is actually gating
+ *            it beyond that — e.g. `gate: 'none'`, which has nothing to ride at all. */
 export type TourHandoffOnOpen = 'advance' | 'prompt';
 
 export interface TourHandoff {
@@ -428,10 +429,12 @@ export const BORROWER_TOUR_STEPS: TourStep[] = [
       waiting: 'Publishing the offer…',
       ready: 'The offer is waiting for you here.',
       gate: 'offer-pending',
-      // Deliberately NOT self-advancing. This offer exists at send time and only takes a poll
-      // to show up — nothing about it opening says the judge has been to the console, and
-      // advancing on it would skip acts 7 and 8 entirely.
-      onOpen: 'prompt',
+      // Self-advancing (2026-08-12, reversing the original "deliberately NOT" call): the offer
+      // exists at send time and only takes a poll to show up, so this was never actually a gate
+      // on the judge having visited the console  Skip already sits right next to the button and
+      // reaches the same place, so a manual click added friction without adding enforcement. The
+      // "Open the Lender Console" link stays on the card for a judge who wants to look anyway.
+      onOpen: 'advance',
     },
   },
   {

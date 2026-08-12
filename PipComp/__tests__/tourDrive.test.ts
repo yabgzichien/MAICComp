@@ -115,11 +115,12 @@ describe('classifyHandoffGate', () => {
   });
 
   // The `approved` ending's offer is published at send time and merely takes a poll to arrive,
-  // so its gate opening says nothing about the judge having been to the console. Advancing on
-  // it would skip acts 7 and 8 and they would never play the officer — which is why the
-  // registry marks it `onOpen: 'prompt'`.
-  it('never advances the approved handoff, gate open or not', () => {
-    expect(classifyHandoffGate(byId('handoff-approved'), true)).toBe('ignore');
+  // so the gate is already open by the time the judge reaches this step (2026-08-12: this used
+  // to hold on a manual Continue click, but that click was never real enforcement — Skip sat
+  // right next to it and reached the same place — so the registry now marks it `onOpen: 'advance'`
+  // like the referred ending).
+  it('advances the approved handoff the moment the gate reads open', () => {
+    expect(classifyHandoffGate(byId('handoff-approved'), true)).toBe('advance');
     expect(classifyHandoffGate(byId('handoff-approved'), false)).toBe('ignore');
   });
 

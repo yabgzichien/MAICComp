@@ -63,11 +63,11 @@ export function classifySignal(step: TourStep | null, missionPhase: number, sign
  *  can already see on screen told the app nothing it didn't already know.
  *
  *  Deliberately state-based, not transition-based: it does not matter whether the gate was
- *  already open when the step opened (e.g. the borrower answered before the officer got here, or
- *  the judge pressed Back onto an already-cleared step) — open is open, and it advances on sight.
+ *  already open when the step opened (e.g. the borrower answered before the officer got here, the
+ *  `approved` ending's offer publishing at send time before this step is even reached, or the
+ *  judge pressed Back onto an already-cleared step) — open is open, and it advances on sight.
  *  Which handoffs may do this is declared in the registry, not inferred here: see
- *  `TourHandoffOnOpen` for why the `approved` ending must NOT (its offer exists at send time, so
- *  "gate open" there says nothing about the judge having done anything). */
+ *  `TourHandoffOnOpen`. */
 export function classifyHandoffGate(step: TourStep | null, open: boolean): HandoffGateOutcome {
   if (!step || step.kind !== 'handoff' || !step.handoff) return 'ignore';
   if (step.handoff.gate === 'none' || step.handoff.onOpen !== 'advance') return 'ignore';
