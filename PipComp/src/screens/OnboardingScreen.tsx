@@ -52,7 +52,7 @@ export function OnboardingScreen() {
 
         <PipGreeting />
 
-        <Text style={styles.thesis}>Please proceed with the Aina demo account walkthrough first.</Text>
+        <Text style={styles.thesis}>Please proceed with the YanYan demo account walkthrough first.</Text>
 
         <View style={styles.rows}>
           {DEMO_PROFILES.map((persona) => (
