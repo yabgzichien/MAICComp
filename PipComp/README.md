@@ -34,8 +34,8 @@ Everything stays **on your device** (local SQLite). No account, no cloud.
 2. Open **API Keys → Create API Key**.
 3. Copy the key (starts with `gsk_…`). You'll paste it into the app's Settings.
 
-> The default model is `meta-llama/llama-4-scout-17b-16e-instruct` (vision-capable,
-> free tier). The model ID is editable in Settings  paste any Groq vision model.
+> The default model is `qwen/qwen3.6-27b` (vision-capable, free tier). The model ID is
+> editable in Settings: paste any Groq vision model.
 
 ---
 
