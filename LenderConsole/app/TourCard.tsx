@@ -17,7 +17,7 @@ const CARD_EST_HEIGHT = 188;
 /** Where the borrower app is served. The cross-app tour sends the judge back there twice, and
  *  in the intended demo setup both apps are tabs in one browser, so a real link is worth more
  *  than an instruction. Overridable for a hosted artifact. */
-const BORROWER_APP_URL = process.env.NEXT_PUBLIC_BORROWER_APP_URL ?? 'http://localhost:8081';
+const BORROWER_APP_URL = process.env.NEXT_PUBLIC_BORROWER_APP_URL ?? 'https://pip-expenses-tracker.vercel.app';
 
 /** Would the card's default bottom-right box overlap the spotlit rect? If so, flip to top. */
 function overlapsDefaultCard(rect: AnchorReport['rect'] | null): boolean {

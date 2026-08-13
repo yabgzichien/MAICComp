@@ -66,7 +66,7 @@ export const DEMO_PROFILES: ReadonlyArray<DemoPersona> = [
       note: 'A human decides. Her income is real, only partly verifiable.',
     },
     expr: 'curious',
-    identity: { fullName: 'YanYan Binti Rahman', nric: '980412-10-5566' },
+    identity: { fullName: 'Fong Yan Yan', nric: '980412-10-5566' },
     occupation: { occupation: 'Online seller', sector: 'E-commerce / Retail', employmentType: 'micro-business', tenureMonths: 14 },
   },
   {
