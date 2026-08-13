@@ -14,6 +14,7 @@ import { buildPerformance, settledSummary, type CohortRow } from '../lib/perform
 import { buildBookStats, type StatSummary } from '../lib/bookStats';
 import { formatPoolMoney } from '../lib/poolView';
 import type { ApplicationRecord } from '../lib/applications';
+import { useViewport } from '../lib/useViewport';
 
 const pct1 = (x: number): string => `${(x * 100).toFixed(1)}%`;
 const pct2 = (x: number): string => `${(x * 100).toFixed(2)}%`;
@@ -60,20 +61,44 @@ function PerformanceStat({ label, value, info, onInfo }: { label: string; value:
   );
 }
 
-function PerformanceTable({ p, rows, onInfo }: { p: Palette; rows: CohortRow[]; onInfo: (entry: string) => void }) {
+function PerformanceTable({ p, rows, onInfo, isMobile }: { p: Palette; rows: CohortRow[]; onInfo: (entry: string) => void; isMobile: boolean }) {
   return (
     <div style={{ background: p.surface, borderRadius: 12, padding: '14px 16px', boxShadow: p.shadow }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
         <SectionLabel color={p.ink2}>Repayment Performance by Band</SectionLabel>
         <InfoButton entry="cohort" onOpen={onInfo} />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '90px 60px 1fr 100px', gap: 10, padding: '4px 6px', borderBottom: `1px solid ${p.hairline}`, marginBottom: 4 }}>
-        {['Band', 'Loans', 'Verdict', 'On-time / Collected'].map((h) => (
-          <span key={h} style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 600, color: p.ink3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{h}</span>
-        ))}
-      </div>
+      {/* Below ~340px of content width the fixed 90/60/100 columns leave the Verdict column
+          too narrow for its longest words ("Underperforming"), so mobile drops the grid for
+          a stacked card per band instead of squeezing text into an unworkable 1fr track. */}
+      {!isMobile && (
+        <div style={{ display: 'grid', gridTemplateColumns: '90px 60px 1fr 100px', gap: 10, padding: '4px 6px', borderBottom: `1px solid ${p.hairline}`, marginBottom: 4 }}>
+          {['Band', 'Loans', 'Verdict', 'On-time / Collected'].map((h) => (
+            <span key={h} style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 600, color: p.ink3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{h}</span>
+          ))}
+        </div>
+      )}
       {rows.map((r) => {
         const verdict = perfVerdict(r);
+        if (isMobile) {
+          return (
+            <div key={r.band} style={{ padding: '10px 6px', borderBottom: `1px solid ${p.hairline}` }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                <span style={{ fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, color: p.ink1 }}>{r.band}</span>
+                <span style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink2 }}>{r.loanCount} loan{r.loanCount === 1 ? '' : 's'}</span>
+              </div>
+              <p style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: verdict.color, marginTop: 4 }}>{verdict.text}</p>
+              {!r.smallSample && (
+                <p style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink3, marginTop: 1 }}>
+                  realized {pct2(r.realizedLossRate)} vs expected {pct2(r.expectedLossRate)}
+                </p>
+              )}
+              <p style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink2, marginTop: 4 }}>
+                {pct1(r.onTimeRate)} on-time · {pct1(r.collectionRate)} collected
+              </p>
+            </div>
+          );
+        }
         return (
           <div key={r.band} style={{ display: 'grid', gridTemplateColumns: '90px 60px 1fr 100px', gap: 10, alignItems: 'center', padding: '8px 6px', borderBottom: `1px solid ${p.hairline}` }}>
             <span style={{ fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, color: p.ink1 }}>{r.band}</span>
@@ -100,11 +125,11 @@ function PerformanceTable({ p, rows, onInfo }: { p: Palette; rows: CohortRow[]; 
  *  principal that came back, and the realized loss on that closed cohort (structurally
  *  always 0  a missed instalment can never let a loan reach settled). Renders nothing
  *  until at least one loan has actually settled  never a zeroed "0 loans" card. */
-function FullyRepaidStat({ p, apps, onInfo }: { p: Palette; apps: ApplicationRecord[]; onInfo: (entry: string) => void }) {
+function FullyRepaidStat({ p, apps, onInfo, isMobile }: { p: Palette; apps: ApplicationRecord[]; onInfo: (entry: string) => void; isMobile: boolean }) {
   const settled = useMemo(() => settledSummary(apps), [apps]);
   if (settled.count === 0) return null;
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderRadius: 12, background: p.accentTint, border: `1.5px solid ${p.accentSoft}` }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderRadius: 12, background: p.accentTint, border: `1.5px solid ${p.accentSoft}`, flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
         <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.accentInk, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Fully Repaid</span>
         <InfoButton entry="fully_repaid" onOpen={onInfo} />
@@ -116,14 +141,14 @@ function FullyRepaidStat({ p, apps, onInfo }: { p: Palette; apps: ApplicationRec
   );
 }
 
-function PerformanceSection({ p, apps }: { p: Palette; apps: ApplicationRecord[] }) {
+function PerformanceSection({ p, apps, isMobile }: { p: Palette; apps: ApplicationRecord[]; isMobile: boolean }) {
   const perf = useMemo(() => buildPerformance(apps), [apps]);
   const [info, setInfo] = useState<string | null>(null);
 
   if (perf.loanCount === 0) return null;
 
   return (
-    <div style={{ padding: '4px 40px 8px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={{ padding: isMobile ? '4px 16px 8px' : '4px 40px 8px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
       <InfoModal entry={info} onClose={() => setInfo(null)} p={p} />
       <SectionLabel color={p.ink2}>Performance · The Validation Loop</SectionLabel>
 
@@ -142,8 +167,8 @@ function PerformanceSection({ p, apps }: { p: Palette; apps: ApplicationRecord[]
             <PerformanceStat label="Realized vs Expected Loss" value={`${pct2(perf.realizedLossRate)} / ${pct2(perf.expectedLossRate)}`} info="realized_loss" onInfo={setInfo} />
             <PerformanceStat label="Interest Collected" value={rm(perf.interestCollected)} info="interest_collected" onInfo={setInfo} />
           </div>
-          <FullyRepaidStat p={p} apps={apps} onInfo={setInfo} />
-          <PerformanceTable p={p} rows={perf.bands} onInfo={setInfo} />
+          <FullyRepaidStat p={p} apps={apps} onInfo={setInfo} isMobile={isMobile} />
+          <PerformanceTable p={p} rows={perf.bands} onInfo={setInfo} isMobile={isMobile} />
         </>
       )}
     </div>
@@ -165,7 +190,36 @@ function DistributionStrip({ p, stat, accent }: { p: Palette; stat: StatSummary;
   );
 }
 
-function StatRow({ p, label, stat, format, info, accent, onInfo }: { p: Palette; label: string; stat: StatSummary; format: (n: number) => string; info: string; accent: string; onInfo: (entry: string) => void }) {
+function StatRow({ p, label, stat, format, info, accent, onInfo, isMobile }: { p: Palette; label: string; stat: StatSummary; format: (n: number) => string; info: string; accent: string; onInfo: (entry: string) => void; isMobile: boolean }) {
+  // Fixed columns here (150+60+60+130=400px + gaps) never fit a ~310px mobile content
+  // column, so mobile stacks the row into two lines instead of squeezing the grid.
+  if (isMobile) {
+    return (
+      <div style={{ padding: '8px 0', borderBottom: `1px solid ${p.hairline}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink1 }}>
+            {label}
+            <InfoButton entry={info} onOpen={onInfo} />
+          </span>
+          {stat.n === 0 ? (
+            <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>No data yet</span>
+          ) : (
+            <span style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink2 }}>
+              μ {format(stat.mean)} · σ {format(stat.stdDev)}
+              {stat.smallSample && <span style={{ marginLeft: 5, color: p.amber }}>· small sample</span>}
+            </span>
+          )}
+        </div>
+        {stat.n !== 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+            <span style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink3 }}>{format(stat.min)}</span>
+            <DistributionStrip p={p} stat={stat} accent={accent} />
+            <span style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink3 }}>{format(stat.max)}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '150px 60px 1fr 60px 130px', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: `1px solid ${p.hairline}` }}>
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink1 }}>
@@ -193,22 +247,22 @@ function StatRow({ p, label, stat, format, info, accent, onInfo }: { p: Palette;
  *  per-loan collection rate  the book's distribution, not just its aggregate risk. Mode
  *  is deliberately omitted (meaningless on continuous values at this book size) and the
  *  spread is standard deviation, never raw variance (squared units nobody reads). */
-function BookStatisticsCard({ p, apps }: { p: Palette; apps: ApplicationRecord[] }) {
+function BookStatisticsCard({ p, apps, isMobile }: { p: Palette; apps: ApplicationRecord[]; isMobile: boolean }) {
   const stats = useMemo(() => buildBookStats(apps), [apps]);
   const [info, setInfo] = useState<string | null>(null);
   if (stats.score.n === 0) return null;
   const scoreFmt = (n: number) => String(Math.round(n));
   return (
-    <div style={{ padding: '4px 40px 8px', flexShrink: 0 }}>
+    <div style={{ padding: isMobile ? '4px 16px 8px' : '4px 40px 8px', flexShrink: 0 }}>
       <InfoModal entry={info} onClose={() => setInfo(null)} p={p} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
         <SectionLabel color={p.ink2}>Book Statistics</SectionLabel>
         <InfoButton entry="distribution_strip" onOpen={setInfo} />
       </div>
       <div style={{ background: p.surface, borderRadius: 12, padding: '4px 16px', boxShadow: p.shadow }}>
-        <StatRow p={p} label="Credit Score" stat={stats.score} format={scoreFmt} info="median" accent={p.primary} onInfo={setInfo} />
-        <StatRow p={p} label="Offered Amount" stat={stats.amount} format={rm} info="standard_deviation" accent="#3b5bdb" onInfo={setInfo} />
-        <StatRow p={p} label="Collection Rate" stat={stats.collectionRate} format={pct1} info="collection_rate" accent={p.amber} onInfo={setInfo} />
+        <StatRow p={p} label="Credit Score" stat={stats.score} format={scoreFmt} info="median" accent={p.primary} onInfo={setInfo} isMobile={isMobile} />
+        <StatRow p={p} label="Offered Amount" stat={stats.amount} format={rm} info="standard_deviation" accent="#3b5bdb" onInfo={setInfo} isMobile={isMobile} />
+        <StatRow p={p} label="Collection Rate" stat={stats.collectionRate} format={pct1} info="collection_rate" accent={p.amber} onInfo={setInfo} isMobile={isMobile} />
       </div>
     </div>
   );
@@ -218,6 +272,7 @@ export default function PortfolioTab({ p, apps, onStructure }: { p: Palette; app
   const book = useMemo(() => buildPortfolio(apps), [apps]);
   const empty = book.loanCount === 0;
   const [info, setInfo] = useState<string | null>(null);
+  const { isMobile } = useViewport();
 
   const stats: { label: string; value: string }[] = [
     { label: 'Total Exposure', value: formatPoolMoney(book.totalExposure) },
@@ -231,7 +286,7 @@ export default function PortfolioTab({ p, apps, onStructure }: { p: Palette; app
   return (
     <div style={{ flex: 1, background: p.bg, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
       <InfoModal entry={info} onClose={() => setInfo(null)} p={p} />
-      <div style={{ padding: '20px 40px 18px', background: p.surface, borderBottom: `1px solid ${p.hairline}`, flexShrink: 0 }}>
+      <div style={{ padding: isMobile ? '20px 16px 18px' : '20px 40px 18px', background: p.surface, borderBottom: `1px solid ${p.hairline}`, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
           <div>
             <SectionLabel color={p.ink2}>Portfolio · Approved Book</SectionLabel>
@@ -253,7 +308,7 @@ export default function PortfolioTab({ p, apps, onStructure }: { p: Palette; app
       </div>
 
       {/* Headline cells  same dark grammar as the Capital Markets pool summary. */}
-      <div style={{ background: 'linear-gradient(135deg, #0e1812 0%, #17211a 100%)', padding: '22px 40px', display: 'flex', alignItems: 'stretch', flexShrink: 0, flexWrap: 'wrap', gap: 16 }}>
+      <div style={{ background: 'linear-gradient(135deg, #0e1812 0%, #17211a 100%)', padding: isMobile ? '22px 16px' : '22px 40px', display: 'flex', alignItems: 'stretch', flexShrink: 0, flexWrap: 'wrap', gap: 16 }}>
         {stats.map((s, i) => (
           <React.Fragment key={s.label}>
             <div style={{ flex: 1, minWidth: 110, display: 'flex', flexDirection: 'column', gap: 7 }}>
@@ -266,7 +321,7 @@ export default function PortfolioTab({ p, apps, onStructure }: { p: Palette; app
       </div>
 
       {empty ? (
-        <div style={{ padding: '40px', flex: 1 }}>
+        <div style={{ padding: isMobile ? '16px' : '40px', flex: 1 }}>
           <div style={{ maxWidth: 520, padding: '18px 20px', borderRadius: 12, background: p.surface, border: `1px solid ${p.hairline}`, boxShadow: p.shadow }}>
             <p style={{ fontFamily: FONT.ui, fontSize: 13, fontWeight: 700, color: p.ink1, marginBottom: 6 }}>No approved loans yet</p>
             <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.6 }}>
@@ -278,7 +333,7 @@ export default function PortfolioTab({ p, apps, onStructure }: { p: Palette; app
         <>
           {/* Concentration warnings */}
           {book.concentrations.length > 0 && (
-            <div style={{ padding: '16px 40px 0', flexShrink: 0 }}>
+            <div style={{ padding: isMobile ? '16px 16px 0' : '16px 40px 0', flexShrink: 0 }}>
               {book.concentrations.map((c, i) => (
                 <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'center', padding: '9px 14px', borderRadius: 9, background: '#fdf3dc', border: '1px solid #f5d990', marginBottom: 8 }}>
                   <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
@@ -295,19 +350,19 @@ export default function PortfolioTab({ p, apps, onStructure }: { p: Palette; app
           )}
 
           <TourAnchor id="portfolio-bands">
-          <div style={{ padding: '18px 40px 8px', display: 'flex', gap: 16, flexWrap: 'wrap', flexShrink: 0 }}>
+          <div style={{ padding: isMobile ? '18px 16px 8px' : '18px 40px 8px', display: 'flex', gap: 16, flexWrap: 'wrap', flexShrink: 0 }}>
             <BreakdownTable p={p} title="Exposure by Credit Band" rows={book.bandBreakdown} accent={p.primary} />
             <BreakdownTable p={p} title="Exposure by Declared Purpose" rows={book.purposeBreakdown} accent="#3b5bdb" />
           </div>
           </TourAnchor>
 
           <TourAnchor id="portfolio-performance">
-            <PerformanceSection p={p} apps={apps} />
+            <PerformanceSection p={p} apps={apps} isMobile={isMobile} />
           </TourAnchor>
 
-          <BookStatisticsCard p={p} apps={apps} />
+          <BookStatisticsCard p={p} apps={apps} isMobile={isMobile} />
 
-          <div style={{ padding: '4px 40px 24px', marginTop: 'auto' }}>
+          <div style={{ padding: isMobile ? '4px 16px 24px' : '4px 40px 24px', marginTop: 'auto' }}>
             <div style={{ padding: '11px 18px', borderRadius: 10, background: p.surface, border: `1px solid ${p.hairline}`, boxShadow: p.shadow, display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>Pool risk methodology</span>
               <InfoButton entry="pool_risk_methodology" onOpen={setInfo} />

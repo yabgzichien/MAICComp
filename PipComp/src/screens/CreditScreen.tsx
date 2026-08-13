@@ -1,6 +1,6 @@
 // src/screens/CreditScreen.tsx
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { CoinMascot } from '../components/CoinMascot';
@@ -48,6 +48,13 @@ export function CreditScreen({
   const capped = score.confidenceCapped;
   const confidence = dataConfidence.confidence;
   const activeTourAnchor = tourActive ? BORROWER_TOUR_STEPS[clampTourStep(tourStepIndex, BORROWER_TOUR_STEPS.length)].anchorId ?? null : null;
+  // 300 is the design size and already fits every native/app-store screen this was built for
+  // (comfortably clears the ScrollView's 16+16 horizontal padding down to ~332pt wide). It only
+  // needs to shrink on a genuinely narrow browser viewport (full-bleed web, no phone-frame
+  // padding to spare) that's tighter than that  clamped here rather than lowering the default,
+  // so native and desktop-web are untouched.
+  const { width: windowWidth } = useWindowDimensions();
+  const gaugeSize = Math.min(300, windowWidth - 32);
 
   const avg = Math.round(score.factors.reduce((s, f) => s + f.subScore, 0) / Math.max(score.factors.length, 1));
   const barColor = confidence >= 0.4 ? colors.accent : colors.red;
@@ -71,7 +78,7 @@ export function CreditScreen({
         <Card style={styles.gaugeCard}>
           <View style={{ alignItems: 'center', paddingTop: 6 }}>
             <TourAnchor id="credit-gauge" activeId={activeTourAnchor}>
-              <CreditGauge score={score.score} band={score.band} size={300} />
+              <CreditGauge score={score.score} band={score.band} size={gaugeSize} />
             </TourAnchor>
             <View style={styles.gaugeInfoRow}>
               <InfoButton entry="score" />

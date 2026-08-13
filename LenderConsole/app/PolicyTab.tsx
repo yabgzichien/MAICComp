@@ -17,6 +17,7 @@ import { emitTourSignal } from '../lib/tourSignals';
 import { findLender, type LenderProfile } from '../lib/lenderRegistry';
 import type { ApplicationRecord } from '../lib/applications';
 import AdvisorCard from './AdvisorCard';
+import { useViewport } from '../lib/useViewport';
 
 /** Form state keeps every field as a string so partial typing never crashes;
  *  numbers are parsed at validation time. Ratios are edited as percentages. */
@@ -170,6 +171,7 @@ export default function PolicyTab({
   lenderName: string;
   apps: ApplicationRecord[];
 }) {
+  const { isMobile } = useViewport();
   const [thresholds, setThresholds] = useState<ThresholdForm>(() => toThresholdForm(stored.policy));
   const [rows, setRows] = useState<LadderRow[]>(() => toLadderRows(stored.products));
   // The ladder is act 10's own do-step control. Only Save is withheld before the tour gets
@@ -273,7 +275,7 @@ export default function PolicyTab({
   return (
     <div style={{ flex: 1, background: p.bg, overflowY: 'auto' }}>
       <InfoModal entry={info} onClose={() => setInfo(null)} p={p} />
-      <div style={{ padding: '20px 40px 18px', background: p.surface, borderBottom: `1px solid ${p.hairline}` }}>
+      <div style={{ padding: isMobile ? '20px 16px 18px' : '20px 40px 18px', background: p.surface, borderBottom: `1px solid ${p.hairline}` }}>
         <div style={{ maxWidth: 1080, margin: '0 auto', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
           <div>
             <SectionLabel color={p.ink2}>Policy · {lenderName}</SectionLabel>
@@ -293,12 +295,12 @@ export default function PolicyTab({
         </div>
       </div>
 
-      <div style={{ padding: '18px 40px 26px', display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 1080, margin: '0 auto' }}>
+      <div style={{ padding: isMobile ? '18px 16px 26px' : '18px 40px 26px', display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 1080, margin: '0 auto' }}>
         {/* ── Affordability thresholds ── */}
         <TourAnchor id="policy-thresholds">
         <div style={{ background: p.surface, borderRadius: 12, padding: '14px 18px', boxShadow: p.shadow }}>
           <SectionLabel color={p.ink2}>Affordability thresholds</SectionLabel>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px 22px', marginTop: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: '14px 22px', marginTop: 10 }}>
             {THRESHOLD_FIELDS.map((f) => (
               <div key={f.key}>
                 <label style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink1, display: 'block', marginBottom: 4 }}>{f.label}</label>
@@ -320,7 +322,7 @@ export default function PolicyTab({
         {/* ── Pricing (risk-based assistant, Brief R) ── */}
         <div style={{ background: p.surface, borderRadius: 12, padding: '14px 18px', boxShadow: p.shadow }}>
           <SectionLabel color={p.ink2}>Pricing · risk-based assistant</SectionLabel>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px 22px', marginTop: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: '14px 22px', marginTop: 10 }}>
             {PRICING_FIELDS.map((f) => (
               <div key={f.key}>
                 <label style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink1, display: 'block', marginBottom: 4 }}>{f.label}</label>
@@ -349,7 +351,10 @@ export default function PolicyTab({
               beyond them lend to full-coverage borrowers only. Naming and ranges are yours.
             </p>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: `0.9fr ${LADDER_COLS.map((c) => c.width).join(' ')} 34px`, gap: '6px 10px', alignItems: 'center', marginTop: 10 }}>
+          {/* Genuine data table (a per-tier rate ladder) — mobile keeps the grid intact and
+              scrolls it sideways rather than restructuring it into stacked cards. */}
+          <div style={{ overflowX: isMobile ? 'auto' : 'visible', marginTop: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `0.9fr ${LADDER_COLS.map((c) => c.width).join(' ')} 34px`, gap: '6px 10px', alignItems: 'center', minWidth: isMobile ? 720 : undefined }}>
             <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink3, letterSpacing: '0.07em', textTransform: 'uppercase' }}>Slot</span>
             {LADDER_COLS.map((c) => (
               <span key={c.key} style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink3, letterSpacing: '0.07em', textTransform: 'uppercase' }}>{c.label}</span>
@@ -370,6 +375,7 @@ export default function PolicyTab({
                 </button>
               </React.Fragment>
             ))}
+          </div>
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>Add tier:</span>
@@ -421,7 +427,10 @@ export default function PolicyTab({
             <>
               <p style={{ fontFamily: FONT.ui, fontSize: 13, fontWeight: 700, color: p.ink1, marginTop: 8 }}>{published.name}</p>
               <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5, marginTop: 2, marginBottom: 10 }}>{published.blurb}</p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 1fr 1fr 0.9fr 0.8fr', gap: '4px 10px' }}>
+              {/* Same treatment as the ladder editor above: a real data table, scrolled
+                  sideways on mobile instead of restructured into cards. */}
+              <div style={{ overflowX: isMobile ? 'auto' : 'visible' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 1fr 1fr 0.9fr 0.8fr', gap: '4px 10px', minWidth: isMobile ? 560 : undefined }}>
                 {['Tier', 'Min score', 'Min RM', 'Max RM', 'Tenor (mo)', 'APR %'].map((h) => (
                   <span key={h} style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{h}</span>
                 ))}
@@ -435,6 +444,7 @@ export default function PolicyTab({
                     <span style={{ fontFamily: FONT.num, fontSize: 12, color: p.ink2 }}>{Math.round(prod.apr * 100)}</span>
                   </React.Fragment>
                 ))}
+              </div>
               </div>
             </>
           )}
@@ -452,7 +462,7 @@ export default function PolicyTab({
           <p key={i} style={{ fontFamily: FONT.mono, fontSize: 12, color: p.red }}>• {e}</p>
         ))}
 
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
           <button
             onClick={save}
             disabled={!validation.ok || saving || publishLocked}

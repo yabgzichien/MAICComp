@@ -13,7 +13,7 @@ import {
 } from '@expo-google-fonts/space-grotesk';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomNav, type NavTab } from './src/components/BottomNav';
@@ -110,9 +110,23 @@ export default function App() {
 /**
  * On web, render the app inside a centred iPhone-17-Pro-Max-sized window (440 × 956 pt) so the
  * exported web build looks like a phone instead of stretching to the browser. No-op on native.
+ *
+ * On a genuinely phone-narrow browser window (real mobile phones, not a small desktop window),
+ * that mock-phone chrome is counter-productive: the fake status bar/notch and hand-tuned
+ * 440×956 frame just waste space and clip content inside a real phone screen that already has
+ * its own chrome. Below `NARROW_BROWSER_MAX` we skip the mock frame entirely and render full-bleed.
  */
+const NARROW_BROWSER_MAX = 500;
+
 function PhoneFrame({ children }: { children: React.ReactNode }) {
   if (Platform.OS !== 'web') return <>{children}</>;
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- Platform.OS is constant for the life
+  // of the app, so this early return never toggles hook order between renders.
+  const { width } = useWindowDimensions();
+  const isNarrowBrowser = width < NARROW_BROWSER_MAX;
+  if (isNarrowBrowser) {
+    return <View style={webStyles.fullBleed}>{children}</View>;
+  }
   return (
     <View style={webStyles.backdrop}>
       <View style={webStyles.phone}>
@@ -699,6 +713,13 @@ const styles = StyleSheet.create({
 
 // Web-only: a centred iPhone-17-Pro-Max-sized window so the web build looks like a phone.
 const webStyles = StyleSheet.create({
+  // Real mobile browsers (< NARROW_BROWSER_MAX wide): no mock chrome, no fake status bar  the
+  // device's own browser already provides both, so this is just a full-height, full-width host.
+  fullBleed: {
+    flex: 1,
+    minHeight: '100vh' as unknown as number,
+    backgroundColor: colors.bg,
+  },
   backdrop: {
     flex: 1,
     minHeight: '100vh' as unknown as number,

@@ -45,6 +45,7 @@ import {
   type PanelWidths,
 } from '../lib/panelLayout';
 import { mergedStanding } from '../lib/repaymentStanding';
+import { useViewport } from '../lib/useViewport';
 import { structurePool, type CreditBand, type PoolLoan } from '../lib/securitization';
 import { SAMPLE_POOL } from '../lib/samplePool';
 import { poolStatCells, trancheViews } from '../lib/poolView';
@@ -162,14 +163,14 @@ function evaluate(code: string, amountStr: string, stored: StoredPolicy, ownAppl
   }
 }
 
-function BrandMark({ p, onRestartTour, activeLender }: { p: Palette; onRestartTour: () => void; activeLender: LenderProfile }) {
+function BrandMark({ p, onRestartTour, activeLender, compact }: { p: Palette; onRestartTour: () => void; activeLender: LenderProfile; compact?: boolean }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0, minWidth: 0 }}>
       <button
         onClick={onRestartTour}
         aria-label="Restart the guided tour"
         title="Restart the guided tour"
-        style={{ width: 28, height: 28, borderRadius: 8, background: p.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer', padding: 0 }}
+        style={{ width: 28, height: 28, borderRadius: 8, background: p.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer', padding: 0, flexShrink: 0 }}
       >
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
           <circle cx="7" cy="8.5" r="4" fill="white" opacity="0.92" />
@@ -177,9 +178,16 @@ function BrandMark({ p, onRestartTour, activeLender }: { p: Palette; onRestartTo
         </svg>
       </button>
       <span style={{ fontFamily: FONT.ui, fontSize: 14, fontWeight: 800, color: p.ink1, whiteSpace: 'nowrap' }}>Pip Credit</span>
-      <span style={{ fontSize: 15, color: p.ink3, fontWeight: 300 }}>·</span>
-      <span style={{ fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 600, color: p.ink2, whiteSpace: 'nowrap' }}>Lender Console</span>
-      <div style={{ marginLeft: 8, padding: '3px 9px 3px 8px', borderRadius: 6, background: activeLender.brandColor, display: 'flex', alignItems: 'center', gap: 5 }}>
+      {/* The "· Lender Console" subtitle is redundant with the page's own title on a screen
+          this narrow  it's the first thing to go so the lender pill (which actually changes
+          per session) and the officer menu stay on-screen instead of clipping off the edge. */}
+      {!compact && (
+        <>
+          <span style={{ fontSize: 15, color: p.ink3, fontWeight: 300 }}>·</span>
+          <span style={{ fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 600, color: p.ink2, whiteSpace: 'nowrap' }}>Lender Console</span>
+        </>
+      )}
+      <div style={{ marginLeft: 8, padding: '3px 9px 3px 8px', borderRadius: 6, background: activeLender.brandColor, display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
         <svg width="9" height="10" viewBox="0 0 10 11" fill="none">
           <path d="M5 1L1 3.5v3.8l4 2.7 4-2.7V3.5L5 1z" fill="rgba(255,255,255,0.18)" stroke="rgba(255,255,255,0.55)" strokeWidth="1" />
         </svg>
@@ -220,8 +228,135 @@ function DemoModeChip({ p }: { p: Palette }) {
   );
 }
 
+/** Back/forward step bar for the mobile drill-down views (Verify: queue → evidence →
+ *  decision; Servicing: list → detail). One reusable strip instead of duplicating the same
+ *  back button + optional forward CTA in three places. Sticky so it stays reachable while
+ *  the panel beneath it scrolls. */
+function MobileStepBar({ p, onBack, backLabel, onForward, forwardLabel }: { p: Palette; onBack: () => void; backLabel: string; onForward?: () => void; forwardLabel?: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 12px', background: p.surface, borderBottom: `1px solid ${p.hairline}`, flexShrink: 0, position: 'sticky', top: 0, zIndex: 5 }}>
+      <button
+        onClick={onBack}
+        style={{ display: 'flex', alignItems: 'center', gap: 5, border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px 6px', fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, color: p.accentInk }}
+      >
+        <span aria-hidden>←</span> {backLabel}
+      </button>
+      {onForward && (
+        <button
+          onClick={onForward}
+          style={{ display: 'flex', alignItems: 'center', gap: 5, border: 'none', background: p.accentInk, color: 'white', cursor: 'pointer', padding: '6px 12px', borderRadius: 7, fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700 }}
+        >
+          {forwardLabel} <span aria-hidden>→</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
+const HEADER_TABS: [Tab, string][] = [['verify', 'Verify Passport'], ['servicing', 'Servicing'], ['portfolio', 'Portfolio'], ['capital', 'Capital Markets'], ['policy', 'Policy']];
+
 function Header({ p, tab, setTab, alert, onRestartTour, onResetToDefaults, resettingDefaults, activeLender, onSwitchLender, watchlistCount }: { p: Palette; tab: Tab; setTab: (t: Tab) => void; alert: boolean; onRestartTour: () => void; onResetToDefaults: () => void; resettingDefaults: boolean; activeLender: LenderProfile; onSwitchLender: (id: string) => void; watchlistCount: number }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { isMobile } = useViewport();
+
+  if (isMobile) {
+    return (
+      <header style={{ background: p.surface, borderBottom: alert ? `2px solid ${p.primary}` : `1px solid ${p.hairline}`, flexShrink: 0, position: 'relative' }}>
+        <div style={{ height: 50, display: 'flex', alignItems: 'center', padding: '0 14px', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
+          <BrandMark p={p} onRestartTour={onRestartTour} activeLender={activeLender} compact />
+          <div style={{ flex: 1 }} />
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <button
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              aria-label="Officer menu"
+              style={{ display: 'flex', alignItems: 'center', border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px 4px', borderRadius: 8 }}
+            >
+              <div style={{ width: 30, height: 30, borderRadius: '50%', background: activeLender.brandColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: 'white' }}>{activeLender.officerInitials}</span>
+              </div>
+            </button>
+            {menuOpen && (
+              <>
+                <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 60 }} />
+                <div
+                  role="menu"
+                  aria-label="Console menu"
+                  style={{ position: 'absolute', top: 42, right: 0, width: 260, maxWidth: 'calc(100vw - 24px)', background: p.surface, borderRadius: 12, border: `1px solid ${p.hairline}`, boxShadow: '0 12px 34px rgba(0,0,0,0.18)', zIndex: 61, overflow: 'hidden' }}
+                >
+                  <div style={{ padding: '10px 14px', borderBottom: `1px solid ${p.hairline}` }}>
+                    <span style={{ fontFamily: FONT.ui, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', color: p.ink2, background: p.surface2, border: `1px solid ${p.hairline}`, borderRadius: 6, padding: '3px 9px' }}>DEMO MODE</span>
+                    <p style={{ fontFamily: FONT.ui, fontSize: 11.5, color: p.ink3, lineHeight: 1.5, marginTop: 6 }}>{DEMO_MODE_DETAIL}</p>
+                  </div>
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onRestartTour();
+                    }}
+                    style={{ width: '100%', textAlign: 'left', padding: '9px 14px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, color: p.ink1 }}
+                  >
+                    Restart tour
+                  </button>
+                  <button
+                    role="menuitem"
+                    disabled={resettingDefaults}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onResetToDefaults();
+                    }}
+                    title={`Clear ${activeLender.name}'s applications, presentment log, and any saved policy edits`}
+                    style={{ width: '100%', textAlign: 'left', padding: '9px 14px', border: 'none', background: 'transparent', cursor: resettingDefaults ? 'default' : 'pointer', fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, color: p.red, opacity: resettingDefaults ? 0.6 : 1 }}
+                  >
+                    {resettingDefaults ? 'Resetting…' : 'Reset to defaults'}
+                  </button>
+                  <div style={{ height: 1, background: p.hairline }} />
+                  <p style={{ fontFamily: FONT.ui, fontSize: 11, fontWeight: 700, color: p.ink3, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '10px 14px 6px' }}>Switch lender</p>
+                  {LENDER_REGISTRY.map((l) => (
+                    <button
+                      key={l.id}
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onSwitchLender(l.id);
+                      }}
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '9px 14px', border: 'none', cursor: 'pointer', background: l.id === activeLender.id ? p.accentTint : 'transparent', textAlign: 'left' }}
+                    >
+                      <div style={{ width: 22, height: 22, borderRadius: 6, background: l.brandColor, flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 700, color: p.ink1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.name}</p>
+                        <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3 }}>{l.officer}</p>
+                      </div>
+                      {l.id === activeLender.id && <span style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.accentInk }}>✓</span>}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+        <nav aria-label="Console sections" style={{ overflowX: 'auto', padding: '0 14px 10px' }}>
+          <div style={{ display: 'inline-flex', background: p.surface2, borderRadius: 10, padding: 3, gap: 2, border: `1px solid ${p.hairline}` }}>
+            {HEADER_TABS.map(([key, label]) => {
+              const active = key === tab;
+              return (
+                <button key={key} onClick={() => setTab(key)} aria-current={active ? 'page' : undefined} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 16px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: FONT.ui, fontSize: 12.5, fontWeight: active ? 700 : 500, background: active ? p.accentInk : 'transparent', color: active ? 'white' : p.ink2, whiteSpace: 'nowrap' }}>
+                  {label}
+                  {key === 'servicing' && watchlistCount > 0 && (
+                    <span aria-label={`${watchlistCount} loan(s) on the watchlist`} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 16, height: 16, padding: '0 4px', borderRadius: 8, background: active ? 'white' : '#c0392b', color: active ? p.accentInk : 'white', fontFamily: FONT.num, fontSize: 11, fontWeight: 800 }}>
+                      {watchlistCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      </header>
+    );
+  }
+
   return (
     <header style={{ height: 50, background: p.surface, borderBottom: alert ? `2px solid ${p.primary}` : `1px solid ${p.hairline}`, display: 'flex', alignItems: 'center', padding: '0 22px', flexShrink: 0, position: 'relative' }}>
       <BrandMark p={p} onRestartTour={onRestartTour} activeLender={activeLender} />
@@ -1558,9 +1693,9 @@ function RightDecision({ p, passport, decision, credential, amount, stacking, se
   );
 }
 
-function RightAlert({ p }: { p: Palette }) {
+function RightAlert({ p, width = 340 }: { p: Palette; /** Desktop's fixed decision-panel width; mobile passes the full viewport (2026-08-13 mobile pass). */ width?: number }) {
   return (
-    <div style={{ width: 340, background: p.surface, borderLeft: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+    <div style={{ width, background: p.surface, borderLeft: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
       <div style={{ padding: '14px 20px 11px', borderBottom: `1px solid ${p.hairline}` }}>
         <SectionLabel color={p.ink2}>Loan Decision Engine</SectionLabel>
       </div>
@@ -1603,6 +1738,7 @@ function RightAlert({ p }: { p: Palette }) {
 
 function CapitalMarkets({ p, book, source, setSource }: { p: Palette; book: PoolLoan[]; source: PoolSource; setSource: (s: PoolSource) => void }) {
   const [info, setInfo] = useState<string | null>(null);
+  const { isMobile } = useViewport();
   // Empty book can't structure, so it always falls back to the sample (labeled).
   const effectiveSource: PoolSource = source === 'live' && book.length === 0 ? 'sample' : source;
   const pool = effectiveSource === 'live' ? book : SAMPLE_POOL;
@@ -1610,11 +1746,12 @@ function CapitalMarkets({ p, book, source, setSource }: { p: Palette; book: Pool
   const stats = poolStatCells(result.summary);
   const tranches = trancheViews(result);
   const isSample = effectiveSource === 'sample';
+  const hPad = isMobile ? 16 : 40;
 
   return (
     <div style={{ flex: 1, background: p.bg, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
       <InfoModal entry={info} onClose={() => setInfo(null)} p={p} />
-      <div style={{ padding: '20px 40px 18px', background: p.surface, borderBottom: `1px solid ${p.hairline}`, flexShrink: 0 }}>
+      <div style={{ padding: `20px ${hPad}px 18px`, background: p.surface, borderBottom: `1px solid ${p.hairline}`, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
           <div>
             <SectionLabel color={p.ink2}>Capital Markets · Pool Structure</SectionLabel>
@@ -1651,7 +1788,7 @@ function CapitalMarkets({ p, book, source, setSource }: { p: Palette; book: Pool
         </div>
       </div>
 
-      <div style={{ background: 'linear-gradient(135deg, #0e1812 0%, #17211a 100%)', padding: '22px 40px', display: 'flex', alignItems: 'stretch', flexShrink: 0, flexWrap: 'wrap', gap: 16 }}>
+      <div style={{ background: 'linear-gradient(135deg, #0e1812 0%, #17211a 100%)', padding: `22px ${hPad}px`, display: 'flex', alignItems: 'stretch', flexShrink: 0, flexWrap: 'wrap', gap: 16 }}>
         {stats.map((s, i) => (
           <React.Fragment key={s.label}>
             <div style={{ flex: 1, minWidth: 120, display: 'flex', flexDirection: 'column', gap: 7 }}>
@@ -1666,7 +1803,7 @@ function CapitalMarkets({ p, book, source, setSource }: { p: Palette; book: Pool
         ))}
       </div>
 
-      <div style={{ padding: '22px 40px 0', flexShrink: 0 }}>
+      <div style={{ padding: `22px ${hPad}px 0`, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 10 }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <SectionLabel color={p.ink2}>Loss-Waterfall Structure</SectionLabel>
@@ -1691,7 +1828,7 @@ function CapitalMarkets({ p, book, source, setSource }: { p: Palette; book: Pool
       </div>
 
       <TourAnchor id="capital-tranches">
-      <div style={{ padding: '18px 40px 0', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, flexShrink: 0 }}>
+      <div style={{ padding: `18px ${hPad}px 0`, display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 14, flexShrink: 0 }}>
         {tranches.map((tr, i) => (
           <div key={tr.seat} style={{ background: tr.tint, borderRadius: 14, border: `1.5px solid ${tr.border}`, padding: '18px 20px', boxShadow: p.shadow, display: 'flex', flexDirection: 'column', gap: 12, animation: 'fade-in-up 0.4s ease-out both', animationDelay: `${i * 70}ms` }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1859,11 +1996,11 @@ function ServicingSectionBlock({ p, label, dotColor, apps, isWatchlisted, settle
   );
 }
 
-function ServicingList({ p, apps, sections, selectedId, onSelect }: { p: Palette; apps: ApplicationRecord[]; sections: ServicingSections; selectedId: string | null; onSelect: (app: ApplicationRecord) => void }) {
+function ServicingList({ p, apps, sections, selectedId, onSelect, width = 260 }: { p: Palette; apps: ApplicationRecord[]; sections: ServicingSections; selectedId: string | null; onSelect: (app: ApplicationRecord) => void; /** Officer-facing width on desktop; mobile passes the full viewport (2026-08-13 mobile pass). */ width?: number }) {
   return (
     // Act 10 spotlights the book the judge's own accepted loan just landed on.
     <TourAnchor id="servicing-list">
-      <nav aria-label="Serviced loans" style={{ width: 260, background: p.surface2, borderRight: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto' }}>
+      <nav aria-label="Serviced loans" style={{ width, background: p.surface2, borderRight: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto' }}>
         <div style={{ padding: '14px 12px 10px', borderBottom: `1px solid ${p.hairline}` }}>
           <p role="heading" aria-level={2} style={{ fontFamily: FONT.ui, fontSize: 12, fontWeight: 700, color: p.ink2, letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: 4 }}>Servicing · Approved Book</p>
           <p style={{ fontFamily: FONT.ui, fontSize: 12, color: p.ink3, lineHeight: 1.5 }}>{apps.filter((a) => a.status === 'approved').length} loan(s) disbursed</p>
@@ -1887,15 +2024,20 @@ function ServicingEmpty({ p, text }: { p: Palette; text: string }) {
   );
 }
 
-function ServicingDetail({ p, app, passport, acceptance, onResolve, onRecordRepayment, onMarkDefault }: { p: Palette; app: ApplicationRecord; passport: CreditPassport | null; acceptance?: AcceptanceState | null; onResolve: (outcome: 'approved' | 'declined', rationale: string) => void; onRecordRepayment: (instalmentSeq: number, amount: number, outcome: RepaymentOutcome) => void; onMarkDefault: () => void }) {
+function ServicingDetail({ p, app, passport, acceptance, onResolve, onRecordRepayment, onMarkDefault, width = 340 }: { p: Palette; app: ApplicationRecord; passport: CreditPassport | null; acceptance?: AcceptanceState | null; onResolve: (outcome: 'approved' | 'declined', rationale: string) => void; onRecordRepayment: (instalmentSeq: number, amount: number, outcome: RepaymentOutcome) => void; onMarkDefault: () => void; /** Desktop's fixed action-card width; mobile passes the full viewport (2026-08-13 mobile pass). */ width?: number }) {
   return (
-    <div style={{ width: 340, background: p.surface, borderLeft: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto', padding: '14px 0' }}>
+    <div style={{ width, background: p.surface, borderLeft: `1px solid ${p.hairline}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto', padding: '14px 0' }}>
       <ApplicationCard p={p} app={app} passport={passport} acceptance={acceptance} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onMarkDefault={onMarkDefault} />
     </div>
   );
 }
 
 export default function Console() {
+  // Mobile redesign (2026-08-13): the single source of truth for every mobile/desktop branch
+  // below. Below MOBILE_BREAKPOINT_PX the three-panel "trading desk" and the servicing
+  // list+detail split have no room to share a row, so they collapse into a drill-down,
+  // one-panel-at-a-time flow instead (see mobileVerifyStep/mobileServicingStep below).
+  const { isMobile } = useViewport();
   const [tab, setTab] = useState<Tab>('verify');
   // The passport code of the open subject. Always set from an application (or the
   // fabricated demo passport); never typed, now that walk-in presentment is gone.
@@ -1919,6 +2061,14 @@ export default function Console() {
   const [apps, setApps] = useState<ApplicationRecord[]>([]);
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
   const [purpose, setPurpose] = useState<DeclaredPurpose | null>(null);
+  // Mobile drill-down step for the Verify tab's three panels (queue rail, evidence, decision
+  // engine) and the Servicing tab's two (loan list, detail). Desktop ignores these entirely —
+  // it keeps showing every panel side by side, unresized. Reset to the first step whenever the
+  // officer navigates away from the tab (effects below), and advanced by onSelectApp whenever a
+  // row is actually picked, so re-opening a tab or picking a different file always lands
+  // somewhere predictable rather than wherever the officer last scrolled to.
+  const [mobileVerifyStep, setMobileVerifyStep] = useState<'queue' | 'evidence' | 'decision'>('queue');
+  const [mobileServicingStep, setMobileServicingStep] = useState<'list' | 'detail'>('list');
   // Capital Markets pool source (Brief Q): defaults to the live approved book, auto-falling
   // back to the sample pool while the book is empty (handled inside CapitalMarkets).
   const [poolSource, setPoolSource] = useState<PoolSource>('live');
@@ -2329,6 +2479,17 @@ export default function Console() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, activeLenderId]);
 
+  // Mobile drill-down reset: leaving a tab always drops its step back to the first panel, so
+  // returning to it (or switching lenders, which also resets `tab` to 'verify') never strands
+  // the officer on a detail view for a file that isn't open any more. Selecting a row is what
+  // moves forward (onSelectApp below); this effect only ever moves back to the start.
+  useEffect(() => {
+    if (tab !== 'verify') setMobileVerifyStep('queue');
+  }, [tab]);
+  useEffect(() => {
+    if (tab !== 'servicing') setMobileServicingStep('list');
+  }, [tab]);
+
   const filingInput = (codeUsed: string, passport: CreditPassport, decision: LoanDecision, amountNum: number, declared?: DeclaredPurpose | null): FileApplicationInput => {
     // The priced tier's term, filed alongside the offer terms: this loan's schedule is the one
     // the borrower books, not one re-derived from their credit band (ApplicationRecord.tenorMonths).
@@ -2441,6 +2602,15 @@ export default function Console() {
     setFlagged(false);
     setAppliedRate(null);
     openApplication(app, storedPolicy, apps, activeLenderId);
+    // Mobile drill-down (2026-08-13): tapping a row is a list→detail navigation, same as any
+    // mobile master-detail pattern. Always lands on the first detail step (never wherever the
+    // step happened to sit before) so picking a different file never strands the officer one
+    // panel further in than the file they just opened. Desktop ignores this — every panel is
+    // already on screen.
+    if (isMobile) {
+      if (tab === 'verify') setMobileVerifyStep('evidence');
+      else if (tab === 'servicing') setMobileServicingStep('detail');
+    }
     // Cross-app tour act 7: only opening the file that actually came from the borrower app
     // completes the step. Opening a seeded applicant is a perfectly reasonable thing for the
     // officer to do, but it is not the beat the tour is asking for, so it must not advance.
@@ -2574,27 +2744,96 @@ export default function Console() {
       {tour.visible && <TourCard p={p} c={tour} officer={activeLender.officer} lender={activeLender.name} />}
       <main aria-label={TAB_LABELS[tab]} style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
         {tab === 'verify' ? (
-          <>
-            <QueueRail p={p} apps={apps} offerBook={offerBook} selectedId={selectedAppId} onSelect={onSelectApp} onSeed={onSeed} onLoadFlagged={onLoadFlagged} lockedToAppId={tour.queueLockedToAppId} width={panelLayout.pipeline} />
-            <PanelResizer p={p} spec={PIPELINE_PANEL} width={panelLayout.pipeline} otherWidth={panelLayout.decision} onResize={(w) => onPanelResize('pipeline', w)} />
-            {showAlert ? <CenterAlert p={p} flagTime={flagTime} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} lapsedTiers={state.credential.verification.lapsedTiers} policy={storedPolicy.policy} /> : state.status === 'invalid' ? <InvalidCenter p={p} reasons={state.reasons} /> : <ServicingEmpty p={p} text="No application open. Pick a file from the pipeline to see the engine's verdict, or seed a demo pipeline to get started." />}
-            <PanelResizer p={p} spec={DECISION_PANEL} width={panelLayout.decision} otherWidth={panelLayout.pipeline} onResize={(w) => onPanelResize('decision', w)} />
-            {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} stacking={stackingSignal} selectedApp={selectedApp} acceptance={selectedAcceptance} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onGenerateLetter={onGenerateLetter} purpose={purpose} setPurpose={setPurpose} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} pricing={pricing} appliedRate={appliedRate} onApplyRate={onApplyRate} previewRate={previewRate} lenderName={activeLender.name} ownApplications={apps} storedPolicy={storedPolicy} width={panelLayout.decision} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} lenderName={activeLender.name} ownApplications={apps} storedPolicy={storedPolicy} width={panelLayout.decision} />}
-          </>
+          isMobile ? (
+            // Mobile drill-down (2026-08-13): one of {queue, evidence, decision} full-width at a
+            // time instead of the desktop's three-across desk — there's no room to share a row
+            // below MOBILE_BREAKPOINT_PX, and no resizer makes sense on a screen with nothing to
+            // drag against. onSelectApp advances 'queue' → 'evidence'; the step bars below handle
+            // the rest of the navigation.
+            <>
+              {mobileVerifyStep === 'queue' && (
+                <QueueRail p={p} apps={apps} offerBook={offerBook} selectedId={selectedAppId} onSelect={onSelectApp} onSeed={onSeed} onLoadFlagged={onLoadFlagged} lockedToAppId={tour.queueLockedToAppId} width={viewportWidth} />
+              )}
+              {mobileVerifyStep === 'evidence' && (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+                  <MobileStepBar
+                    p={p}
+                    onBack={() => setMobileVerifyStep('queue')}
+                    backLabel="Queue"
+                    onForward={showAlert || state.status === 'valid' ? () => setMobileVerifyStep('decision') : undefined}
+                    forwardLabel="Decision"
+                  />
+                  <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+                    {showAlert ? <CenterAlert p={p} flagTime={flagTime} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} lapsedTiers={state.credential.verification.lapsedTiers} policy={storedPolicy.policy} /> : state.status === 'invalid' ? <InvalidCenter p={p} reasons={state.reasons} /> : <ServicingEmpty p={p} text="No application open. Pick a file from the pipeline to see the engine's verdict, or seed a demo pipeline to get started." />}
+                  </div>
+                </div>
+              )}
+              {mobileVerifyStep === 'decision' && (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+                  <MobileStepBar p={p} onBack={() => setMobileVerifyStep('evidence')} backLabel="Evidence" />
+                  <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+                    {showAlert ? (
+                      <RightAlert p={p} width={viewportWidth} />
+                    ) : state.status === 'valid' ? (
+                      <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} stacking={stackingSignal} selectedApp={selectedApp} acceptance={selectedAcceptance} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onGenerateLetter={onGenerateLetter} purpose={purpose} setPurpose={setPurpose} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} pricing={pricing} appliedRate={appliedRate} onApplyRate={onApplyRate} previewRate={previewRate} lenderName={activeLender.name} ownApplications={apps} storedPolicy={storedPolicy} width={viewportWidth} />
+                    ) : (
+                      <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} lenderName={activeLender.name} ownApplications={apps} storedPolicy={storedPolicy} width={viewportWidth} />
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <QueueRail p={p} apps={apps} offerBook={offerBook} selectedId={selectedAppId} onSelect={onSelectApp} onSeed={onSeed} onLoadFlagged={onLoadFlagged} lockedToAppId={tour.queueLockedToAppId} width={panelLayout.pipeline} />
+              <PanelResizer p={p} spec={PIPELINE_PANEL} width={panelLayout.pipeline} otherWidth={panelLayout.decision} onResize={(w) => onPanelResize('pipeline', w)} />
+              {showAlert ? <CenterAlert p={p} flagTime={flagTime} /> : state.status === 'valid' ? <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} lapsedTiers={state.credential.verification.lapsedTiers} policy={storedPolicy.policy} /> : state.status === 'invalid' ? <InvalidCenter p={p} reasons={state.reasons} /> : <ServicingEmpty p={p} text="No application open. Pick a file from the pipeline to see the engine's verdict, or seed a demo pipeline to get started." />}
+              <PanelResizer p={p} spec={DECISION_PANEL} width={panelLayout.decision} otherWidth={panelLayout.pipeline} onResize={(w) => onPanelResize('decision', w)} />
+              {showAlert ? <RightAlert p={p} /> : state.status === 'valid' ? <RightDecision p={p} passport={state.passport} decision={state.decision} credential={state.credential} amount={amount} stacking={stackingSignal} selectedApp={selectedApp} acceptance={selectedAcceptance} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onGenerateLetter={onGenerateLetter} purpose={purpose} setPurpose={setPurpose} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} pricing={pricing} appliedRate={appliedRate} onApplyRate={onApplyRate} previewRate={previewRate} lenderName={activeLender.name} ownApplications={apps} storedPolicy={storedPolicy} width={panelLayout.decision} /> : <RightDecision p={p} passport={null} decision={null} credential={null} amount={amount} policy={storedPolicy.policy} policyUpdatedAt={storedPolicy.updatedAt} lenderName={activeLender.name} ownApplications={apps} storedPolicy={storedPolicy} width={panelLayout.decision} />}
+            </>
+          )
         ) : tab === 'servicing' ? (
-          <>
-            <ServicingList p={p} apps={booked} sections={servicingSections} selectedId={selectedAppId} onSelect={onSelectApp} />
-            {servicingCount === 0 ? (
-              <ServicingEmpty p={p} text="No approved loans yet. Approved applications appear here." />
-            ) : selectedApp && selectedApp.status === 'approved' && state.status === 'valid' ? (
-              <>
-                <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} lapsedTiers={state.credential.verification.lapsedTiers} policy={storedPolicy.policy} />
-                <ServicingDetail p={p} app={selectedApp} passport={state.passport} acceptance={selectedAcceptance} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onMarkDefault={onMarkDefault} />
-              </>
-            ) : (
-              <ServicingEmpty p={p} text="Select a loan to service it." />
-            )}
-          </>
+          isMobile ? (
+            // Mobile drill-down, 2 steps (less going on than Verify: no separate "decision"
+            // panel to split out — VerifiedCenter + ServicingDetail stack into one scrollable
+            // "detail" screen instead of a third step).
+            <>
+              {mobileServicingStep === 'list' && (
+                <ServicingList p={p} apps={booked} sections={servicingSections} selectedId={selectedAppId} onSelect={onSelectApp} width={viewportWidth} />
+              )}
+              {mobileServicingStep === 'detail' && (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+                  <MobileStepBar p={p} onBack={() => setMobileServicingStep('list')} backLabel="Loans" />
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+                    {servicingCount === 0 ? (
+                      <ServicingEmpty p={p} text="No approved loans yet. Approved applications appear here." />
+                    ) : selectedApp && selectedApp.status === 'approved' && state.status === 'valid' ? (
+                      <>
+                        <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} lapsedTiers={state.credential.verification.lapsedTiers} policy={storedPolicy.policy} />
+                        <ServicingDetail p={p} app={selectedApp} passport={state.passport} acceptance={selectedAcceptance} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onMarkDefault={onMarkDefault} width={viewportWidth} />
+                      </>
+                    ) : (
+                      <ServicingEmpty p={p} text="Select a loan to service it." />
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <ServicingList p={p} apps={booked} sections={servicingSections} selectedId={selectedAppId} onSelect={onSelectApp} />
+              {servicingCount === 0 ? (
+                <ServicingEmpty p={p} text="No approved loans yet. Approved applications appear here." />
+              ) : selectedApp && selectedApp.status === 'approved' && state.status === 'valid' ? (
+                <>
+                  <VerifiedCenter p={p} passport={state.passport} decision={state.decision} priors={priors} issuerVerified={Boolean(state.credential.issuerSignature)} stacking={stackingSignal} lapsedTiers={state.credential.verification.lapsedTiers} policy={storedPolicy.policy} />
+                  <ServicingDetail p={p} app={selectedApp} passport={state.passport} acceptance={selectedAcceptance} onResolve={onResolve} onRecordRepayment={onRecordRepayment} onMarkDefault={onMarkDefault} />
+                </>
+              ) : (
+                <ServicingEmpty p={p} text="Select a loan to service it." />
+              )}
+            </>
+          )
         ) : tab === 'portfolio' ? (
           <PortfolioTab p={palette(false)} apps={booked} onStructure={() => { setPoolSource('live'); setTab('capital'); }} />
         ) : tab === 'capital' ? (
