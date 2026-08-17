@@ -80,3 +80,7 @@ PipComp/src/data/issuerKey.ts
 !/LenderConsole/
 !/README.md
 !/.gitignore
+
+# ─── Internal strategy notes: keep on disk, never publish ──────────────────────
+# (self-assessment against the competition rubric; not for the public repo)
+PipComp/docs/rubric-scorecard.md

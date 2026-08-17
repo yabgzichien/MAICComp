@@ -311,8 +311,8 @@ function AccountReviewList({
               </View>
               <Text style={styles.accMeta}>
                 {acc.clsLabel}
-                {acc.notes ? `  ·  ${acc.notes}` : ''}
-                {'  ·  '}{acc.asOf}
+                {acc.notes ? ` · ${acc.notes}` : ''}
+                {' · '}{acc.asOf}
               </Text>
             </View>
 
@@ -601,7 +601,7 @@ export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
               >
                 <Icon name="receipt" size={18} color={colors.accent} />
                 <Text style={styles.copyBtnText}>
-                  {copied ? '✓  Prompt copied!' : 'Copy Prompt'}
+                  {copied ? '✓ Prompt copied!' : 'Copy Prompt'}
                 </Text>
               </Pressable>
 
