@@ -9,35 +9,11 @@ affordability decision without ever seeing a raw transaction.
 
 Built for **MAIC Nexus 2026, Track T3 (Financial Services)**.
 
-**Try it now, no signup and no API key:**
+**Try it now:**
 [Borrower app](https://pip-expenses-tracker.vercel.app) ·
 [Lender console](https://pip-lender-console.vercel.app)
 
 ---
-
-## Sixty seconds, if you only have sixty seconds
-
-1. Open the [lender console](https://pip-lender-console.vercel.app) and enter as **TEKUN
-   Nasional**. There are no credentials.
-2. Click any applicant in the pipeline. You get five cryptographic checks on the passport,
-   a seven-factor score, the affordability arithmetic, and a numbered audit trail.
-3. Click **Load flagged applicant**. The console switches to data-integrity mode: data
-   confidence collapses, a forensics panel names which checks fired, and the case routes to
-   manual review instead of a decision.
-4. Optional round trip: mint a passport in the [borrower app](https://pip-expenses-tracker.vercel.app)
-   and paste the code into the console's Verify tab.
-
-Step 3 is the part worth watching. Most credit demos only show the happy path.
-
-## Why now
-
-Malaysia's Consumer Credit Act 2025 came into force on 1 March 2026, and credit-provider
-licensing takes effect on **1 June 2026**. From that date a licensed lender must assess
-affordability before granting credit, and must be able to defend that assessment.
-
-Roughly 3 to 4 million self-employed and gig workers in Malaysia earn real, regular income
-and have no payslip and no credit file. Lenders are now legally obliged to assess exactly
-the people they have no instrument for. That gap is what this repo is about.
 
 ## The problem
 
