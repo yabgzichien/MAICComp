@@ -8,7 +8,9 @@ import { BtnLabel, CategoryChip, Eyebrow, PrimaryButton, TopBar } from '../compo
 import { todayISO } from '../lib/duplicates';
 import { fullDate, isValidIsoDate } from '../lib/dates';
 import { defaultLinkEffect, type LinkEffect } from '../lib/networth';
-import type { Category, ExtractedTxn, TxnType } from '../lib/types';
+import { fmt } from '../lib/format';
+import { SplitSheet } from '../components/SplitSheet';
+import type { Category, ExtractedTxn, SplitDraft, TxnType } from '../lib/types';
 import { useAppData } from '../state/store';
 import { colors, numFont, radius, shadowToggle, uiFont } from '../theme';
 
@@ -16,20 +18,36 @@ export function ManualEntryScreen({
   categories,
   onBack,
   onComplete,
+  title,
+  startSplitting = false,
+  initialMerchant = null,
+  initialAmount = null,
+  initialSplit = null,
 }: {
   categories: Category[];
   onBack: () => void;
-  onComplete: (item: ExtractedTxn, categoryId: string) => void;
+  onComplete: (item: ExtractedTxn, categoryId: string, split: SplitDraft | null) => void;
+  /** Overrides the top-bar title when the caller knows how the user got here. */
+  title?: string;
+  /** Framed as the standalone Split action rather than a plain manual entry. */
+  startSplitting?: boolean;
+  /** Prefill from a scanned receipt: the merchant, what the card was charged, and the
+   *  per-person split the itemiser produced. */
+  initialMerchant?: string | null;
+  initialAmount?: number | null;
+  initialSplit?: SplitDraft | null;
 }) {
   const insets = useSafeAreaInsets();
   const { accounts, recordBalanceLink, ensureDefaultAccount } = useAppData();
-  const [merchant, setMerchant] = useState('');
-  const [amountText, setAmountText] = useState('');
+  const [merchant, setMerchant] = useState(initialMerchant ?? '');
+  const [amountText, setAmountText] = useState(initialAmount ? initialAmount.toFixed(2) : '');
   const [dateText, setDateText] = useState(todayISO());
   const [type, setType] = useState<TxnType>('expense');
   const [cat, setCat] = useState<string | null>(null);
   const [remark, setRemark] = useState('');
   const [adding, setAdding] = useState(false);
+  const [split, setSplit] = useState<SplitDraft | null>(initialSplit);
+  const [splitting, setSplitting] = useState(false);
 
   // Every transaction is tied to an account. Default to a cash account (prefer an
   // existing one); the effect below seeds it and creates a "Cash" account if none exist.
@@ -71,25 +89,32 @@ export function ManualEntryScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultAcctId]);
 
+  // A split whose gross no longer matches the amount field is stale (the user changed the bill
+  // after splitting it), so it is dropped rather than silently applied to a different number.
+  const activeSplit = split && Math.abs(split.gross - Math.round(amount * 100) / 100) < 0.005 ? split : null;
+
   const save = async () => {
     if (!canSave || !cat || !validDate) return;
     const amt = Math.round(amount * 100) / 100;
     const item: ExtractedTxn = {
       merchant: merchant.trim(),
-      amount: amt,
+      // Only the payer's own share is the expense; the rest becomes a receivable.
+      amount: activeSplit ? activeSplit.ownShare : amt,
       type,
       date: validDate,
       method: null,
       remark: remark.trim() || null,
     };
+    // The balance moves by the full bill even when the row records only a share, because the
+    // whole amount is what actually left the account.
     if (linkId) await recordBalanceLink(linkId, amt, linkEffect, validDate);
-    onComplete(item, cat);
+    onComplete(item, cat, activeSplit);
   };
 
   return (
     <View style={styles.root}>
       <View style={{ paddingTop: insets.top + 4 }}>
-        <TopBar title="Add manually" onBack={onBack} />
+        <TopBar title={title ?? (startSplitting ? 'Split a bill' : 'Add manually')} onBack={onBack} />
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 130 }} keyboardShouldPersistTaps="handled">
@@ -112,7 +137,7 @@ export function ManualEntryScreen({
           placeholder={type === 'income' ? 'e.g. Salary' : 'e.g. Jaya Grocer'}
           placeholderTextColor={colors.ink3}
           style={styles.textInput}
-          autoFocus
+          autoFocus={!initialMerchant}
         />
 
         <Eyebrow style={{ marginTop: 18, marginBottom: 8 }}>Amount</Eyebrow>
@@ -127,6 +152,30 @@ export function ManualEntryScreen({
             style={styles.amountInput}
           />
         </View>
+
+        {type === 'expense' && (
+          <Pressable
+            onPress={() => setSplitting(true)}
+            style={[styles.splitRow, amount <= 0 && styles.splitRowOff]}
+            disabled={amount <= 0}
+            hitSlop={4}
+          >
+            <Icon name="gift" size={17} color={amount > 0 ? colors.accent : colors.ink3} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.splitTitle}>
+                {activeSplit ? `Your share: RM ${fmt(activeSplit.ownShare)}` : 'Split with friends'}
+              </Text>
+              <Text style={styles.splitSub} numberOfLines={1}>
+                {activeSplit
+                  ? `RM ${fmt(activeSplit.gross - activeSplit.ownShare)} owed back to you`
+                  : amount > 0
+                    ? 'Paid for the table? Record only your share'
+                    : 'Enter the bill amount first'}
+              </Text>
+            </View>
+            <Icon name="chevronRight" size={17} color={colors.ink3} />
+          </Pressable>
+        )}
 
         <View style={{ marginTop: 18 }}>
           <AccountLinkField accounts={accounts} selectedId={linkId} effect={linkEffect} onSelect={selectLink} onEffect={setLinkEffect} required />
@@ -187,6 +236,19 @@ export function ManualEntryScreen({
           setAdding(false);
         }}
       />
+
+      <SplitSheet
+        visible={splitting}
+        gross={Math.round(amount * 100) / 100}
+        merchant={merchant.trim() || undefined}
+        initial={activeSplit}
+        onClose={() => setSplitting(false)}
+        onApply={(draft) => {
+          setSplit(draft);
+          setSplitting(false);
+        }}
+        onRemove={activeSplit ? () => { setSplit(null); setSplitting(false); } : undefined}
+      />
     </View>
   );
 }
@@ -218,5 +280,20 @@ const styles = StyleSheet.create({
   gridCell: { width: '50%', paddingHorizontal: 5, paddingBottom: 10 },
   addChip: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 14, borderRadius: radius.sm, borderWidth: 1.5, borderColor: colors.accentSoft, borderStyle: 'dashed', backgroundColor: colors.accentTint },
   addChipText: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.accent },
+  splitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    marginTop: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  splitRowOff: { opacity: 0.6 },
+  splitTitle: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.ink },
+  splitSub: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, marginTop: 2 },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 18, paddingTop: 12, backgroundColor: colors.bg, borderTopWidth: 1, borderTopColor: colors.line2 },
 });

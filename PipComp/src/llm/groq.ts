@@ -1,5 +1,6 @@
 import { parseExtraction, ExtractionParseError } from '../lib/parseExtraction';
 import { parseBalance } from '../lib/parseBalance';
+import { parseReceipt, type ScannedReceipt } from '../lib/parseReceipt';
 import { parseSnapshot, type ScannedSnapshot } from '../lib/parseSnapshot';
 import { parseCryptoHoldings, type ScannedHolding } from '../lib/prices';
 import type { ExtractedTxn } from '../lib/types';
@@ -27,6 +28,8 @@ import {
   DOC_USER_PROMPT,
   HOLDINGS_SYSTEM_PROMPT,
   HOLDINGS_USER_PROMPT,
+  RECEIPT_SYSTEM_PROMPT,
+  RECEIPT_USER_PROMPT,
   SNAPSHOT_SYSTEM_PROMPT,
   SNAPSHOT_USER_PROMPT,
 } from './extractPrompt';
@@ -272,6 +275,10 @@ export const GroqProvider: LLMProvider = {
 
   async extractSnapshot({ apiKey, model, parts }: DocExtractInput): Promise<ScannedSnapshot> {
     return parseSnapshot(await visionJson(apiKey, model, SNAPSHOT_SYSTEM_PROMPT, SNAPSHOT_USER_PROMPT, parts));
+  },
+
+  async extractReceipt({ apiKey, model, parts }: DocExtractInput): Promise<ScannedReceipt> {
+    return parseReceipt(await visionJson(apiKey, model, RECEIPT_SYSTEM_PROMPT, RECEIPT_USER_PROMPT, parts));
   },
 
   async guessCategories({ apiKey, model, items, categories }: CategoryGuessInput): Promise<Record<number, string | null>> {

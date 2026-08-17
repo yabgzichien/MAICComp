@@ -3,16 +3,31 @@ import { Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, View } fr
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AddCategoryModal } from '../components/AddCategoryModal';
 import { Icon } from '../components/Icon';
+import { SplitSheet } from '../components/SplitSheet';
 import { Amount, B, BtnLabel, BubbleText, Card, CategoryChip, PipSays, PrimaryButton, ProgressTrack, TopBar } from '../components/ui';
 import { applyDateEdit, fullDateWithWeekday, ISO_DATE_RE, isValidIsoDate, shortDate } from '../lib/dates';
 import { findDuplicate, todayISO } from '../lib/duplicates';
 import { fmt } from '../lib/format';
 import { CLASS_BY_ID } from '../lib/networth';
-import { DROP, type Category, type CategorySuggestion, type ExtractedTxn, type TxnType } from '../lib/types';
+import { suggestSettlement } from '../lib/split';
+import { DROP, type Category, type CategorySuggestion, type ExtractedTxn, type SplitDraft, type TxnType } from '../lib/types';
 import type { IconName } from '../components/Icon';
 import { useAccent, useAccentAlert } from '../state/accent';
 import { useAppData } from '../state/store';
 import { colors, numFont, shadowToggle, uiFont } from '../theme';
+
+/**
+ * An inbound row the user confirmed is a friend paying them back. It is deliberately NOT saved
+ * as a transaction: being repaid is a receivable turning into cash, not income, so the row is
+ * dropped from the batch and this settles the share instead.
+ */
+export interface PendingSettlement {
+  shareId: string;
+  amount: number;
+  paidOn: string;
+  merchant: string;
+  personName: string;
+}
 
 export function CategorizeScreen({
   extracted,
@@ -28,10 +43,15 @@ export function CategorizeScreen({
   /** Account the whole scanned batch is linked to, if any — shown on each card. */
   linkId?: string | null;
   onBack: () => void;
-  onComplete: (assignments: (string | null)[], items: ExtractedTxn[]) => void;
+  onComplete: (
+    assignments: (string | null)[],
+    items: ExtractedTxn[],
+    splitDrafts: (SplitDraft | null)[],
+    settlements: (PendingSettlement | null)[]
+  ) => void;
 }) {
   const insets = useSafeAreaInsets();
-  const { transactions, accounts } = useAppData();
+  const { transactions, accounts, openShares } = useAppData();
   // The ledger as it stood when this batch opened. Deliberately frozen: `commitCategorized`
   // writes the batch on the last Finish tap, the store's `transactions` then updates while this
   // screen is still mounted, and every row suddenly matches ITSELF — which is what flashed the
@@ -57,6 +77,11 @@ export function CategorizeScreen({
   const [acked, setAcked] = useState<Record<number, boolean>>({});
   const [step, setStep] = useState(0);
   const [adding, setAdding] = useState(false);
+  const [splitting, setSplitting] = useState(false);
+  const [splitDrafts, setSplitDrafts] = useState<(SplitDraft | null)[]>(() => extracted.map(() => null));
+  const [settlements, setSettlements] = useState<(PendingSettlement | null)[]>(() => extracted.map(() => null));
+  /** Inbound rows the user has told us are NOT a repayment, so we stop asking. */
+  const [notRepayment, setNotRepayment] = useState<Record<number, boolean>>({});
 
   const fade = useRef(new Animated.Value(1)).current;
   const slide = useRef(new Animated.Value(0)).current;
@@ -82,6 +107,16 @@ export function CategorizeScreen({
   const showBanner = !!dup && !acked[originalIndex];
   const dupDay = dup ? shortDate(dup.date ?? dup.createdAt) : '';
   const keptCount = stepIndices.filter((i) => assignments[i] !== DROP).length;
+
+  const activeSplit = hasSteps ? splitDrafts[originalIndex] : null;
+
+  // Only inbound rows can be a repayment, and only while the duplicate banner is not already
+  // holding the screen. Recomputed per step rather than up front so an amount edit re-matches.
+  const settlementHit = useMemo(() => {
+    if (!item || item.type !== 'income' || showBanner || notRepayment[originalIndex]) return null;
+    return suggestSettlement(openShares, { merchant: item.merchant, amount: item.amount, date: item.date }, today);
+  }, [item, showBanner, notRepayment, originalIndex, openShares, today]);
+  const showSettlement = !!settlementHit;
 
   useEffect(() => {
     fade.setValue(0);
@@ -144,8 +179,13 @@ export function CategorizeScreen({
     });
   };
 
-  const advanceOrFinish = (nextAssignments: (string | null)[]) => {
-    if (isLast) onComplete(nextAssignments, items);
+  // The overrides matter on the LAST step: state updates have not landed by the time this
+  // finishes the batch, so whatever the caller just decided has to be handed over directly.
+  const advanceOrFinish = (
+    nextAssignments: (string | null)[],
+    nextSettlements: (PendingSettlement | null)[] = settlements
+  ) => {
+    if (isLast) onComplete(nextAssignments, items, splitDrafts, nextSettlements);
     else setStep((s) => s + 1);
   };
 
@@ -156,11 +196,42 @@ export function CategorizeScreen({
     advanceOrFinish(next);
   };
 
+  const applySplit = (draft: SplitDraft | null) => {
+    setSplitDrafts((prev) => {
+      const next = [...prev];
+      next[originalIndex] = draft;
+      return next;
+    });
+    setSplitting(false);
+  };
+
+  /**
+   * Confirm an inbound row is a repayment. The row is dropped from the batch (no income
+   * transaction is written) and the share is settled after the commit instead.
+   */
+  const acceptSettlement = () => {
+    if (!settlementHit) return;
+    const nextSettlements = [...settlements];
+    nextSettlements[originalIndex] = {
+      shareId: settlementHit.share.shareId,
+      amount: settlementHit.amount,
+      paidOn: item!.date ?? today,
+      merchant: item!.merchant,
+      personName: settlementHit.share.personName,
+    };
+    setSettlements(nextSettlements);
+
+    const nextAssignments = [...assignments];
+    nextAssignments[originalIndex] = DROP;
+    setAssignments(nextAssignments);
+    advanceOrFinish(nextAssignments, nextSettlements);
+  };
+
   const addAnyway = () => setAcked((a) => ({ ...a, [originalIndex]: true }));
 
   const go = (dir: number) => {
     if (dir > 0 && isLast) {
-      onComplete(assignments, items);
+      onComplete(assignments, items, splitDrafts, settlements);
       return;
     }
     if (dir < 0 && safeStep === 0) {
@@ -237,6 +308,23 @@ export function CategorizeScreen({
             <AmountEditor value={item!.amount} income={isIncome} onChange={setAmount} />
           </Card>
 
+          {!isIncome && !showBanner && (
+            <Pressable onPress={() => setSplitting(true)} style={styles.splitRow} hitSlop={4}>
+              <Icon name="gift" size={17} color={colors.accent} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.splitTitle}>
+                  {activeSplit ? `Your share: RM ${fmt(activeSplit.ownShare)}` : 'Split with friends'}
+                </Text>
+                <Text style={styles.splitSub} numberOfLines={1}>
+                  {activeSplit
+                    ? `RM ${fmt(activeSplit.gross - activeSplit.ownShare)} owed back to you`
+                    : 'Paid for the table? Record only your share'}
+                </Text>
+              </View>
+              <Icon name="chevronRight" size={17} color={colors.ink3} />
+            </Pressable>
+          )}
+
           {showBanner ? (
             <View style={[styles.banner, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]}>
               <View style={styles.bannerHead}>
@@ -255,6 +343,35 @@ export function CategorizeScreen({
                 </View>
                 <Pressable onPress={addAnyway} style={styles.ghostBtn}>
                   <Text style={[styles.ghostText, { color: theme.accentInk }]}>Add anyway</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : showSettlement ? (
+            <View style={[styles.banner, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]}>
+              <View style={styles.bannerHead}>
+                <Icon name="gift" size={18} color={theme.accentInk} stroke={2} />
+                <Text style={[styles.bannerTitle, { color: theme.accentInk }]}>
+                  {settlementHit!.partial ? 'Part of a repayment?' : 'Paying you back?'}
+                </Text>
+              </View>
+              <Text style={styles.bannerText}>
+                This looks like <B>{settlementHit!.share.personName}</B> settling{' '}
+                {settlementHit!.partial ? 'part of ' : ''}what they owe you for{' '}
+                <B>{settlementHit!.share.merchant}</B> (RM {fmt(settlementHit!.share.outstanding)} outstanding).
+                {'\n'}It clears the debt instead of counting as income.
+              </Text>
+              <View style={styles.bannerBtns}>
+                <View style={{ flex: 1 }}>
+                  <PrimaryButton onPress={acceptSettlement} height={48}>
+                    <Icon name="check" size={17} color="#fff" stroke={2.4} />
+                    <BtnLabel>Yes, they paid me back</BtnLabel>
+                  </PrimaryButton>
+                </View>
+                <Pressable
+                  onPress={() => setNotRepayment((m) => ({ ...m, [originalIndex]: true }))}
+                  style={styles.ghostBtn}
+                >
+                  <Text style={[styles.ghostText, { color: theme.accentInk }]}>No, it’s income</Text>
                 </Pressable>
               </View>
             </View>
@@ -293,7 +410,7 @@ export function CategorizeScreen({
         </Animated.View>
       </ScrollView>
 
-      {!showBanner && (
+      {!showBanner && !showSettlement && (
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
           <Pressable onPress={dropCurrent} style={styles.dropLink} hitSlop={6}>
             <Icon name="x" size={14} color={colors.ink3} />
@@ -328,6 +445,16 @@ export function CategorizeScreen({
           setCat(id);
           setAdding(false);
         }}
+      />
+
+      <SplitSheet
+        visible={splitting}
+        gross={item?.amount ?? 0}
+        merchant={item?.merchant}
+        initial={activeSplit}
+        onClose={() => setSplitting(false)}
+        onApply={applySplit}
+        onRemove={activeSplit ? () => applySplit(null) : undefined}
       />
     </View>
   );
@@ -533,6 +660,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accentTint,
   },
   addChipText: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.accent },
+  splitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    marginTop: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  splitTitle: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.ink },
+  splitSub: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, marginTop: 2 },
   incomeNote: {
     flexDirection: 'row',
     alignItems: 'center',

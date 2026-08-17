@@ -1,6 +1,7 @@
 import type { ExtractedTxn } from '../lib/types';
 import type { ScannedHolding } from '../lib/prices';
 import type { ScannedSnapshot } from '../lib/parseSnapshot';
+import type { ScannedReceipt } from '../lib/parseReceipt';
 import type { IdentityExtraction } from './ekycPrompt';
 import type { CategoryOption, GuessableItem } from './categoryGuessPrompt';
 
@@ -97,6 +98,8 @@ export interface LLMProvider {
   extractSnapshot?(input: DocExtractInput): Promise<ScannedSnapshot>;
   /** Extract holder identity (name + IC/passport number) from a document photo. */
   extractIdentity?(input: DocExtractInput): Promise<IdentityExtraction>;
+  /** Read a paper receipt line by line, so a bill can be split per item. */
+  extractReceipt?(input: DocExtractInput): Promise<ScannedReceipt>;
   /** Guess a category for merchants with no learned-memory match (new-merchant subset only). */
   guessCategories?(input: CategoryGuessInput): Promise<Record<number, string | null>>;
   /** Lightweight credential check for the Settings "Test" button. */

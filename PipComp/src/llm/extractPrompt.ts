@@ -82,6 +82,39 @@ Rules:
 - For "holdings": use each coin's QUANTITY, never its fiat/USD/MYR value. Omit amount (null). Skip rows without a readable quantity.
 - Output JSON only.`;
 
+export const RECEIPT_SYSTEM_PROMPT =
+  'You read a photo of a paper restaurant or shop receipt and return ONLY JSON ' +
+  'listing what was ordered. Never add prose, explanations, or markdown fences.';
+
+export const RECEIPT_USER_PROMPT = `Read every ordered item on this receipt so the bill can be split between friends.
+
+Return a JSON object exactly in this shape:
+{
+  "merchant": "the shop or restaurant name printed on the receipt, or null",
+  "items": [
+    {
+      "label": "the item name as printed",
+      "amount": number  the LINE TOTAL for that row (quantity already multiplied in),
+      "quantity": number or null  how many, if the receipt shows it
+    }
+  ],
+  "subtotal": number or null  the items subtotal BEFORE service charge and tax,
+  "serviceCharge": number or null  the service charge amount (often 10%),
+  "tax": number or null  the service tax / SST / GST amount (often 6%),
+  "total": number or null  the final amount payable
+}
+
+Rules:
+- One object per ordered line. If a row shows "2 x Teh Ais 3.00 6.00", the amount is the
+  LINE TOTAL (6.00) and quantity is 2.
+- Do NOT include service charge, tax, subtotal, total, rounding, change, or payment lines in
+  "items"  they have their own fields.
+- Amounts are plain positive numbers: strip currency symbols and thousands separators
+  ("RM 12,340.50" becomes 12340.50).
+- A discount or voucher row may be negative; keep its sign.
+- If a field is not printed or you cannot read it, use null. Never guess a number.
+- Output JSON only.`;
+
 export const BALANCE_SYSTEM_PROMPT =
   'You read a screenshot of a bank account, e-wallet, or loan statement and ' +
   'return ONLY JSON. Never add prose, explanations, or markdown fences.';

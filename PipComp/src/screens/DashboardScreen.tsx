@@ -18,6 +18,7 @@ import { fmt } from '../lib/format';
 import { netWorth } from '../lib/networth';
 import { computeStreak } from '../lib/streak';
 import { computeIncomeBaseline } from '../lib/incomeBaseline';
+import { daysBetween } from '../lib/split';
 import { BORROWER_TOUR_STEPS, clampTourStep } from '../lib/tourSteps';
 import type { Category } from '../lib/types';
 import { useAppData } from '../state/store';
@@ -47,6 +48,7 @@ export function DashboardScreen({
   onOpenCredit = () => {},
   onOpenPassport = () => {},
   onOpenCoach = () => {},
+  onOpenOwed = () => {},
 }: {
   onScan: () => void;
   onOpenCategories: () => void;
@@ -58,10 +60,11 @@ export function DashboardScreen({
   onOpenCredit?: () => void;
   onOpenPassport?: () => void;
   onOpenCoach?: () => void;
+  onOpenOwed?: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const now = useNow();
-  const { transactions, catById, allocations, hasBudget, coverage, accounts, accountValues, tourActive, tourStepIndex, startTour } = useAppData();
+  const { transactions, catById, allocations, hasBudget, coverage, accounts, accountValues, openShares, tourActive, tourStepIndex, startTour } = useAppData();
   const nw = useMemo(() => netWorth(accounts, accountValues), [accounts, accountValues]);
   const { score, dataConfidence } = useCreditProfile();
   const activeTourAnchor = tourActive ? BORROWER_TOUR_STEPS[clampTourStep(tourStepIndex, BORROWER_TOUR_STEPS.length)].anchorId ?? null : null;
@@ -102,6 +105,28 @@ export function DashboardScreen({
       .sort((a, b) => b.amt - a.amt);
   }, [monthExpenses]);
 
+  // A debt this old has stopped being a favour and started being a thing you have to chase, so
+  // the card switches from a neutral total to naming who is sitting on it.
+  const owed = useMemo(() => {
+    const today = dayKey(new Date());
+    let oldestDays = 0;
+    let oldestName = '';
+    for (const share of openShares) {
+      const age = daysBetween(share.billDate, today) ?? 0;
+      if (age > oldestDays) {
+        oldestDays = age;
+        oldestName = share.personName;
+      }
+    }
+    return {
+      total: openShares.reduce((s, x) => s + x.outstanding, 0),
+      count: openShares.length,
+      oldestDays,
+      oldestName,
+      overdue: oldestDays >= 14,
+    };
+  }, [openShares]);
+
   const empty = transactions.length === 0;
   const streak = useMemo(() => computeStreak(transactions), [transactions]);
   const incomeBaseline = useMemo(() => computeIncomeBaseline(transactions), [transactions]);
@@ -122,7 +147,8 @@ export function DashboardScreen({
 
   return (
     <FadeIn style={styles.root}>
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
+      {/* Bottom padding clears the bottom nav's raised Add button, which overhangs the bar. */}
+      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
@@ -167,6 +193,27 @@ export function DashboardScreen({
               onOpenNetWorth={onOpenNetWorth}
             />
 
+            {/* Money friends still owe from split bills. Sits next to the balance sheet because
+                that is what it is: an asset, not spending that never happened. */}
+            {owed.total > 0 && (
+              <Pressable
+                onPress={onOpenOwed}
+                style={({ pressed }) => [styles.owedRow, { opacity: pressed ? 0.9 : 1 }]}
+                accessibilityRole="button"
+              >
+                <Icon name="gift" size={17} color={colors.accent} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.owedTitle}>RM {fmt(owed.total)} owed to you</Text>
+                  <Text style={styles.owedSub}>
+                    {owed.overdue
+                      ? `${owed.oldestName} has owed you for ${owed.oldestDays} days. Worth a nudge.`
+                      : `From ${owed.count} shared ${owed.count === 1 ? 'bill' : 'bills'}. Tap to settle up.`}
+                  </Text>
+                </View>
+                <Icon name="chevronRight" size={16} color={colors.ink3} />
+              </Pressable>
+            )}
+
             {/* Safe monthly income — only for borrowers whose earnings actually swing, since a
                 steady salary needs no separate planning figure. */}
             {incomeBaseline.irregular && (
@@ -210,18 +257,13 @@ export function DashboardScreen({
               onOpenPassport={onOpenPassport}
             />
 
-            {/* Scan CTA — kept high (right under the quick actions) so the core capture
-                loop is reachable without scrolling to the bottom of the feed. */}
-            <View style={{ paddingHorizontal: 16, marginTop: 12 }}>
-              <PrimaryButton onPress={onScan} height={54}>
-                <Icon name="camera" size={21} color="#fff" />
-                <BtnLabel>Scan a receipt</BtnLabel>
-                <Icon name="sparkles" size={16} color="#fff" />
-              </PrimaryButton>
-            </View>
+            {/* No capture CTA in the feed: it now lives as the raised "Add" button in the bottom
+                nav, which is on screen from every tab. An inline copy meant the core action sat
+                four cards down the scroll AND was labelled "Scan a receipt" while opening a menu
+                of five different things. */}
 
             {/* This month budget (kept) */}
-            <View style={{ paddingHorizontal: 16, marginTop: 10 }}>
+            <View style={{ paddingHorizontal: 16, marginTop: 12 }}>
               {hasBudget ? (
                 <>
                   <View style={styles.sectionHead}>
@@ -255,12 +297,13 @@ export function DashboardScreen({
           </>
         )}
 
-        {/* Empty-state fallback: no cards above, so the capture CTA lives here instead. */}
+        {/* Empty state: nothing to explore yet, so the one thing to do gets a full-width CTA on
+            top of the bottom-nav button. */}
         {empty && (
           <View style={{ paddingHorizontal: 16, marginTop: 14 }}>
             <PrimaryButton onPress={onScan} height={54}>
-              <Icon name="camera" size={21} color="#fff" />
-              <BtnLabel>Scan a receipt</BtnLabel>
+              <Icon name="plus" size={21} color="#fff" stroke={2.4} />
+              <BtnLabel>Add your first transaction</BtnLabel>
               <Icon name="sparkles" size={16} color="#fff" />
             </PrimaryButton>
           </View>
@@ -371,12 +414,12 @@ function SummaryCard({
   liabilities: number;
   onOpenNetWorth: () => void;
 }) {
-  const [view, setView] = useState<SummaryView>('networth');
+  const [view, setView] = useState<SummaryView>('cashflow');
   return (
     <Card style={styles.cashCard}>
       {/* segmented toggle */}
       <View style={styles.segTrack}>
-        {(['networth', 'cashflow'] as SummaryView[]).map((v) => {
+        {(['cashflow', 'networth'] as SummaryView[]).map((v) => {
           const on = view === v;
           return (
             <Pressable
@@ -645,7 +688,8 @@ function EmptyState() {
       <Pip size={88} expr="curious" float />
       <Text style={styles.emptyTitle}>No spending yet</Text>
       <Text style={styles.emptySub}>
-        Tap “Scan a receipt”, attach a transaction screenshot, and I’ll pull out each line for you to file.
+        Tap <Text style={{ fontFamily: uiFont(700) }}>Add</Text> to scan one receipt, or a whole statement at
+        once. I’ll read the lines and you file them.
       </Text>
     </Card>
   );
@@ -668,6 +712,10 @@ const styles = StyleSheet.create({
   safeIncomeTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   safeIncomeTitle: { fontFamily: uiFont(700), fontSize: 14, color: colors.ink },
   safeIncomeSub: { fontFamily: uiFont(500), fontSize: 11.5, lineHeight: 16, color: colors.ink2, marginTop: 2 },
+  /* owed to you */
+  owedRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginTop: 10, padding: 13, backgroundColor: colors.accentTint, borderRadius: 16, borderWidth: 1, borderColor: colors.accentSoft },
+  owedTitle: { fontFamily: uiFont(700), fontSize: 14, color: colors.ink },
+  owedSub: { fontFamily: uiFont(500), fontSize: 11.5, lineHeight: 16, color: colors.ink2, marginTop: 2 },
   /* streak */
   streakCard:{ marginHorizontal: 16, marginTop: 2, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
   streakLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },

@@ -39,6 +39,7 @@ import { PassportCoachScreen } from './src/screens/PassportCoachScreen';
 import { KycScreen } from './src/screens/KycScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { NetWorthScreen } from './src/screens/NetWorthScreen';
+import { OwedScreen } from './src/screens/OwedScreen';
 import { RecapScreen } from './src/screens/RecapScreen';
 import { CalendarScreen } from './src/screens/CalendarScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
@@ -53,7 +54,7 @@ import { AppDataProvider, useAppData } from './src/state/store';
 import { useNow } from './src/state/useNow';
 import { colors, platformShadow, uiFont } from './src/theme';
 
-type Screen = 'home' | 'add' | 'settings' | 'categories' | 'transactions' | 'breakdown' | 'budget' | 'recap' | 'networth' | 'credit' | 'loans' | 'passport' | 'coach' | 'attacks' | 'kyc' | 'calendar' | 'advancedImport';
+type Screen = 'home' | 'add' | 'settings' | 'categories' | 'transactions' | 'breakdown' | 'budget' | 'recap' | 'networth' | 'credit' | 'loans' | 'passport' | 'coach' | 'attacks' | 'kyc' | 'calendar' | 'advancedImport' | 'owed';
 
 /**
  * Web-only: a global :focus-visible outline so keyboard users get a visible focus indicator
@@ -190,6 +191,8 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
   /** Where the Attack Gallery's back button returns to. It has two entrances  the Settings row
    *  and the tour's passport-step deep link  and each should go back where it came from. */
   const [attacksOrigin, setAttacksOrigin] = useState<Screen>('settings');
+  // Owed is reachable from both Home and Activity, so back has to return where it came from.
+  const [owedOrigin, setOwedOrigin] = useState<Screen>('transactions');
   const [txnFilter, setTxnFilter] = useState<string | null>(null);
   const [addInitial, setAddInitial] = useState<'attach' | 'import'>('attach');
   const [calendarMonth, setCalendarMonth] = useState<string | undefined>(undefined);
@@ -559,6 +562,10 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
           onOpenCredit={() => setScreen('credit')}
           onOpenPassport={() => setScreen('passport')}
           onOpenCoach={() => setScreen('coach')}
+          onOpenOwed={() => {
+            setOwedOrigin('home');
+            setScreen('owed');
+          }}
         />
       )}
       {screen === 'add' && (
@@ -589,12 +596,17 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
         <AllTransactionsScreen
           filterCategoryId={txnFilter}
           onClearFilter={() => setTxnFilter(null)}
+          onOpenOwed={() => {
+            setOwedOrigin('transactions');
+            setScreen('owed');
+          }}
           onBack={() => {
             setTxnFilter(null);
             setScreen('home');
           }}
         />
       )}
+      {screen === 'owed' && <OwedScreen onBack={() => setScreen(owedOrigin)} />}
       {screen === 'budget' && <BudgetScreen onBack={() => setScreen('home')} onOpenRecap={() => setScreen('recap')} />}
       {screen === 'recap' && (
         <RecapScreen
@@ -650,7 +662,17 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
         />
       )}
       </View>
-      {navTab && <BottomNav active={navTab} onNavigate={goTab} badges={{ loan: pendingOffers.length }} />}
+      {navTab && (
+        <BottomNav
+          active={navTab}
+          onNavigate={goTab}
+          onAdd={() => {
+            setAddInitial('attach');
+            setScreen('add');
+          }}
+          badges={{ loan: pendingOffers.length }}
+        />
+      )}
       {tourActive && currentTourStep && !tourPaused && (
         <TourSpotlight
           onDimPress={() => {

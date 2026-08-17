@@ -7,6 +7,7 @@ import {
   deleteTransaction,
   deleteTransactions,
   listTransactions,
+  updateTransactionAmount,
   updateTransactionFields,
   type NewTxn,
 } from '../db/txnRepo';
@@ -37,6 +38,19 @@ import {
   upsertDailyBalanceEntry,
   upsertPrice,
 } from '../db/accountsRepo';
+import {
+  createSplit as dbCreateSplit,
+  deleteSplitsForTxns as dbDeleteSplitsForTxns,
+  findOrCreatePerson as dbFindOrCreatePerson,
+  listPayments as dbListPayments,
+  listPeople as dbListPeople,
+  listShares as dbListShares,
+  listSplits as dbListSplits,
+  recordPayment as dbRecordPayment,
+  renamePerson as dbRenamePerson,
+  writeOffShare as dbWriteOffShare,
+} from '../db/splitRepo';
+import { openReceivableTotal, outstanding, type OpenShare } from '../lib/split';
 import { refreshPrices as fetchPrices } from '../prices';
 import {
   listProducts as dbListProducts,
@@ -95,7 +109,7 @@ const ACTIVE_DEMO_PROFILE_KEY = 'active_demo_profile';
 const HOUSEHOLD_PROFILE_KEY = 'belanjawanku_household';
 const GUIDE_CITY_KEY = 'belanjawanku_city';
 const SAVINGS_TARGET_KEY = 'savings_target';
-import { applyEffect, currentValue, type LinkEffect } from '../lib/networth';
+import { applyEffect, currentValue, RECEIVABLE_CLS, type LinkEffect } from '../lib/networth';
 import { holdingValue, isHolding, mergeAccountValues } from '../lib/prices';
 import { merchantKey } from '../lib/normalize';
 import {
@@ -106,7 +120,13 @@ import {
   type Category,
   type ExtractedTxn,
   type MemoryMap,
+  type PaymentEvidence,
+  type Person,
   type PriceQuote,
+  type Split,
+  type SplitDraft,
+  type SplitPayment,
+  type SplitShare,
   type Transaction,
   type TxnSource,
   type TxnType,
@@ -120,6 +140,33 @@ function todayKey(): string {
 export interface NewLearned {
   merchant: string;
   categoryId: string;
+}
+
+/**
+ * Make the "Owed to me" account equal what the open shares actually add up to.
+ *
+ * The receivable is derived state that has to live in a table so the rest of Net Worth (class
+ * grouping, the history series, the balance sheet) can treat it like any other asset. Deriving
+ * it fresh on every load is what keeps that shortcut honest: the split records are the truth,
+ * and the account is only ever their shadow. The account is not created until there is
+ * something to owe, so a user who never splits a bill never sees the line.
+ *
+ * Returns whether anything moved, so the caller knows to refetch accounts and entries.
+ */
+async function reconcileReceivable(shareRows: SplitShare[], accts: Account[]): Promise<boolean> {
+  const total = openReceivableTotal(shareRows);
+  const existing = accts.find((a) => a.cls === RECEIVABLE_CLS && !a.archived);
+
+  if (!existing) {
+    if (total <= 0) return false;
+    await dbAddAccount('Owed to me', 'asset', RECEIVABLE_CLS, total, todayKey(), null);
+    return true;
+  }
+
+  const mine = (await listBalanceEntries()).filter((e) => e.accountId === existing.id);
+  if (Math.round(currentValue(mine) * 100) === Math.round(total * 100)) return false;
+  await upsertDailyBalanceEntry(existing.id, total, todayKey());
+  return true;
 }
 
 /** An offer waiting on the borrower, paired with the lender who made it (borrower acceptance,
@@ -194,8 +241,38 @@ interface AppData {
   commitCategorized: (
     items: ExtractedTxn[],
     assignments: (string | null)[],
-    source?: TxnSource
+    source?: TxnSource,
+    /** Parallel to `items`: a split to attach to that row, or null. A split row saves at its
+     *  `ownShare`, not the extracted amount, and the gross is kept on the split record. */
+    splitDrafts?: (SplitDraft | null)[]
   ) => Promise<{ created: Transaction[]; newLearned: NewLearned[] }>;
+  /** People you split bills with, remembered locally so totals can roll up per person. */
+  people: Person[];
+  splits: Split[];
+  shares: SplitShare[];
+  splitPayments: SplitPayment[];
+  /** Unsettled shares joined with the person and the bill behind them, ready to match a
+   *  repayment against or to list on the Owed screen. */
+  openShares: OpenShare[];
+  /** Remember a name (or return the one already saved under it, case-insensitively). */
+  addPerson: (name: string) => Promise<Person>;
+  renamePerson: (id: string, name: string) => Promise<void>;
+  /** Split a transaction already in the ledger: its amount drops to the payer's own share. */
+  splitTransaction: (txn: Transaction, draft: SplitDraft) => Promise<void>;
+  /** Undo a split, restoring the transaction to the full amount that left the account. */
+  unsplitTransaction: (txn: Transaction) => Promise<void>;
+  /** Record money received against a share. Never writes an income row: it moves cash against
+   *  the receivable, which is what being paid back actually is. */
+  settleShare: (
+    shareId: string,
+    amount: number,
+    paidOn: string,
+    evidence: PaymentEvidence,
+    matchedMerchant: string | null,
+    accountId: string | null
+  ) => Promise<void>;
+  /** Give up on a share: the uncollected money becomes the payer's own expense after all. */
+  writeOffShare: (shareId: string) => Promise<void>;
   saveTransactionEdits: (
     txn: Transaction,
     edits: { amount: number; type: TxnType; categoryId: string; remark?: string | null }
@@ -311,6 +388,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [snapshots, setSnapshots] = useState<Record<string, { income: number; allocations: Record<string, number> }>>({});
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [balanceEntries, setBalanceEntries] = useState<BalanceEntry[]>([]);
+  const [people, setPeople] = useState<Person[]>([]);
+  const [splits, setSplits] = useState<Split[]>([]);
+  const [shares, setShares] = useState<SplitShare[]>([]);
+  const [splitPayments, setSplitPayments] = useState<SplitPayment[]>([]);
   const [prices, setPrices] = useState<Record<string, PriceQuote>>({});
   const [loanProducts, setLoanProducts] = useState<LoanProduct[]>([]);
   const [loanApplications, setLoanApplications] = useState<LoanApplication[]>([]);
@@ -343,7 +424,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const tourBranchRef = useRef<TourBranch | null>(null);
 
   const refreshAll = useCallback(async () => {
-    const [cats, txns, mem, income, alloc, snaps, accts, entries, cache, products, applications, allRepayments, repSummary, kycRow, onboardingFlag, tourActiveFlag, tourStepRaw, activeDemoProfileRaw, tourBranchRaw, householdRaw, cityRaw, savingsTargetRaw] =
+    const [cats, txns, mem, income, alloc, snaps, accts, entries, cache, products, applications, allRepayments, repSummary, kycRow, onboardingFlag, tourActiveFlag, tourStepRaw, activeDemoProfileRaw, tourBranchRaw, householdRaw, cityRaw, savingsTargetRaw, peopleRows, splitRows, shareRows, paymentRows] =
       await Promise.all([
         listCategories(),
         listTransactions(),
@@ -367,6 +448,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         getMeta(HOUSEHOLD_PROFILE_KEY),
         getMeta(GUIDE_CITY_KEY),
         getMeta(SAVINGS_TARGET_KEY),
+        dbListPeople(),
+        dbListSplits(),
+        dbListShares(),
+        dbListPayments(),
       ]);
     // A stale or hand-edited preference falls back to the default rather than breaking Budget.
     setHouseholdProfileState(
@@ -399,8 +484,19 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setMemory(mem);
     setIncome(income);
     setAlloc(alloc);
-    setAccounts(accts);
-    setBalanceEntries(entries);
+    setPeople(peopleRows);
+    setSplits(splitRows);
+    setShares(shareRows);
+    setSplitPayments(paymentRows);
+    // The receivable account is derived state that happens to live in a table, so it is
+    // re-asserted on every load rather than trusted: a hand-edited balance, or a wipe that
+    // took the shares but left the account, self-corrects here instead of drifting.
+    const receivableMoved = await reconcileReceivable(shareRows, accts);
+    const [finalAccts, finalEntries] = receivableMoved
+      ? await Promise.all([listAccounts(), listBalanceEntries()])
+      : [accts, entries];
+    setAccounts(finalAccts);
+    setBalanceEntries(finalEntries);
     setPrices(Object.fromEntries(cache.map((q) => [q.symbol, q])));
     setLoanProducts(products);
     setLoanApplications(applications);
@@ -441,11 +537,59 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setRepaymentSummaryState(repSummary);
   }, []);
 
+  /**
+   * Targeted refresh for split actions, mirroring `refreshLoanState`. Accounts and balance
+   * entries come along because every split action moves the receivable, and a settlement moves
+   * the account the money landed in too.
+   */
+  const refreshSplitState = useCallback(async () => {
+    const [peopleRows, splitRows, shareRows, paymentRows, accts] = await Promise.all([
+      dbListPeople(),
+      dbListSplits(),
+      dbListShares(),
+      dbListPayments(),
+      listAccounts(),
+    ]);
+    setPeople(peopleRows);
+    setSplits(splitRows);
+    setShares(shareRows);
+    setSplitPayments(paymentRows);
+    await reconcileReceivable(shareRows, accts);
+    const [finalAccts, finalEntries] = await Promise.all([listAccounts(), listBalanceEntries()]);
+    setAccounts(finalAccts);
+    setBalanceEntries(finalEntries);
+  }, []);
+
   const catById = useMemo(() => {
     const map: Record<string, Category> = {};
     for (const c of categories) map[c.id] = c;
     return map;
   }, [categories]);
+
+  /** Open shares, joined once here so the matching and the Owed screen read the same rows. */
+  const openShares = useMemo<OpenShare[]>(() => {
+    const txnById: Record<string, Transaction> = {};
+    for (const t of transactions) txnById[t.id] = t;
+    const splitById: Record<string, Split> = {};
+    for (const s of splits) splitById[s.id] = s;
+    const personById: Record<string, Person> = {};
+    for (const p of people) personById[p.id] = p;
+
+    return shares
+      .filter((s) => s.status === 'open')
+      .map((s) => {
+        const txn = txnById[splitById[s.splitId]?.txnId ?? ''];
+        return {
+          shareId: s.id,
+          personId: s.personId,
+          personName: personById[s.personId]?.name ?? 'Someone',
+          outstanding: outstanding(s),
+          billDate: txn?.date ?? txn?.createdAt ?? null,
+          merchant: txn?.merchantRaw ?? 'A shared bill',
+        };
+      })
+      .filter((s) => s.outstanding > 0);
+  }, [shares, splits, transactions, people]);
 
   // Value per account: qty × live price for holdings, else its latest balance entry.
   const accountValues = useMemo(
@@ -482,9 +626,17 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const commitCategorized = useCallback(
-    async (items: ExtractedTxn[], assignments: (string | null)[], source: TxnSource = 'extracted') => {
+    async (
+      items: ExtractedTxn[],
+      assignments: (string | null)[],
+      source: TxnSource = 'extracted',
+      splitDrafts?: (SplitDraft | null)[]
+    ) => {
       const newLearned: NewLearned[] = [];
       const toInsert: NewTxn[] = [];
+      // Parallel to `toInsert` rather than to `items`: dropped rows never reach the insert, so
+      // the two arrays would fall out of step if this were indexed off the original items.
+      const draftFor: (SplitDraft | null)[] = [];
 
       for (let i = 0; i < items.length; i++) {
         const it = items[i];
@@ -493,6 +645,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
         const categoryId = a ?? (it.type === 'income' ? DEFAULT_INCOME_ID : DEFAULT_EXPENSE_ID);
         const key = merchantKey(it.merchant);
+        const draft = splitDrafts?.[i] ?? null;
 
         // Learn the merchant -> category for both expenses and income.
         if (!(key in memory)) newLearned.push({ merchant: it.merchant, categoryId });
@@ -501,23 +654,37 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         toInsert.push({
           merchantRaw: it.merchant,
           merchantKey: key,
-          amount: it.amount,
+          // A split row records only what the payer consumed. The full amount that left the
+          // account is kept on the split, so the screenshot line stays reconstructable and the
+          // row can honestly keep its `extracted` provenance.
+          amount: draft ? draft.ownShare : it.amount,
           type: it.type,
           date: it.date,
           categoryId,
           source,
           remark: it.remark,
         });
+        draftFor.push(draft);
       }
 
       const created = await addTransactions(toInsert);
 
+      let splitCount = 0;
+      for (let i = 0; i < created.length; i++) {
+        const draft = draftFor[i];
+        if (!draft || draft.shares.length === 0) continue;
+        await dbCreateSplit(created[i].id, draft);
+        splitCount++;
+      }
+
       const [txns, mem] = await Promise.all([listTransactions(), getMemoryMap()]);
       setTransactions(txns);
       setMemory(mem);
+      if (splitCount > 0) await refreshSplitState();
 
       return { created, newLearned };
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [memory]
   );
 
@@ -536,15 +703,133 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  // Deleting a transaction takes its split with it: a receivable with no bill behind it is a
+  // claim on nothing, and leaving the shares would keep inflating net worth forever.
   const removeTransaction = useCallback(async (id: string) => {
     await deleteTransaction(id);
+    await dbDeleteSplitsForTxns([id]);
     setTransactions(await listTransactions());
-  }, []);
+    await refreshSplitState();
+  }, [refreshSplitState]);
 
   const removeMany = useCallback(async (ids: string[]) => {
     await deleteTransactions(ids);
+    await dbDeleteSplitsForTxns(ids);
     setTransactions(await listTransactions());
+    await refreshSplitState();
+  }, [refreshSplitState]);
+
+  const addPerson = useCallback(
+    async (name: string) => {
+      const person = await dbFindOrCreatePerson(name);
+      setPeople(await dbListPeople());
+      return person;
+    },
+    []
+  );
+
+  const renamePerson = useCallback(async (id: string, name: string) => {
+    await dbRenamePerson(id, name);
+    setPeople(await dbListPeople());
   }, []);
+
+  /**
+   * Split a transaction that is already in the ledger. The row drops to the payer's own share
+   * and the rest becomes a receivable, so the same bill now reads as what was consumed rather
+   * than what was fronted.
+   */
+  const splitTransaction = useCallback(
+    async (txn: Transaction, draft: SplitDraft) => {
+      await updateTransactionAmount(txn.id, draft.ownShare);
+      await dbCreateSplit(txn.id, draft);
+      setTransactions(await listTransactions());
+      await refreshSplitState();
+    },
+    [refreshSplitState]
+  );
+
+  /** Undo a split, putting the whole amount that left the account back on the row. */
+  const unsplitTransaction = useCallback(
+    async (txn: Transaction) => {
+      const split = splits.find((s) => s.txnId === txn.id);
+      if (!split) return;
+      await updateTransactionAmount(txn.id, split.gross);
+      await dbDeleteSplitsForTxns([txn.id]);
+      setTransactions(await listTransactions());
+      await refreshSplitState();
+    },
+    [splits, refreshSplitState]
+  );
+
+  /**
+   * Record money received against a share.
+   *
+   * No income transaction is written, on purpose. Being paid back is not earnings, it is a
+   * receivable converting into cash, and booking it as income would inflate avgIncome and
+   * incomeMonths, both of which feed the credit score directly. The cash side is a balance
+   * movement on whichever account the money landed in; passing no account leaves the cash to
+   * arrive with the next balance scan instead.
+   */
+  const settleShare = useCallback(
+    async (
+      shareId: string,
+      amount: number,
+      paidOn: string,
+      evidence: PaymentEvidence,
+      matchedMerchant: string | null,
+      accountId: string | null
+    ) => {
+      const result = await dbRecordPayment(shareId, amount, paidOn, evidence, matchedMerchant, accountId);
+      if (!result) return;
+      if (accountId) {
+        const entries = await listBalanceEntries();
+        const mine = entries.filter((e) => e.accountId === accountId);
+        const latestAsOf = mine.reduce((m, e) => (e.asOf > m ? e.asOf : m), '');
+        await dbAddBalanceEntry(
+          accountId,
+          applyEffect(currentValue(mine), amount, 'add'),
+          paidOn > latestAsOf ? paidOn : latestAsOf
+        );
+      }
+      await refreshSplitState();
+    },
+    [refreshSplitState]
+  );
+
+  /**
+   * Give up on a share. The money that never came back was consumption after all, so it becomes
+   * a real expense dated today, carrying the original bill's category, and the share is stamped
+   * with that transaction so the write-off stays traceable.
+   */
+  const writeOffShare = useCallback(
+    async (shareId: string) => {
+      const share = shares.find((s) => s.id === shareId);
+      if (!share || share.status !== 'open') return;
+      const amount = outstanding(share);
+      if (amount <= 0) return;
+
+      const split = splits.find((s) => s.id === share.splitId);
+      const origin = split ? transactions.find((t) => t.id === split.txnId) : undefined;
+      const person = people.find((p) => p.id === share.personId);
+
+      const [created] = await addTransactions([
+        {
+          merchantRaw: origin?.merchantRaw ?? 'Written-off split',
+          merchantKey: origin?.merchantKey ?? 'written-off split',
+          amount,
+          type: 'expense',
+          date: todayKey(),
+          categoryId: origin?.categoryId ?? DEFAULT_EXPENSE_ID,
+          source: 'manual',
+          remark: person ? `Written off: ${person.name} never paid this back` : 'Written-off split',
+        },
+      ]);
+      await dbWriteOffShare(shareId, created.id);
+      setTransactions(await listTransactions());
+      await refreshSplitState();
+    },
+    [shares, splits, transactions, people, refreshSplitState]
+  );
 
   const saveBudget = useCallback(async (income: number, alloc: Record<string, number>) => {
     await setExpectedIncome(income);
@@ -1243,6 +1528,17 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     saveTransactionEdits,
     removeTransaction,
     removeMany,
+    people,
+    splits,
+    shares,
+    splitPayments,
+    openShares,
+    addPerson,
+    renamePerson,
+    splitTransaction,
+    unsplitTransaction,
+    settleShare,
+    writeOffShare,
     saveBudget,
     resetBudget,
     resetAllData,

@@ -1,5 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Image as RNImage, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, type IconName } from '../components/Icon';
@@ -14,12 +14,26 @@ export interface PickedImage {
   mime: string;
 }
 
+/**
+ * The add hub. Two jobs live behind this screen and they are NOT the same shape, which is why
+ * they are now separated instead of listed as five sibling buttons:
+ *
+ *   · one purchase   — a paper receipt is a single transaction at a single moment, whose value is
+ *                      in its LINE ITEMS (burger 20, pizza 37), so it reads into one row plus an
+ *                      optional per-item split.
+ *   · many at once   — a bank statement or e-wallet screenshot is a LIST of transactions from
+ *                      different days, so it reads into many rows that each need a category.
+ *
+ * Mixing them under a button called "Scan a receipt" (which then offered statement scanning,
+ * file import and manual entry) meant the label promised one job and the screen delivered four.
+ */
 export function AttachScreen({
   hasKey,
   onClose,
   onPicked,
   onManual,
   onImport,
+  onReceipt,
   showSamples = false,
 }: {
   hasKey: boolean;
@@ -27,12 +41,23 @@ export function AttachScreen({
   onPicked: (img: PickedImage) => void;
   onManual: () => void;
   onImport: () => void;
+  /** Open the itemised-receipt scanner (one purchase, many lines). */
+  onReceipt: () => void;
   /** Offer the bundled demo statements as one-tap samples (used during the judge tour)
    *  alongside the real upload options, so the app never injects an image on its own. */
   showSamples?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const [busy, setBusy] = useState(false);
+  // Camera-vs-gallery is a detail of HOW you hand over a statement, not a separate thing to add,
+  // so it stays folded away until the statement row is chosen. Open from the start during the
+  // tour, where the sample statements underneath are the point of the step.
+  const [statementOpen, setStatementOpen] = useState(showSamples);
+  // The tour's scan step asks the judge to tap a sample statement, so the samples must never be
+  // behind a fold — reopen the row if the tour starts while this screen is already mounted.
+  useEffect(() => {
+    if (showSamples) setStatementOpen(true);
+  }, [showSamples]);
 
   const handleResult = (res: ImagePicker.ImagePickerResult) => {
     if (res.canceled || !res.assets?.length) return;
@@ -86,12 +111,13 @@ export function AttachScreen({
         contentContainerStyle={{ paddingTop: insets.top + 4, paddingBottom: insets.bottom + 30 }}
         showsVerticalScrollIndicator={false}
       >
-        <TopBar title="Add a receipt" onBack={onClose} />
+        <TopBar title="Add transactions" onBack={onClose} />
 
         <View style={{ paddingHorizontal: 18, paddingTop: 8 }}>
           <PipSays expr="curious">
             <BubbleText>
-              Snap or pick a <B>transaction screenshot</B>  I’ll pull out each line and help you file it.
+              Adding <B>one purchase</B>, or <B>a batch</B> from a statement? Pick the row that matches and
+              I’ll do the reading.
             </BubbleText>
           </PipSays>
         </View>
@@ -106,57 +132,80 @@ export function AttachScreen({
           </Pressable>
         )}
 
-        {showSamples && (
-          <View style={{ paddingHorizontal: 18, paddingTop: 18 }}>
-            <Text style={styles.sampleLabel}>NO SCREENSHOT HANDY? TAP A SAMPLE</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 12, paddingVertical: 4, paddingRight: 4 }}
-            >
-              {SAMPLE_STATEMENTS.map((s) => (
-                <Pressable key={s.id} onPress={() => onPicked(s.image)} style={styles.sampleCard} disabled={busy}>
-                  <RNImage source={{ uri: s.image.uri }} style={styles.sampleThumb} resizeMode="cover" />
-                  <View style={{ padding: 10 }}>
-                    <Text style={styles.sampleTitle} numberOfLines={1}>{s.label}</Text>
-                    <Text style={styles.sampleSub} numberOfLines={1}>{s.provider}</Text>
-                  </View>
-                </Pressable>
-              ))}
-            </ScrollView>
-            <Text style={styles.sampleOr}>or use your own below</Text>
+        {/* ── One purchase ── */}
+        <View style={styles.group}>
+          <Text style={styles.groupLabel}>ONE PURCHASE</Text>
+          <Text style={styles.groupSub}>A single shop, on a single day.</Text>
+          <View style={{ gap: 12, marginTop: 12 }}>
+            <SourceButton
+              icon="receipt"
+              title="Scan a receipt"
+              sub="Reads every line item. Split it with friends if you shared."
+              onPress={onReceipt}
+              disabled={busy}
+            />
+            <SourceButton
+              icon="pencil"
+              title="Enter it manually"
+              sub="Type one expense or income yourself"
+              onPress={onManual}
+              disabled={busy}
+            />
           </View>
-        )}
+        </View>
 
-        <View style={{ paddingHorizontal: 18, paddingTop: 22, gap: 14 }}>
-          <SourceButton
-            icon="camera"
-            title="Take a photo"
-            sub="Point at a receipt or statement"
-            onPress={takePhoto}
-            disabled={busy}
-          />
-          <SourceButton
-            icon="gallery"
-            title="Choose from gallery"
-            sub="Pick an existing screenshot"
-            onPress={pickFromLibrary}
-            disabled={busy}
-          />
-          <SourceButton
-            icon="pencil"
-            title="Enter manually"
-            sub="Type an expense or income yourself"
-            onPress={onManual}
-            disabled={busy}
-          />
-          <SourceButton
-            icon="receipt"
-            title="Import a file"
-            sub="Migrate from a PDF, image, CSV, Excel, or Word file"
-            onPress={onImport}
-            disabled={busy}
-          />
+        {/* ── Many transactions ── */}
+        <View style={styles.group}>
+          <Text style={styles.groupLabel}>MANY TRANSACTIONS AT ONCE</Text>
+          <Text style={styles.groupSub}>A statement or wallet history, covering several days.</Text>
+          <View style={{ gap: 12, marginTop: 12 }}>
+            <SourceButton
+              icon="scan"
+              title="Scan a statement or e-wallet"
+              sub="A screenshot listing several transactions"
+              onPress={() => setStatementOpen((v) => !v)}
+              disabled={busy}
+              expanded={statementOpen}
+            />
+
+            {statementOpen && (
+              <View style={styles.nested}>
+                {showSamples && (
+                  <>
+                    <Text style={styles.sampleLabel}>NO SCREENSHOT HANDY? TAP A SAMPLE</Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={{ gap: 12, paddingVertical: 4, paddingRight: 4 }}
+                    >
+                      {SAMPLE_STATEMENTS.map((s) => (
+                        <Pressable key={s.id} onPress={() => onPicked(s.image)} style={styles.sampleCard} disabled={busy}>
+                          <RNImage source={{ uri: s.image.uri }} style={styles.sampleThumb} resizeMode="cover" />
+                          <View style={{ padding: 10 }}>
+                            <Text style={styles.sampleTitle} numberOfLines={1}>{s.label}</Text>
+                            <Text style={styles.sampleSub} numberOfLines={1}>{s.provider}</Text>
+                          </View>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                    <Text style={styles.sampleOr}>or use your own</Text>
+                  </>
+                )}
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: showSamples ? 12 : 0 }}>
+                  <MiniButton icon="camera" label="Take a photo" onPress={takePhoto} disabled={busy} />
+                  <MiniButton icon="gallery" label="From gallery" onPress={pickFromLibrary} disabled={busy} />
+                </View>
+              </View>
+            )}
+
+            <SourceButton
+              icon="wallet"
+              title="Import a file"
+              sub="PDF, image, CSV, Excel, or Word statement"
+              onPress={onImport}
+              disabled={busy}
+            />
+          </View>
         </View>
 
         <Text style={styles.hint}>
@@ -173,18 +222,29 @@ function SourceButton({
   sub,
   onPress,
   disabled,
+  expanded,
 }: {
   icon: IconName;
   title: string;
   sub: string;
   onPress: () => void;
   disabled?: boolean;
+  /** Set on a row that opens options in place — the chevron then points down/up rather than
+   *  right, so it never promises a screen change it does not make. */
+  expanded?: boolean;
 }) {
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
-      style={({ pressed }) => [styles.source, { opacity: disabled ? 0.6 : pressed ? 0.9 : 1 }]}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}. ${sub}`}
+      accessibilityState={expanded === undefined ? undefined : { expanded }}
+      style={({ pressed }) => [
+        styles.source,
+        expanded && styles.sourceOn,
+        { opacity: disabled ? 0.6 : pressed ? 0.9 : 1 },
+      ]}
     >
       <View style={styles.sourceIcon}>
         <Icon name={icon} size={24} color={colors.accent} />
@@ -193,7 +253,36 @@ function SourceButton({
         <Text style={styles.sourceTitle}>{title}</Text>
         <Text style={styles.sourceSub}>{sub}</Text>
       </View>
-      <Icon name="chevronRight" size={18} color={colors.ink3} />
+      <Icon
+        name={expanded === undefined ? 'chevronRight' : expanded ? 'chevronDown' : 'chevronRight'}
+        size={18}
+        color={colors.ink3}
+      />
+    </Pressable>
+  );
+}
+
+/** A compact secondary choice inside an expanded row — how to hand a file over, not what to add. */
+function MiniButton({
+  icon,
+  label,
+  onPress,
+  disabled,
+}: {
+  icon: IconName;
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      style={({ pressed }) => [styles.mini, { opacity: disabled ? 0.6 : pressed ? 0.9 : 1 }]}
+    >
+      <Icon name={icon} size={19} color={colors.accent} />
+      <Text style={styles.miniText}>{label}</Text>
     </Pressable>
   );
 }
@@ -213,6 +302,23 @@ const styles = StyleSheet.create({
     borderColor: colors.accentSoft,
   },
   keyNoticeText: { flex: 1, fontFamily: uiFont(600), fontSize: 13.5, color: colors.accentInk },
+  group: { paddingHorizontal: 18, paddingTop: 22 },
+  groupLabel: { fontFamily: uiFont(700), fontSize: 11, letterSpacing: 0.6, color: colors.ink2 },
+  groupSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink3, marginTop: 3 },
+  nested: { marginLeft: 14, paddingLeft: 14, borderLeftWidth: 2, borderLeftColor: colors.accentSoft },
+  mini: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 13,
+    borderRadius: radius.sm,
+    backgroundColor: colors.accentTint,
+    borderWidth: 1,
+    borderColor: colors.accentSoft,
+  },
+  miniText: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.accentInk },
   source: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -224,6 +330,7 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     borderStyle: 'dashed',
   },
+  sourceOn: { borderStyle: 'solid', borderColor: colors.accentSoft, backgroundColor: colors.accentTint },
   sourceIcon: {
     width: 48,
     height: 48,

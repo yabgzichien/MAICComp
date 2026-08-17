@@ -1,12 +1,13 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../components/Icon';
 import { Pip } from '../components/Pip';
 import { Amount, BtnLabel, Card, CatBadge, Eyebrow, PrimaryButton } from '../components/ui';
 import { fmt } from '../lib/format';
+import { outstanding } from '../lib/split';
 import type { Category, Transaction } from '../lib/types';
-import type { NewLearned } from '../state/store';
+import { useAppData, type NewLearned } from '../state/store';
 import { colors, uiFont } from '../theme';
 
 const fallback: Category = { id: 'other', label: 'Other', icon: 'dots', hue: 220, kind: 'expense', isDefault: true };
@@ -24,12 +25,25 @@ export function SavedScreen({
 }) {
   const insets = useSafeAreaInsets();
   const pop = useRef(new Animated.Value(0)).current;
+  const { splits, shares } = useAppData();
 
   useEffect(() => {
     Animated.spring(pop, { toValue: 1, friction: 5, tension: 120, useNativeDriver: true }).start();
   }, [pop]);
 
   const total = result.reduce((s, t) => s + t.amount, 0);
+
+  /** txnId -> still owed, so a row that just saved at a share explains why it looks small. */
+  const owedByTxn = useMemo(() => {
+    const openBySplit: Record<string, number> = {};
+    for (const s of shares) {
+      if (s.status !== 'open') continue;
+      openBySplit[s.splitId] = (openBySplit[s.splitId] ?? 0) + outstanding(s);
+    }
+    const map: Record<string, number> = {};
+    for (const split of splits) map[split.txnId] = openBySplit[split.id] ?? 0;
+    return map;
+  }, [splits, shares]);
 
   return (
     <View style={styles.root}>
@@ -95,6 +109,12 @@ export function SavedScreen({
                       {t.merchantRaw}
                     </Text>
                     <Text style={styles.cat}>{cat.label}</Text>
+                    {owedByTxn[t.id] > 0 && (
+                      <View style={styles.owedChip}>
+                        <Icon name="gift" size={10} color={colors.accentInk} />
+                        <Text style={styles.owedChipText}>RM {fmt(owedByTxn[t.id])} owed to you</Text>
+                      </View>
+                    )}
                   </View>
                   <Amount value={t.amount} size={14} weight={600} color={income ? colors.accent : colors.ink} />
                 </View>
@@ -119,6 +139,18 @@ const styles = StyleSheet.create({
   title: { fontFamily: uiFont(700), fontSize: 25, color: colors.ink, marginTop: 14 },
   sub: { marginTop: 6, fontFamily: uiFont(500), fontSize: 14.5, color: colors.ink2 },
   subStrong: { fontFamily: uiFont(700), color: colors.ink },
+  owedChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: colors.accentTint,
+  },
+  owedChipText: { fontFamily: uiFont(600), fontSize: 10.5, color: colors.accentInk },
   learnCard: { padding: 16, backgroundColor: colors.accentTint, borderColor: colors.accentSoft },
   learnHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   learnTitle: { fontFamily: uiFont(700), fontSize: 14.5, color: colors.accentInk },

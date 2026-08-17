@@ -137,7 +137,44 @@ async function init(): Promise<SQLite.SQLiteDatabase> {
       amount          REAL NOT NULL,
       status          TEXT NOT NULL DEFAULT 'scheduled'
     );
+    CREATE TABLE IF NOT EXISTS people (
+      id          TEXT PRIMARY KEY NOT NULL,
+      name        TEXT NOT NULL,
+      created_at  TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS splits (
+      id          TEXT PRIMARY KEY NOT NULL,
+      txn_id      TEXT NOT NULL UNIQUE,
+      gross       REAL NOT NULL,
+      own_share   REAL NOT NULL,
+      method      TEXT NOT NULL,
+      created_at  TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS split_shares (
+      id                  TEXT PRIMARY KEY NOT NULL,
+      split_id            TEXT NOT NULL,
+      person_id           TEXT NOT NULL,
+      owed                REAL NOT NULL,
+      paid                REAL NOT NULL DEFAULT 0,
+      status              TEXT NOT NULL DEFAULT 'open',
+      written_off_txn_id  TEXT,
+      created_at          TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS split_payments (
+      id               TEXT PRIMARY KEY NOT NULL,
+      share_id         TEXT NOT NULL,
+      amount           REAL NOT NULL,
+      paid_on          TEXT NOT NULL,
+      evidence         TEXT NOT NULL,
+      matched_merchant TEXT,
+      account_id       TEXT,
+      created_at       TEXT NOT NULL
+    );
     CREATE INDEX IF NOT EXISTS idx_txn_created ON transactions (created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_split_txn ON splits (txn_id);
+    CREATE INDEX IF NOT EXISTS idx_share_split ON split_shares (split_id);
+    CREATE INDEX IF NOT EXISTS idx_share_status ON split_shares (status);
+    CREATE INDEX IF NOT EXISTS idx_payment_share ON split_payments (share_id);
     CREATE INDEX IF NOT EXISTS idx_balance_account ON balance_entries (account_id);
     CREATE INDEX IF NOT EXISTS idx_loan_app_status ON loan_applications (status);
     CREATE INDEX IF NOT EXISTS idx_repayment_application ON repayments (application_id);
@@ -351,6 +388,10 @@ export async function resetAllData(): Promise<void> {
       DELETE FROM loan_products;
       DELETE FROM occupation;
       DELETE FROM kyc;
+      DELETE FROM split_payments;
+      DELETE FROM split_shares;
+      DELETE FROM splits;
+      DELETE FROM people;
     `);
     await seedCategories(db);
     await seedProducts(db);

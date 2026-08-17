@@ -100,3 +100,80 @@ export interface BalanceEntry {
  * Used in the categorize step; commitCategorized skips these.
  */
 export const DROP = '__drop__';
+
+/* ---------------------------------------------------------------------------
+ * Bill splitting (receivables).
+ *
+ * The model is plain double entry. You pay RM120 for a group dinner: the ledger
+ * records only the RM40 you actually consumed, and the RM80 your friends owe you
+ * is an ASSET (a receivable), not an expense you later "earn back". Repayment
+ * moves cash against that asset with no income event anywhere  booking it as
+ * income would inflate avgIncome and incomeMonths, which are direct score inputs.
+ * ------------------------------------------------------------------------- */
+
+/** Someone you split bills with. Local only: a remembered name, no account, no network. */
+export interface Person {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+/** How a bill was divided across the people at the table. */
+export type SplitMethod = 'equal' | 'shares' | 'exact' | 'itemized';
+
+/** Whether a repayment was evidenced by a scanned inbound row, or merely declared (cash). */
+export type PaymentEvidence = 'matched' | 'declared';
+
+export type ShareStatus = 'open' | 'settled' | 'written_off';
+
+/**
+ * A bill you paid in full and divided. `gross` is what actually left your account;
+ * the linked transaction carries only `ownShare`. Keeping `gross` here is what lets a
+ * split row honestly stay `source: 'extracted'`  the original screenshot line is
+ * reconstructable from the pair, so the reduction is auditable rather than silent.
+ */
+export interface Split {
+  id: string;
+  txnId: string;
+  gross: number;
+  ownShare: number;
+  method: SplitMethod;
+  createdAt: string;
+}
+
+/** One person's portion of a split. `paid` accumulates across partial repayments. */
+export interface SplitShare {
+  id: string;
+  splitId: string;
+  personId: string;
+  owed: number;
+  paid: number;
+  status: ShareStatus;
+  /** The expense transaction a write-off created, once this was given up on. */
+  writtenOffTxnId: string | null;
+  createdAt: string;
+}
+
+/**
+ * Money received against a share. Deliberately not a foreign key onto `transactions`:
+ * a matched settlement is consumed by the match and never becomes a ledger row, so the
+ * evidence is carried inline instead of pointing at something that does not exist.
+ */
+export interface SplitPayment {
+  id: string;
+  shareId: string;
+  amount: number;
+  paidOn: string; // YYYY-MM-DD
+  evidence: PaymentEvidence;
+  matchedMerchant: string | null;
+  accountId: string | null;
+  createdAt: string;
+}
+
+/** A split as the sheet composes it, before the transaction it hangs on exists. */
+export interface SplitDraft {
+  gross: number;
+  ownShare: number;
+  method: SplitMethod;
+  shares: { personId: string; owed: number }[];
+}

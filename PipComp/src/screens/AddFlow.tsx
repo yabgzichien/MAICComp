@@ -5,18 +5,19 @@ import { getLLM } from '../llm';
 import { todayISO } from '../lib/duplicates';
 import { defaultLinkEffect } from '../lib/networth';
 import { suggestForMerchant } from '../lib/recommend';
-import type { CategorySuggestion, ExtractedTxn, Transaction } from '../lib/types';
+import { DROP, type CategorySuggestion, type ExtractedTxn, type SplitDraft, type Transaction } from '../lib/types';
 import { emitTourSignal } from '../lib/tourSignals';
 import { useAppData, type NewLearned } from '../state/store';
 import { colors } from '../theme';
 import { AttachScreen, type PickedImage } from './AttachScreen';
-import { CategorizeScreen } from './CategorizeScreen';
+import { CategorizeScreen, type PendingSettlement } from './CategorizeScreen';
 import { ExtractScreen } from './ExtractScreen';
 import { ImportScreen } from './ImportScreen';
 import { ManualEntryScreen } from './ManualEntryScreen';
+import { ReceiptScanScreen, type ReceiptSplitResult } from './ReceiptScanScreen';
 import { SavedScreen } from './SavedScreen';
 
-type Phase = 'attach' | 'extract' | 'guessing' | 'categorize' | 'manual' | 'saved' | 'import';
+type Phase = 'attach' | 'extract' | 'guessing' | 'categorize' | 'manual' | 'receipt' | 'split' | 'saved' | 'import';
 
 const GUESS_TIMEOUT_MS = 12000;
 
@@ -39,7 +40,7 @@ export function AddFlow({
   onClose: () => void;
   initialPhase?: Phase;
 }) {
-  const { commitCategorized, recordBalanceLink, accounts, memory, categories, catById, tourActive } = useAppData();
+  const { commitCategorized, recordBalanceLink, settleShare, accounts, memory, categories, catById, tourActive } = useAppData();
 
   const [phase, setPhase] = useState<Phase>(initialPhase);
   const [image, setImage] = useState<PickedImage | null>(null);
@@ -47,6 +48,7 @@ export function AddFlow({
   const [suggestions, setSuggestions] = useState<(CategorySuggestion | null)[]>([]);
   const [cached, setCached] = useState<ExtractedTxn[] | undefined>(undefined);
   const [linkId, setLinkId] = useState<string | null>(null);
+  const [receiptResult, setReceiptResult] = useState<ReceiptSplitResult | null>(null);
   const [result, setResult] = useState<Transaction[]>([]);
   const [newLearned, setNewLearned] = useState<NewLearned[]>([]);
   const [hasKey, setHasKey] = useState(true);
@@ -106,16 +108,32 @@ export function AddFlow({
     setPhase('categorize');
   };
 
-  const onCategorized = async (assignments: (string | null)[], items: ExtractedTxn[]) => {
-    const { created, newLearned: learned } = await commitCategorized(items, assignments, 'extracted');
+  const onCategorized = async (
+    assignments: (string | null)[],
+    items: ExtractedTxn[],
+    splitDrafts: (SplitDraft | null)[] = [],
+    settlements: (PendingSettlement | null)[] = []
+  ) => {
+    const { created, newLearned: learned } = await commitCategorized(items, assignments, 'extracted', splitDrafts);
     // If the whole batch was tagged to an account, move that account's balance
     // per saved row — direction derived from account kind + txn type (an expense
     // reduces an asset / pays down a liability; income does the reverse).
     const account = linkId ? accounts.find((a) => a.id === linkId) : null;
     if (account) {
-      for (const t of created) {
-        await recordBalanceLink(account.id, t.amount, defaultLinkEffect(account.kind, t.type), t.date ?? todayISO());
+      // `created` is the kept rows in order, so drop the same items commitCategorized dropped
+      // to line the drafts back up with them.
+      const keptDrafts = items.map((_, i) => splitDrafts[i] ?? null).filter((_, i) => assignments[i] !== DROP);
+      for (let k = 0; k < created.length; k++) {
+        const t = created[k];
+        // A split row saved at the payer's own share, but the whole bill left the account, so
+        // the balance moves by the gross or the cash side is short by what friends owe.
+        const moved = keptDrafts[k]?.gross ?? t.amount;
+        await recordBalanceLink(account.id, moved, defaultLinkEffect(account.kind, t.type), t.date ?? todayISO());
       }
+    }
+    // Repayments the user confirmed: settled against the receivable, never written as income.
+    for (const s of settlements) {
+      if (s) await settleShare(s.shareId, s.amount, s.paidOn, 'matched', s.merchant, linkId);
     }
     setResult(created);
     setNewLearned(learned);
@@ -123,8 +141,8 @@ export function AddFlow({
     emitTourSignal('scan-saved');
   };
 
-  const onManualComplete = async (item: ExtractedTxn, categoryId: string) => {
-    const { created, newLearned: learned } = await commitCategorized([item], [categoryId], 'manual');
+  const onManualComplete = async (item: ExtractedTxn, categoryId: string, split: SplitDraft | null) => {
+    const { created, newLearned: learned } = await commitCategorized([item], [categoryId], 'manual', [split]);
     setResult(created);
     setNewLearned(learned);
     setPhase('saved');
@@ -138,6 +156,7 @@ export function AddFlow({
         onPicked={onPicked}
         onManual={() => setPhase('manual')}
         onImport={() => setPhase('import')}
+        onReceipt={() => setPhase('receipt')}
         showSamples={tourActive}
       />
     );
@@ -154,8 +173,36 @@ export function AddFlow({
       </View>
     );
   }
-  if (phase === 'manual') {
-    return <ManualEntryScreen categories={categories} onBack={() => setPhase('attach')} onComplete={onManualComplete} />;
+  if (phase === 'receipt') {
+    return (
+      <ReceiptScanScreen
+        onBack={() => setPhase('attach')}
+        onManualInstead={() => {
+          setReceiptResult(null);
+          setPhase('split');
+        }}
+        onDone={(r) => {
+          setReceiptResult(r);
+          setPhase('split');
+        }}
+      />
+    );
+  }
+  if (phase === 'manual' || phase === 'split') {
+    return (
+      <ManualEntryScreen
+        categories={categories}
+        onBack={() => setPhase(phase === 'split' && receiptResult ? 'receipt' : 'attach')}
+        onComplete={onManualComplete}
+        // Three ways in, three honest titles: a scanned receipt lands here already filled in, the
+        // no-receipt path is a bare split, and 'manual' is a plain typed entry.
+        title={phase !== 'split' ? undefined : receiptResult ? 'Check your receipt' : 'Split a bill'}
+        startSplitting={phase === 'split'}
+        initialMerchant={phase === 'split' ? receiptResult?.merchant ?? null : null}
+        initialAmount={phase === 'split' ? receiptResult?.charged ?? null : null}
+        initialSplit={phase === 'split' ? receiptResult?.draft ?? null : null}
+      />
+    );
   }
   if (phase === 'extract' && image) {
     return (

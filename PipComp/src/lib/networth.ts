@@ -7,12 +7,17 @@ export interface ClassMeta {
   label: string;
   kind: AccountKind;
   icon: string; // IconName
+  /** Owned by a feature, not by the user: hidden from the class pickers so it cannot be
+   *  hand-created or edited into a desynced state. Still resolves for display. */
+  managed?: boolean;
 }
 
 /** The fixed asset/liability classes, in display order. */
 export const ACCOUNT_CLASSES: ClassMeta[] = [
   { id: 'cash', label: 'Cash', kind: 'asset', icon: 'wallet' },
   { id: 'investments', label: 'Investments', kind: 'asset', icon: 'trending' },
+  // Money friends owe you from split bills. Maintained by the split engine, never by hand.
+  { id: 'receivable', label: 'Owed to me', kind: 'asset', icon: 'gift', managed: true },
   { id: 'mortgage', label: 'Mortgage', kind: 'liability', icon: 'home' },
   { id: 'personal', label: 'Personal Loan', kind: 'liability', icon: 'wallet' },
   { id: 'credit_card', label: 'Credit Card', kind: 'liability', icon: 'receipt' },
@@ -24,9 +29,13 @@ export const CLASS_BY_ID: Record<string, ClassMeta> = Object.fromEntries(
   ACCOUNT_CLASSES.map((c) => [c.id, c])
 );
 
+/** The classes a user may pick when creating or re-classing an account (managed ones excluded). */
 export function classesFor(kind: AccountKind): ClassMeta[] {
-  return ACCOUNT_CLASSES.filter((c) => c.kind === kind);
+  return ACCOUNT_CLASSES.filter((c) => c.kind === kind && !c.managed);
 }
+
+/** The single slug the split engine keeps its receivable balance under. */
+export const RECEIVABLE_CLS = 'receivable';
 
 /** Order entries oldest→newest by asOf date, tie-broken by createdAt. */
 function chronological(entries: BalanceEntry[]): BalanceEntry[] {

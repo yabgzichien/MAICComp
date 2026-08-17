@@ -5,7 +5,9 @@ import { EditTransactionModal } from '../components/EditTransactionModal';
 import { Icon } from '../components/Icon';
 import { Amount, Card, CatBadge, Eyebrow, IconButton, TopBar } from '../components/ui';
 import { shortDate } from '../lib/dates';
+import { fmt } from '../lib/format';
 import { confirmAction } from '../lib/platformAlert';
+import { outstanding } from '../lib/split';
 import type { Category, Transaction } from '../lib/types';
 import { useAppData } from '../state/store';
 import { colors, uiFont } from '../theme';
@@ -16,13 +18,32 @@ export function AllTransactionsScreen({
   onBack,
   filterCategoryId,
   onClearFilter,
+  onOpenOwed,
 }: {
   onBack: () => void;
   filterCategoryId?: string | null;
   onClearFilter: () => void;
+  onOpenOwed: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const { transactions, catById, removeMany } = useAppData();
+  const { transactions, catById, removeMany, splits, shares, openShares } = useAppData();
+
+  /** txnId -> what is still owed on that bill, so a small row can explain itself. */
+  const owedByTxn = useMemo(() => {
+    const openBySplit: Record<string, number> = {};
+    for (const s of shares) {
+      if (s.status !== 'open') continue;
+      openBySplit[s.splitId] = (openBySplit[s.splitId] ?? 0) + outstanding(s);
+    }
+    const map: Record<string, { owed: number; gross: number }> = {};
+    for (const split of splits) {
+      const owed = openBySplit[split.id] ?? 0;
+      if (owed > 0) map[split.txnId] = { owed, gross: split.gross };
+    }
+    return map;
+  }, [splits, shares]);
+
+  const owedTotal = useMemo(() => openShares.reduce((s, x) => s + x.outstanding, 0), [openShares]);
 
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [selectMode, setSelectMode] = useState(false);
@@ -104,10 +125,23 @@ export function AllTransactionsScreen({
           </Pressable>
         )}
 
+        {owedTotal > 0 && !selectMode && (
+          <Pressable onPress={onOpenOwed} style={styles.owedBanner}>
+            <Icon name="gift" size={18} color={colors.accent} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.owedTitle}>RM {fmt(owedTotal)} owed to you</Text>
+              <Text style={styles.owedSub}>
+                From {openShares.length} shared {openShares.length === 1 ? 'bill' : 'bills'}
+              </Text>
+            </View>
+            <Icon name="chevronRight" size={18} color={colors.ink3} />
+          </Pressable>
+        )}
+
         {shown.length === 0 ? (
           <Card style={{ padding: 26, alignItems: 'center' }}>
             <Text style={styles.emptyTitle}>{filtered ? 'Nothing in this category' : 'No transactions yet'}</Text>
-            <Text style={styles.emptySub}>{filtered ? 'Try clearing the filter.' : 'Scan a receipt to start logging.'}</Text>
+            <Text style={styles.emptySub}>{filtered ? 'Try clearing the filter.' : 'Tap Add to scan a receipt or a statement.'}</Text>
           </Card>
         ) : (
           <>
@@ -161,6 +195,16 @@ export function AllTransactionsScreen({
                           {t.remark}
                         </Text>
                       ) : null}
+                      {/* A split row shows only the payer's share, which reads as a suspiciously
+                          cheap dinner without this. */}
+                      {owedByTxn[t.id] && (
+                        <View style={styles.owedChip}>
+                          <Icon name="gift" size={10} color={colors.accentInk} />
+                          <Text style={styles.owedChipText}>
+                            RM {fmt(owedByTxn[t.id].owed)} owed · split of RM {fmt(owedByTxn[t.id].gross)}
+                          </Text>
+                        </View>
+                      )}
                     </View>
                     <Amount value={t.amount} size={15} weight={600} color={income ? colors.accent : colors.ink} />
                     {!selectMode && <Icon name="pencil" size={15} color={colors.ink3} />}
@@ -204,6 +248,31 @@ const styles = StyleSheet.create({
   merchant: { fontFamily: uiFont(600), fontSize: 14.5, color: colors.ink },
   sub: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, marginTop: 1 },
   remark: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, marginTop: 1, fontStyle: 'italic' },
+  owedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    padding: 13,
+    marginBottom: 14,
+    borderRadius: 14,
+    backgroundColor: colors.accentTint,
+    borderWidth: 1,
+    borderColor: colors.accentSoft,
+  },
+  owedTitle: { fontFamily: uiFont(700), fontSize: 14, color: colors.ink },
+  owedSub: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, marginTop: 1 },
+  owedChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: colors.accentTint,
+  },
+  owedChipText: { fontFamily: uiFont(600), fontSize: 10.5, color: colors.accentInk },
   emptyTitle: { fontFamily: uiFont(700), fontSize: 17, color: colors.ink },
   emptySub: { fontFamily: uiFont(500), fontSize: 13.5, color: colors.ink2, marginTop: 6, textAlign: 'center' },
   checkbox: { width: 22, height: 22, borderRadius: 999, borderWidth: 2, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },

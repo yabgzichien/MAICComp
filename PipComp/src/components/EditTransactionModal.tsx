@@ -10,13 +10,28 @@ import { useAppData } from '../state/store';
 import { colors, numFont, radius, shadowToggle, uiFont } from '../theme';
 import { AccountLinkField } from './AccountLinkField';
 import { AddCategoryModal } from './AddCategoryModal';
+import { SplitSheet } from './SplitSheet';
 import { BtnLabel, CategoryChip, PrimaryButton } from './ui';
 import { Icon } from './Icon';
+import { fmt } from '../lib/format';
+import { outstanding } from '../lib/split';
+import type { SplitDraft } from '../lib/types';
 
 /** Bottom-sheet editor for a single transaction. Shared by Dashboard + View All. */
 export function EditTransactionModal({ txn, onClose }: { txn: Transaction | null; onClose: () => void }) {
   const insets = useSafeAreaInsets();
-  const { categories, accounts, saveTransactionEdits, removeTransaction, recordBalanceLink } = useAppData();
+  const {
+    categories,
+    accounts,
+    saveTransactionEdits,
+    removeTransaction,
+    recordBalanceLink,
+    splits,
+    shares,
+    people,
+    splitTransaction,
+    unsplitTransaction,
+  } = useAppData();
 
   const [amountText, setAmountText] = useState('');
   const [type, setType] = useState<TxnType>('expense');
@@ -26,6 +41,7 @@ export function EditTransactionModal({ txn, onClose }: { txn: Transaction | null
   const [expanded, setExpanded] = useState(false);
   const [linkId, setLinkId] = useState<string | null>(null);
   const [linkEffect, setLinkEffect] = useState<LinkEffect>('subtract');
+  const [splitting, setSplitting] = useState(false);
 
   const openId = txn?.id;
   useEffect(() => {
@@ -37,8 +53,33 @@ export function EditTransactionModal({ txn, onClose }: { txn: Transaction | null
       setExpanded(false);
       setLinkId(null);
       setLinkEffect('subtract');
+      setSplitting(false);
     }
   }, [openId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const split = useMemo(() => splits.find((s) => s.txnId === openId) ?? null, [splits, openId]);
+  const splitShares = useMemo(
+    () => (split ? shares.filter((s) => s.splitId === split.id) : []),
+    [shares, split]
+  );
+  const splitDraft: SplitDraft | null = useMemo(
+    () =>
+      split
+        ? {
+            gross: split.gross,
+            ownShare: split.ownShare,
+            method: split.method,
+            shares: splitShares.map((s) => ({ personId: s.personId, owed: s.owed })),
+          }
+        : null,
+    [split, splitShares]
+  );
+  const stillOwed = splitShares
+    .filter((s) => s.status === 'open')
+    .reduce((sum, s) => sum + outstanding(s), 0);
+  const splitNames = splitShares
+    .map((s) => people.find((p) => p.id === s.personId)?.name ?? 'someone')
+    .join(', ');
 
   const selectLink = (id: string | null) => {
     setLinkId(id);
@@ -73,7 +114,13 @@ export function EditTransactionModal({ txn, onClose }: { txn: Transaction | null
 
   const save = async () => {
     const n = parseFloat(amountText.replace(/[^0-9.]/g, ''));
-    const amount = Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : txn.amount;
+    // A split row's amount is derived from the split, so it is not the user's to retype here:
+    // letting it drift would leave `gross` and the shares reconciling against nothing.
+    const amount = split
+      ? txn.amount
+      : Number.isFinite(n) && n >= 0
+        ? Math.round(n * 100) / 100
+        : txn.amount;
     const categoryId = cat ?? (type === 'income' ? DEFAULT_INCOME_ID : DEFAULT_EXPENSE_ID);
     await saveTransactionEdits(txn, { amount, type, categoryId, remark: remark.trim() || null });
     if (linkId) await recordBalanceLink(linkId, amount, linkEffect, txn.date ?? todayISO());
@@ -114,7 +161,7 @@ export function EditTransactionModal({ txn, onClose }: { txn: Transaction | null
             })}
           </View>
 
-          <Text style={styles.fieldLabel}>Amount</Text>
+          <Text style={styles.fieldLabel}>{split ? 'Your share' : 'Amount'}</Text>
           <View style={styles.amountRow}>
             <Text style={styles.rmPrefix}>RM</Text>
             <TextInput
@@ -122,9 +169,15 @@ export function EditTransactionModal({ txn, onClose }: { txn: Transaction | null
               onChangeText={setAmountText}
               keyboardType="decimal-pad"
               selectTextOnFocus
-              style={styles.amountInput}
+              editable={!split}
+              style={[styles.amountInput, !!split && styles.amountInputLocked]}
             />
           </View>
+          {!!split && (
+            <Text style={styles.lockNote}>
+              RM {fmt(split.gross)} left your account. Change the split below to adjust this.
+            </Text>
+          )}
 
           <Text style={[styles.fieldLabel, { marginTop: 18 }]}>Category</Text>
           <View style={styles.grid}>
@@ -161,6 +214,23 @@ export function EditTransactionModal({ txn, onClose }: { txn: Transaction | null
             multiline
           />
 
+          {type === 'expense' && (
+            <Pressable onPress={() => setSplitting(true)} style={styles.splitRow} hitSlop={4}>
+              <Icon name="gift" size={18} color={colors.accent} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.splitTitle}>{split ? 'Split with friends' : 'Split with friends'}</Text>
+                <Text style={styles.splitSub} numberOfLines={1}>
+                  {split
+                    ? stillOwed > 0
+                      ? `${splitNames} owe you RM ${fmt(stillOwed)}`
+                      : `${splitNames} settled up`
+                    : 'Record only your share and track what you are owed'}
+                </Text>
+              </View>
+              <Icon name="chevronRight" size={18} color={colors.ink3} />
+            </Pressable>
+          )}
+
           <View style={{ marginTop: 18 }}>
             <AccountLinkField accounts={accounts} selectedId={linkId} effect={linkEffect} onSelect={selectLink} onEffect={setLinkEffect} label="Link to account (optional)" />
           </View>
@@ -187,6 +257,30 @@ export function EditTransactionModal({ txn, onClose }: { txn: Transaction | null
           setCat(id);
           setAdding(false);
         }}
+      />
+
+      {/* Splitting saves and closes on its own: it rewrites the row's amount, so leaving the
+          editor open on a stale figure would invite the user to save the old one back. */}
+      <SplitSheet
+        visible={splitting}
+        gross={split ? split.gross : txn.amount}
+        merchant={txn.merchantRaw}
+        initial={splitDraft}
+        onClose={() => setSplitting(false)}
+        onApply={async (draft) => {
+          setSplitting(false);
+          await splitTransaction(txn, draft);
+          onClose();
+        }}
+        onRemove={
+          split
+            ? async () => {
+                setSplitting(false);
+                await unsplitTransaction(txn);
+                onClose();
+              }
+            : undefined
+        }
       />
     </Modal>
   );
@@ -237,6 +331,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.line,
   },
+  amountInputLocked: { backgroundColor: colors.surface2, color: colors.ink2 },
+  lockNote: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, marginTop: 6 },
+  splitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    marginTop: 18,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  splitTitle: { fontFamily: uiFont(700), fontSize: 14, color: colors.ink },
+  splitSub: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, marginTop: 2 },
   remarkInput: {
     backgroundColor: colors.surface,
     borderWidth: 1,

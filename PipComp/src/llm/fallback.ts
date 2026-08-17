@@ -23,6 +23,7 @@ export type Capability =
   | 'extractBalance'
   | 'extractSnapshot'
   | 'extractIdentity'
+  | 'extractReceipt'
   | 'guessCategories'
   | 'coach';
 
@@ -91,6 +92,9 @@ export class FallbackProvider {
   }
   extractIdentity(input: Payload<DocExtractInput>) {
     return this.run<Awaited<ReturnType<NonNullable<LLMProvider['extractIdentity']>>>>('extractIdentity', input);
+  }
+  extractReceipt(input: Payload<DocExtractInput>) {
+    return this.run<Awaited<ReturnType<NonNullable<LLMProvider['extractReceipt']>>>>('extractReceipt', input);
   }
   guessCategories(input: Payload<CategoryGuessInput>) {
     return this.run<Awaited<ReturnType<NonNullable<LLMProvider['guessCategories']>>>>('guessCategories', input);
