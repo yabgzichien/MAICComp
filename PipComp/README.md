@@ -1,22 +1,45 @@
-# Pip  AI Expenses Tracker
+# PipComp: Pip Credit borrower app
 
-Attach a screenshot of your bank/e-wallet transaction history. Pip (a friendly
-coin-sprout mascot) reads each line with a vision LLM, asks which category it
-belongs to, and **learns** your choices  so the next time it sees the same
-merchant, it pre-fills the category for you.
+It started as an AI expense tracker: attach a screenshot of your bank or e-wallet history and
+Pip (a friendly coin-sprout mascot) reads each line with a vision LLM, asks which category it
+belongs to, and **learns** your choices, so next time it sees the same merchant it pre-fills
+the category. That loop is still the foundation. The app has since grown around it into the
+full Pip Credit borrower experience: a deterministic credit score, an ML fraud/data-confidence
+layer, a signed Credit Passport, and a loans flow that talks to the Lender Console.
 
-Built with **Expo (React Native) + TypeScript**, on-device **SQLite**, and the
-free **Groq** vision API. The look is ported from the approved Pip design
-(clean fintech-green, Hanken Grotesk + Space Grotesk).
+Built with **Expo (React Native) + TypeScript**, on-device **SQLite**, and the free **Groq**
+vision API. For the product pitch and the system architecture, see the
+[root README](../README.md).
+
+---
+
+## Screenshots
+
+<table>
+<tr>
+<td align="center" width="33%">
+<img src="assets/screenshots/dashboard.png" width="220"><br>
+<sub><b>Dashboard</b></sub>
+</td>
+<td align="center" width="33%">
+<img src="assets/screenshots/credit-score.png" width="220"><br>
+<sub><b>Credit Profile</b></sub>
+</td>
+<td align="center" width="33%">
+<img src="assets/screenshots/passport.png" width="220"><br>
+<sub><b>Credit Passport</b></sub>
+</td>
+</tr>
+</table>
 
 ---
 
 ## The loop
 
-1. **Scan**  attach a transaction screenshot (camera or gallery).
-2. **Extract**  Groq reads the image → structured transactions (merchant, amount, in/out, date).
-3. **Categorize**  tap a category per expense. Merchants you've taught before come **pre-filled** with a "learned" badge.
-4. **Saved**  records update, and Pip remembers any new merchant → category mappings.
+1. **Scan**: attach a transaction screenshot (camera or gallery).
+2. **Extract**: Groq reads the image → structured transactions (merchant, amount, in/out, date).
+3. **Categorize**: tap a category per expense. Merchants you've taught before come **pre-filled** with a "learned" badge.
+4. **Saved**: records update, and Pip remembers any new merchant → category mappings.
 
 Everything stays **on your device** (local SQLite). No account, no cloud.
 
@@ -46,19 +69,19 @@ and force Expo Go mode:
 
 ```bash
 npm install
-node tools/issuerKey/generate.js               # first clone only — see note below
+node tools/issuerKey/generate.js               # first clone only, see note below
 node tools/demoPassport/generate.js
 node tools/demoPassport/generateApplicants.js
 npx expo start --go -c
 ```
 
 > **Issuer signing key:** `src/data/issuerKey.ts` is gitignored (rotated 2026-07-12 after
-> the previous key was found committed/public) — generate your own local one with the
+> the previous key was found committed/public). Generate your own local one with the
 > command above before running the app, or the passport/loan demo screens won't verify.
 > After regenerating, copy the new `ISSUER_PUBLIC_KEY` into
 > `LenderConsole/lib/passport.ts`'s `ISSUER_PUBLIC_KEY_HEX`. Then paste the
 > `SAMPLE_CODE` line that `tools/demoPassport/generate.js` prints into
-> `LenderConsole/app/tokens.ts` (manual — see that file's own comment).
+> `LenderConsole/app/tokens.ts` (manual, see that file's own comment).
 > `generateApplicants.js` writes `LenderConsole/app/demoApplicants.ts` directly.
 
 Then:
@@ -76,7 +99,7 @@ Then:
 2. Paste your Groq API key, then tap **Test connection** (should say "Key works").
 3. Go back → tap **Scan a receipt** → pick a transaction screenshot.
 4. Categorize each line. Tap **Finish** to save.
-5. Scan another screenshot with a repeat merchant  watch Pip pre-fill the category. 🎉
+5. Scan another screenshot with a repeat merchant and watch Pip pre-fill the category. 🎉
 
 ---
 
@@ -89,7 +112,7 @@ Then:
 - Income rows (money received) are auto-tagged **Income**, never prompt, and aren't learned.
 - Reset everything Pip has learned in **Settings → Learning → Reset**.
 
-Matching is intentionally **exact (case/space-tolerant)**  e.g. "TEALIVE" and "Tealive"
+Matching is intentionally **exact (case/space-tolerant)**: "TEALIVE" and "Tealive"
 match, but two different tolls won't. (Fuzzy matching is a documented future enhancement.)
 
 ---
@@ -105,36 +128,39 @@ interface, registered in `src/llm/index.ts`.
 
 ## Project structure
 
+The original expense-tracking loop lives in a handful of files; everything the app grew
+into since (credit scoring, passport, loans, eKYC, the guided tour) sits alongside it under
+the same `src/` layout:
+
 ```
-App.tsx                      root: fonts + providers + screen state machine
+App.tsx               root: fonts + providers + screen state machine
 src/
-  theme.ts                   design tokens (colors, fonts, radii, shadows)
-  data/categories.ts         the 10 default categories (+ Income)
-  components/
-    Pip.tsx                  the mascot (4 expressions, idle float)  react-native-svg
-    Icon.tsx                 monoline icon set
-    ui.tsx                   Amount, CatBadge, CategoryChip, PipSays, TopBar, buttons…
-  lib/
-    normalize.ts             merchantKey()  the learning key
-    parseExtraction.ts       defensive parser for the LLM reply
-    recommend.ts             deterministic category suggestion
-    oklch.ts / catColors.ts  OKLCH→hex for the category tints
-    format.ts / dates.ts     formatting helpers
-  db/
-    db.ts                    open + migrate + seed (expo-sqlite)
-    categoriesRepo / txnRepo / memoryRepo
-  llm/
-    types.ts                 LLMProvider interface + typed errors
-    groq.ts                  Groq adapter (vision, JSON, error mapping)
-    index.ts                 provider registry
-  settings/settingsStore.ts  API key/model in expo-secure-store
-  state/store.tsx            AppDataProvider (categories, txns, memory, save+learn)
-  screens/
-    DashboardScreen          spend hero + breakdown + recents + scan CTA
-    AddFlow                  Attach → Extract → Categorize → Saved
-    SettingsScreen / CategoriesScreen
-__tests__/                   pure-logic + adapter unit tests
-docs/superpowers/specs/      the approved design spec
+  theme.ts             design tokens (colors, fonts, radii, shadows)
+  screens/              30+ screens, grouped roughly into:
+                          tracking   Dashboard, Add flow, Budget, Net worth, Recap,
+                                     Balance scan, Import, Calendar…
+                          credit     Credit, Passport ceremony, Passport coach,
+                                     Attack gallery
+                          loans      Loans, Owed, Commitments
+                          identity   Onboarding, KYC, Settings
+  lib/                  scoring (creditScore.ts), fraud model, data confidence,
+                         passport assembly, offers, the guided tour, and other
+                         pure business logic
+  db/                   expo-sqlite schema + repositories (transactions,
+                         categories, merchant memory, budget, loans, KYC…)
+  crypto/                issuer.ts + keys.ts: Ed25519 signing (issuer key + holder key)
+  data/                  demoPersonas.ts, seed data, the gitignored issuer key
+  ekyc/                  identity-verification flow
+  llm/                   LLMProvider interface + the Groq adapter
+  settings/              settingsStore.ts: API key/model in expo-secure-store
+  state/                 AppDataProvider, credit-profile and reminder-sync hooks
+  components/            Pip mascot, icon set, credit gauge, and shared UI
+  notifications/         local notification scheduling
+  prices/                Yahoo Finance adapter (net worth tracking)
+  widget/                iOS/Android home-screen streak widget
+__tests__/               pure-logic + adapter unit tests
+docs/superpowers/specs/  design specs (the 2026-06-03 spec is called out as
+                          authoritative in the root HANDOFF.md)
 ```
 
 ---
@@ -142,9 +168,10 @@ docs/superpowers/specs/      the approved design spec
 ## Testing & quality
 
 ```bash
-npm test            # jest  32 unit tests (logic + Groq adapter, fetch mocked)
-npm run typecheck   # tsc --noEmit (strict)
-npx expo-doctor     # project health (21 checks)
+npm test            # jest: unit tests across scoring, fraud detection, passport
+                     # signing, and the original extraction/categorization logic
+npm run typecheck    # tsc --noEmit (strict)
+npx expo-doctor      # project health checks
 ```
 
 The reference fixture in `__tests__/parseExtraction.test.ts` is the exact bank
@@ -155,8 +182,8 @@ screenshot that started this project (tolls, transfers, DuitNow QR, incoming mon
 ## Notes & limitations
 
 - **Key safety:** the key is stored in `expo-secure-store` and calls Groq directly from
-  the app  fine for personal/learning use. A real product would proxy calls through a
-  backend to keep the key off-device.
+  the app, which is fine for personal/learning use. A real product would proxy calls
+  through a backend to keep the key off-device.
 - **Budget** on the dashboard is a fixed RM 2,000 placeholder (easy to make editable later).
 - **Future:** fuzzy merchant grouping (tolls), duplicate-import detection, editing saved
   transactions, cloud sync, a Gemini adapter.
