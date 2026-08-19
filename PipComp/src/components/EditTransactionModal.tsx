@@ -6,8 +6,10 @@ import type { Transaction, TxnType } from '../lib/types';
 import { todayISO } from '../lib/duplicates';
 import { defaultLinkEffect, type LinkEffect } from '../lib/networth';
 import { confirmAction } from '../lib/platformAlert';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
 import { useAppData } from '../state/store';
-import { colors, numFont, radius, shadowToggle, uiFont } from '../theme';
+import { numFont, radius, shadowToggle, uiFont } from '../theme';
 import { AccountLinkField } from './AccountLinkField';
 import { AddCategoryModal } from './AddCategoryModal';
 import { SplitSheet } from './SplitSheet';
@@ -20,6 +22,8 @@ import type { SplitDraft } from '../lib/types';
 /** Bottom-sheet editor for a single transaction. Shared by Dashboard + View All. */
 export function EditTransactionModal({ txn, onClose }: { txn: Transaction | null; onClose: () => void }) {
   const insets = useSafeAreaInsets();
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const {
     categories,
     accounts,
@@ -127,8 +131,11 @@ export function EditTransactionModal({ txn, onClose }: { txn: Transaction | null
     onClose();
   };
 
+  const currentCatLabel = categories.find((c) => c.id === (cat ?? txn.categoryId))?.label ?? (txn.type === 'income' ? 'Income' : 'Expense');
+
   const confirmDelete = () => {
-    confirmAction('Delete transaction?', `Remove “${txn.merchantRaw}”? This can’t be undone.`, 'Delete', async () => {
+    const label = txn.merchantRaw || currentCatLabel;
+    confirmAction('Delete transaction?', `Remove “${label}”? This can’t be undone.`, 'Delete', async () => {
       await removeTransaction(txn.id);
       onClose();
     });
@@ -137,49 +144,67 @@ export function EditTransactionModal({ txn, onClose }: { txn: Transaction | null
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={[styles.sheet, { paddingBottom: insets.bottom + 18 }]}>
-        <View style={styles.handle} />
+      <View style={[styles.sheet, { backgroundColor: colorTheme.bg, paddingBottom: insets.bottom + 18 }]}>
+        <View style={[styles.handle, { backgroundColor: colorTheme.line }]} />
         <View style={styles.head}>
-          <Text style={styles.title} numberOfLines={1}>
-            {txn.merchantRaw}
+          <Text style={[styles.title, { color: colorTheme.ink }]} numberOfLines={1}>
+            {txn.merchantRaw || currentCatLabel}
           </Text>
           <Pressable onPress={onClose} hitSlop={8}>
-            <Icon name="x" size={20} color={colors.ink2} />
+            <Icon name="x" size={20} color={colorTheme.ink2} />
           </Pressable>
         </View>
 
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {/* type toggle */}
-          <View style={styles.toggle}>
+          <View style={[styles.toggle, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line2 }]}>
             {(['expense', 'income'] as TxnType[]).map((k) => {
               const on = type === k;
               return (
-                <Pressable key={k} onPress={() => switchType(k)} style={[styles.toggleBtn, on && styles.toggleBtnOn]}>
-                  <Text style={[styles.toggleText, on && styles.toggleTextOn]}>{k === 'expense' ? 'Expense' : 'Income'}</Text>
+                <Pressable
+                  key={k}
+                  onPress={() => switchType(k)}
+                  style={[styles.toggleBtn, on && styles.toggleBtnOn, on && { backgroundColor: colorTheme.surface }]}
+                >
+                  <Text
+                    style={[
+                      styles.toggleText,
+                      { color: colorTheme.ink2 },
+                      on && styles.toggleTextOn,
+                      on && { color: colorTheme.ink },
+                    ]}
+                  >
+                    {k === 'expense' ? 'Expense' : 'Income'}
+                  </Text>
                 </Pressable>
               );
             })}
           </View>
 
-          <Text style={styles.fieldLabel}>{split ? 'Your share' : 'Amount'}</Text>
+          <Text style={[styles.fieldLabel, { color: colorTheme.ink2 }]}>{split ? 'Your share' : 'Amount'}</Text>
           <View style={styles.amountRow}>
-            <Text style={styles.rmPrefix}>RM</Text>
+            <Text style={[styles.rmPrefix, { color: colorTheme.ink2 }]}>RM</Text>
             <TextInput
               value={amountText}
               onChangeText={setAmountText}
               keyboardType="decimal-pad"
               selectTextOnFocus
               editable={!split}
-              style={[styles.amountInput, !!split && styles.amountInputLocked]}
+              style={[
+                styles.amountInput,
+                { color: colorTheme.ink, backgroundColor: colorTheme.surface, borderColor: colorTheme.line },
+                !!split && styles.amountInputLocked,
+                !!split && { backgroundColor: colorTheme.surface2, color: colorTheme.ink2 },
+              ]}
             />
           </View>
           {!!split && (
-            <Text style={styles.lockNote}>
+            <Text style={[styles.lockNote, { color: colorTheme.ink3 }]}>
               RM {fmt(split.gross)} left your account. Change the split below to adjust this.
             </Text>
           )}
 
-          <Text style={[styles.fieldLabel, { marginTop: 18 }]}>Category</Text>
+          <Text style={[styles.fieldLabel, { color: colorTheme.ink2, marginTop: 18 }]}>Category</Text>
           <View style={styles.grid}>
             {visible.map((c) => (
               <View key={c.id} style={styles.gridCell}>
@@ -188,38 +213,42 @@ export function EditTransactionModal({ txn, onClose }: { txn: Transaction | null
             ))}
             {expanded && (
               <View style={styles.gridCell}>
-                <Pressable onPress={() => setAdding(true)} style={styles.addChip}>
-                  <Icon name="plus" size={16} color={colors.accent} stroke={2.2} />
-                  <Text style={styles.addChipText}>New category</Text>
+                <Pressable onPress={() => setAdding(true)} style={[styles.addChip, { borderColor: theme.accentSoft, backgroundColor: theme.accentTint }]}>
+                  <Icon name="plus" size={16} color={theme.accent} stroke={2.2} />
+                  <Text style={[styles.addChipText, { color: theme.accent }]}>New category</Text>
                 </Pressable>
               </View>
             )}
           </View>
           {grid.length > 4 && (
             <Pressable onPress={() => setExpanded((e) => !e)} style={styles.moreBtn} hitSlop={6}>
-              <Text style={styles.moreText}>{expanded ? 'Show less' : `Show all ${grid.length}`}</Text>
+              <Text style={[styles.moreText, { color: theme.accent }]}>{expanded ? 'Show less' : `Show all ${grid.length}`}</Text>
               <View style={{ transform: [{ rotate: expanded ? '180deg' : '0deg' }] }}>
-                <Icon name="chevronDown" size={16} color={colors.accent} />
+                <Icon name="chevronDown" size={16} color={theme.accent} />
               </View>
             </Pressable>
           )}
 
-          <Text style={[styles.fieldLabel, { marginTop: 18 }]}>Remark (optional)</Text>
+          <Text style={[styles.fieldLabel, { color: colorTheme.ink2, marginTop: 18 }]}>Remark (optional)</Text>
           <TextInput
             value={remark}
             onChangeText={setRemark}
             placeholder="e.g. Lunch with a supplier"
-            placeholderTextColor={colors.ink3}
-            style={styles.remarkInput}
+            placeholderTextColor={colorTheme.ink3}
+            style={[styles.remarkInput, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line, color: colorTheme.ink }]}
             multiline
           />
 
           {type === 'expense' && (
-            <Pressable onPress={() => setSplitting(true)} style={styles.splitRow} hitSlop={4}>
-              <Icon name="gift" size={18} color={colors.accent} />
+            <Pressable
+              onPress={() => setSplitting(true)}
+              style={[styles.splitRow, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line }]}
+              hitSlop={4}
+            >
+              <Icon name="gift" size={18} color={theme.accent} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.splitTitle}>{split ? 'Split with friends' : 'Split with friends'}</Text>
-                <Text style={styles.splitSub} numberOfLines={1}>
+                <Text style={[styles.splitTitle, { color: colorTheme.ink }]}>{split ? 'Split with friends' : 'Split with friends'}</Text>
+                <Text style={[styles.splitSub, { color: colorTheme.ink2 }]} numberOfLines={1}>
                   {split
                     ? stillOwed > 0
                       ? `${splitNames} owe you RM ${fmt(stillOwed)}`
@@ -227,7 +256,7 @@ export function EditTransactionModal({ txn, onClose }: { txn: Transaction | null
                     : 'Record only your share and track what you are owed'}
                 </Text>
               </View>
-              <Icon name="chevronRight" size={18} color={colors.ink3} />
+              <Icon name="chevronRight" size={18} color={colorTheme.ink3} />
             </Pressable>
           )}
 
@@ -293,46 +322,40 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: colors.bg,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     paddingHorizontal: 18,
     paddingTop: 10,
     maxHeight: '88%',
   },
-  handle: { alignSelf: 'center', width: 40, height: 5, borderRadius: 999, backgroundColor: colors.line, marginBottom: 12 },
+  handle: { alignSelf: 'center', width: 40, height: 5, borderRadius: 999, marginBottom: 12 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  title: { flex: 1, fontFamily: uiFont(700), fontSize: 19, color: colors.ink, marginRight: 12 },
+  title: { flex: 1, fontFamily: uiFont(700), fontSize: 19, marginRight: 12 },
   toggle: {
     flexDirection: 'row',
-    backgroundColor: colors.surface2,
     borderRadius: 999,
     padding: 4,
     marginBottom: 18,
     borderWidth: 1,
-    borderColor: colors.line2,
   },
   toggleBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 9, borderRadius: 999 },
-  toggleBtnOn: { backgroundColor: colors.surface, ...shadowToggle },
-  toggleText: { fontFamily: uiFont(600), fontSize: 14, color: colors.ink2 },
-  toggleTextOn: { color: colors.ink },
-  fieldLabel: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2, marginBottom: 8 },
+  toggleBtnOn: { ...shadowToggle },
+  toggleText: { fontFamily: uiFont(600), fontSize: 14 },
+  toggleTextOn: {},
+  fieldLabel: { fontFamily: uiFont(600), fontSize: 12.5, marginBottom: 8 },
   amountRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  rmPrefix: { fontFamily: numFont(600), fontSize: 18, color: colors.ink2 },
+  rmPrefix: { fontFamily: numFont(600), fontSize: 18 },
   amountInput: {
     flex: 1,
     fontFamily: numFont(700),
     fontSize: 24,
-    color: colors.ink,
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: radius.sm,
-    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.line,
   },
-  amountInputLocked: { backgroundColor: colors.surface2, color: colors.ink2 },
-  lockNote: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, marginTop: 6 },
+  amountInputLocked: {},
+  lockNote: { fontFamily: uiFont(500), fontSize: 11.5, marginTop: 6 },
   splitRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -341,22 +364,17 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     paddingHorizontal: 14,
     borderRadius: radius.sm,
-    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.line,
   },
-  splitTitle: { fontFamily: uiFont(700), fontSize: 14, color: colors.ink },
-  splitSub: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, marginTop: 2 },
+  splitTitle: { fontFamily: uiFont(700), fontSize: 14 },
+  splitSub: { fontFamily: uiFont(500), fontSize: 12, marginTop: 2 },
   remarkInput: {
-    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.line,
     borderRadius: radius.sm,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontFamily: uiFont(600),
     fontSize: 14.5,
-    color: colors.ink,
   },
   grid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -5 },
   gridCell: { width: '50%', paddingHorizontal: 5, paddingBottom: 10 },
@@ -368,13 +386,11 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: radius.sm,
     borderWidth: 1.5,
-    borderColor: colors.accentSoft,
     borderStyle: 'dashed',
-    backgroundColor: colors.accentTint,
   },
-  addChipText: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.accent },
+  addChipText: { fontFamily: uiFont(700), fontSize: 13.5 },
   moreBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 8 },
-  moreText: { fontFamily: uiFont(600), fontSize: 13.5, color: colors.accent },
+  moreText: { fontFamily: uiFont(600), fontSize: 13.5 },
   deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 16, marginTop: 4 },
   deleteText: { fontFamily: uiFont(700), fontSize: 14.5, color: '#b3261e' },
 });

@@ -11,7 +11,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { spotlightFrames, type SpotlightRect } from '../lib/spotlight';
 import { getTourAnchor, onTourAnchor, type AnchorReport } from '../lib/tourAnchorRect';
-import { colors, platformShadow, radius } from '../theme';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
+import { platformShadow, radius } from '../theme';
 
 const CUTOUT_PADDING = 8;
 const DIM_OPACITY = 0.45;
@@ -45,6 +47,8 @@ function scrollsInsideCutout(target: EventTarget | null, rect: SpotlightRect): b
 }
 
 export function TourSpotlight({ onDimPress }: { onDimPress: () => void }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const [report, setReport] = useState<AnchorReport | null>(() => getTourAnchor());
   const [frameSize, setFrameSize] = useState<{ width: number; height: number } | null>(null);
   const [frameOffset, setFrameOffset] = useState({ x: 0, y: 0 });
@@ -153,9 +157,16 @@ export function TourSpotlight({ onDimPress }: { onDimPress: () => void }) {
       {frames && (
         <>
           {[frames.top, frames.bottom, frames.left, frames.right].map((r, i) => (
-            <Pressable key={i} accessible={false} focusable={false} onPress={onDimPress} style={[styles.dim, rectStyle(r)]} />
+            <Pressable key={i} accessible={false} focusable={false} onPress={onDimPress} style={[styles.dim, rectStyle(r), { backgroundColor: colorTheme.ink }]} />
           ))}
-          <Animated.View pointerEvents="none" style={[styles.halo, rectStyle(frames.cutout), { opacity: pulse }]} />
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.halo,
+              rectStyle(frames.cutout),
+              { opacity: pulse, borderColor: theme.accent, ...platformShadow(theme.accent, 0.5, 10, { width: 0, height: 0 }, 0) },
+            ]}
+          />
         </>
       )}
     </View>
@@ -163,12 +174,10 @@ export function TourSpotlight({ onDimPress }: { onDimPress: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  dim: { position: 'absolute', backgroundColor: colors.ink, opacity: DIM_OPACITY },
+  dim: { position: 'absolute', opacity: DIM_OPACITY },
   halo: {
     position: 'absolute',
     borderRadius: radius.lg,
     borderWidth: 2.5,
-    borderColor: colors.accent,
-    ...platformShadow(colors.accent, 0.5, 10, { width: 0, height: 0 }, 0),
   },
 });

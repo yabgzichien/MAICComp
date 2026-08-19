@@ -8,18 +8,20 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { FadeIn } from './Motion';
 import { Icon } from './Icon';
-import { colors, shadowCard, uiFont } from '../theme';
+import { shadowCard, uiFont } from '../theme';
+import { useThemeColors } from '../state/colorScheme';
 
 export function ClearedLoanBanner({ message, topInset, onDismiss }: { message: string; topInset: number; onDismiss: () => void }) {
+  const colorTheme = useThemeColors();
   return (
     <FadeIn key={message} style={[styles.wrap, { top: topInset + 10 }]} offset={-8}>
-      <View style={styles.card}>
-        <View style={styles.iconCircle}>
-          <Icon name="alert" size={14} color={colors.amber} />
+      <View style={[styles.card, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line }]}>
+        <View style={[styles.iconCircle, { backgroundColor: colorTheme.amber + '1a' }]}>
+          <Icon name="alert" size={14} color={colorTheme.amber} />
         </View>
-        <Text style={styles.text}>{message}</Text>
+        <Text style={[styles.text, { color: colorTheme.ink }]}>{message}</Text>
         <Pressable onPress={onDismiss} accessibilityRole="button" accessibilityLabel="Dismiss" hitSlop={8} style={styles.closeBtn}>
-          <Icon name="x" size={13} color={colors.ink3} stroke={2.4} />
+          <Icon name="x" size={13} color={colorTheme.ink3} stroke={2.4} />
         </Pressable>
       </View>
     </FadeIn>
@@ -32,10 +34,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 9,
-    backgroundColor: colors.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.line,
     padding: 12,
     ...shadowCard,
   },
@@ -43,11 +43,10 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: colors.amber + '1a',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 1,
   },
-  text: { flex: 1, fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink, lineHeight: 17.5 },
+  text: { flex: 1, fontFamily: uiFont(600), fontSize: 12.5, lineHeight: 17.5 },
   closeBtn: { padding: 2, marginTop: 1 },
 });

@@ -94,7 +94,9 @@ import { BORROWER_TOUR_STEPS, clampTourStep, stepsForBranch, type TourBranch } f
 import { emitTourSignal } from '../lib/tourSignals';
 import { DEFAULT_GUIDE_CITY, DEFAULT_HOUSEHOLD_PROFILE } from '../lib/belanjawanku';
 import { DEFAULT_SAVINGS_TARGET } from '../lib/savingsHabit';
+import { isReminderCadence, type ReminderCadence } from '../lib/reminders';
 import { GUIDE_CITIES, HOUSEHOLD_PROFILES, type GuideCityId, type HouseholdProfileId } from '../data/belanjawanku';
+import { syncStreakWidget } from '../widget/syncStreakWidget';
 
 const ONBOARDING_KEY = 'onboarding_complete';
 const TOUR_ACTIVE_KEY = 'tour_active';
@@ -109,6 +111,13 @@ const ACTIVE_DEMO_PROFILE_KEY = 'active_demo_profile';
 const HOUSEHOLD_PROFILE_KEY = 'belanjawanku_household';
 const GUIDE_CITY_KEY = 'belanjawanku_city';
 const SAVINGS_TARGET_KEY = 'savings_target';
+// Local reminder preferences. Both default to off so the OS permission prompt only ever
+// appears because the user reached for it in Settings. Deliberately survive `resetAllData`,
+// `resetToOnboarding` and demo-profile loads: this is how the owner of the phone wants to be
+// interrupted, not persona data, and having a demo reset silently unsubscribe them would be a
+// surprise they would not think to look for.
+const REMINDER_CADENCE_KEY = 'reminder_cadence';
+const OWED_REMINDER_KEY = 'owed_reminder_on';
 import { applyEffect, currentValue, RECEIVABLE_CLS, type LinkEffect } from '../lib/networth';
 import { holdingValue, isHolding, mergeAccountValues } from '../lib/prices';
 import { merchantKey } from '../lib/normalize';
@@ -295,6 +304,12 @@ interface AppData {
   /** Monthly pay-yourself-first commitment. Motivation only, never a credit signal. */
   savingsTarget: number;
   setSavingsTarget: (amount: number) => Promise<void>;
+  /** How often to nudge about logging spending. `'off'` disables the reminder entirely. */
+  reminderCadence: ReminderCadence;
+  setReminderCadence: (cadence: ReminderCadence) => Promise<void>;
+  /** Whether to chase debts that have aged past `AGING_DAYS`, weekly. */
+  owedReminderEnabled: boolean;
+  setOwedReminderEnabled: (on: boolean) => Promise<void>;
   addAccount: (name: string, kind: AccountKind, cls: string, openingValue: number, asOf: string, icon?: string | null) => Promise<void>;
   /** Returns a default account id for the add flows, creating a "Cash" account if none exist. */
   ensureDefaultAccount: () => Promise<string>;
@@ -416,6 +431,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [householdProfile, setHouseholdProfileState] = useState<HouseholdProfileId>(DEFAULT_HOUSEHOLD_PROFILE);
   const [guideCity, setGuideCityState] = useState<GuideCityId>(DEFAULT_GUIDE_CITY);
   const [savingsTarget, setSavingsTargetState] = useState<number>(DEFAULT_SAVINGS_TARGET);
+  const [reminderCadence, setReminderCadenceState] = useState<ReminderCadence>('off');
+  const [owedReminderEnabled, setOwedReminderEnabledState] = useState(false);
   const [tourActive, setTourActive] = useState(false);
   const [tourPaused, setTourPaused] = useState(false);
   const [tourStepIndex, setTourStepIndexState] = useState(0);
@@ -424,7 +441,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const tourBranchRef = useRef<TourBranch | null>(null);
 
   const refreshAll = useCallback(async () => {
-    const [cats, txns, mem, income, alloc, snaps, accts, entries, cache, products, applications, allRepayments, repSummary, kycRow, onboardingFlag, tourActiveFlag, tourStepRaw, activeDemoProfileRaw, tourBranchRaw, householdRaw, cityRaw, savingsTargetRaw, peopleRows, splitRows, shareRows, paymentRows] =
+    const [cats, txns, mem, income, alloc, snaps, accts, entries, cache, products, applications, allRepayments, repSummary, kycRow, onboardingFlag, tourActiveFlag, tourStepRaw, activeDemoProfileRaw, tourBranchRaw, householdRaw, cityRaw, savingsTargetRaw, reminderCadenceRaw, owedReminderRaw, peopleRows, splitRows, shareRows, paymentRows] =
       await Promise.all([
         listCategories(),
         listTransactions(),
@@ -448,6 +465,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         getMeta(HOUSEHOLD_PROFILE_KEY),
         getMeta(GUIDE_CITY_KEY),
         getMeta(SAVINGS_TARGET_KEY),
+        getMeta(REMINDER_CADENCE_KEY),
+        getMeta(OWED_REMINDER_KEY),
         dbListPeople(),
         dbListSplits(),
         dbListShares(),
@@ -466,6 +485,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setSavingsTargetState(
       Number.isFinite(parsedTarget) && parsedTarget >= 0 ? parsedTarget : DEFAULT_SAVINGS_TARGET
     );
+    // An unreadable cadence falls back to off rather than to a guess: silence is the safe
+    // failure mode for something that interrupts the user.
+    setReminderCadenceState(isReminderCadence(reminderCadenceRaw) ? reminderCadenceRaw : 'off');
+    setOwedReminderEnabledState(owedReminderRaw === 'true');
     setOccupationState(await getOccupation());
     setKycState(kycRow);
     setOnboardingComplete(onboardingFlag === 'true');
@@ -520,6 +543,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       .catch((e) => console.warn('Failed to load app data', e))
       .finally(() => setReady(true));
   }, [refreshAll]);
+
+  useEffect(() => {
+    if (!ready) return;
+    syncStreakWidget(transactions).catch(() => {});
+  }, [ready, transactions]);
 
   // Targeted refresh for loan actions: only the three loan-derived slices change
   // (applications, repayments, the on-time/total summary)  refetching the other
@@ -647,9 +675,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         const key = merchantKey(it.merchant);
         const draft = splitDrafts?.[i] ?? null;
 
-        // Learn the merchant -> category for both expenses and income.
-        if (!(key in memory)) newLearned.push({ merchant: it.merchant, categoryId });
-        await upsertMemory(key, categoryId);
+        // Learn the merchant -> category for both expenses and income, only if merchant is non-empty.
+        if (key) {
+          if (!(key in memory)) newLearned.push({ merchant: it.merchant, categoryId });
+          await upsertMemory(key, categoryId);
+        }
 
         toInsert.push({
           merchantRaw: it.merchant,
@@ -694,8 +724,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       edits: { amount: number; type: TxnType; categoryId: string; remark?: string | null }
     ) => {
       await updateTransactionFields(txn.id, edits.amount, edits.type, edits.categoryId, edits.remark);
-      // Correcting a category re-teaches Pip for that merchant (expense or income).
-      await upsertMemory(txn.merchantKey, edits.categoryId);
+      // Correcting a category re-teaches Pip for that merchant (expense or income), only if merchant is non-empty.
+      if (txn.merchantKey) {
+        await upsertMemory(txn.merchantKey, edits.categoryId);
+      }
       const [txns, mem] = await Promise.all([listTransactions(), getMemoryMap()]);
       setTransactions(txns);
       setMemory(mem);
@@ -853,6 +885,16 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     const clean = Math.max(0, Math.round(amount));
     await setMeta(SAVINGS_TARGET_KEY, String(clean));
     setSavingsTargetState(clean);
+  }, []);
+
+  const setReminderCadence = useCallback(async (cadence: ReminderCadence) => {
+    await setMeta(REMINDER_CADENCE_KEY, cadence);
+    setReminderCadenceState(cadence);
+  }, []);
+
+  const setOwedReminderEnabled = useCallback(async (on: boolean) => {
+    await setMeta(OWED_REMINDER_KEY, on ? 'true' : 'false');
+    setOwedReminderEnabledState(on);
   }, []);
 
   const resetBudget = useCallback(async () => {
@@ -1550,6 +1592,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setBenchmarkProfile,
     savingsTarget,
     setSavingsTarget,
+    reminderCadence,
+    setReminderCadence,
+    owedReminderEnabled,
+    setOwedReminderEnabled,
     addAccount,
     ensureDefaultAccount,
     updateAccount,

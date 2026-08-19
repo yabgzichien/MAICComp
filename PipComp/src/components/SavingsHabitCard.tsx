@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { savingsStepUp, type SavingsHabit } from '../lib/savingsHabit';
 import { fmt } from '../lib/format';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
 import { colors, numFont, radius, uiFont } from '../theme';
 import { Card, Eyebrow, ProgressTrack } from './ui';
 import { InfoButton } from './InfoButton';
@@ -23,6 +25,8 @@ export function SavingsHabitCard({
   guideSuggestion?: number;
   onSetTarget: (amount: number) => void;
 }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(String(habit.target));
   const stepUp = savingsStepUp(habit, guideSuggestion);
@@ -41,12 +45,12 @@ export function SavingsHabitCard({
             <Eyebrow>Pay yourself first</Eyebrow>
             <InfoButton entry="pay_yourself_first" />
           </View>
-          <Text style={styles.target}>RM {fmt(habit.target)} a month</Text>
+          <Text style={[styles.target, { color: colorTheme.ink }]}>RM {fmt(habit.target)} a month</Text>
         </View>
         {habit.monthsKept > 0 && (
           <View style={styles.streak}>
             <Text style={styles.flame}>{'\u{1F525}'}</Text>
-            <Text style={styles.streakText}>
+            <Text style={[styles.streakText, { color: theme.accentInk }]}>
               {habit.monthsKept} month{habit.monthsKept === 1 ? '' : 's'}
             </Text>
           </View>
@@ -55,7 +59,7 @@ export function SavingsHabitCard({
 
       <View style={{ marginTop: 12 }}>
         <ProgressTrack pct={habit.thisMonthProgress * 100} />
-        <Text style={styles.progress}>
+        <Text style={[styles.progress, { color: colorTheme.ink2 }]}>
           {habit.thisMonthSaved >= 0
             ? `RM ${fmt(habit.thisMonthSaved)} kept back this month`
             : `RM ${fmt(-habit.thisMonthSaved)} more spent than earned this month`}
@@ -64,7 +68,7 @@ export function SavingsHabitCard({
       </View>
 
       {habit.monthsKept === 0 && habit.bestRun > 0 && (
-        <Text style={styles.best}>
+        <Text style={[styles.best, { color: colorTheme.ink2 }]}>
           Your best run so far is {habit.bestRun} month{habit.bestRun === 1 ? '' : 's'}.
         </Text>
       )}
@@ -72,34 +76,34 @@ export function SavingsHabitCard({
       {/* The "increase gradually" half of the advice, offered only once the borrower has proved
           they can hold the smaller amount. Never auto-applied: raising it is their call. */}
       {stepUp !== null && !editing && (
-        <View style={styles.stepUp}>
-          <Text style={styles.stepUpText}>
+        <View style={[styles.stepUp, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]}>
+          <Text style={[styles.stepUpText, { color: theme.accentInk }]}>
             You have kept this up {habit.monthsKept} month{habit.monthsKept === 1 ? '' : 's'} in a
             row. The national guide suggests RM {fmt(stepUp)} for your household.
           </Text>
           <Pressable
             onPress={() => onSetTarget(stepUp)}
-            style={({ pressed }) => [styles.stepUpBtn, { opacity: pressed ? 0.8 : 1 }]}
+            style={({ pressed }) => [styles.stepUpBtn, { backgroundColor: theme.accent, opacity: pressed ? 0.8 : 1 }]}
             accessibilityRole="button"
           >
-            <Text style={styles.stepUpBtnText}>Raise to RM {fmt(stepUp)}</Text>
+            <Text style={[styles.stepUpBtnText, { color: theme.accentInk }]}>Raise to RM {fmt(stepUp)}</Text>
           </Pressable>
         </View>
       )}
 
       {editing ? (
         <View style={styles.editRow}>
-          <Text style={styles.rm}>RM</Text>
+          <Text style={[styles.rm, { color: colorTheme.ink2 }]}>RM</Text>
           <TextInput
             value={draft}
             onChangeText={setDraft}
             keyboardType="decimal-pad"
-            style={styles.input}
+            style={[styles.input, { color: colorTheme.ink, backgroundColor: colorTheme.surface2, borderColor: colorTheme.line }]}
             autoFocus
             accessibilityLabel="Monthly savings target"
           />
-          <Pressable onPress={save} style={styles.saveBtn} accessibilityRole="button">
-            <Text style={styles.saveText}>Save</Text>
+          <Pressable onPress={save} style={[styles.saveBtn, { backgroundColor: theme.accent }]} accessibilityRole="button">
+            <Text style={[styles.saveText, { color: theme.accentInk }]}>Save</Text>
           </Pressable>
         </View>
       ) : (
@@ -108,14 +112,14 @@ export function SavingsHabitCard({
             setDraft(String(habit.target));
             setEditing(true);
           }}
-          style={({ pressed }) => [styles.changeBtn, { opacity: pressed ? 0.75 : 1 }]}
+          style={({ pressed }) => [styles.changeBtn, { borderColor: colorTheme.line, backgroundColor: colorTheme.surface2, opacity: pressed ? 0.75 : 1 }]}
           accessibilityRole="button"
         >
-          <Text style={styles.changeText}>Change target</Text>
+          <Text style={[styles.changeText, { color: colorTheme.ink2 }]}>Change target</Text>
         </Pressable>
       )}
 
-      <Text style={styles.note}>
+      <Text style={[styles.note, { color: colorTheme.ink3 }]}>
         A habit tracker, not a credit signal. Your real surplus already counts towards your score.
       </Text>
     </Card>
@@ -126,46 +130,40 @@ const styles = StyleSheet.create({
   card: { padding: 16, marginTop: 14 },
   head: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  target: { fontFamily: uiFont(700), fontSize: 16, color: colors.ink, marginTop: 3 },
+  target: { fontFamily: uiFont(700), fontSize: 16, marginTop: 3 },
   stepUp: {
     marginTop: 12,
     padding: 12,
     borderRadius: radius.sm,
-    backgroundColor: colors.accentTint,
     borderWidth: 1,
-    borderColor: colors.accentSoft,
   },
-  stepUpText: { fontFamily: uiFont(500), fontSize: 12.5, lineHeight: 18, color: colors.accentInk },
+  stepUpText: { fontFamily: uiFont(500), fontSize: 12.5, lineHeight: 18 },
   stepUpBtn: {
     alignSelf: 'flex-start',
     marginTop: 10,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: colors.accent,
   },
-  stepUpBtnText: { fontFamily: uiFont(700), fontSize: 12.5, color: colors.accentInk },
+  stepUpBtnText: { fontFamily: uiFont(700), fontSize: 12.5 },
   streak: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   flame: { fontSize: 15 },
-  streakText: { fontFamily: uiFont(700), fontSize: 13, color: colors.accentInk },
-  progress: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 7 },
-  best: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, marginTop: 6 },
+  streakText: { fontFamily: uiFont(700), fontSize: 13 },
+  progress: { fontFamily: uiFont(500), fontSize: 12.5, marginTop: 7 },
+  best: { fontFamily: uiFont(500), fontSize: 12, marginTop: 6 },
   editRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
-  rm: { fontFamily: numFont(600), fontSize: 14, color: colors.ink2 },
+  rm: { fontFamily: numFont(600), fontSize: 14 },
   input: {
     flex: 1,
     fontFamily: numFont(700),
     fontSize: 16,
-    color: colors.ink,
-    backgroundColor: colors.surface2,
     borderRadius: radius.sm,
     borderWidth: 1,
-    borderColor: colors.line,
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
-  saveBtn: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999, backgroundColor: colors.accent },
-  saveText: { fontFamily: uiFont(700), fontSize: 13, color: colors.accentInk },
+  saveBtn: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999 },
+  saveText: { fontFamily: uiFont(700), fontSize: 13 },
   changeBtn: {
     alignSelf: 'flex-start',
     marginTop: 12,
@@ -173,9 +171,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.surface2,
   },
-  changeText: { fontFamily: uiFont(700), fontSize: 12.5, color: colors.ink2 },
-  note: { fontFamily: uiFont(500), fontSize: 11, lineHeight: 15, color: colors.ink3, marginTop: 12 },
+  changeText: { fontFamily: uiFont(700), fontSize: 12.5 },
+  note: { fontFamily: uiFont(500), fontSize: 11, lineHeight: 15, marginTop: 12 },
 });

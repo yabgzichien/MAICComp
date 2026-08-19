@@ -17,6 +17,8 @@ import { scanReceiptImage } from '../lib/scanReceipt';
 import { computeItemized, SELF, type ReceiptLine, type Surcharges } from '../lib/split';
 import type { SplitDraft } from '../lib/types';
 import { useAppData } from '../state/store';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
 import { colors, numFont, radius, uiFont } from '../theme';
 
 export interface ReceiptSplitResult {
@@ -41,6 +43,8 @@ export function ReceiptScanScreen({
   onManualInstead: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const { people, addPerson } = useAppData();
 
   const [phase, setPhase] = useState<Phase>('capture');
@@ -198,18 +202,18 @@ export function ReceiptScanScreen({
 
   if (phase === 'reading') {
     return (
-      <View style={[styles.root, styles.center]}>
+      <View style={[styles.root, { backgroundColor: colorTheme.bg }, styles.center]}>
         <PipSays expr="think">
           <BubbleText>Reading the receipt line by line… this takes a few seconds.</BubbleText>
         </PipSays>
-        <ActivityIndicator color={colors.accent} style={{ marginTop: 22 }} />
+        <ActivityIndicator color={theme.accent} style={{ marginTop: 22 }} />
       </View>
     );
   }
 
   if (phase === 'capture') {
     return (
-      <View style={styles.root}>
+      <View style={[styles.root, { backgroundColor: colorTheme.bg }]}>
         <View style={{ paddingTop: insets.top + 4 }}>
           <TopBar title="Scan a receipt" onBack={onBack} />
         </View>
@@ -222,7 +226,7 @@ export function ReceiptScanScreen({
           </PipSays>
 
           {error !== '' && (
-            <Card style={styles.errorCard}>
+            <Card style={[styles.errorCard, { backgroundColor: colorTheme.redTint, borderColor: colorTheme.redSoft }]}>
               <Icon name="alert" size={17} color="#b3261e" />
               <Text style={styles.errorText}>{error}</Text>
             </Card>
@@ -234,7 +238,7 @@ export function ReceiptScanScreen({
             <SourceRow icon="pencil" title="No receipt? Split a total" sub="Type the amount and divide it by hand" onPress={onManualInstead} disabled={busy} />
           </View>
 
-          <Text style={styles.hint}>
+          <Text style={[styles.hint, { color: colorTheme.ink3 }]}>
             The photo is read once and never stored. If you split it, only your own share is recorded as
             spending.
           </Text>
@@ -244,7 +248,7 @@ export function ReceiptScanScreen({
   }
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: colorTheme.bg }]}>
       <View style={{ paddingTop: insets.top + 4 }}>
         <TopBar title={receipt?.merchant ?? 'Assign the items'} onBack={() => setPhase('capture')} />
       </View>
@@ -267,13 +271,13 @@ export function ReceiptScanScreen({
           </BubbleText>
         </PipSays>
 
-        <Text style={styles.label}>Who was at the table (optional)</Text>
+        <Text style={[styles.label, { color: colorTheme.ink2 }]}>Who was at the table (optional)</Text>
         {unpicked.length > 0 && (
           <View style={styles.chipWrap}>
             {unpicked.map((p) => (
-              <Pressable key={p.id} onPress={() => setPicked((prev) => [...prev, p.id])} style={styles.chip}>
-                <Icon name="plus" size={13} color={colors.accent} stroke={2.4} />
-                <Text style={styles.chipText}>{p.name}</Text>
+              <Pressable key={p.id} onPress={() => setPicked((prev) => [...prev, p.id])} style={[styles.chip, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]}>
+                <Icon name="plus" size={13} color={theme.accent} stroke={2.4} />
+                <Text style={[styles.chipText, { color: theme.accentInk }]}>{p.name}</Text>
               </Pressable>
             ))}
           </View>
@@ -283,55 +287,58 @@ export function ReceiptScanScreen({
             value={newName}
             onChangeText={setNewName}
             placeholder="Add a name"
-            placeholderTextColor={colors.ink3}
-            style={styles.nameInput}
+            placeholderTextColor={colorTheme.ink3}
+            style={[styles.nameInput, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line, color: colorTheme.ink }]}
             autoCapitalize="words"
             returnKeyType="done"
             onSubmitEditing={addNew}
           />
           <Pressable
             onPress={addNew}
-            style={[styles.addBtn, !newName.trim() && styles.addBtnOff]}
+            style={[
+              styles.addBtn,
+              newName.trim() ? { backgroundColor: theme.accent } : [styles.addBtnOff, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line }],
+            ]}
             disabled={!newName.trim() || busy}
             accessibilityLabel="Add this person"
           >
-            <Icon name="plus" size={18} color={newName.trim() ? colors.onAccent : colors.ink3} stroke={2.4} />
+            <Icon name="plus" size={18} color={newName.trim() ? colors.onAccent : colorTheme.ink3} stroke={2.4} />
           </Pressable>
         </View>
 
         {picked.length > 0 && (
           <View style={styles.tableRow}>
             {picked.map((id) => (
-              <Pressable key={id} onPress={() => removePerson(id)} style={styles.tableChip}>
-                <Text style={styles.tableChipText}>{nameById[id] ?? 'Someone'}</Text>
-                <Icon name="x" size={12} color={colors.ink3} />
+              <Pressable key={id} onPress={() => removePerson(id)} style={[styles.tableChip, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line }]}>
+                <Text style={[styles.tableChipText, { color: colorTheme.ink }]}>{nameById[id] ?? 'Someone'}</Text>
+                <Icon name="x" size={12} color={colorTheme.ink3} />
               </Pressable>
             ))}
-            <View style={[styles.tableChip, styles.tableChipSelf]}>
-              <Text style={styles.tableChipText}>You</Text>
+            <View style={[styles.tableChip, styles.tableChipSelf, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]}>
+              <Text style={[styles.tableChipText, { color: colorTheme.ink }]}>You</Text>
             </View>
           </View>
         )}
 
         {picked.length === 0 && (
-          <Text style={styles.empty}>Paid for it alone? Leave this empty and just check the total.</Text>
+          <Text style={[styles.empty, { color: colorTheme.ink3 }]}>Paid for it alone? Leave this empty and just check the total.</Text>
         )}
 
         {lines.length > 0 && (
             <>
-              <Text style={[styles.label, { marginTop: 22 }]}>
+              <Text style={[styles.label, { marginTop: 22, color: colorTheme.ink2 }]}>
                 {splitting ? 'What they ordered' : 'What I read'}
               </Text>
               <Card style={{ overflow: 'hidden' }}>
                 {lines.map((line, i) => {
                   const everyone = line.assignedTo.length === participants.length;
                   return (
-                    <View key={line.id} style={[styles.itemRow, i > 0 && styles.divider]}>
+                    <View key={line.id} style={[styles.itemRow, i > 0 && styles.divider, i > 0 && { borderTopColor: colorTheme.line2 }]}>
                       <View style={styles.itemHead}>
-                        <Text style={styles.itemLabel} numberOfLines={1}>
+                        <Text style={[styles.itemLabel, { color: colorTheme.ink }]} numberOfLines={1}>
                           {line.label}
                         </Text>
-                        <Text style={styles.itemAmount}>{fmt(line.amount)}</Text>
+                        <Text style={[styles.itemAmount, { color: colorTheme.ink }]}>{fmt(line.amount)}</Text>
                       </View>
                       {splitting && (
                       <View style={styles.avatarRow}>
@@ -342,18 +349,23 @@ export function ReceiptScanScreen({
                             <Pressable
                               key={id}
                               onPress={() => toggleAssign(line.id, id)}
-                              style={[styles.avatar, on && styles.avatarOn]}
+                              style={[
+                                styles.avatar,
+                                { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line },
+                                on && styles.avatarOn,
+                                on && { backgroundColor: theme.accent, borderColor: theme.accent },
+                              ]}
                               accessibilityLabel={`${on ? 'Remove' : 'Add'} ${name} on ${line.label}`}
                               accessibilityState={{ selected: on }}
                             >
-                              <Text style={[styles.avatarText, on && styles.avatarTextOn]}>
+                              <Text style={[styles.avatarText, { color: colorTheme.ink2 }, on && styles.avatarTextOn]}>
                                 {name.slice(0, id === SELF ? 3 : 1).toUpperCase()}
                               </Text>
                             </Pressable>
                           );
                         })}
                         <Pressable onPress={() => shareWholeTable(line.id)} style={styles.allBtn} hitSlop={4}>
-                          <Text style={[styles.allText, everyone && styles.allTextOn]}>
+                          <Text style={[styles.allText, { color: theme.accent }, everyone && { color: colorTheme.ink3 }]}>
                             {everyone ? 'Clear' : 'Shared'}
                           </Text>
                         </Pressable>
@@ -364,7 +376,7 @@ export function ReceiptScanScreen({
                 })}
               </Card>
               {splitting && result.unassigned.length > 0 && (
-                <Text style={styles.unassigned}>
+                <Text style={[styles.unassigned, { color: colorTheme.amber }]}>
                   {result.unassigned.length} item{result.unassigned.length === 1 ? '' : 's'} nobody has claimed
                   yet, shared across the table for now.
                 </Text>
@@ -374,7 +386,7 @@ export function ReceiptScanScreen({
 
         {splitting && (
           <>
-            <Text style={[styles.label, { marginTop: 22 }]}>On top of the items</Text>
+            <Text style={[styles.label, { marginTop: 22, color: colorTheme.ink2 }]}>On top of the items</Text>
             <Card style={{ padding: 4 }}>
               <PctRow
                 label="Service charge"
@@ -382,7 +394,7 @@ export function ReceiptScanScreen({
                 onChange={(v) => setSurcharges((s) => ({ ...s, serviceChargePct: v }))}
                 note="Applied to the items subtotal"
               />
-              <View style={styles.divider} />
+              <View style={[styles.divider, { borderTopColor: colorTheme.line2 }]} />
               <PctRow
                 label="Service tax"
                 value={surcharges.taxPct}
@@ -394,22 +406,22 @@ export function ReceiptScanScreen({
         )}
 
         {/* Always shown: the charge is the whole point of the scan, split or not. */}
-        <Text style={[styles.label, { marginTop: 22 }]}>What your card was charged</Text>
-        <View style={styles.amountRow}>
-          <Text style={styles.rm}>RM</Text>
+        <Text style={[styles.label, { marginTop: 22, color: colorTheme.ink2 }]}>What your card was charged</Text>
+        <View style={[styles.amountRow, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line }]}>
+          <Text style={[styles.rm, { color: colorTheme.ink2 }]}>RM</Text>
           <TextInput
             value={chargedText}
             onChangeText={setChargedText}
             keyboardType="decimal-pad"
             selectTextOnFocus
-            style={styles.amountInput}
+            style={[styles.amountInput, { color: colorTheme.ink }]}
           />
         </View>
 
         {splitting && (
           <>
             {Math.abs(result.difference) >= 0.01 && (
-              <Text style={styles.diffNote}>
+              <Text style={[styles.diffNote, { color: colorTheme.ink2 }]}>
                 The receipt adds up to RM {fmt(result.computedTotal)}, so RM {fmt(Math.abs(result.difference))}{' '}
                 {result.difference > 0 ? 'more was charged' : 'less was charged'}. That is shared across the
                 table so the split matches your bank exactly.
@@ -419,10 +431,10 @@ export function ReceiptScanScreen({
             <Card style={styles.summary}>
               {participants.map((id) => (
                 <View key={id} style={styles.summaryRow}>
-                  <Text style={[styles.summaryName, id === SELF && styles.summaryNameSelf]}>
+                  <Text style={[styles.summaryName, { color: colorTheme.ink2 }, id === SELF && [styles.summaryNameSelf, { color: colorTheme.ink }]]}>
                     {id === SELF ? 'You (your expense)' : nameById[id] ?? 'Someone'}
                   </Text>
-                  <Text style={[styles.summaryValue, id === SELF && styles.summaryValueSelf]}>
+                  <Text style={[styles.summaryValue, { color: theme.accent }, id === SELF && [styles.summaryValueSelf, { color: colorTheme.ink }]]}>
                     RM {fmt(owedByPerson[id] ?? 0)}
                   </Text>
                 </View>
@@ -439,7 +451,7 @@ export function ReceiptScanScreen({
         )}
       </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 16, backgroundColor: colorTheme.bg, borderTopColor: colorTheme.line2 }]}>
         <PrimaryButton onPress={save} disabled={!canSave}>
           <Icon name="check" size={19} color="#fff" stroke={2.4} />
           <BtnLabel>{splitting ? 'Use this split' : 'Use this receipt'}</BtnLabel>
@@ -461,6 +473,8 @@ function PctRow({
   onChange: (v: number) => void;
   note: string;
 }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const [text, setText] = useState(String(value));
   // Keep the field in step when the scan prefills a rate the user has not touched.
   React.useEffect(() => setText(String(value)), [value]);
@@ -469,11 +483,11 @@ function PctRow({
   return (
     <View style={styles.pctRow}>
       <View style={{ flex: 1 }}>
-        <Text style={styles.pctLabel}>{label}</Text>
-        <Text style={styles.pctNote}>{note}</Text>
+        <Text style={[styles.pctLabel, { color: colorTheme.ink }]}>{label}</Text>
+        <Text style={[styles.pctNote, { color: colorTheme.ink2 }]}>{note}</Text>
       </View>
       {on ? (
-        <View style={styles.pctField}>
+        <View style={[styles.pctField, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line }]}>
           <TextInput
             value={text}
             onChangeText={(v) => {
@@ -482,19 +496,19 @@ function PctRow({
               onChange(Number.isFinite(n) && n >= 0 ? n : 0);
             }}
             keyboardType="decimal-pad"
-            style={styles.pctInput}
+            style={[styles.pctInput, { color: colorTheme.ink }]}
             selectTextOnFocus
           />
-          <Text style={styles.pctSign}>%</Text>
+          <Text style={[styles.pctSign, { color: colorTheme.ink2 }]}>%</Text>
         </View>
       ) : (
-        <Pressable onPress={() => onChange(label === 'Service tax' ? 6 : 10)} style={styles.pctAdd} hitSlop={4}>
-          <Text style={styles.pctAddText}>Add</Text>
+        <Pressable onPress={() => onChange(label === 'Service tax' ? 6 : 10)} style={[styles.pctAdd, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]} hitSlop={4}>
+          <Text style={[styles.pctAddText, { color: theme.accentInk }]}>Add</Text>
         </Pressable>
       )}
       {on && (
         <Pressable onPress={() => onChange(0)} hitSlop={8} accessibilityLabel={`Remove ${label}`}>
-          <Icon name="x" size={15} color={colors.ink3} />
+          <Icon name="x" size={15} color={colorTheme.ink3} />
         </Pressable>
       )}
     </View>
@@ -514,41 +528,41 @@ function SourceRow({
   onPress: () => void;
   disabled?: boolean;
 }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   return (
-    <Pressable onPress={onPress} disabled={disabled} style={({ pressed }) => [styles.source, pressed && { opacity: 0.9 }]}>
-      <View style={styles.sourceIcon}>
-        <Icon name={icon} size={19} color={colors.accent} />
+    <Pressable onPress={onPress} disabled={disabled} style={({ pressed }) => [styles.source, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line }, pressed && { opacity: 0.9 }]}>
+      <View style={[styles.sourceIcon, { backgroundColor: theme.accentTint }]}>
+        <Icon name={icon} size={19} color={theme.accent} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={styles.sourceTitle}>{title}</Text>
-        <Text style={styles.sourceSub}>{sub}</Text>
+        <Text style={[styles.sourceTitle, { color: colorTheme.ink }]}>{title}</Text>
+        <Text style={[styles.sourceSub, { color: colorTheme.ink2 }]}>{sub}</Text>
       </View>
-      <Icon name="chevronRight" size={18} color={colors.ink3} />
+      <Icon name="chevronRight" size={18} color={colorTheme.ink3} />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+  root: { flex: 1 },
   center: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
-  errorCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, marginTop: 16, backgroundColor: colors.redTint, borderColor: colors.redSoft },
+  errorCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, marginTop: 16 },
   errorText: { flex: 1, fontFamily: uiFont(600), fontSize: 13, color: '#b3261e' },
-  hint: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink3, textAlign: 'center', marginTop: 22, lineHeight: 17 },
+  hint: { fontFamily: uiFont(500), fontSize: 12, textAlign: 'center', marginTop: 22, lineHeight: 17 },
   source: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 13,
     padding: 15,
     borderRadius: radius.sm,
-    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.line,
   },
-  sourceIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.accentTint, alignItems: 'center', justifyContent: 'center' },
-  sourceTitle: { fontFamily: uiFont(700), fontSize: 15, color: colors.ink },
-  sourceSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 2 },
+  sourceIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  sourceTitle: { fontFamily: uiFont(700), fontSize: 15 },
+  sourceSub: { fontFamily: uiFont(500), fontSize: 12.5, marginTop: 2 },
 
-  label: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2, marginTop: 18, marginBottom: 9 },
+  label: { fontFamily: uiFont(600), fontSize: 12.5, marginTop: 18, marginBottom: 9 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
   chip: {
     flexDirection: 'row',
@@ -557,26 +571,21 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 999,
-    backgroundColor: colors.accentTint,
     borderWidth: 1,
-    borderColor: colors.accentSoft,
   },
-  chipText: { fontFamily: uiFont(600), fontSize: 13, color: colors.accentInk },
+  chipText: { fontFamily: uiFont(600), fontSize: 13 },
   addRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   nameInput: {
     flex: 1,
-    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.line,
     borderRadius: radius.sm,
     paddingHorizontal: 12,
     paddingVertical: 11,
     fontFamily: uiFont(600),
     fontSize: 14.5,
-    color: colors.ink,
   },
-  addBtn: { width: 44, height: 44, borderRadius: radius.sm, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
-  addBtnOff: { backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line },
+  addBtn: { width: 44, height: 44, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center' },
+  addBtnOff: { borderWidth: 1 },
   tableRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   tableChip: {
     flexDirection: 'row',
@@ -585,59 +594,54 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     paddingHorizontal: 11,
     borderRadius: 999,
-    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.line,
   },
-  tableChipSelf: { backgroundColor: colors.accentTint, borderColor: colors.accentSoft },
-  tableChipText: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink },
-  empty: { fontFamily: uiFont(500), fontSize: 13, color: colors.ink3, marginTop: 18, textAlign: 'center' },
+  tableChipSelf: {},
+  tableChipText: { fontFamily: uiFont(600), fontSize: 13 },
+  empty: { fontFamily: uiFont(500), fontSize: 13, marginTop: 18, textAlign: 'center' },
 
   itemRow: { paddingHorizontal: 14, paddingVertical: 12, gap: 9 },
-  divider: { borderTopWidth: 1, borderTopColor: colors.line2 },
+  divider: { borderTopWidth: 1 },
   itemHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  itemLabel: { flex: 1, fontFamily: uiFont(600), fontSize: 14, color: colors.ink },
-  itemAmount: { fontFamily: numFont(700), fontSize: 14, color: colors.ink },
+  itemLabel: { flex: 1, fontFamily: uiFont(600), fontSize: 14 },
+  itemAmount: { fontFamily: numFont(700), fontSize: 14 },
   avatarRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 7 },
   avatar: {
     minWidth: 32,
     height: 32,
     paddingHorizontal: 8,
     borderRadius: 16,
-    backgroundColor: colors.surface2,
     borderWidth: 1,
-    borderColor: colors.line,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarOn: { backgroundColor: colors.accent, borderColor: colors.accent },
-  avatarText: { fontFamily: uiFont(700), fontSize: 12, color: colors.ink2 },
+  avatarOn: {},
+  avatarText: { fontFamily: uiFont(700), fontSize: 12 },
   avatarTextOn: { color: colors.onAccent },
   allBtn: { paddingHorizontal: 9, paddingVertical: 7 },
-  allText: { fontFamily: uiFont(600), fontSize: 12, color: colors.accent },
-  allTextOn: { color: colors.ink3 },
-  unassigned: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.amber, marginTop: 9, lineHeight: 16 },
+  allText: { fontFamily: uiFont(600), fontSize: 12 },
+  unassigned: { fontFamily: uiFont(500), fontSize: 11.5, marginTop: 9, lineHeight: 16 },
 
   pctRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 12 },
-  pctLabel: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.ink },
-  pctNote: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink2, marginTop: 2 },
-  pctField: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: colors.surface2, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 8 },
-  pctInput: { width: 42, textAlign: 'right', fontFamily: numFont(700), fontSize: 14, color: colors.ink, paddingVertical: 7 },
-  pctSign: { fontFamily: numFont(600), fontSize: 13, color: colors.ink2 },
-  pctAdd: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: colors.accentTint, borderWidth: 1, borderColor: colors.accentSoft },
-  pctAddText: { fontFamily: uiFont(700), fontSize: 12, color: colors.accentInk },
+  pctLabel: { fontFamily: uiFont(700), fontSize: 13.5 },
+  pctNote: { fontFamily: uiFont(500), fontSize: 11, marginTop: 2 },
+  pctField: { flexDirection: 'row', alignItems: 'center', gap: 2, borderRadius: radius.sm, borderWidth: 1, paddingHorizontal: 8 },
+  pctInput: { width: 42, textAlign: 'right', fontFamily: numFont(700), fontSize: 14, paddingVertical: 7 },
+  pctSign: { fontFamily: numFont(600), fontSize: 13 },
+  pctAdd: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1 },
+  pctAddText: { fontFamily: uiFont(700), fontSize: 12 },
 
-  amountRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, paddingHorizontal: 14 },
-  rm: { fontFamily: numFont(600), fontSize: 18, color: colors.ink2 },
-  amountInput: { flex: 1, fontFamily: numFont(700), fontSize: 24, color: colors.ink, paddingVertical: 12 },
-  diffNote: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, marginTop: 8, lineHeight: 16 },
+  amountRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 14 },
+  rm: { fontFamily: numFont(600), fontSize: 18 },
+  amountInput: { flex: 1, fontFamily: numFont(700), fontSize: 24, paddingVertical: 12 },
+  diffNote: { fontFamily: uiFont(500), fontSize: 11.5, marginTop: 8, lineHeight: 16 },
 
   summary: { padding: 14, gap: 9, marginTop: 18 },
   summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  summaryName: { fontFamily: uiFont(600), fontSize: 13.5, color: colors.ink2 },
-  summaryNameSelf: { fontFamily: uiFont(700), color: colors.ink },
-  summaryValue: { fontFamily: numFont(600), fontSize: 14.5, color: colors.accent },
-  summaryValueSelf: { fontFamily: numFont(700), fontSize: 16, color: colors.ink },
+  summaryName: { fontFamily: uiFont(600), fontSize: 13.5 },
+  summaryNameSelf: { fontFamily: uiFont(700) },
+  summaryValue: { fontFamily: numFont(600), fontSize: 14.5 },
+  summaryValueSelf: { fontFamily: numFont(700), fontSize: 16 },
   error: { fontFamily: uiFont(600), fontSize: 12.5, color: '#b3261e', marginTop: 14, textAlign: 'center', lineHeight: 17 },
 
   footer: {
@@ -647,8 +651,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     paddingHorizontal: 18,
     paddingTop: 12,
-    backgroundColor: colors.bg,
     borderTopWidth: 1,
-    borderTopColor: colors.line2,
   },
 });

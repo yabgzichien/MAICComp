@@ -6,7 +6,9 @@
 // GlossaryModal.
 import React, { useRef } from 'react';
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useAccent } from '../state/accent';
 import { useAlertHost } from '../state/alertHost';
+import { useThemeColors } from '../state/colorScheme';
 import { colors, radius, shadowCard, uiFont } from '../theme';
 import { Icon } from './Icon';
 
@@ -16,6 +18,8 @@ export function AppAlertModal() {
   // Guards a fast double-tap on the confirm button from running onConfirm twice (same class of
   // bug as the passport send-button spam fix): a ref flips synchronously, state doesn't.
   const confirmingRef = useRef(false);
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
 
   if (!request) return <Modal visible={false} transparent />;
 
@@ -38,34 +42,34 @@ export function AppAlertModal() {
     <Modal visible transparent animationType="fade" onRequestClose={dismiss}>
       <Pressable style={styles.backdrop} onPress={busy ? undefined : dismiss} />
       <View style={styles.center} pointerEvents="box-none">
-        <View style={styles.card}>
-          <View style={[styles.iconCircle, destructive && styles.iconCircleDanger]}>
-            <Icon name={destructive ? 'alert' : 'check'} size={18} color={destructive ? colors.red : colors.accent} stroke={2.4} />
+        <View style={[styles.card, { backgroundColor: colorTheme.surface }]}>
+          <View style={[styles.iconCircle, { backgroundColor: theme.accentSoft }, destructive && [styles.iconCircleDanger, { backgroundColor: colorTheme.red + '1a' }]]}>
+            <Icon name={destructive ? 'alert' : 'check'} size={18} color={destructive ? colorTheme.red : theme.accent} stroke={2.4} />
           </View>
-          <Text style={styles.title}>{request.title}</Text>
-          {request.message ? <Text style={styles.message}>{request.message}</Text> : null}
+          <Text style={[styles.title, { color: colorTheme.ink }]}>{request.title}</Text>
+          {request.message ? <Text style={[styles.message, { color: colorTheme.ink2 }]}>{request.message}</Text> : null}
 
           {request.kind === 'confirm' ? (
             <View style={styles.row}>
               <Pressable
                 onPress={dismiss}
                 disabled={busy}
-                style={({ pressed }) => [styles.btn, styles.btnCancel, (pressed || busy) && { opacity: 0.85 }]}
+                style={({ pressed }) => [styles.btn, styles.btnCancel, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line }, (pressed || busy) && { opacity: 0.85 }]}
                 accessibilityRole="button"
               >
-                <Text style={styles.btnCancelText}>Cancel</Text>
+                <Text style={[styles.btnCancelText, { color: colorTheme.ink2 }]}>Cancel</Text>
               </Pressable>
               <Pressable
                 onPress={handleConfirm}
                 disabled={busy}
-                style={({ pressed }) => [styles.btn, styles.btnDanger, (pressed || busy) && { opacity: 0.9 }]}
+                style={({ pressed }) => [styles.btn, styles.btnDanger, { backgroundColor: colorTheme.red }, (pressed || busy) && { opacity: 0.9 }]}
                 accessibilityRole="button"
               >
                 {busy ? <ActivityIndicator size="small" color={colors.onAccent} /> : <Text style={styles.btnDangerText}>{request.confirmLabel}</Text>}
               </Pressable>
             </View>
           ) : (
-            <Pressable onPress={dismiss} style={({ pressed }) => [styles.btn, styles.btnOk, pressed && { opacity: 0.9 }]} accessibilityRole="button">
+            <Pressable onPress={dismiss} style={({ pressed }) => [styles.btn, styles.btnOk, { backgroundColor: theme.accentInk }, pressed && { opacity: 0.9 }]} accessibilityRole="button">
               <Text style={styles.btnOkText}>OK</Text>
             </Pressable>
           )}
@@ -81,7 +85,6 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: colors.surface,
     borderRadius: radius.md,
     padding: 22,
     alignItems: 'center',
@@ -91,20 +94,19 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.accentSoft,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
   },
-  iconCircleDanger: { backgroundColor: colors.red + '1a' },
-  title: { fontFamily: uiFont(800), fontSize: 17, color: colors.ink, textAlign: 'center', marginBottom: 6 },
-  message: { fontFamily: uiFont(500), fontSize: 13, color: colors.ink2, textAlign: 'center', lineHeight: 19, marginBottom: 18 },
+  iconCircleDanger: {},
+  title: { fontFamily: uiFont(800), fontSize: 17, textAlign: 'center', marginBottom: 6 },
+  message: { fontFamily: uiFont(500), fontSize: 13, textAlign: 'center', lineHeight: 19, marginBottom: 18 },
   row: { flexDirection: 'row', gap: 10, width: '100%', marginTop: 4 },
   btn: { flex: 1, height: 46, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
-  btnCancel: { backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line },
-  btnCancelText: { fontFamily: uiFont(700), fontSize: 14, color: colors.ink2 },
-  btnDanger: { backgroundColor: colors.red },
+  btnCancel: { borderWidth: 1 },
+  btnCancelText: { fontFamily: uiFont(700), fontSize: 14 },
+  btnDanger: {},
   btnDangerText: { fontFamily: uiFont(700), fontSize: 14, color: colors.onAccent },
-  btnOk: { backgroundColor: colors.accentInk, width: '100%', marginTop: 4 },
+  btnOk: { width: '100%', marginTop: 4 },
   btnOkText: { fontFamily: uiFont(700), fontSize: 14, color: colors.onAccent },
 });

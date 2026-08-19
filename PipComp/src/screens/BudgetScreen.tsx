@@ -19,8 +19,10 @@ import { fmt } from '../lib/format';
 import type { Category } from '../lib/types';
 import { getLLM, llmErrorMessage } from '../llm';
 import { buildBudgetPrompt, COACH_SYSTEM_PROMPT } from '../llm/budgetPrompt';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
 import { useAppData } from '../state/store';
-import { colors, uiFont } from '../theme';
+import { uiFont } from '../theme';
 import { BudgetWizard } from './BudgetWizard';
 
 const fallback: Category = { id: 'other', label: 'Other', icon: 'dots', hue: 220, kind: 'expense', isDefault: true };
@@ -28,6 +30,8 @@ const STATUS_COLOR = { ok: '#1f8a5b', warn: '#d98a00', over: '#c5402f' } as cons
 
 export function BudgetScreen({ onBack, onOpenRecap = () => {} }: { onBack: () => void; onOpenRecap?: () => void }) {
   const insets = useSafeAreaInsets();
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const {
     transactions,
     catById,
@@ -113,7 +117,7 @@ export function BudgetScreen({ onBack, onOpenRecap = () => {} }: { onBack: () =>
   };
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: colorTheme.bg }]}>
       <View style={{ paddingTop: insets.top + 4 }}>
         <TopBar title="Budget" onBack={onBack} />
       </View>
@@ -133,28 +137,28 @@ export function BudgetScreen({ onBack, onOpenRecap = () => {} }: { onBack: () =>
                 <Eyebrow>{left < 0 ? 'Over' : 'Unallocated'}</Eyebrow>
                 {left >= 0 && <InfoButton entry="unallocated" />}
               </View>
-              <Amount value={Math.abs(left)} size={22} weight={700} color={left < 0 ? STATUS_COLOR.over : colors.accent} />
+              <Amount value={Math.abs(left)} size={22} weight={700} color={left < 0 ? STATUS_COLOR.over : theme.accent} />
             </View>
           </View>
           <View style={{ marginTop: 14 }}>
             <ProgressTrack pct={expectedIncome > 0 ? (allocated / expectedIncome) * 100 : 0} />
-            <Text style={styles.muted}>Allocated RM {fmt(allocated)} of RM {fmt(expectedIncome)}</Text>
+            <Text style={[styles.muted, { color: colorTheme.ink2 }]}>Allocated RM {fmt(allocated)} of RM {fmt(expectedIncome)}</Text>
           </View>
         </Card>
 
         {/* Ask Pip */}
-        <Card style={styles.adviceCard}>
+        <Card style={[styles.adviceCard, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]}>
           <View style={styles.adviceHead}>
             <Pip size={34} expr="idle" />
-            <Text style={styles.adviceTitle}>Pip's budget tip</Text>
+            <Text style={[styles.adviceTitle, { color: theme.accentInk }]}>Pip's budget tip</Text>
           </View>
-          {advice ? <Text style={styles.adviceText}>{advice}</Text> : <Text style={styles.muted}>Tap for a quick take on your plan.</Text>}
+          {advice ? <Text style={[styles.adviceText, { color: colorTheme.ink }]}>{advice}</Text> : <Text style={[styles.muted, { color: colorTheme.ink2 }]}>Tap for a quick take on your plan.</Text>}
           {adviceErr ? <Text style={[styles.muted, { color: STATUS_COLOR.over }]}>{adviceErr}</Text> : null}
-          <Pressable onPress={askPip} style={styles.askBtn} disabled={adviceBusy}>
-            {adviceBusy ? <ActivityIndicator size="small" color={colors.accent} /> : (
+          <Pressable onPress={askPip} style={[styles.askBtn, { backgroundColor: colorTheme.surface, borderColor: theme.accentSoft }]} disabled={adviceBusy}>
+            {adviceBusy ? <ActivityIndicator size="small" color={theme.accent} /> : (
               <>
-                <Icon name="sparkles" size={15} color={colors.accent} />
-                <Text style={styles.askText}>{advice ? 'Refresh' : 'Ask Pip'}</Text>
+                <Icon name="sparkles" size={15} color={theme.accent} />
+                <Text style={[styles.askText, { color: theme.accent }]}>{advice ? 'Refresh' : 'Ask Pip'}</Text>
               </>
             )}
           </Pressable>
@@ -177,13 +181,19 @@ export function BudgetScreen({ onBack, onOpenRecap = () => {} }: { onBack: () =>
           onSetTarget={(amount) => void setSavingsTarget(amount)}
         />
 
-        <Pressable onPress={onOpenRecap} style={({ pressed }) => [styles.recapLink, { opacity: pressed ? 0.9 : 1 }]}>
-          <Icon name="trending" size={18} color={colors.accent} />
+        <Pressable
+          onPress={onOpenRecap}
+          style={({ pressed }) => [
+            styles.recapLink,
+            { backgroundColor: colorTheme.surface, borderColor: colorTheme.line2, opacity: pressed ? 0.9 : 1 },
+          ]}
+        >
+          <Icon name="trending" size={18} color={theme.accent} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.recapTitle}>Monthly recap</Text>
-            <Text style={styles.recapSub}>See how each month stacked up against target.</Text>
+            <Text style={[styles.recapTitle, { color: colorTheme.ink }]}>Monthly recap</Text>
+            <Text style={[styles.recapSub, { color: colorTheme.ink2 }]}>See how each month stacked up against target.</Text>
           </View>
-          <Icon name="chevronRight" size={17} color={colors.ink3} />
+          <Icon name="chevronRight" size={17} color={colorTheme.ink3} />
         </Pressable>
 
         <View style={{ marginTop: 18 }}>
@@ -209,24 +219,24 @@ export function BudgetScreen({ onBack, onOpenRecap = () => {} }: { onBack: () =>
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+  root: { flex: 1 },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  muted: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 6 },
-  adviceCard: { padding: 16, marginTop: 14, backgroundColor: colors.accentTint, borderColor: colors.accentSoft },
+  muted: { fontFamily: uiFont(500), fontSize: 12.5, marginTop: 6 },
+  adviceCard: { padding: 16, marginTop: 14 },
   adviceHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  adviceTitle: { fontFamily: uiFont(700), fontSize: 14.5, color: colors.accentInk },
-  adviceText: { fontFamily: uiFont(500), fontSize: 14, lineHeight: 20, color: colors.ink },
-  askBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 12, paddingVertical: 10, borderRadius: 999, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.accentSoft },
-  askText: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.accent },
+  adviceTitle: { fontFamily: uiFont(700), fontSize: 14.5 },
+  adviceText: { fontFamily: uiFont(500), fontSize: 14, lineHeight: 20 },
+  askBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 12, paddingVertical: 10, borderRadius: 999, borderWidth: 1 },
+  askText: { fontFamily: uiFont(700), fontSize: 13.5 },
   catRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 15, paddingVertical: 12 },
-  divider: { borderTopWidth: 1, borderTopColor: colors.line2 },
-  catLabel: { fontFamily: uiFont(600), fontSize: 14.5, color: colors.ink, flex: 1 },
-  catNums: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2 },
-  barTrack: { height: 6, borderRadius: 999, backgroundColor: colors.line, overflow: 'hidden', marginTop: 7 },
-  remaining: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, marginTop: 4 },
-  unbudgetedIcon: { width: 36, height: 36, borderRadius: 11, backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center' },
-  recapLink: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 18, padding: 16, backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.line2 },
-  recapTitle: { fontFamily: uiFont(700), fontSize: 15, color: colors.ink },
-  recapSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 1 },
+  divider: { borderTopWidth: 1 },
+  catLabel: { fontFamily: uiFont(600), fontSize: 14.5, flex: 1 },
+  catNums: { fontFamily: uiFont(600), fontSize: 12.5 },
+  barTrack: { height: 6, borderRadius: 999, overflow: 'hidden', marginTop: 7 },
+  remaining: { fontFamily: uiFont(500), fontSize: 11.5, marginTop: 4 },
+  unbudgetedIcon: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  recapLink: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 18, padding: 16, borderRadius: 16, borderWidth: 1 },
+  recapTitle: { fontFamily: uiFont(700), fontSize: 15 },
+  recapSub: { fontFamily: uiFont(500), fontSize: 12.5, marginTop: 1 },
 });

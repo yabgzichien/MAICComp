@@ -78,6 +78,10 @@ describe('assignImported', () => {
     const out = assignImported([item({ merchant: 'Unknown Shop', categoryHint: 'Groceries' })], {}, cats, catById);
     expect(out).toEqual(['groceries']);
   });
+  it('correctly maps category hints when merchant is empty (e.g. from existing financial tracker)', () => {
+    const out = assignImported([item({ merchant: '', categoryHint: 'Groceries' })], {}, cats, catById);
+    expect(out).toEqual(['groceries']);
+  });
   it('ignores a learned category whose kind mismatches the item, using the fallback', () => {
     const memory: MemoryMap = { acme: 'dining' }; // expense category on an income row
     const out = assignImported([item({ merchant: 'Acme', type: 'income' })], memory, cats, catById);

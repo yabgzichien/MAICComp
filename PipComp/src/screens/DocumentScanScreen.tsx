@@ -10,7 +10,9 @@ import { Icon } from '../components/Icon';
 import { llmErrorMessage } from '../llm';
 import type { IdentityExtraction } from '../llm/ekycPrompt';
 import { scanIdentityImage } from '../ekyc/scan';
+import { useAccent } from '../state/accent';
 import { colors, uiFont } from '../theme';
+import { useThemeColors } from '../state/colorScheme';
 
 const DIM = 'rgba(0,0,0,0.55)';
 const CARD_ASPECT = 1.586; // ID-1 / CR80 card ratio (85.6mm × 54mm)
@@ -23,6 +25,8 @@ export function DocumentScanScreen({
   onResult: (r: IdentityExtraction) => void;
 }) {
   const insets = useSafeAreaInsets();
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const { width } = useWindowDimensions();
   const [permission, requestPermission] = useCameraPermissions();
   const camRef = useRef<CameraView>(null);
@@ -49,19 +53,19 @@ export function DocumentScanScreen({
 
   // Permission states
   if (!permission) {
-    return <View style={styles.permRoot}><ActivityIndicator color={colors.accent} /></View>;
+    return <View style={[styles.permRoot, { backgroundColor: colorTheme.bg }]}><ActivityIndicator color={theme.accent} /></View>;
   }
   if (!permission.granted) {
     return (
-      <View style={[styles.permRoot, { padding: 24 }]}>
-        <Icon name="alert" size={30} color={colors.accent} />
-        <Text style={styles.permTitle}>Camera access needed</Text>
-        <Text style={styles.permBody}>Allow camera access to scan your IC or passport.</Text>
-        <Pressable style={styles.permBtn} onPress={requestPermission}>
+      <View style={[styles.permRoot, { backgroundColor: colorTheme.bg, padding: 24 }]}>
+        <Icon name="alert" size={30} color={theme.accent} />
+        <Text style={[styles.permTitle, { color: colorTheme.ink }]}>Camera access needed</Text>
+        <Text style={[styles.permBody, { color: colorTheme.ink2 }]}>Allow camera access to scan your IC or passport.</Text>
+        <Pressable style={[styles.permBtn, { backgroundColor: theme.accentInk }]} onPress={requestPermission}>
           <Text style={styles.permBtnText}>Grant access</Text>
         </Pressable>
         <Pressable style={styles.permCancel} onPress={onCancel}>
-          <Text style={styles.permCancelText}>Enter details manually instead</Text>
+          <Text style={[styles.permCancelText, { color: colorTheme.ink2 }]}>Enter details manually instead</Text>
         </Pressable>
       </View>
     );
@@ -77,10 +81,10 @@ export function DocumentScanScreen({
         <View style={{ height: boxH, flexDirection: 'row' }}>
           <View style={[styles.dim, { flex: 1 }]} />
           <View style={[styles.frame, { width: boxW, height: boxH }]}>
-            <View style={[styles.corner, styles.tl]} />
-            <View style={[styles.corner, styles.tr]} />
-            <View style={[styles.corner, styles.bl]} />
-            <View style={[styles.corner, styles.br]} />
+            <View style={[styles.corner, { borderColor: theme.accent }, styles.tl]} />
+            <View style={[styles.corner, { borderColor: theme.accent }, styles.tr]} />
+            <View style={[styles.corner, { borderColor: theme.accent }, styles.bl]} />
+            <View style={[styles.corner, { borderColor: theme.accent }, styles.br]} />
           </View>
           <View style={[styles.dim, { flex: 1 }]} />
         </View>
@@ -88,7 +92,7 @@ export function DocumentScanScreen({
           <Text style={styles.guidance}>Place your IC or passport inside the frame</Text>
           {error !== '' && <Text style={styles.error}>{error}</Text>}
           <Pressable style={styles.shutter} onPress={capture} disabled={busy}>
-            {busy ? <ActivityIndicator color={colors.accent} /> : <View style={styles.shutterInner} />}
+            {busy ? <ActivityIndicator color={theme.accent} /> : <View style={styles.shutterInner} />}
           </Pressable>
           {busy && <Text style={styles.reading}>Reading document…</Text>}
         </View>
@@ -108,7 +112,7 @@ const styles = StyleSheet.create({
   dim: { backgroundColor: DIM },
   bottom: { alignItems: 'center', paddingTop: 26 },
   frame: { borderColor: ACCENT, borderWidth: 2, borderRadius: 14, backgroundColor: 'transparent' },
-  corner: { position: 'absolute', width: 22, height: 22, borderColor: colors.accent, borderWidth: 4 },
+  corner: { position: 'absolute', width: 22, height: 22, borderWidth: 4 },
   tl: { top: -2, left: -2, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 14 },
   tr: { top: -2, right: -2, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 14 },
   bl: { bottom: -2, left: -2, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 14 },
@@ -127,11 +131,11 @@ const styles = StyleSheet.create({
   },
 
   // Permission states
-  permRoot: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', gap: 10 },
-  permTitle: { fontFamily: uiFont(700), fontSize: 17, color: colors.ink, marginTop: 6 },
-  permBody: { fontFamily: uiFont(500), fontSize: 13.5, color: colors.ink2, textAlign: 'center', lineHeight: 19 },
-  permBtn: { height: 48, borderRadius: 999, backgroundColor: colors.accentInk, alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch', marginTop: 14 },
+  permRoot: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
+  permTitle: { fontFamily: uiFont(700), fontSize: 17, marginTop: 6 },
+  permBody: { fontFamily: uiFont(500), fontSize: 13.5, textAlign: 'center', lineHeight: 19 },
+  permBtn: { height: 48, borderRadius: 999, alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch', marginTop: 14 },
   permBtnText: { fontFamily: uiFont(700), fontSize: 15, color: colors.onAccent },
   permCancel: { marginTop: 14 },
-  permCancelText: { fontFamily: uiFont(600), fontSize: 13.5, color: colors.ink2 },
+  permCancelText: { fontFamily: uiFont(600), fontSize: 13.5 },
 });

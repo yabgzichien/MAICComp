@@ -16,6 +16,8 @@ import type { Repayment, RepaymentStatus } from '../db/loansRepo';
 import { useAppData, type PendingOffer } from '../state/store';
 import { useLenderSyncPoll } from '../state/useLenderSyncPoll';
 import { useCreditProfile } from '../state/useCreditProfile';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
 import { colors, uiFont } from '../theme';
 
 const GREEN = '#1f8a5b';
@@ -25,11 +27,11 @@ const AMBER = '#a3791f';
 // for text-on-light, not as a button background under white text).
 const AMBER_BTN = '#7c5a15';
 
-function repaymentStatusColor(s: RepaymentStatus): string {
+function repaymentStatusColor(s: RepaymentStatus, colorTheme: ReturnType<typeof useThemeColors>): string {
   if (s === 'paid') return GREEN;
   if (s === 'late') return AMBER;
   if (s === 'missed' || s === 'defaulted') return RED;
-  return colors.ink3;
+  return colorTheme.ink3;
 }
 
 function repaymentStatusLabel(s: RepaymentStatus): string {
@@ -43,23 +45,25 @@ function repaymentStatusLabel(s: RepaymentStatus): string {
 /** One "package" card per loan (My Financing polish, 2026-07-19): lender + purpose + progress,
  *  never the raw per-installment list  tapping it is how you reach that loan's own schedule. */
 function LoanPackageCard({ pkg, onPress }: { pkg: LoanPackage; onPress: () => void }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const pct = pkg.tenorMonths > 0 ? (pkg.paidCount / pkg.tenorMonths) * 100 : 0;
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.pkgCard, pressed && { opacity: 0.92 }]}
+      style={({ pressed }) => [styles.pkgCard, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line2 }, pressed && { opacity: 0.92 }]}
       accessibilityRole="button"
       accessibilityLabel={`${pkg.lenderLabel}, ${pkg.purposeLabel}, open full schedule`}
     >
       <View style={styles.pkgRow}>
-        <View style={styles.lenderBadge}>
-          <Icon name="wallet" size={18} color={colors.accentInk} />
+        <View style={[styles.lenderBadge, { backgroundColor: theme.accentTint }]}>
+          <Icon name="wallet" size={18} color={theme.accentInk} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.pkgLender} numberOfLines={1}>{pkg.lenderLabel}</Text>
-          <Text style={styles.pkgPurpose} numberOfLines={1}>{pkg.purposeLabel}</Text>
+          <Text style={[styles.pkgLender, { color: colorTheme.ink }]} numberOfLines={1}>{pkg.lenderLabel}</Text>
+          <Text style={[styles.pkgPurpose, { color: colorTheme.ink2 }]} numberOfLines={1}>{pkg.purposeLabel}</Text>
         </View>
-        <Icon name="chevronRight" size={16} color={colors.ink3} />
+        <Icon name="chevronRight" size={16} color={colorTheme.ink3} />
       </View>
 
       {pkg.status === 'defaulted' ? (
@@ -72,19 +76,19 @@ function LoanPackageCard({ pkg, onPress }: { pkg: LoanPackage; onPress: () => vo
       ) : pkg.status === 'settled' ? (
         <View style={styles.pkgFooterRow}>
           <Amount value={pkg.principal} size={16} />
-          <View style={[styles.statusPill, { backgroundColor: colors.accentTint }]}>
-            <Text style={[styles.statusPillText, { color: colors.accentInk }]}>Paid off</Text>
+          <View style={[styles.statusPill, { backgroundColor: theme.accentTint }]}>
+            <Text style={[styles.statusPillText, { color: theme.accentInk }]}>Paid off</Text>
           </View>
         </View>
       ) : (
         <>
           <View style={styles.pkgFooterRow}>
             <Amount value={pkg.outstandingPrincipal} size={16} />
-            <Text style={styles.pkgMuted}>outstanding</Text>
+            <Text style={[styles.pkgMuted, { color: colorTheme.ink2 }]}>outstanding</Text>
           </View>
           <View style={{ marginTop: 8 }}>
             <ProgressTrack pct={pct} height={5} />
-            <Text style={styles.pkgMuted}>
+            <Text style={[styles.pkgMuted, { color: colorTheme.ink2 }]}>
               {pkg.paidCount} of {pkg.tenorMonths} paid · RM{Math.round(pkg.monthlyInstallment).toLocaleString('en-MY')}/mo
             </Text>
           </View>
@@ -121,6 +125,7 @@ function OfferCard({
   activeTourAnchor: string | null;
 }) {
   const { offer, lender } = p;
+  const colorTheme = useThemeColors();
   // The lender's own tenor when they published one; only fall back to a tier lookup for
   // offers made before that shipped.
   const tenorMonths = offer.tenorMonths ?? productTenorFor(offer, lender.products);
@@ -130,35 +135,35 @@ function OfferCard({
       <Card style={styles.offerCard}>
         <View style={styles.offerHeader}>
           <View style={[styles.offerDot, { backgroundColor: lender.brandColor }]} />
-          <Text style={styles.offerLender} numberOfLines={1}>{lender.name}</Text>
+          <Text style={[styles.offerLender, { color: colorTheme.ink }]} numberOfLines={1}>{lender.name}</Text>
           <View style={styles.offerPill}>
             <Text style={styles.offerPillText}>Approved</Text>
           </View>
         </View>
-        <Text style={styles.offerLead}>
+        <Text style={[styles.offerLead, { color: colorTheme.ink2 }]}>
           {lender.name} has approved you. It&apos;s yours to take or leave, and nothing is borrowed until you accept.
         </Text>
 
         <View style={styles.offerFigures}>
           <View>
-            <Text style={styles.offerFigureLabel}>You&apos;d receive</Text>
+            <Text style={[styles.offerFigureLabel, { color: colorTheme.ink2 }]}>You&apos;d receive</Text>
             <Amount value={offer.maxAmount} size={20} />
           </View>
           <View>
-            <Text style={styles.offerFigureLabel}>Repayment / mo</Text>
+            <Text style={[styles.offerFigureLabel, { color: colorTheme.ink2 }]}>Repayment / mo</Text>
             <Amount value={offer.installment} size={20} />
           </View>
         </View>
         {tenorMonths > 0 && (
-          <Text style={styles.offerTerms}>
+          <Text style={[styles.offerTerms, { color: colorTheme.ink2 }]}>
             {tenorMonths} monthly repayments · RM{Math.round(offer.installment * tenorMonths).toLocaleString('en-MY')} repaid in total
           </Text>
         )}
         {offer.apr != null && (
-          <Text style={styles.offerApr}>{(offer.apr * 100).toFixed(1)}% APR</Text>
+          <Text style={[styles.offerApr, { color: colorTheme.ink2 }]}>{(offer.apr * 100).toFixed(1)}% APR</Text>
         )}
         {offer.apr != null && offer.discountBps != null && offer.discountBps > 0 && (
-          <Text style={styles.offerDiscount}>
+          <Text style={[styles.offerDiscount, { color: colorTheme.ink3 }]}>
             {(offer.discountBps / 100).toFixed(1)} percentage points below {lender.name}&apos;s standard {((offer.apr + offer.discountBps / 10000) * 100).toFixed(1)}% rate
           </Text>
         )}
@@ -183,7 +188,7 @@ function OfferCard({
           <Pressable
             onPress={onDecline}
             disabled={declineDisabled}
-            style={({ pressed }) => [styles.offerDeclineBtn, (declineDisabled || pressed) && { opacity: 0.5 }]}
+            style={({ pressed }) => [styles.offerDeclineBtn, { borderColor: colorTheme.line }, (declineDisabled || pressed) && { opacity: 0.5 }]}
             accessibilityRole="button"
             accessibilityState={{ disabled: declineDisabled }}
             accessibilityLabel={
@@ -192,7 +197,7 @@ function OfferCard({
                 : `Turn down ${lender.name}'s offer`
             }
           >
-            <Text style={styles.offerDeclineText}>No thanks</Text>
+            <Text style={[styles.offerDeclineText, { color: colorTheme.ink2 }]}>No thanks</Text>
           </Pressable>
         </View>
       </Card>
@@ -220,6 +225,8 @@ export function LoansScreen({
   onOpenCoach?: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const {
     kyc,
     loanProducts,
@@ -387,19 +394,19 @@ export function LoansScreen({
   // eKYC gate: applying for financing requires a verified identity.
   if (!kyc) {
     return (
-      <View style={styles.root}>
+      <View style={[styles.root, { backgroundColor: colorTheme.bg }]}>
         <View style={{ paddingTop: insets.top + 4 }}>
           <TopBar title="My Financing" onBack={onBack} />
         </View>
         <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: insets.bottom + 30 }}>
           <Card style={styles.gateCard}>
             <Icon name="alert" size={30} color="#a05c00" />
-            <Text style={styles.gateTitle}>Verify your identity to borrow</Text>
-            <Text style={styles.gateBody}>
+            <Text style={[styles.gateTitle, { color: colorTheme.ink }]}>Verify your identity to borrow</Text>
+            <Text style={[styles.gateBody, { color: colorTheme.ink2 }]}>
               Financing is offered against a verified identity. Complete a one-time identity
               check to see your offers and apply.
             </Text>
-            <Pressable style={styles.gateBtn} onPress={onOpenKyc}>
+            <Pressable style={[styles.gateBtn, { backgroundColor: theme.accentInk }]} onPress={onOpenKyc}>
               <Text style={styles.gateBtnText}>Verify identity</Text>
             </Pressable>
           </Card>
@@ -414,29 +421,29 @@ export function LoansScreen({
     const onTime = pkg.repayments.filter((r) => r.status === 'paid').length;
     const totalResolved = pkg.paidCount + pkg.missedCount;
     return (
-      <View style={styles.root}>
+      <View style={[styles.root, { backgroundColor: colorTheme.bg }]}>
         <View style={{ paddingTop: insets.top + 4 }}>
           <TopBar title={pkg.lenderLabel} onBack={() => setSelectedId(null)} />
         </View>
         <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: insets.bottom + 30 }} showsVerticalScrollIndicator={false}>
           <Card style={{ padding: 16 }}>
             <View style={styles.pkgRow}>
-              <View style={styles.lenderBadge}>
-                <Icon name="wallet" size={20} color={colors.accentInk} />
+              <View style={[styles.lenderBadge, { backgroundColor: theme.accentTint }]}>
+                <Icon name="wallet" size={20} color={theme.accentInk} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.detailTitle}>{pkg.productLabel}</Text>
-                <Text style={styles.pkgPurpose}>{pkg.purposeLabel} · {pkg.lenderLabel}</Text>
+                <Text style={[styles.detailTitle, { color: colorTheme.ink }]}>{pkg.productLabel}</Text>
+                <Text style={[styles.pkgPurpose, { color: colorTheme.ink2 }]}>{pkg.purposeLabel} · {pkg.lenderLabel}</Text>
               </View>
             </View>
             <View style={{ marginTop: 16 }}>
               <Amount value={pkg.principal} size={22} />
-              <Text style={styles.muted}>Principal disbursed</Text>
+              <Text style={[styles.muted, { color: colorTheme.ink2 }]}>Principal disbursed</Text>
             </View>
             {pkg.tenorMonths > 0 && (
               <View style={{ marginTop: 14 }}>
                 <ProgressTrack pct={(pkg.paidCount / pkg.tenorMonths) * 100} />
-                <Text style={[styles.muted, { marginTop: 6 }]}>
+                <Text style={[styles.muted, { marginTop: 6, color: colorTheme.ink2 }]}>
                   {pkg.paidCount} of {pkg.tenorMonths} instalments paid · RM{Math.round(pkg.monthlyInstallment).toLocaleString('en-MY')}/mo
                 </Text>
               </View>
@@ -476,7 +483,7 @@ export function LoansScreen({
                     <Text style={[styles.standingTitle, { color: RED }]}>
                       {pkgOverdue.length} month{pkgOverdue.length > 1 ? 's' : ''} behind — RM{Math.round(amountOverdue).toLocaleString('en-MY')} overdue
                     </Text>
-                    <Text style={styles.standingBody}>
+                    <Text style={[styles.standingBody, { color: colorTheme.ink2 }]}>
                       Paying this off restores your loan access and rate discount today. This event stays on
                       your record for 12 months even after it's cleared.
                     </Text>
@@ -501,10 +508,10 @@ export function LoansScreen({
               </View>
               <Card style={{ overflow: 'hidden' }}>
                 {pkg.repayments.map((r, idx) => (
-                  <View key={r.id} style={[styles.repayRow, idx > 0 && styles.repayDivider]}>
+                  <View key={r.id} style={[styles.repayRow, idx > 0 && [styles.repayDivider, { borderTopColor: colorTheme.line2 }]]}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.repayDate}>Due {shortDate(r.dueDate)}</Text>
-                      <Text style={[styles.repayStatus, { color: repaymentStatusColor(r.status) }]}>
+                      <Text style={[styles.repayDate, { color: colorTheme.ink }]}>Due {shortDate(r.dueDate)}</Text>
+                      <Text style={[styles.repayStatus, { color: repaymentStatusColor(r.status, colorTheme) }]}>
                         {repaymentStatusLabel(r.status)}
                         {r.paidOn ? ` · ${shortDate(r.paidOn)}` : ''}
                       </Text>
@@ -513,7 +520,7 @@ export function LoansScreen({
                   </View>
                 ))}
               </Card>
-              <Text style={styles.muted}>
+              <Text style={[styles.muted, { color: colorTheme.ink2 }]}>
                 Track record on this loan: {onTime} of {totalResolved} repayments on time.
               </Text>
             </>
@@ -523,15 +530,15 @@ export function LoansScreen({
           {pkg.status === 'ongoing' && (
             <>
               <Eyebrow style={{ marginTop: 22, marginBottom: 10 }}>Demo beats</Eyebrow>
-              <Card style={[styles.demoCard, { borderColor: colors.accentSoft, backgroundColor: colors.accentTint }]}>
+              <Card style={[styles.demoCard, { borderColor: theme.accentSoft, backgroundColor: theme.accentTint }]}>
                 <View style={styles.demoBadgeRow}>
-                  <View style={styles.demoBadge}>
-                    <Icon name="sparkles" size={12} color={colors.accentInk} />
-                    <Text style={styles.demoBadgeText}>Demo</Text>
+                  <View style={[styles.demoBadge, { backgroundColor: theme.accentSoft }]}>
+                    <Icon name="sparkles" size={12} color={theme.accentInk} />
+                    <Text style={[styles.demoBadgeText, { color: theme.accentInk }]}>Demo</Text>
                   </View>
-                  <Text style={styles.demoTitle}>Simulate on-time repayment → score rises</Text>
+                  <Text style={[styles.demoTitle, { color: colorTheme.ink }]}>Simulate on-time repayment → score rises</Text>
                 </View>
-                <Text style={styles.demoBody}>
+                <Text style={[styles.demoBody, { color: colorTheme.ink2 }]}>
                   {pkg.nextDue
                     ? `Mark your next scheduled repayment (due ${shortDate(pkg.nextDue.dueDate)}, ${'RM' + Math.round(pkg.nextDue.amount).toLocaleString('en-MY')}) as paid on time. Your repayment-history factor, and your Pip Score. Should move. Re-open Credit to confirm.`
                     : 'All scheduled repayments are settled. Re-open Credit to see how your track record moved your Pip Score.'}
@@ -539,7 +546,7 @@ export function LoansScreen({
                 {pkg.nextDue && (
                   <Pressable
                     onPress={() => simulateOnTimeRepayment(pkg.nextDue!)}
-                    style={[styles.applyBtn, { backgroundColor: colors.accentInk }]}
+                    style={[styles.applyBtn, { backgroundColor: theme.accentInk }]}
                     disabled={repayBusy === pkg.nextDue.id}
                   >
                     {repayBusy === pkg.nextDue.id ? (
@@ -552,7 +559,7 @@ export function LoansScreen({
                     )}
                   </Pressable>
                 )}
-                {repayMsg ? <Text style={[styles.muted, { marginTop: 10 }]}>{repayMsg}</Text> : null}
+                {repayMsg ? <Text style={[styles.muted, { marginTop: 10, color: colorTheme.ink2 }]}>{repayMsg}</Text> : null}
                 {repayError ? <Text style={[styles.muted, { marginTop: 10, color: RED }]}>{repayError}</Text> : null}
               </Card>
 
@@ -562,9 +569,9 @@ export function LoansScreen({
                     <Icon name="alert" size={12} color={AMBER} />
                     <Text style={[styles.demoBadgeText, { color: AMBER }]}>Demo</Text>
                   </View>
-                  <Text style={styles.demoTitle}>Simulate a missed payment → score drops</Text>
+                  <Text style={[styles.demoTitle, { color: colorTheme.ink }]}>Simulate a missed payment → score drops</Text>
                 </View>
-                <Text style={styles.demoBody}>
+                <Text style={[styles.demoBody, { color: colorTheme.ink2 }]}>
                   {pkg.nextDue
                     ? 'Skip your next installment. It dents your track record (and Pip Score) without paying down the loan, which is the opposite of an on-time payment. Re-open Credit to confirm.'
                     : 'No scheduled installments left to miss.'}
@@ -585,7 +592,7 @@ export function LoansScreen({
                     )}
                   </Pressable>
                 )}
-                {missMsg ? <Text style={[styles.muted, { marginTop: 10 }]}>{missMsg}</Text> : null}
+                {missMsg ? <Text style={[styles.muted, { marginTop: 10, color: colorTheme.ink2 }]}>{missMsg}</Text> : null}
                 {missError ? <Text style={[styles.muted, { marginTop: 10, color: RED }]}>{missError}</Text> : null}
               </Card>
 
@@ -595,9 +602,9 @@ export function LoansScreen({
                     <Icon name="alert" size={12} color={RED} />
                     <Text style={[styles.demoBadgeText, { color: RED }]}>Demo</Text>
                   </View>
-                  <Text style={styles.demoTitle}>Simulate default → reported to CTOS (mock)</Text>
+                  <Text style={[styles.demoTitle, { color: colorTheme.ink }]}>Simulate default → reported to CTOS (mock)</Text>
                 </View>
-                <Text style={styles.demoBody}>Marks this loan defaulted. This is a demo; no real bureau is notified.</Text>
+                <Text style={[styles.demoBody, { color: colorTheme.ink2 }]}>Marks this loan defaulted. This is a demo; no real bureau is notified.</Text>
                 <Pressable
                   onPress={() => simulateDefault(pkg.application.id)}
                   style={[styles.applyBtn, { backgroundColor: RED, marginTop: 10 }]}
@@ -623,7 +630,7 @@ export function LoansScreen({
 
   // List: stats on top, then one package card per loan.
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: colorTheme.bg }]}>
       <View style={{ paddingTop: insets.top + 4 }}>
         <TopBar title="My Financing" onBack={onBack} />
       </View>
@@ -652,7 +659,7 @@ export function LoansScreen({
             ))}
           </>
         )}
-        {offerMsg ? <Text style={[styles.muted, { marginBottom: 14 }]}>{offerMsg}</Text> : null}
+        {offerMsg ? <Text style={[styles.muted, { marginBottom: 14, color: colorTheme.ink2 }]}>{offerMsg}</Text> : null}
         {offerError ? <Text style={[styles.muted, { marginBottom: 14, color: RED }]}>{offerError}</Text> : null}
 
         {/* Empty state: nothing disbursed yet  applying happens on the Credit Passport.
@@ -660,17 +667,17 @@ export function LoansScreen({
             reads as a contradiction, and the offer card is already the clear next action. */}
         {packages.length === 0 && pendingOffers.length === 0 && (
           <Card style={styles.gateCard}>
-            <Icon name="trending" size={30} color={colors.accentInk} />
-            <Text style={styles.gateTitle}>No financing yet</Text>
-            <Text style={styles.gateBody}>
+            <Icon name="trending" size={30} color={theme.accentInk} />
+            <Text style={[styles.gateTitle, { color: colorTheme.ink }]}>No financing yet</Text>
+            <Text style={[styles.gateBody, { color: colorTheme.ink2 }]}>
               When a lender approves you, the loan shows up here with its repayment schedule and
               track record. You apply straight from your Credit Passport.
             </Text>
-            <Pressable style={styles.gateBtn} onPress={onOpenPassport}>
+            <Pressable style={[styles.gateBtn, { backgroundColor: theme.accentInk }]} onPress={onOpenPassport}>
               <Text style={styles.gateBtnText}>Apply with your passport</Text>
             </Pressable>
-            <Pressable style={styles.gateBtnSecondary} onPress={onOpenCoach}>
-              <Text style={styles.gateBtnSecondaryText}>See what unlocks a loan</Text>
+            <Pressable style={[styles.gateBtnSecondary, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]} onPress={onOpenCoach}>
+              <Text style={[styles.gateBtnSecondaryText, { color: theme.accentInk }]}>See what unlocks a loan</Text>
             </Pressable>
           </Card>
         )}
@@ -682,11 +689,11 @@ export function LoansScreen({
         {packages.length > 0 && (
           <View style={styles.statsRow}>
             <Card style={styles.statTile}>
-              <Text style={styles.statLabel}>Monthly repayment</Text>
+              <Text style={[styles.statLabel, { color: colorTheme.ink2 }]}>Monthly repayment</Text>
               <Amount value={totals.totalMonthlyRepayment} size={19} />
             </Card>
             <Card style={styles.statTile}>
-              <Text style={styles.statLabel}>Total unpaid</Text>
+              <Text style={[styles.statLabel, { color: colorTheme.ink2 }]}>Total unpaid</Text>
               <Amount value={totals.totalUnpaidPrincipal} size={19} />
             </Card>
           </View>
@@ -725,37 +732,37 @@ export function LoansScreen({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+  root: { flex: 1 },
   gateCard: { padding: 24, alignItems: 'center', gap: 4 },
-  gateTitle: { fontFamily: uiFont(700), fontSize: 17, color: colors.ink, marginTop: 12, textAlign: 'center' },
-  gateBody: { fontFamily: uiFont(500), fontSize: 13.5, color: colors.ink2, lineHeight: 20, textAlign: 'center', marginTop: 8 },
-  gateBtn: { alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 999, backgroundColor: colors.accentInk, marginTop: 18, alignSelf: 'stretch' },
+  gateTitle: { fontFamily: uiFont(700), fontSize: 17, marginTop: 12, textAlign: 'center' },
+  gateBody: { fontFamily: uiFont(500), fontSize: 13.5, lineHeight: 20, textAlign: 'center', marginTop: 8 },
+  gateBtn: { alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 999, marginTop: 18, alignSelf: 'stretch' },
   gateBtnText: { fontFamily: uiFont(700), fontSize: 14.5, color: colors.onAccent },
-  gateBtnSecondary: { alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 999, backgroundColor: colors.accentTint, borderWidth: 1, borderColor: colors.accentSoft, marginTop: 10, alignSelf: 'stretch' },
-  gateBtnSecondaryText: { fontFamily: uiFont(700), fontSize: 14.5, color: colors.accentInk },
+  gateBtnSecondary: { alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 999, borderWidth: 1, marginTop: 10, alignSelf: 'stretch' },
+  gateBtnSecondaryText: { fontFamily: uiFont(700), fontSize: 14.5 },
   eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
 
   /* offer awaiting the borrower's decision */
   offerCard: { padding: 16, marginBottom: 12, borderWidth: 1.5, borderColor: GREEN + '55', backgroundColor: GREEN + '0a' },
   offerHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   offerDot: { width: 11, height: 11, borderRadius: 999 },
-  offerLender: { flex: 1, fontFamily: uiFont(700), fontSize: 15, color: colors.ink },
+  offerLender: { flex: 1, fontFamily: uiFont(700), fontSize: 15 },
   offerPill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3, backgroundColor: GREEN },
   offerPillText: { fontFamily: uiFont(700), fontSize: 11, color: colors.onAccent, letterSpacing: 0.3, textTransform: 'uppercase' },
-  offerLead: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, lineHeight: 18, marginTop: 8 },
+  offerLead: { fontFamily: uiFont(500), fontSize: 12.5, lineHeight: 18, marginTop: 8 },
   offerFigures: { flexDirection: 'row', gap: 28, marginTop: 14 },
-  offerFigureLabel: { fontFamily: uiFont(600), fontSize: 11, color: colors.ink2, marginBottom: 3 },
-  offerTerms: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, marginTop: 10 },
-  offerApr: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2, marginTop: 6 },
-  offerDiscount: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, marginTop: 2 },
+  offerFigureLabel: { fontFamily: uiFont(600), fontSize: 11, marginBottom: 3 },
+  offerTerms: { fontFamily: uiFont(500), fontSize: 12, marginTop: 10 },
+  offerApr: { fontFamily: uiFont(600), fontSize: 12.5, marginTop: 6 },
+  offerDiscount: { fontFamily: uiFont(500), fontSize: 11.5, marginTop: 2 },
   offerActions: { flexDirection: 'row', gap: 10, marginTop: 16 },
   offerAcceptBtn: { flex: 2, alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 999, backgroundColor: GREEN },
   offerAcceptText: { fontFamily: uiFont(700), fontSize: 14.5, color: colors.onAccent },
-  offerDeclineBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 999, backgroundColor: 'transparent', borderWidth: 1.5, borderColor: colors.line },
-  offerDeclineText: { fontFamily: uiFont(600), fontSize: 14, color: colors.ink2 },
+  offerDeclineBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 999, backgroundColor: 'transparent', borderWidth: 1.5 },
+  offerDeclineText: { fontFamily: uiFont(600), fontSize: 14 },
 
-  fieldLabel: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink2, marginBottom: 8 },
-  muted: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 8 },
+  fieldLabel: { fontFamily: uiFont(600), fontSize: 13, marginBottom: 8 },
+  muted: { fontFamily: uiFont(500), fontSize: 12.5, marginTop: 8 },
   applyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -764,12 +771,11 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingVertical: 13,
     borderRadius: 999,
-    backgroundColor: colors.accentInk,
   },
   applyBtnText: { fontFamily: uiFont(700), fontSize: 14, color: colors.onAccent },
   repayRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 13 },
-  repayDivider: { borderTopWidth: 1, borderTopColor: colors.line2 },
-  repayDate: { fontFamily: uiFont(600), fontSize: 13.5, color: colors.ink },
+  repayDivider: { borderTopWidth: 1 },
+  repayDate: { fontFamily: uiFont(600), fontSize: 13.5 },
   repayStatus: { fontFamily: uiFont(500), fontSize: 12, marginTop: 2 },
   demoCard: { padding: 16 },
   demoBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
@@ -780,24 +786,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: colors.accentSoft,
   },
-  demoBadgeText: { fontFamily: uiFont(700), fontSize: 11, color: colors.accentInk },
-  demoTitle: { fontFamily: uiFont(700), fontSize: 14.5, color: colors.ink, flex: 1 },
-  demoBody: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, lineHeight: 17, marginTop: 10 },
-  detailTitle: { fontFamily: uiFont(700), fontSize: 16, color: colors.ink },
+  demoBadgeText: { fontFamily: uiFont(700), fontSize: 11 },
+  demoTitle: { fontFamily: uiFont(700), fontSize: 14.5, flex: 1 },
+  demoBody: { fontFamily: uiFont(500), fontSize: 12.5, lineHeight: 17, marginTop: 10 },
+  detailTitle: { fontFamily: uiFont(700), fontSize: 16 },
 
   // ── Stats row (My Financing polish, 2026-07-19) ──
   statsRow: { flexDirection: 'row', gap: 10, marginTop: 4, marginBottom: 4 },
   statTile: { flex: 1, padding: 14 },
-  statLabel: { fontFamily: uiFont(600), fontSize: 11.5, color: colors.ink2, marginBottom: 6 },
+  statLabel: { fontFamily: uiFont(600), fontSize: 11.5, marginBottom: 6 },
 
   // ── Loan package card ──
   pkgCard: {
-    backgroundColor: colors.surface,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: colors.line2,
     padding: 14,
     marginBottom: 10,
   },
@@ -806,21 +809,20 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 11,
-    backgroundColor: colors.accentTint,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pkgLender: { fontFamily: uiFont(700), fontSize: 14.5, color: colors.ink },
-  pkgPurpose: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 1 },
+  pkgLender: { fontFamily: uiFont(700), fontSize: 14.5 },
+  pkgPurpose: { fontFamily: uiFont(500), fontSize: 12.5, marginTop: 1 },
   pkgFooterRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 12 },
-  pkgMuted: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, marginTop: 6 },
+  pkgMuted: { fontFamily: uiFont(500), fontSize: 11.5, marginTop: 6 },
   statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
   statusPillText: { fontFamily: uiFont(700), fontSize: 11.5 },
 
   // ── Standing banner / pay-off-arrears (repayment standing, 2026-07-21) ──
   standingBanner: { borderWidth: 1.5, borderRadius: 14, padding: 14, marginBottom: 14, backgroundColor: '#fdecea' },
   standingTitle: { fontFamily: uiFont(700), fontSize: 14, marginBottom: 4 },
-  standingBody: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, lineHeight: 18, marginBottom: 8 },
+  standingBody: { fontFamily: uiFont(500), fontSize: 12.5, lineHeight: 18, marginBottom: 8 },
   clearBtn: { borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
   clearBtnText: { fontFamily: uiFont(700), fontSize: 13.5, color: '#fff' },
 });

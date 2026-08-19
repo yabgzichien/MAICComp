@@ -6,8 +6,10 @@ import Svg, { Path } from 'react-native-svg';
 import { fmt } from '../lib/format';
 import { monthLabel } from '../lib/dates';
 import type { Transaction } from '../lib/types';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
 import { useAppData } from '../state/store';
-import { colors, numFont, shadowCard, uiFont } from '../theme';
+import { numFont, shadowCard, uiFont } from '../theme';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -106,21 +108,35 @@ const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'S
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function SummaryCards({ income, expense }: { income: number; expense: number }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   return (
     <View style={styles.summaryRow}>
-      <View style={[styles.summaryCard, styles.summaryCardIncome]}>
+      <View
+        style={[
+          styles.summaryCard,
+          styles.summaryCardIncome,
+          { backgroundColor: colorTheme.surface, borderColor: colorTheme.line2, borderTopColor: theme.accent },
+        ]}
+      >
         <View style={styles.summaryDotRow}>
-          <View style={[styles.summaryDot, { backgroundColor: colors.accent }]} />
-          <Text style={styles.summaryLabel}>INCOME</Text>
+          <View style={[styles.summaryDot, { backgroundColor: theme.accent }]} />
+          <Text style={[styles.summaryLabel, { color: colorTheme.ink2 }]}>INCOME</Text>
         </View>
-        <Text style={styles.summaryAmount}>RM{fmt(income)}</Text>
+        <Text style={[styles.summaryAmount, { color: colorTheme.ink }]}>RM{fmt(income)}</Text>
       </View>
-      <View style={[styles.summaryCard, styles.summaryCardExpense]}>
+      <View
+        style={[
+          styles.summaryCard,
+          styles.summaryCardExpense,
+          { backgroundColor: colorTheme.surface, borderColor: colorTheme.line2, borderTopColor: colorTheme.red },
+        ]}
+      >
         <View style={styles.summaryDotRow}>
-          <View style={[styles.summaryDot, { backgroundColor: colors.red }]} />
-          <Text style={styles.summaryLabel}>EXPENSE</Text>
+          <View style={[styles.summaryDot, { backgroundColor: colorTheme.red }]} />
+          <Text style={[styles.summaryLabel, { color: colorTheme.ink2 }]}>EXPENSE</Text>
         </View>
-        <Text style={[styles.summaryAmount, { color: colors.red }]}>RM{fmt(expense)}</Text>
+        <Text style={[styles.summaryAmount, { color: colorTheme.red }]}>RM{fmt(expense)}</Text>
       </View>
     </View>
   );
@@ -139,6 +155,8 @@ function DayCell({
   isToday: boolean;
   onPress: (day: number) => void;
 }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   if (day === null) return <View style={styles.cellEmpty} />;
 
   const hasIncome = dayData && dayData.income > 0;
@@ -150,27 +168,28 @@ function DayCell({
     <Pressable
       style={[
         styles.cell,
-        selected && styles.cellSelected,
-        isToday && !selected && styles.cellToday,
-        hasIncome && !hasExpense && styles.cellIncomeOnly,
+        { backgroundColor: colorTheme.surface, borderColor: colorTheme.line2 },
+        selected && { backgroundColor: theme.accent, borderColor: theme.accent },
+        isToday && !selected && [styles.cellToday, { borderColor: theme.accent }],
+        hasIncome && !hasExpense && [styles.cellIncomeOnly, { borderColor: theme.accentSoft }],
         hasExpense && !hasIncome && styles.cellExpenseOnly,
       ]}
       onPress={() => onPress(day)}
       accessibilityRole="button"
       accessibilityLabel={`Day ${day}`}
     >
-      <Text style={[styles.cellDay, selected && styles.cellDaySelected]}>
+      <Text style={[styles.cellDay, { color: colorTheme.ink }, selected && styles.cellDaySelected]}>
         {day}
       </Text>
       {hasIncome && (
-        <Text style={[styles.cellIncome]}>{compactAmt(dayData!.income)}</Text>
+        <Text style={[styles.cellIncome, { color: theme.accentInk }]}>{compactAmt(dayData!.income)}</Text>
       )}
       {hasExpense && (
-        <Text style={[styles.cellExpense]}>{compactAmt(dayData!.expense)}</Text>
+        <Text style={[styles.cellExpense, { color: colorTheme.red }]}>{compactAmt(dayData!.expense)}</Text>
       )}
       {(hasIncome || hasExpense) && (
-        <View style={[styles.cellNet, { backgroundColor: netPositive ? colors.accentSoft : '#fce8e6' }]}>
-          <Text style={[styles.cellNetText, { color: netPositive ? colors.accentInk : colors.red }]}>
+        <View style={[styles.cellNet, { backgroundColor: netPositive ? theme.accentSoft : '#fce8e6' }]}>
+          <Text style={[styles.cellNetText, { color: netPositive ? theme.accentInk : colorTheme.red }]}>
             {netPositive ? '+' : '−'}{compactAmt(Math.abs(net))}
           </Text>
         </View>
@@ -184,6 +203,9 @@ function DayTransactionList({
 }: {
   year: number; month: number; day: number; dayData: DayData | null;
 }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
+  const { catById } = useAppData();
   // e.g. "Tue, May 26"
   const d = new Date(year, month - 1, day);
   const weekdayIdx = (d.getDay() + 6) % 7; // Mon-first
@@ -191,28 +213,30 @@ function DayTransactionList({
 
   return (
     <View style={styles.daySection}>
-      <Text style={styles.daySectionTitle}>{dateLabel}</Text>
+      <Text style={[styles.daySectionTitle, { color: colorTheme.ink }]}>{dateLabel}</Text>
       {!dayData || dayData.txns.length === 0 ? (
-        <View style={styles.emptyDay}>
-          <Text style={styles.emptyDayText}>No transactions</Text>
+        <View style={[styles.emptyDay, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line2 }]}>
+          <Text style={[styles.emptyDayText, { color: colorTheme.ink2 }]}>No transactions</Text>
         </View>
       ) : (
-        <View style={styles.txnList}>
+        <View style={[styles.txnList, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line2 }]}>
           {dayData.txns.map((t) => (
-            <View key={t.id} style={styles.txnRow}>
+            <View key={t.id} style={[styles.txnRow, { borderBottomColor: colorTheme.line2 }]}>
               <View style={styles.txnLeft}>
-                <View style={[styles.txnDot, { backgroundColor: t.type === 'income' ? colors.accent : colors.red }]} />
-                <Text style={styles.txnMerchant} numberOfLines={1}>{t.merchantRaw}</Text>
+                <View style={[styles.txnDot, { backgroundColor: t.type === 'income' ? theme.accent : colorTheme.red }]} />
+                <Text style={[styles.txnMerchant, { color: colorTheme.ink }]} numberOfLines={1}>
+                  {t.merchantRaw || (t.categoryId ? catById[t.categoryId]?.label : null) || (t.type === 'income' ? 'Income' : 'Expense')}
+                </Text>
               </View>
-              <Text style={[styles.txnAmount, { color: t.type === 'income' ? colors.accentInk : colors.red }]}>
+              <Text style={[styles.txnAmount, { color: t.type === 'income' ? theme.accentInk : colorTheme.red }]}>
                 {t.type === 'income' ? '+' : '−'} RM {fmt(t.amount)}
               </Text>
             </View>
           ))}
           {/* Net for the day */}
-          <View style={styles.dayNetRow}>
-            <Text style={styles.dayNetLabel}>Net</Text>
-            <Text style={[styles.dayNetVal, { color: dayData.net >= 0 ? colors.accentInk : colors.red }]}>
+          <View style={[styles.dayNetRow, { backgroundColor: colorTheme.surface2 }]}>
+            <Text style={[styles.dayNetLabel, { color: colorTheme.ink2 }]}>Net</Text>
+            <Text style={[styles.dayNetVal, { color: dayData.net >= 0 ? theme.accentInk : colorTheme.red }]}>
               {dayData.net >= 0 ? '+' : '−'} RM {fmt(Math.abs(dayData.net))}
             </Text>
           </View>
@@ -226,6 +250,7 @@ function DayTransactionList({
 
 export function CalendarScreen({ onBack, initialMonth }: { onBack: () => void; initialMonth?: string }) {
   const insets = useSafeAreaInsets();
+  const colorTheme = useThemeColors();
   const { transactions } = useAppData();
 
   // Initialise to the passed month or the current month
@@ -261,15 +286,15 @@ export function CalendarScreen({ onBack, initialMonth }: { onBack: () => void; i
   const isCurrentMonth = today.getFullYear() === ym.year && today.getMonth() + 1 === ym.month;
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
+    <View style={[styles.root, { paddingTop: insets.top, backgroundColor: colorTheme.bg }]}>
       {/* ── Nav bar ── */}
       <View style={styles.nav}>
-        <Pressable onPress={onBack} style={styles.navBtn} accessibilityRole="button" accessibilityLabel="Back">
+        <Pressable onPress={onBack} style={[styles.navBtn, { backgroundColor: colorTheme.surface }]} accessibilityRole="button" accessibilityLabel="Back">
           <Svg width={10} height={17} viewBox="0 0 10 17" fill="none">
-            <Path d="M8.5 1.5L1.5 8.5l7 7" stroke={colors.ink2} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            <Path d="M8.5 1.5L1.5 8.5l7 7" stroke={colorTheme.ink2} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
         </Pressable>
-        <Text style={styles.navTitle}>Cash Flow Calendar</Text>
+        <Text style={[styles.navTitle, { color: colorTheme.ink }]}>Cash Flow Calendar</Text>
         <View style={styles.navSpacer} />
       </View>
 
@@ -278,23 +303,23 @@ export function CalendarScreen({ onBack, initialMonth }: { onBack: () => void; i
         <View style={styles.monthNav}>
           <Pressable
             onPress={() => setYm((prev) => addMonths(prev, -1))}
-            style={styles.monthNavBtn}
+            style={[styles.monthNavBtn, { backgroundColor: colorTheme.surface }]}
             accessibilityRole="button"
             accessibilityLabel="Previous month"
           >
             <Svg width={8} height={14} viewBox="0 0 8 14" fill="none">
-              <Path d="M7 1L1 7l6 6" stroke={colors.ink2} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+              <Path d="M7 1L1 7l6 6" stroke={colorTheme.ink2} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
           </Pressable>
-          <Text style={styles.monthLabel}>{monthLabel(monthKeyFrom(ym))}</Text>
+          <Text style={[styles.monthLabel, { color: colorTheme.ink }]}>{monthLabel(monthKeyFrom(ym))}</Text>
           <Pressable
             onPress={() => setYm((prev) => addMonths(prev, 1))}
-            style={styles.monthNavBtn}
+            style={[styles.monthNavBtn, { backgroundColor: colorTheme.surface }]}
             accessibilityRole="button"
             accessibilityLabel="Next month"
           >
             <Svg width={8} height={14} viewBox="0 0 8 14" fill="none">
-              <Path d="M1 1l6 6-6 6" stroke={colors.ink2} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+              <Path d="M1 1l6 6-6 6" stroke={colorTheme.ink2} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
           </Pressable>
         </View>
@@ -305,7 +330,7 @@ export function CalendarScreen({ onBack, initialMonth }: { onBack: () => void; i
         {/* ── Weekday header ── */}
         <View style={styles.weekdayHeader}>
           {WEEKDAY_LABELS.map((w) => (
-            <Text key={w} style={styles.weekdayLabel}>{w}</Text>
+            <Text key={w} style={[styles.weekdayLabel, { color: colorTheme.ink2 }]}>{w}</Text>
           ))}
         </View>
 
@@ -348,10 +373,9 @@ export function CalendarScreen({ onBack, initialMonth }: { onBack: () => void; i
 
 const CELL_INCOME_BG = '#e8f5ee';
 const CELL_EXPENSE_BG = '#fce8e6';
-const CELL_SELECTED_BG = colors.accent;
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+  root: { flex: 1 },
 
   // nav
   nav: {
@@ -364,7 +388,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 999,
-    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     ...shadowCard,
@@ -374,7 +397,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontFamily: uiFont(700),
     fontSize: 16,
-    color: colors.ink,
   },
   navSpacer: { width: 36 },
 
@@ -391,7 +413,6 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 999,
-    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     ...shadowCard,
@@ -399,7 +420,6 @@ const styles = StyleSheet.create({
   monthLabel: {
     fontFamily: uiFont(700),
     fontSize: 15,
-    color: colors.ink,
     minWidth: 130,
     textAlign: 'center',
   },
@@ -413,16 +433,14 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     flex: 1,
-    backgroundColor: colors.surface,
     borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: colors.line2,
     ...shadowCard,
   },
-  summaryCardIncome: { borderTopWidth: 3, borderTopColor: colors.accent },
-  summaryCardExpense: { borderTopWidth: 3, borderTopColor: colors.red },
+  summaryCardIncome: { borderTopWidth: 3 },
+  summaryCardExpense: { borderTopWidth: 3 },
   summaryDotRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 5 },
   summaryDot: { width: 6, height: 6, borderRadius: 3 },
   summaryLabel: {
@@ -430,12 +448,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 0.9,
     textTransform: 'uppercase',
-    color: colors.ink2,
   },
   summaryAmount: {
     fontFamily: numFont(700),
     fontSize: 16,
-    color: colors.ink,
   },
 
   // weekday header
@@ -450,7 +466,6 @@ const styles = StyleSheet.create({
     fontFamily: uiFont(700),
     fontSize: 11,
     letterSpacing: 0.6,
-    color: colors.ink2,
   },
 
   // calendar grid
@@ -462,37 +477,31 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 62,
     borderRadius: 12,
-    backgroundColor: colors.surface,
     alignItems: 'center',
     paddingTop: 6,
     paddingBottom: 5,
     paddingHorizontal: 2,
     borderWidth: 1,
-    borderColor: colors.line2,
     gap: 1,
   },
   cellEmpty: { flex: 1, minHeight: 62 },
-  cellIncomeOnly: { backgroundColor: CELL_INCOME_BG, borderColor: colors.accentSoft },
+  cellIncomeOnly: { backgroundColor: CELL_INCOME_BG },
   cellExpenseOnly: { backgroundColor: CELL_EXPENSE_BG, borderColor: '#f5ceca' },
-  cellToday: { borderColor: colors.accent, borderWidth: 1.5 },
-  cellSelected: { backgroundColor: CELL_SELECTED_BG, borderColor: CELL_SELECTED_BG },
+  cellToday: { borderWidth: 1.5 },
   cellDay: {
     fontFamily: uiFont(600),
     fontSize: 12,
-    color: colors.ink,
     lineHeight: 16,
   },
   cellDaySelected: { color: '#fff', fontFamily: uiFont(700) },
   cellIncome: {
     fontFamily: numFont(600),
     fontSize: 11,
-    color: colors.accentInk,
     lineHeight: 12,
   },
   cellExpense: {
     fontFamily: numFont(600),
     fontSize: 11,
-    color: colors.red,
     lineHeight: 12,
   },
   cellNet: {
@@ -515,14 +524,11 @@ const styles = StyleSheet.create({
   daySectionTitle: {
     fontFamily: uiFont(700),
     fontSize: 14,
-    color: colors.ink,
     marginBottom: 10,
   },
   emptyDay: {
-    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.line2,
     paddingVertical: 28,
     alignItems: 'center',
     ...shadowCard,
@@ -530,13 +536,10 @@ const styles = StyleSheet.create({
   emptyDayText: {
     fontFamily: uiFont(500),
     fontSize: 13.5,
-    color: colors.ink2,
   },
   txnList: {
-    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.line2,
     overflow: 'hidden',
     ...shadowCard,
   },
@@ -547,14 +550,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 11,
     borderBottomWidth: 1,
-    borderBottomColor: colors.line2,
   },
   txnLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 },
   txnDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
   txnMerchant: {
     fontFamily: uiFont(500),
     fontSize: 13,
-    color: colors.ink,
     flex: 1,
   },
   txnAmount: {
@@ -568,13 +569,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 14,
     paddingVertical: 10,
-    backgroundColor: colors.surface2,
   },
   dayNetLabel: {
     fontFamily: uiFont(700),
     fontSize: 12,
     letterSpacing: 0.3,
-    color: colors.ink2,
     textTransform: 'uppercase',
   },
   dayNetVal: {

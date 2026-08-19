@@ -14,6 +14,7 @@ export interface ExtractedTxn {
   date: string | null; // ISO date (YYYY-MM-DD) or null
   method: string | null; // optional sub-label, e.g. "DuitNow QR"
   categoryHint?: string | null; // a category label the source document carried, if any
+  account?: string | null; // account name specified in import, if any
   /** A short user-written note, e.g. "lunch with client". Never extracted from the
    *  screenshot itself; the user adds it during review or manual entry. */
   remark?: string | null;

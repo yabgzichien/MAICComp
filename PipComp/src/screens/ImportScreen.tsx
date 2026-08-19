@@ -7,6 +7,8 @@ import { Icon } from '../components/Icon';
 import { B, BtnLabel, BubbleText, Card, PipSays, PrimaryButton, TopBar } from '../components/ui';
 import { readDocumentParts } from '../lib/fileRead';
 import { getLLM, llmErrorMessage } from '../llm';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
 import { useAppData } from '../state/store';
 import { DROP, type ExtractedTxn } from '../lib/types';
 import { colors, uiFont } from '../theme';
@@ -27,6 +29,8 @@ const ACCEPT = [
 
 export function ImportScreen({ onClose }: { onClose: () => void }) {
   const insets = useSafeAreaInsets();
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const { commitCategorized } = useAppData();
   const [phase, setPhase] = useState<Phase>('reading');
   const [fileName, setFileName] = useState('');
@@ -109,7 +113,7 @@ export function ImportScreen({ onClose }: { onClose: () => void }) {
   const busy = phase === 'reading' || phase === 'extracting' || phase === 'saving';
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: colorTheme.bg }]}>
       <View style={{ paddingTop: insets.top + 4 }}>
         <TopBar title="Import data" onBack={onClose} />
       </View>
@@ -128,8 +132,8 @@ export function ImportScreen({ onClose }: { onClose: () => void }) {
               </BubbleText>
             </PipSays>
             <Card style={styles.busyCard}>
-              <ActivityIndicator color={colors.accent} />
-              <Text style={styles.busyText}>This can take a moment for long statements.</Text>
+              <ActivityIndicator color={theme.accent} />
+              <Text style={[styles.busyText, { color: colorTheme.ink2 }]}>This can take a moment for long statements.</Text>
             </Card>
           </>
         )}
@@ -193,7 +197,7 @@ export function ImportScreen({ onClose }: { onClose: () => void }) {
               </BubbleText>
             </PipSays>
             <Card style={styles.doneCard}>
-              <Text style={styles.doneText}>
+              <Text style={[styles.doneText, { color: colorTheme.ink2 }]}>
                 Categories were filled in from what I’ve learned. Tweak any of them from your transactions list.
               </Text>
             </Card>
@@ -211,9 +215,9 @@ export function ImportScreen({ onClose }: { onClose: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+  root: { flex: 1 },
   busyCard: { marginTop: 22, padding: 22, alignItems: 'center', gap: 12 },
-  busyText: { fontFamily: uiFont(500), fontSize: 13, color: colors.ink2, textAlign: 'center' },
+  busyText: { fontFamily: uiFont(500), fontSize: 13, textAlign: 'center' },
   doneCard: { marginTop: 16, padding: 16 },
-  doneText: { fontFamily: uiFont(500), fontSize: 13.5, lineHeight: 19, color: colors.ink2 },
+  doneText: { fontFamily: uiFont(500), fontSize: 13.5, lineHeight: 19 },
 });

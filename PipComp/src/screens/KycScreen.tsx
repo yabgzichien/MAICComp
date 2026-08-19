@@ -16,6 +16,8 @@ import { DEMO_PROFILES } from '../data/demoProfile';
 import { emitTourSignal } from '../lib/tourSignals';
 import { useAppData } from '../state/store';
 import type { EmploymentType } from '../db/occupationRepo';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
 import { colors, uiFont } from '../theme';
 import { DocumentScanScreen } from './DocumentScanScreen';
 
@@ -28,6 +30,8 @@ const EMPLOYMENT_OPTIONS: { value: EmploymentType; label: string }[] = [
 
 export function KycScreen({ onBack, onDone }: { onBack: () => void; onDone?: () => void }) {
   const insets = useSafeAreaInsets();
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const { kyc, verifyIdentity, occupation, saveOccupation, tourActive, activeDemoProfile } = useAppData();
   const finish = onDone ?? onBack;
 
@@ -131,7 +135,7 @@ export function KycScreen({ onBack, onDone }: { onBack: () => void; onDone?: () 
   }
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: colorTheme.bg }]}>
       <View style={{ paddingTop: insets.top + 4 }}>
         <TopBar title="Verify identity" onBack={onBack} />
       </View>
@@ -148,40 +152,40 @@ export function KycScreen({ onBack, onDone }: { onBack: () => void; onDone?: () 
 
         {done && kyc ? (
           <>
-            <Card style={styles.successCard}>
+            <Card style={[styles.successCard, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]}>
               <View style={styles.successHead}>
-                <View style={styles.checkCircle}>
+                <View style={[styles.checkCircle, { backgroundColor: theme.accent }]}>
                   <Icon name="check" size={14} color="#fff" stroke={2.6} />
                 </View>
-                <Text style={styles.successTitle}>Identity verified</Text>
+                <Text style={[styles.successTitle, { color: theme.accentInk }]}>Identity verified</Text>
               </View>
-              <Text style={styles.successName}>{kyc.fullName}</Text>
-              <Text style={styles.successSub}>{kyc.nricMasked} · {kyc.provider}</Text>
+              <Text style={[styles.successName, { color: colorTheme.ink }]}>{kyc.fullName}</Text>
+              <Text style={[styles.successSub, { color: colorTheme.ink2 }]}>{kyc.nricMasked} · {kyc.provider}</Text>
             </Card>
 
             <Eyebrow style={{ marginTop: 22, marginBottom: 6 }}>Work & income</Eyebrow>
-            <Text style={styles.occLede}>
+            <Text style={[styles.occLede, { color: colorTheme.ink2 }]}>
               Self-declared context a lender sees alongside your verified figures. Required to finish
               verification. Shared only under a Tier 1 grant, and always labelled &ldquo;self-declared&rdquo;.
               Never presented as verified.
             </Text>
 
             <TextInput
-              style={[styles.input, { marginTop: 12 }]}
+              style={[styles.input, { color: colorTheme.ink, backgroundColor: colorTheme.surface2, borderColor: colorTheme.line, marginTop: 12 }]}
               placeholder="Occupation: e.g. Ride-hailing driver"
-              placeholderTextColor={colors.ink3}
+              placeholderTextColor={colorTheme.ink3}
               value={occ}
               onChangeText={setOcc}
             />
             <TextInput
-              style={[styles.input, { marginTop: 10 }]}
+              style={[styles.input, { color: colorTheme.ink, backgroundColor: colorTheme.surface2, borderColor: colorTheme.line, marginTop: 10 }]}
               placeholder="Sector: e.g. Transport"
-              placeholderTextColor={colors.ink3}
+              placeholderTextColor={colorTheme.ink3}
               value={sector}
               onChangeText={setSector}
             />
 
-            <Text style={styles.occFieldLabel}>Employment type</Text>
+            <Text style={[styles.occFieldLabel, { color: colorTheme.ink2 }]}>Employment type</Text>
             <View style={styles.chipRow}>
               {EMPLOYMENT_OPTIONS.map((o) => {
                 const on = employmentType === o.value;
@@ -189,27 +193,27 @@ export function KycScreen({ onBack, onDone }: { onBack: () => void; onDone?: () 
                   <Pressable
                     key={o.value}
                     onPress={() => setEmploymentType(o.value)}
-                    style={[styles.chip, on && styles.chipOn]}
+                    style={[styles.chip, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line }, on && { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]}
                     accessibilityRole="radio"
                     accessibilityState={{ selected: on }}
                   >
-                    <Text style={[styles.chipText, on && styles.chipTextOn]}>{o.label}</Text>
+                    <Text style={[styles.chipText, { color: colorTheme.ink2 }, on && { color: theme.accentInk }]}>{o.label}</Text>
                   </Pressable>
                 );
               })}
             </View>
 
             <TextInput
-              style={[styles.input, { marginTop: 14 }]}
+              style={[styles.input, { color: colorTheme.ink, backgroundColor: colorTheme.surface2, borderColor: colorTheme.line, marginTop: 14 }]}
               placeholder="Months in this work: e.g. 18"
-              placeholderTextColor={colors.ink3}
+              placeholderTextColor={colorTheme.ink3}
               keyboardType="number-pad"
               value={tenure}
               onChangeText={setTenure}
             />
 
             <Pressable
-              style={[styles.doneBtn, !canFinish && styles.verifyBtnDisabled]}
+              style={[styles.doneBtn, { backgroundColor: theme.accentInk }, !canFinish && styles.verifyBtnDisabled]}
               onPress={handleFinish}
               disabled={!canFinish || savingOcc}
             >
@@ -229,66 +233,66 @@ export function KycScreen({ onBack, onDone }: { onBack: () => void; onDone?: () 
                 accessibilityRole="button"
                 accessibilityLabel={`Use ${demoMeta.name}'s demo identity`}
               >
-                <Icon name="check" size={16} color={colors.accentInk} stroke={2.4} />
-                <Text style={styles.sampleBtnText}>Use {demoMeta.name}&rsquo;s demo identity</Text>
+                <Icon name="check" size={16} color={theme.accentInk} stroke={2.4} />
+                <Text style={[styles.sampleBtnText, { color: theme.accentInk }]}>Use {demoMeta.name}&rsquo;s demo identity</Text>
               </Pressable>
             )}
             <View style={styles.scanRow}>
-              <Pressable style={styles.scanBtn} onPress={() => setScanning(true)} disabled={scanBusy}>
-                <Icon name="camera" size={18} color={colors.accent} />
-                <Text style={styles.scanBtnText}>Scan with camera</Text>
+              <Pressable style={[styles.scanBtn, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]} onPress={() => setScanning(true)} disabled={scanBusy}>
+                <Icon name="camera" size={18} color={theme.accent} />
+                <Text style={[styles.scanBtnText, { color: theme.accent }]}>Scan with camera</Text>
               </Pressable>
-              <Pressable style={styles.scanBtn} onPress={pickFromGallery} disabled={scanBusy}>
+              <Pressable style={[styles.scanBtn, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]} onPress={pickFromGallery} disabled={scanBusy}>
                 {scanBusy ? (
-                  <ActivityIndicator size="small" color={colors.accent} />
+                  <ActivityIndicator size="small" color={theme.accent} />
                 ) : (
                   <>
-                    <Icon name="image" size={18} color={colors.accent} />
-                    <Text style={styles.scanBtnText}>Upload from gallery</Text>
+                    <Icon name="image" size={18} color={theme.accent} />
+                    <Text style={[styles.scanBtnText, { color: theme.accent }]}>Upload from gallery</Text>
                   </>
                 )}
               </Pressable>
             </View>
-            <Text style={styles.scanHint}>or enter your details manually below</Text>
+            <Text style={[styles.scanHint, { color: colorTheme.ink2 }]}>or enter your details manually below</Text>
 
             <Eyebrow style={{ marginBottom: 8, marginTop: 6 }}>Full name (as in IC)</Eyebrow>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: colorTheme.ink, backgroundColor: colorTheme.surface2, borderColor: colorTheme.line }]}
               placeholder="e.g. Aisyah binti Rahman"
-              placeholderTextColor={colors.ink3}
+              placeholderTextColor={colorTheme.ink3}
               value={name}
               onChangeText={setName}
             />
 
             <Eyebrow style={{ marginBottom: 8, marginTop: 16 }}>IC number (MyKad)</Eyebrow>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: colorTheme.ink, backgroundColor: colorTheme.surface2, borderColor: colorTheme.line }]}
               placeholder="e.g. 900115-10-5678"
-              placeholderTextColor={colors.ink3}
+              placeholderTextColor={colorTheme.ink3}
               keyboardType="numbers-and-punctuation"
               value={nric}
               onChangeText={setNric}
             />
 
             {preview && (
-              <Card style={styles.previewCard}>
-                <Text style={styles.previewRow}>Date of birth: <Text style={styles.previewVal}>{preview.dob}</Text></Text>
-                <Text style={styles.previewRow}>Gender: <Text style={styles.previewVal}>{preview.gender === 'M' ? 'Male' : 'Female'}</Text></Text>
-                <Text style={styles.previewRow}>State of birth: <Text style={styles.previewVal}>{preview.stateOfBirth}</Text></Text>
+              <Card style={[styles.previewCard, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]}>
+                <Text style={[styles.previewRow, { color: colorTheme.ink2 }]}>Date of birth: <Text style={[styles.previewVal, { color: colorTheme.ink }]}>{preview.dob}</Text></Text>
+                <Text style={[styles.previewRow, { color: colorTheme.ink2 }]}>Gender: <Text style={[styles.previewVal, { color: colorTheme.ink }]}>{preview.gender === 'M' ? 'Male' : 'Female'}</Text></Text>
+                <Text style={[styles.previewRow, { color: colorTheme.ink2 }]}>State of birth: <Text style={[styles.previewVal, { color: colorTheme.ink }]}>{preview.stateOfBirth}</Text></Text>
               </Card>
             )}
 
             {error !== '' && <Text style={styles.errorText}>{error}</Text>}
 
             <Pressable
-              style={[styles.verifyBtn, !canVerify && styles.verifyBtnDisabled]}
+              style={[styles.verifyBtn, { backgroundColor: theme.accentInk }, !canVerify && styles.verifyBtnDisabled]}
               disabled={!canVerify}
               onPress={handleVerify}
             >
               {busy ? <ActivityIndicator color={colors.onAccent} /> : <Text style={styles.verifyBtnText}>Verify identity</Text>}
             </Pressable>
 
-            <Text style={styles.privacyNote}>
+            <Text style={[styles.privacyNote, { color: colorTheme.ink2 }]}>
               Your IC number is validated on-device. Only a masked version (last 4 digits) is stored or shared.
             </Text>
           </>
@@ -299,58 +303,56 @@ export function KycScreen({ onBack, onDone }: { onBack: () => void; onDone?: () 
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+  root: { flex: 1 },
   noteCard: { padding: 14, marginBottom: 16, backgroundColor: '#fffbf0', borderColor: '#f5d78a' },
   noteText: { fontFamily: uiFont(500), fontSize: 12.5, color: '#7a4d00', lineHeight: 18 },
   sampleBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
-    height: 46, borderRadius: 14, backgroundColor: colors.accentTint,
-    borderWidth: 1.5, borderColor: colors.accent, marginTop: 6, marginBottom: 4,
+    height: 46, borderRadius: 14,
+    borderWidth: 1.5, marginTop: 6, marginBottom: 4,
   },
-  sampleBtnText: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.accentInk },
+  sampleBtnText: { fontFamily: uiFont(700), fontSize: 13.5 },
   scanRow: { flexDirection: 'row', gap: 10, marginTop: 6 },
   scanBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
-    height: 50, borderRadius: 14, backgroundColor: colors.accentTint,
-    borderWidth: 1, borderColor: colors.accentSoft, paddingHorizontal: 8,
+    height: 50, borderRadius: 14,
+    borderWidth: 1, paddingHorizontal: 8,
   },
-  scanBtnText: { fontFamily: uiFont(700), fontSize: 13, color: colors.accent },
-  scanHint: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, textAlign: 'center', marginTop: 8 },
+  scanBtnText: { fontFamily: uiFont(700), fontSize: 13 },
+  scanHint: { fontFamily: uiFont(500), fontSize: 12, textAlign: 'center', marginTop: 8 },
   input: {
-    fontFamily: uiFont(500), fontSize: 15, color: colors.ink,
-    backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line,
+    fontFamily: uiFont(500), fontSize: 15,
+    borderWidth: 1,
     borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12,
   },
-  previewCard: { padding: 14, marginTop: 14, backgroundColor: colors.accentTint, borderColor: colors.accentSoft },
-  previewRow: { fontFamily: uiFont(500), fontSize: 13, color: colors.ink2, marginVertical: 2 },
-  previewVal: { fontFamily: uiFont(700), color: colors.ink },
+  previewCard: { padding: 14, marginTop: 14 },
+  previewRow: { fontFamily: uiFont(500), fontSize: 13, marginVertical: 2 },
+  previewVal: { fontFamily: uiFont(700) },
   errorText: { fontFamily: uiFont(600), fontSize: 13, color: '#c0392b', marginTop: 14 },
   verifyBtn: {
     alignItems: 'center', justifyContent: 'center', height: 50, borderRadius: 999,
-    backgroundColor: colors.accentInk, marginTop: 18,
+    marginTop: 18,
   },
   verifyBtnDisabled: { opacity: 0.45 },
   verifyBtnText: { fontFamily: uiFont(700), fontSize: 15, color: colors.onAccent },
-  privacyNote: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, lineHeight: 17, marginTop: 12, textAlign: 'center' },
+  privacyNote: { fontFamily: uiFont(500), fontSize: 12, lineHeight: 17, marginTop: 12, textAlign: 'center' },
 
-  successCard: { padding: 18, marginTop: 6, backgroundColor: colors.accentTint, borderColor: colors.accentSoft },
+  successCard: { padding: 18, marginTop: 6 },
   successHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  checkCircle: { width: 24, height: 24, borderRadius: 999, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
-  successTitle: { fontFamily: uiFont(700), fontSize: 16, color: colors.accentInk },
-  successName: { fontFamily: uiFont(700), fontSize: 18, color: colors.ink, marginTop: 14 },
-  successSub: { fontFamily: uiFont(500), fontSize: 13, color: colors.ink2, marginTop: 3 },
+  checkCircle: { width: 24, height: 24, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  successTitle: { fontFamily: uiFont(700), fontSize: 16 },
+  successName: { fontFamily: uiFont(700), fontSize: 18, marginTop: 14 },
+  successSub: { fontFamily: uiFont(500), fontSize: 13, marginTop: 3 },
 
-  occLede: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, lineHeight: 17 },
-  occFieldLabel: { fontFamily: uiFont(600), fontSize: 12, color: colors.ink2, marginTop: 16, marginBottom: 8 },
+  occLede: { fontFamily: uiFont(500), fontSize: 12, lineHeight: 17 },
+  occFieldLabel: { fontFamily: uiFont(600), fontSize: 12, marginTop: 16, marginBottom: 8 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999,
-    backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line,
+    borderWidth: 1,
   },
-  chipOn: { backgroundColor: colors.accentTint, borderColor: colors.accentSoft },
-  chipText: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2 },
-  chipTextOn: { color: colors.accentInk },
+  chipText: { fontFamily: uiFont(600), fontSize: 12.5 },
 
-  doneBtn: { alignItems: 'center', justifyContent: 'center', height: 46, borderRadius: 999, backgroundColor: colors.accentInk, marginTop: 18 },
+  doneBtn: { alignItems: 'center', justifyContent: 'center', height: 46, borderRadius: 999, marginTop: 18 },
   doneBtnText: { fontFamily: uiFont(700), fontSize: 14.5, color: colors.onAccent },
 });

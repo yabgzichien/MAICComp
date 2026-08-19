@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GUIDE_CITIES, HOUSEHOLD_PROFILES, type GuideCityId, type HouseholdProfileId } from '../data/belanjawanku';
-import { colors, radius, uiFont } from '../theme';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
+import { radius, uiFont } from '../theme';
 import { Icon } from './Icon';
 import { BtnLabel, PrimaryButton } from './ui';
 
@@ -25,6 +27,8 @@ export function BenchmarkPicker({
   onSave: (profile: HouseholdProfileId, city: GuideCityId) => void;
 }) {
   const insets = useSafeAreaInsets();
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const [pickedProfile, setPickedProfile] = useState(profile);
   const [pickedCity, setPickedCity] = useState(city);
 
@@ -39,44 +43,52 @@ export function BenchmarkPicker({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + 18 }]}>
+        <View style={[styles.sheet, { paddingBottom: insets.bottom + 18, backgroundColor: colorTheme.bg }]}>
           <View style={styles.head}>
-            <Text style={styles.title}>Your household</Text>
+            <Text style={[styles.title, { color: colorTheme.ink }]}>Your household</Text>
             <Pressable onPress={onClose} hitSlop={10} accessibilityLabel="Close">
-              <Icon name="x" size={20} color={colors.ink2} />
+              <Icon name="x" size={20} color={colorTheme.ink2} />
             </Pressable>
           </View>
-          <Text style={styles.sub}>
+          <Text style={[styles.sub, { color: colorTheme.ink2 }]}>
             Belanjawanku publishes a different monthly figure for each household and city. Pick
             yours so the comparison is fair.
           </Text>
 
           <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
-            <Text style={styles.group}>Who is in your household</Text>
+            <Text style={[styles.group, { color: colorTheme.ink2 }]}>Who is in your household</Text>
             {HOUSEHOLD_PROFILES.map((p) => (
               <Pressable
                 key={p.id}
                 onPress={() => setPickedProfile(p.id)}
-                style={[styles.row, pickedProfile === p.id && styles.rowOn]}
+                style={[
+                  styles.row,
+                  { borderColor: colorTheme.line2, backgroundColor: colorTheme.surface },
+                  pickedProfile === p.id && { borderColor: theme.accentSoft, backgroundColor: theme.accentTint },
+                ]}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: pickedProfile === p.id }}
               >
-                <Text style={[styles.rowLabel, pickedProfile === p.id && styles.rowLabelOn]}>{p.label}</Text>
-                {pickedProfile === p.id && <Icon name="check" size={17} color={colors.accent} stroke={2.4} />}
+                <Text style={[styles.rowLabel, { color: colorTheme.ink }, pickedProfile === p.id && { color: theme.accentInk }]}>{p.label}</Text>
+                {pickedProfile === p.id && <Icon name="check" size={17} color={theme.accent} stroke={2.4} />}
               </Pressable>
             ))}
 
-            <Text style={[styles.group, { marginTop: 16 }]}>Where you live</Text>
+            <Text style={[styles.group, { marginTop: 16, color: colorTheme.ink2 }]}>Where you live</Text>
             {GUIDE_CITIES.map((c) => (
               <Pressable
                 key={c.id}
                 onPress={() => setPickedCity(c.id)}
-                style={[styles.row, pickedCity === c.id && styles.rowOn]}
+                style={[
+                  styles.row,
+                  { borderColor: colorTheme.line2, backgroundColor: colorTheme.surface },
+                  pickedCity === c.id && { borderColor: theme.accentSoft, backgroundColor: theme.accentTint },
+                ]}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: pickedCity === c.id }}
               >
-                <Text style={[styles.rowLabel, pickedCity === c.id && styles.rowLabelOn]}>{c.label}</Text>
-                {pickedCity === c.id && <Icon name="check" size={17} color={colors.accent} stroke={2.4} />}
+                <Text style={[styles.rowLabel, { color: colorTheme.ink }, pickedCity === c.id && { color: theme.accentInk }]}>{c.label}</Text>
+                {pickedCity === c.id && <Icon name="check" size={17} color={theme.accent} stroke={2.4} />}
               </Pressable>
             ))}
           </ScrollView>
@@ -95,16 +107,15 @@ export function BenchmarkPicker({
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(15,18,22,0.45)', justifyContent: 'flex-end' },
   sheet: {
-    backgroundColor: colors.bg,
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     paddingHorizontal: 18,
     paddingTop: 18,
   },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title: { fontFamily: uiFont(700), fontSize: 18, color: colors.ink },
-  sub: { fontFamily: uiFont(500), fontSize: 12.5, lineHeight: 18, color: colors.ink2, marginTop: 6, marginBottom: 12 },
-  group: { fontFamily: uiFont(700), fontSize: 11.5, letterSpacing: 0.7, color: colors.ink2, textTransform: 'uppercase', marginBottom: 8 },
+  title: { fontFamily: uiFont(700), fontSize: 18 },
+  sub: { fontFamily: uiFont(500), fontSize: 12.5, lineHeight: 18, marginTop: 6, marginBottom: 12 },
+  group: { fontFamily: uiFont(700), fontSize: 11.5, letterSpacing: 0.7, textTransform: 'uppercase', marginBottom: 8 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -113,11 +124,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: radius.sm,
     borderWidth: 1,
-    borderColor: colors.line2,
-    backgroundColor: colors.surface,
     marginBottom: 8,
   },
-  rowOn: { borderColor: colors.accentSoft, backgroundColor: colors.accentTint },
-  rowLabel: { fontFamily: uiFont(600), fontSize: 14, color: colors.ink },
-  rowLabelOn: { color: colors.accentInk },
+  rowLabel: { fontFamily: uiFont(600), fontSize: 14 },
 });

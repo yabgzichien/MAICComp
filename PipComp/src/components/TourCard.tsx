@@ -15,6 +15,8 @@ import { AccessibilityInfo, Animated, Linking, Platform, Pressable, StyleSheet, 
 import { colors, radius, shadowCard, uiFont } from '../theme';
 import { fillPersona, type TourStep } from '../lib/tourSteps';
 import { LENDER_API_BASE } from '../lib/lenderDirectory';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
 import { Pip } from './Pip';
 
 export interface TourActProgress {
@@ -29,17 +31,24 @@ export interface TourRecapItem {
 }
 
 function ActMeter({ progress, persona }: { progress: TourActProgress; persona?: { name?: string; role?: string } }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   return (
     <View style={styles.meterRow}>
       <View style={styles.meterTrack}>
         {Array.from({ length: progress.totalActs }).map((_, i) => (
           <View
             key={i}
-            style={[styles.meterSeg, i < progress.act - 1 && styles.meterSegDone, i === progress.act - 1 && styles.meterSegActive]}
+            style={[
+              styles.meterSeg,
+              { backgroundColor: colorTheme.line },
+              i < progress.act - 1 && { backgroundColor: theme.accentSoft },
+              i === progress.act - 1 && { backgroundColor: theme.accent },
+            ]}
           />
         ))}
       </View>
-      <Text style={styles.meterLabel}>
+      <Text style={[styles.meterLabel, { color: colorTheme.ink3 }]}>
         Act {progress.act} of {progress.totalActs} · {fillPersona(progress.actLabel, persona ?? {})}
       </Text>
     </View>
@@ -48,6 +57,7 @@ function ActMeter({ progress, persona }: { progress: TourActProgress; persona?: 
 
 /** Brief green flash confirming the judge's own action landed. Announced politely. */
 function CelebrateFlash({ text }: { text: string }) {
+  const theme = useAccent();
   const fade = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const useNative = Platform.OS !== 'web';
@@ -57,8 +67,8 @@ function CelebrateFlash({ text }: { text: string }) {
       .catch(fadeIn);
   }, [fade]);
   return (
-    <Animated.View style={[styles.celebrate, { opacity: fade }]} accessibilityLiveRegion="polite">
-      <Text style={styles.celebrateText}>✓ {text}</Text>
+    <Animated.View style={[styles.celebrate, { backgroundColor: theme.accentTint, opacity: fade }]} accessibilityLiveRegion="polite">
+      <Text style={[styles.celebrateText, { color: theme.accentInk }]}>✓ {text}</Text>
     </Animated.View>
   );
 }
@@ -125,6 +135,8 @@ export function TourCard({
   onAction?: () => void;
   onMissionStart?: () => void;
 }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const interactive = step.kind !== 'explain';
   const isHandoff = step.kind === 'handoff';
   const title = fillPersona(step.title, persona ?? {});
@@ -161,21 +173,21 @@ export function TourCard({
       <View
         ref={focusRef}
         focusable
-        style={styles.card}
+        style={[styles.card, { borderColor: theme.accentSoft, backgroundColor: colorTheme.surface }]}
         accessibilityLabel={`Tour, act ${progress.act} of ${progress.totalActs}. ${title}. ${body}`}
       >
         {celebrate ? <CelebrateFlash text={celebrate} /> : null}
         <ActMeter progress={progress} persona={persona} />
         {interactive && (
-          <View style={styles.turnPill}>
-            <Text style={styles.turnPillText}>{isHandoff ? 'SWITCH APPS' : completed ? 'DONE' : 'YOUR TASK'}</Text>
+          <View style={[styles.turnPill, { backgroundColor: theme.accentTint }]}>
+            <Text style={[styles.turnPillText, { color: theme.accentInk }]}>{isHandoff ? 'SWITCH APPS' : completed ? 'DONE' : 'YOUR TASK'}</Text>
           </View>
         )}
-        <Text style={styles.title} accessibilityRole="header" accessibilityLiveRegion="polite">
+        <Text style={[styles.title, { color: colorTheme.ink }]} accessibilityRole="header" accessibilityLiveRegion="polite">
           {title}
         </Text>
-        <Text style={styles.body}>{body}</Text>
-        {detail ? <Text style={styles.detail}>{detail}</Text> : null}
+        <Text style={[styles.body, { color: colorTheme.ink2 }]}>{body}</Text>
+        {detail ? <Text style={[styles.detail, { color: theme.accentInk }]}>{detail}</Text> : null}
 
         {isHandoff && step.handoff && (
           <View style={styles.handoff}>
@@ -183,15 +195,15 @@ export function TourCard({
               onPress={openConsole}
               accessibilityRole="link"
               accessibilityLabel="Open the Lender Console in a new tab"
-              style={styles.handoffBtn}
+              style={[styles.handoffBtn, { borderColor: theme.accentInk }]}
               hitSlop={4}
             >
-              <Text style={styles.handoffBtnText}>Open the Lender Console →</Text>
+              <Text style={[styles.handoffBtnText, { color: theme.accentInk }]}>Open the Lender Console →</Text>
             </Pressable>
             {/* The honest status of the real loan. Announced politely so a screen-reader user
                 hears the gate open without having to poll the button's disabled state. */}
             <Text
-              style={[styles.handoffStatus, handoffReady && styles.handoffStatusReady]}
+              style={[styles.handoffStatus, { color: colorTheme.ink3 }, handoffReady && [styles.handoffStatusReady, { color: theme.accentInk }]]}
               accessibilityLiveRegion="polite"
             >
               {handoffReady ? step.handoff.ready : step.handoff.waiting}
@@ -203,8 +215,8 @@ export function TourCard({
           <View style={styles.recap}>
             {recap.map((item) => (
               <View key={item.label} style={styles.recapRow}>
-                <Text style={[styles.recapTick, !item.done && styles.recapTickSkipped]}>{item.done ? '✓' : '·'}</Text>
-                <Text style={[styles.recapLabel, !item.done && styles.recapLabelSkipped]}>
+                <Text style={[styles.recapTick, { color: theme.accentInk }, !item.done && { color: colorTheme.ink3 }]}>{item.done ? '✓' : '·'}</Text>
+                <Text style={[styles.recapLabel, { color: colorTheme.ink2 }, !item.done && { color: colorTheme.ink3 }]}>
                   {item.done ? item.label : `${item.label} (skipped)`}
                 </Text>
               </View>
@@ -213,38 +225,38 @@ export function TourCard({
         )}
 
         {step.kind === 'mission' && onMissionStart && (
-          <Pressable onPress={onMissionStart} accessibilityRole="button" accessibilityLabel={step.mission?.cta ?? 'Start'} style={styles.missionBtn} hitSlop={4}>
+          <Pressable onPress={onMissionStart} accessibilityRole="button" accessibilityLabel={step.mission?.cta ?? 'Start'} style={[styles.missionBtn, { backgroundColor: theme.accentInk }]} hitSlop={4}>
             <Text style={styles.missionBtnText}>{step.mission?.cta}</Text>
           </Pressable>
         )}
         {step.actionLabel && onAction && (
           <Pressable onPress={onAction} accessibilityRole="button" accessibilityLabel={step.actionLabel} style={styles.actionBtn} hitSlop={4}>
-            <Text style={styles.actionText}>{step.actionLabel} →</Text>
+            <Text style={[styles.actionText, { color: theme.accentInk }]}>{step.actionLabel} →</Text>
           </Pressable>
         )}
 
         <View style={styles.row}>
           <Pressable onPress={onExit} accessibilityRole="button" accessibilityLabel="Exit tour" hitSlop={8}>
-            <Text style={styles.exit}>Exit</Text>
+            <Text style={[styles.exit, { color: colorTheme.ink3 }]}>Exit</Text>
           </Pressable>
           <View style={{ flex: 1 }} />
           {/* Back sits on EVERY step kind, not only the explain ones. A judge who wants to re-read
               the beat they just cleared should not have to restart the tour to do it. */}
           {index > backFloor && (
             <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Previous step" style={styles.secondaryBtn} hitSlop={8}>
-              <Text style={styles.secondaryText}>Back</Text>
+              <Text style={[styles.secondaryText, { color: colorTheme.ink2 }]}>Back</Text>
             </Pressable>
           )}
           {completed ? (
             // Already done, reached by pressing Back. Nothing to wait for and nothing to skip —
             // one plain Next returns the judge to where they were.
-            <Pressable onPress={onNext} accessibilityRole="button" accessibilityLabel={index === total - 1 ? 'Finish tour' : 'Next step'} style={styles.nextBtn} hitSlop={8}>
+            <Pressable onPress={onNext} accessibilityRole="button" accessibilityLabel={index === total - 1 ? 'Finish tour' : 'Next step'} style={[styles.nextBtn, { backgroundColor: theme.accentInk }]} hitSlop={8}>
               <Text style={styles.nextText}>{index === total - 1 ? 'Done' : 'Next'}</Text>
             </Pressable>
           ) : isHandoff ? (
             <>
               <Pressable onPress={onSkip} accessibilityRole="button" accessibilityLabel="Skip this step" style={styles.secondaryBtn} hitSlop={8}>
-                <Text style={styles.secondaryText}>Skip</Text>
+                <Text style={[styles.secondaryText, { color: colorTheme.ink2 }]}>Skip</Text>
               </Pressable>
               {/* No Continue while the step is watching the real loan: it advances itself the
                   moment the gate opens, and a button asking the judge to confirm the offer they
@@ -259,10 +271,14 @@ export function TourCard({
                   accessibilityRole="button"
                   accessibilityLabel={step.handoff?.cta ?? 'Continue'}
                   accessibilityState={{ disabled: !handoffReady }}
-                  style={[styles.nextBtn, !handoffReady && styles.nextBtnDisabled]}
+                  style={[
+                    styles.nextBtn,
+                    { backgroundColor: theme.accentInk },
+                    !handoffReady && [styles.nextBtnDisabled, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line }],
+                  ]}
                   hitSlop={8}
                 >
-                  <Text style={[styles.nextText, !handoffReady && styles.nextTextDisabled]}>{step.handoff?.cta}</Text>
+                  <Text style={[styles.nextText, !handoffReady && { color: colorTheme.ink3 }]}>{step.handoff?.cta}</Text>
                 </Pressable>
               )}
             </>
@@ -271,11 +287,11 @@ export function TourCard({
             // it builds is what every later act reads. Exit, top left, remains the way out.
             step.required ? null : (
               <Pressable onPress={onSkip} accessibilityRole="button" accessibilityLabel="Skip this step" style={styles.secondaryBtn} hitSlop={8}>
-                <Text style={styles.secondaryText}>Skip</Text>
+                <Text style={[styles.secondaryText, { color: colorTheme.ink2 }]}>Skip</Text>
               </Pressable>
             )
           ) : (
-            <Pressable onPress={onNext} accessibilityRole="button" accessibilityLabel={index === total - 1 ? 'Finish tour' : 'Next step'} style={styles.nextBtn} hitSlop={8}>
+            <Pressable onPress={onNext} accessibilityRole="button" accessibilityLabel={index === total - 1 ? 'Finish tour' : 'Next step'} style={[styles.nextBtn, { backgroundColor: theme.accentInk }]} hitSlop={8}>
               <Text style={styles.nextText}>{index === total - 1 ? 'Done' : 'Next'}</Text>
             </Pressable>
           )}
@@ -307,24 +323,34 @@ export function MissionBanner({
   onSkip: () => void;
   onExit: () => void;
 }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   return (
     <View style={[styles.wrapTop, { paddingTop: 8 + topInset, pointerEvents: 'box-none' }]}>
-      <View style={styles.banner}>
+      <View style={[styles.banner, { borderColor: theme.accentSoft, backgroundColor: colorTheme.surface }]}>
         <View style={styles.bannerDots}>
           {Array.from({ length: phaseCount }).map((_, i) => (
-            <View key={i} style={[styles.dot, i < phaseIndex && styles.dotDone, i === phaseIndex && styles.dotActive]} />
+            <View
+              key={i}
+              style={[
+                styles.dot,
+                { backgroundColor: colorTheme.line },
+                i < phaseIndex && { backgroundColor: theme.accentSoft },
+                i === phaseIndex && [styles.dotActive, { backgroundColor: theme.accent }],
+              ]}
+            />
           ))}
         </View>
-        <Text style={styles.bannerText} accessibilityLiveRegion="polite" numberOfLines={2}>
+        <Text style={[styles.bannerText, { color: colorTheme.ink2 }]} accessibilityLiveRegion="polite" numberOfLines={2}>
           {instruction}
         </Text>
         {!required && (
           <Pressable onPress={onSkip} accessibilityRole="button" accessibilityLabel="Skip the scan mission" hitSlop={8}>
-            <Text style={styles.bannerSkip}>Skip</Text>
+            <Text style={[styles.bannerSkip, { color: colorTheme.ink3 }]}>Skip</Text>
           </Pressable>
         )}
         <Pressable onPress={onExit} accessibilityRole="button" accessibilityLabel="Exit tour" hitSlop={8}>
-          <Text style={styles.bannerExit}>✕</Text>
+          <Text style={[styles.bannerExit, { color: colorTheme.ink3 }]}>✕</Text>
         </Pressable>
       </View>
     </View>
@@ -342,10 +368,11 @@ export function TourResumeChip({
   progress?: TourActProgress | null;
   onResume: () => void;
 }) {
+  const colorTheme = useThemeColors();
   return (
     <View style={[styles.chipWrap, { bottom: 14 + bottomInset, pointerEvents: 'box-none' }]}>
-      <Pressable onPress={onResume} accessibilityRole="button" accessibilityLabel="Resume tour" style={styles.chip}>
-        <Text style={styles.chipText}>{progress ? `Resume tour · Act ${progress.act} of ${progress.totalActs}` : 'Resume tour'}</Text>
+      <Pressable onPress={onResume} accessibilityRole="button" accessibilityLabel="Resume tour" style={[styles.chip, { backgroundColor: colorTheme.ink }]}>
+        <Text style={[styles.chipText, { color: colorTheme.surface }]}>{progress ? `Resume tour · Act ${progress.act} of ${progress.totalActs}` : 'Resume tour'}</Text>
       </Pressable>
     </View>
   );
@@ -356,78 +383,70 @@ const styles = StyleSheet.create({
   wrapTop: { position: 'absolute', left: 0, right: 0, top: 0, paddingHorizontal: 16, zIndex: 40 },
   pipSeat: { position: 'absolute', top: -34, left: 26, zIndex: 41 },
   card: {
-    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1.5,
-    borderColor: colors.accentSoft,
     padding: 16,
     paddingTop: 14,
     ...shadowCard,
   },
   meterRow: { marginBottom: 10, gap: 5 },
   meterTrack: { flexDirection: 'row', gap: 4 },
-  meterSeg: { flex: 1, height: 4, borderRadius: 2, backgroundColor: colors.line },
-  meterSegDone: { backgroundColor: colors.accentSoft },
-  meterSegActive: { backgroundColor: colors.accent },
-  meterLabel: { fontFamily: uiFont(600), fontSize: 11, color: colors.ink3 },
-  turnPill: { alignSelf: 'flex-start', backgroundColor: colors.accentTint, borderRadius: 999, paddingVertical: 3, paddingHorizontal: 9, marginBottom: 6 },
-  turnPillText: { fontFamily: uiFont(800), fontSize: 10, letterSpacing: 0.6, color: colors.accentInk },
-  celebrate: { backgroundColor: colors.accentTint, borderRadius: 10, paddingVertical: 7, paddingHorizontal: 10, marginBottom: 9 },
-  celebrateText: { fontFamily: uiFont(700), fontSize: 12.5, color: colors.accentInk },
-  title: { fontFamily: uiFont(800), fontSize: 15, color: colors.ink, marginBottom: 4 },
-  body: { fontFamily: uiFont(500), fontSize: 13.5, color: colors.ink2, lineHeight: 19 },
-  detail: { fontFamily: uiFont(800), fontSize: 14, color: colors.accentInk, marginTop: 8 },
+  meterSeg: { flex: 1, height: 4, borderRadius: 2 },
+  meterLabel: { fontFamily: uiFont(600), fontSize: 11 },
+  turnPill: { alignSelf: 'flex-start', borderRadius: 999, paddingVertical: 3, paddingHorizontal: 9, marginBottom: 6 },
+  turnPillText: { fontFamily: uiFont(800), fontSize: 10, letterSpacing: 0.6 },
+  celebrate: { borderRadius: 10, paddingVertical: 7, paddingHorizontal: 10, marginBottom: 9 },
+  celebrateText: { fontFamily: uiFont(700), fontSize: 12.5 },
+  title: { fontFamily: uiFont(800), fontSize: 15, marginBottom: 4 },
+  body: { fontFamily: uiFont(500), fontSize: 13.5, lineHeight: 19 },
+  detail: { fontFamily: uiFont(800), fontSize: 14, marginTop: 8 },
   recap: { marginTop: 10, gap: 5 },
   recapRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  recapTick: { fontFamily: uiFont(800), fontSize: 12.5, color: colors.accentInk, width: 14, textAlign: 'center' },
-  recapTickSkipped: { color: colors.ink3 },
-  recapLabel: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2 },
-  recapLabelSkipped: { color: colors.ink3 },
-  missionBtn: { marginTop: 12, backgroundColor: colors.accentInk, borderRadius: 999, paddingVertical: 11, alignItems: 'center' },
+  recapTick: { fontFamily: uiFont(800), fontSize: 12.5, width: 14, textAlign: 'center' },
+  recapTickSkipped: {},
+  recapLabel: { fontFamily: uiFont(600), fontSize: 12.5 },
+  recapLabelSkipped: {},
+  missionBtn: { marginTop: 12, borderRadius: 999, paddingVertical: 11, alignItems: 'center' },
   missionBtnText: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.onAccent },
   actionBtn: { marginTop: 10, alignSelf: 'flex-start' },
-  actionText: { fontFamily: uiFont(700), fontSize: 13, color: colors.accentInk },
+  actionText: { fontFamily: uiFont(700), fontSize: 13 },
   row: { flexDirection: 'row', alignItems: 'center', marginTop: 14, gap: 12 },
-  exit: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink3 },
+  exit: { fontFamily: uiFont(600), fontSize: 13 },
   secondaryBtn: { paddingVertical: 8, paddingHorizontal: 4 },
-  secondaryText: { fontFamily: uiFont(600), fontSize: 13.5, color: colors.ink2 },
-  nextBtn: { backgroundColor: colors.accentInk, borderRadius: 999, paddingVertical: 9, paddingHorizontal: 20 },
+  secondaryText: { fontFamily: uiFont(600), fontSize: 13.5 },
+  nextBtn: { borderRadius: 999, paddingVertical: 9, paddingHorizontal: 20 },
   nextText: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.onAccent },
   // Disabled handoff Continue: reads clearly as "not yet" without going so faint it fails
   // contrast (the ink pair here is checked by tools/contrastAudit).
-  nextBtnDisabled: { backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line },
-  nextTextDisabled: { color: colors.ink3 },
+  nextBtnDisabled: { borderWidth: 1 },
+  nextTextDisabled: {},
   handoff: { marginTop: 12, gap: 8 },
   handoffBtn: {
     borderWidth: 1.5,
-    borderColor: colors.accentInk,
     borderRadius: 999,
     paddingVertical: 10,
     alignItems: 'center',
   },
-  handoffBtnText: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.accentInk },
-  handoffStatus: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink3, textAlign: 'center' },
-  handoffStatusReady: { fontFamily: uiFont(800), color: colors.accentInk },
+  handoffBtnText: { fontFamily: uiFont(700), fontSize: 13.5 },
+  handoffStatus: { fontFamily: uiFont(500), fontSize: 12.5, textAlign: 'center' },
+  handoffStatusReady: { fontFamily: uiFont(800) },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: colors.surface,
     borderRadius: 999,
     borderWidth: 1.5,
-    borderColor: colors.accentSoft,
     paddingVertical: 9,
     paddingHorizontal: 14,
     ...shadowCard,
   },
   bannerDots: { flexDirection: 'row', gap: 4 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.line },
-  dotDone: { backgroundColor: colors.accentSoft },
-  dotActive: { backgroundColor: colors.accent, width: 14 },
-  bannerText: { flex: 1, fontFamily: uiFont(600), fontSize: 12, color: colors.ink2, lineHeight: 16 },
-  bannerSkip: { fontFamily: uiFont(700), fontSize: 12.5, color: colors.ink3 },
-  bannerExit: { fontFamily: uiFont(700), fontSize: 13, color: colors.ink3, paddingLeft: 2 },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  dotActive: { width: 14 },
+  bannerText: { flex: 1, fontFamily: uiFont(600), fontSize: 12, lineHeight: 16 },
+  bannerSkip: { fontFamily: uiFont(700), fontSize: 12.5 },
+  bannerExit: { fontFamily: uiFont(700), fontSize: 13, paddingLeft: 2 },
   chipWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center', zIndex: 40 },
-  chip: { backgroundColor: colors.ink, borderRadius: 999, paddingVertical: 9, paddingHorizontal: 18, ...shadowCard },
-  chipText: { fontFamily: uiFont(700), fontSize: 13, color: colors.surface },
+  chip: { borderRadius: 999, paddingVertical: 9, paddingHorizontal: 18, ...shadowCard },
+  chipText: { fontFamily: uiFont(700), fontSize: 13 },
 });

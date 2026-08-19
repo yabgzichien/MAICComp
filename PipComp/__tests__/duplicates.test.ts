@@ -60,6 +60,12 @@ describe('findDuplicate', () => {
     const s = [txn({ date: null, createdAt: '2026-05-12T19:00:00.000Z' })];
     expect(findDuplicate(s, { merchant: 'ABC Trading', amount: 10, date: '2026-05-12' }, TODAY)).not.toBeNull();
   });
+
+  it('does not flag duplicates when candidate has no merchant', () => {
+    const s = [txn({ merchantRaw: '', merchantKey: '', amount: 10, date: '2026-05-12' })];
+    expect(findDuplicate(s, { merchant: '', amount: 10, date: '2026-05-12' }, TODAY)).toBeNull();
+    expect(findDuplicate(saved, { merchant: '', amount: 10, date: '2026-05-12' }, TODAY)).toBeNull();
+  });
 });
 
 describe('todayISO', () => {

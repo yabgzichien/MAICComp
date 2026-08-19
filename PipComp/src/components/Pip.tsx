@@ -2,10 +2,9 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, Easing } from 'react-native';
 import Svg, { Circle, Ellipse, Path, G } from 'react-native-svg';
 import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
 
 export type PipExpr = 'idle' | 'happy' | 'think' | 'curious';
-
-const INK = '#15281d';
 
 /** Multiply each RGB channel of a #rrggbb hex by `factor` (brightness shade). */
 function shade(hex: string, factor: number): string {
@@ -18,7 +17,7 @@ function shade(hex: string, factor: number): string {
   return '#' + ch.map((c) => c.toString(16).padStart(2, '0')).join('');
 }
 
-function Eyes({ expr }: { expr: PipExpr }) {
+function Eyes({ expr, INK }: { expr: PipExpr; INK: string }) {
   if (expr === 'happy') {
     return (
       <G fill="none" stroke={INK} strokeWidth={3.4} strokeLinecap="round">
@@ -57,7 +56,7 @@ function Eyes({ expr }: { expr: PipExpr }) {
   );
 }
 
-function Mouth({ expr }: { expr: PipExpr }) {
+function Mouth({ expr, INK }: { expr: PipExpr; INK: string }) {
   if (expr === 'happy') return <Path d="M41 64 Q50 75 59 64 Q50 69 41 64 Z" fill={INK} />;
   if (expr === 'think') return <Circle cx={50} cy={67} r={2.6} fill={INK} />;
   if (expr === 'curious')
@@ -77,6 +76,8 @@ export function Pip({
   float?: boolean;
 }) {
   const theme = useAccent();
+  const colorTheme = useThemeColors();
+  const INK = colorTheme.ink;
   const fill = color ?? theme.accent;
   const ty = useRef(new Animated.Value(0)).current;
 
@@ -122,8 +123,8 @@ export function Pip({
         <Circle cx={33} cy={63} r={5} fill="rgba(255,255,255,0.18)" />
         <Circle cx={67} cy={63} r={5} fill="rgba(255,255,255,0.18)" />
 
-        <Eyes expr={expr} />
-        <Mouth expr={expr} />
+        <Eyes expr={expr} INK={INK} />
+        <Mouth expr={expr} INK={INK} />
       </Svg>
     </Animated.View>
   );

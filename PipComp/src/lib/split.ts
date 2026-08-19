@@ -342,6 +342,15 @@ export interface SettlementMatch {
 /** How long after a bill a repayment is still plausibly for that bill. */
 const SETTLEMENT_WINDOW_DAYS = 120;
 
+/**
+ * A debt this old is worth chasing, and worth Pip mentioning.
+ *
+ * Lives here rather than in a screen because three places need to agree on it: the Owed
+ * screen's "Overdue" pill, the Dashboard's nudge line, and the reminder scheduler. When they
+ * disagreed the app would flag a debt on one screen and stay silent on another.
+ */
+export const AGING_DAYS = 14;
+
 /** YYYY-MM-DD out of an ISO date/datetime, or null. */
 function dayOf(iso: string | null): string | null {
   if (!iso) return null;
@@ -357,6 +366,46 @@ export function daysBetween(from: string | null, to: string | null): number | nu
   const ms = new Date(`${b}T00:00:00Z`).getTime() - new Date(`${a}T00:00:00Z`).getTime();
   if (!Number.isFinite(ms)) return null;
   return Math.round(ms / 86400000);
+}
+
+/** Everything one person still owes you, rolled up across every bill they are on. */
+export interface PersonDebt {
+  personId: string;
+  name: string;
+  total: number;
+  shares: OpenShare[];
+  /** Age of their oldest unpaid bill, in days. Compare against `AGING_DAYS`. */
+  oldestDays: number;
+}
+
+/**
+ * Open shares grouped by who owes them, biggest debt first, each person's bills oldest first.
+ *
+ * Totals accumulate through cents so a person on three bills cannot drift a cent away from the
+ * sum of their shares. Shared by the Owed screen and the reminder scheduler so a debt the
+ * screen calls overdue is exactly the debt that gets a notification.
+ */
+export function groupOpenSharesByPerson(open: OpenShare[], today: string): PersonDebt[] {
+  const map = new Map<string, PersonDebt>();
+  for (const share of open) {
+    let entry = map.get(share.personId);
+    if (!entry) {
+      entry = { personId: share.personId, name: share.personName, total: 0, shares: [], oldestDays: 0 };
+      map.set(share.personId, entry);
+    }
+    entry.total = fromCents(toCents(entry.total) + toCents(share.outstanding));
+    entry.shares.push(share);
+    entry.oldestDays = Math.max(entry.oldestDays, daysBetween(share.billDate, today) ?? 0);
+  }
+  for (const entry of map.values()) {
+    entry.shares.sort((a, b) => (a.billDate ?? '').localeCompare(b.billDate ?? ''));
+  }
+  return [...map.values()].sort((a, b) => b.total - a.total);
+}
+
+/** The age of the oldest unpaid bill across everyone, or 0 when nobody owes you. */
+export function oldestOverdueDays(open: OpenShare[], today: string): number {
+  return groupOpenSharesByPerson(open, today).reduce((max, p) => Math.max(max, p.oldestDays), 0);
 }
 
 /**

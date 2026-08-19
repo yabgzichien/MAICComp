@@ -7,8 +7,10 @@ import { Amount, BtnLabel, Card, CatBadge, Eyebrow, PrimaryButton } from '../com
 import { fmt } from '../lib/format';
 import { outstanding } from '../lib/split';
 import type { Category, Transaction } from '../lib/types';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
 import { useAppData, type NewLearned } from '../state/store';
-import { colors, uiFont } from '../theme';
+import { uiFont } from '../theme';
 
 const fallback: Category = { id: 'other', label: 'Other', icon: 'dots', hue: 220, kind: 'expense', isDefault: true };
 
@@ -24,6 +26,8 @@ export function SavedScreen({
   onDone: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const pop = useRef(new Animated.Value(0)).current;
   const { splits, shares } = useAppData();
 
@@ -46,18 +50,18 @@ export function SavedScreen({
   }, [splits, shares]);
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: colorTheme.bg }]}>
       <ScrollView contentContainerStyle={{ paddingTop: insets.top + 30, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         <View style={{ alignItems: 'center', paddingHorizontal: 22 }}>
           <Animated.View style={{ transform: [{ scale: pop }] }}>
             <Pip size={104} expr="happy" />
           </Animated.View>
-          <Text style={styles.title}>{result.length === 0 ? 'Nothing added' : 'All sorted!'}</Text>
+          <Text style={[styles.title, { color: colorTheme.ink }]}>{result.length === 0 ? 'Nothing added' : 'All sorted!'}</Text>
           {result.length === 0 ? (
-            <Text style={styles.sub}>You skipped every item in this scan.</Text>
+            <Text style={[styles.sub, { color: colorTheme.ink2 }]}>You skipped every item in this scan.</Text>
           ) : (
-            <Text style={styles.sub}>
-              <Text style={styles.subStrong}>
+            <Text style={[styles.sub, { color: colorTheme.ink2 }]}>
+              <Text style={[styles.subStrong, { color: colorTheme.ink }]}>
                 {result.length} transaction{result.length > 1 ? 's' : ''}
               </Text>{' '}
               · <Amount value={total} size={14.5} weight={700} /> added
@@ -67,10 +71,10 @@ export function SavedScreen({
 
         {newLearned.length > 0 && (
           <View style={{ paddingHorizontal: 18, paddingTop: 22 }}>
-            <Card style={styles.learnCard}>
+            <Card style={[styles.learnCard, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]}>
               <View style={styles.learnHead}>
-                <Icon name="sparkles" size={17} color={colors.accent} />
-                <Text style={styles.learnTitle}>
+                <Icon name="sparkles" size={17} color={theme.accent} />
+                <Text style={[styles.learnTitle, { color: theme.accentInk }]}>
                   Pip learned {newLearned.length} new merchant{newLearned.length > 1 ? 's' : ''}
                 </Text>
               </View>
@@ -80,16 +84,16 @@ export function SavedScreen({
                   return (
                     <View key={i} style={styles.learnRow}>
                       <CatBadge category={cat} size={28} rad={8} />
-                      <Text style={styles.learnMerchant} numberOfLines={1}>
+                      <Text style={[styles.learnMerchant, { color: colorTheme.ink }]} numberOfLines={1}>
                         {n.merchant}
                       </Text>
-                      <Icon name="arrowRight" size={14} color={colors.ink3} />
-                      <Text style={styles.learnCat}>{cat.label}</Text>
+                      <Icon name="arrowRight" size={14} color={colorTheme.ink3} />
+                      <Text style={[styles.learnCat, { color: theme.accentInk }]}>{cat.label}</Text>
                     </View>
                   );
                 })}
               </View>
-              <Text style={styles.learnFoot}>Next time I see these, I’ll suggest the category automatically.</Text>
+              <Text style={[styles.learnFoot, { color: colorTheme.ink2 }]}>Next time I see these, I’ll suggest the category automatically.</Text>
             </Card>
           </View>
         )}
@@ -102,21 +106,21 @@ export function SavedScreen({
               const cat = catById[t.categoryId ?? 'other'] ?? fallback;
               const income = t.type === 'income';
               return (
-                <View key={t.id} style={[styles.row, i > 0 && styles.divider]}>
+                <View key={t.id} style={[styles.row, i > 0 && [styles.divider, { borderTopColor: colorTheme.line2 }]]}>
                   <CatBadge category={cat} size={36} />
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={styles.merchant} numberOfLines={1}>
-                      {t.merchantRaw}
+                    <Text style={[styles.merchant, { color: colorTheme.ink }]} numberOfLines={1}>
+                      {t.merchantRaw || cat.label}
                     </Text>
-                    <Text style={styles.cat}>{cat.label}</Text>
+                    <Text style={[styles.cat, { color: colorTheme.ink2 }]}>{cat.label}</Text>
                     {owedByTxn[t.id] > 0 && (
-                      <View style={styles.owedChip}>
-                        <Icon name="gift" size={10} color={colors.accentInk} />
-                        <Text style={styles.owedChipText}>RM {fmt(owedByTxn[t.id])} owed to you</Text>
+                      <View style={[styles.owedChip, { backgroundColor: theme.accentTint }]}>
+                        <Icon name="gift" size={10} color={theme.accentInk} />
+                        <Text style={[styles.owedChipText, { color: theme.accentInk }]}>RM {fmt(owedByTxn[t.id])} owed to you</Text>
                       </View>
                     )}
                   </View>
-                  <Amount value={t.amount} size={14} weight={600} color={income ? colors.accent : colors.ink} />
+                  <Amount value={t.amount} size={14} weight={600} color={income ? theme.accent : colorTheme.ink} />
                 </View>
               );
             })}
@@ -125,7 +129,7 @@ export function SavedScreen({
         )}
       </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+      <View style={[styles.footer, { backgroundColor: colorTheme.bg, borderTopColor: colorTheme.line2 }, { paddingBottom: insets.bottom + 16 }]}>
         <PrimaryButton onPress={onDone}>
           <BtnLabel>Done</BtnLabel>
         </PrimaryButton>
@@ -135,10 +139,10 @@ export function SavedScreen({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
-  title: { fontFamily: uiFont(700), fontSize: 25, color: colors.ink, marginTop: 14 },
-  sub: { marginTop: 6, fontFamily: uiFont(500), fontSize: 14.5, color: colors.ink2 },
-  subStrong: { fontFamily: uiFont(700), color: colors.ink },
+  root: { flex: 1 },
+  title: { fontFamily: uiFont(700), fontSize: 25, marginTop: 14 },
+  sub: { marginTop: 6, fontFamily: uiFont(500), fontSize: 14.5 },
+  subStrong: { fontFamily: uiFont(700) },
   owedChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -148,20 +152,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 3,
     borderRadius: 999,
-    backgroundColor: colors.accentTint,
   },
-  owedChipText: { fontFamily: uiFont(600), fontSize: 10.5, color: colors.accentInk },
-  learnCard: { padding: 16, backgroundColor: colors.accentTint, borderColor: colors.accentSoft },
+  owedChipText: { fontFamily: uiFont(600), fontSize: 10.5 },
+  learnCard: { padding: 16 },
   learnHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  learnTitle: { fontFamily: uiFont(700), fontSize: 14.5, color: colors.accentInk },
+  learnTitle: { fontFamily: uiFont(700), fontSize: 14.5 },
   learnRow: { flexDirection: 'row', alignItems: 'center', gap: 9 },
-  learnMerchant: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.ink, flexShrink: 1 },
-  learnCat: { fontFamily: uiFont(600), fontSize: 13.5, color: colors.accentInk },
-  learnFoot: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 11 },
+  learnMerchant: { fontFamily: uiFont(700), fontSize: 13.5, flexShrink: 1 },
+  learnCat: { fontFamily: uiFont(600), fontSize: 13.5 },
+  learnFoot: { fontFamily: uiFont(500), fontSize: 12.5, marginTop: 11 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 15, paddingVertical: 11 },
-  divider: { borderTopWidth: 1, borderTopColor: colors.line2 },
-  merchant: { fontFamily: uiFont(600), fontSize: 14, color: colors.ink },
-  cat: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, marginTop: 1 },
+  divider: { borderTopWidth: 1 },
+  merchant: { fontFamily: uiFont(600), fontSize: 14 },
+  cat: { fontFamily: uiFont(500), fontSize: 12, marginTop: 1 },
   footer: {
     position: 'absolute',
     left: 0,
@@ -169,8 +172,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     paddingHorizontal: 18,
     paddingTop: 12,
-    backgroundColor: colors.bg,
     borderTopWidth: 1,
-    borderTopColor: colors.line2,
   },
 });

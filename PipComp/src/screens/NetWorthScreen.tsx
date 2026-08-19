@@ -29,7 +29,9 @@ import { todayISO } from '../lib/duplicates';
 import { searchInvestments } from '../prices';
 import type { Account, AccountKind, PriceQuote } from '../lib/types';
 import { useAppData } from '../state/store';
-import { colors, numFont, platformShadow, radius, shadowCard, shadowToggle, uiFont } from '../theme';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
+import { numFont, platformShadow, radius, shadowCard, shadowToggle, uiFont } from '../theme';
 
 const RED2 = '#c5402f';
 function timeOf(iso: string | null): string {
@@ -61,6 +63,8 @@ function lastMonths(n: number): string[] {
 
 export function NetWorthScreen({ onBack }: { onBack: () => void }) {
   const insets = useSafeAreaInsets();
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const { accounts, balanceEntries, accountValues, prices, pricesAsOf, refreshPrices } = useAppData();
   const [adding, setAdding] = useState(false);
   const [presetCoin, setPresetCoin] = useState<TickerResult | null>(null);
@@ -111,13 +115,13 @@ export function NetWorthScreen({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: colorTheme.bg }]}>
       {/* Nav */}
       <View style={[styles.nav, { paddingTop: insets.top + 6 }]}>
-        <Pressable onPress={onBack} style={styles.navBtn} hitSlop={6}>
-          <Icon name="chevronLeft" size={18} color={colors.ink2} />
+        <Pressable onPress={onBack} style={[styles.navBtn, { backgroundColor: colorTheme.surface }]} hitSlop={6}>
+          <Icon name="chevronLeft" size={18} color={colorTheme.ink2} />
         </Pressable>
-        <Text style={styles.navTitle}>Net Worth</Text>
+        <Text style={[styles.navTitle, { color: colorTheme.ink }]}>Net Worth</Text>
         {/* invisible spacer keeps the title centered opposite the back button */}
         <View style={{ width: 36 }} />
       </View>
@@ -126,7 +130,7 @@ export function NetWorthScreen({ onBack }: { onBack: () => void }) {
         contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          hasHoldings ? <RefreshControl refreshing={refreshing} onRefresh={doRefresh} tintColor={colors.accent} /> : undefined
+          hasHoldings ? <RefreshControl refreshing={refreshing} onRefresh={doRefresh} tintColor={theme.accent} /> : undefined
         }
       >
         <HeroCard nw={nw} series={series} months={monthShorts} delta={delta} prevMonth={prevMonth} mode={profitMode} setMode={setProfitMode} />
@@ -134,14 +138,14 @@ export function NetWorthScreen({ onBack }: { onBack: () => void }) {
 
         {empty && (
           <Card style={{ padding: 22, alignItems: 'center', margin: 16 }}>
-            <Icon name="scale" size={40} color={colors.accent} />
-            <Text style={styles.emptyTitle}>Track what you own and owe</Text>
-            <Text style={styles.emptySub}>Add cash, investments, and loans to see your net worth grow over time.</Text>
+            <Icon name="scale" size={40} color={theme.accent} />
+            <Text style={[styles.emptyTitle, { color: colorTheme.ink }]}>Track what you own and owe</Text>
+            <Text style={[styles.emptySub, { color: colorTheme.ink2 }]}>Add cash, investments, and loans to see your net worth grow over time.</Text>
           </Card>
         )}
 
         {/* Assets */}
-        {groups.assets.length > 0 && <GroupHeader label="Assets" total={nw.assets} color={colors.accent} />}
+        {groups.assets.length > 0 && <GroupHeader label="Assets" total={nw.assets} color={theme.accent} />}
         {groups.assets.map((g) => (
           <AssetClassCard
             key={g.cls}
@@ -158,9 +162,9 @@ export function NetWorthScreen({ onBack }: { onBack: () => void }) {
         ))}
 
         {/* Liabilities */}
-        {groups.liabilities.length > 0 && <GroupHeader label="Liabilities" total={nw.liabilities} color={colors.red} />}
+        {groups.liabilities.length > 0 && <GroupHeader label="Liabilities" total={nw.liabilities} color={colorTheme.red} />}
         {groups.liabilities.length > 0 && (
-          <View style={styles.classCard}>
+          <View style={[styles.classCard, { backgroundColor: colorTheme.surface }]}>
             {flattenLiabs(groups.liabilities).map((row, i, arr) => (
               <LiabilityRowD
                 key={row.account.id}
@@ -208,6 +212,7 @@ function HeroCard({
   mode: ValueMode;
   setMode: (m: ValueMode) => void;
 }) {
+  const theme = useAccent();
   const deltaUp = (delta ?? 0) >= 0;
   const prevNet = series.length >= 2 ? series[series.length - 2] : 0;
   const pct = prevNet !== 0 ? (delta ?? 0) / Math.abs(prevNet) * 100 : 0;
@@ -239,7 +244,7 @@ function HeroCard({
             const on = mode === m;
             return (
               <Pressable key={m} onPress={() => setMode(m)} style={[styles.heroToggleBtn, on && styles.heroToggleBtnOn]}>
-                <Text style={[styles.heroToggleText, on && styles.heroToggleTextOn]}>{m === 'amount' ? 'RM' : '%'}</Text>
+                <Text style={[styles.heroToggleText, on && [styles.heroToggleTextOn, { color: theme.accentInk }]]}>{m === 'amount' ? 'RM' : '%'}</Text>
               </Pressable>
             );
           })}
@@ -321,9 +326,14 @@ function HeroSparkline({ values }: { values: number[] }) {
 
 // ── Scan / add row ──────────────────────────────────────────────────────────
 function ScanRow({ onScan, onAdd }: { onScan: () => void; onAdd: () => void }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   return (
     <View style={styles.scanRow}>
-      <Pressable onPress={onScan} style={styles.scanBanner}>
+      <Pressable
+        onPress={onScan}
+        style={[styles.scanBanner, { backgroundColor: theme.accentInk, ...platformShadow(theme.accent, 0.3, 14, { width: 0, height: 4 }, 3) }]}
+      >
         <View style={styles.scanIcon}>
           <Icon name="scan" size={16} color="#fff" />
         </View>
@@ -332,8 +342,8 @@ function ScanRow({ onScan, onAdd }: { onScan: () => void; onAdd: () => void }) {
           <Text style={styles.scanSub}>AI reads your bank screenshot</Text>
         </View>
       </Pressable>
-      <Pressable onPress={onAdd} style={styles.addBtn}>
-        <Icon name="plus" size={18} color={colors.accent} stroke={2.4} />
+      <Pressable onPress={onAdd} style={[styles.addBtn, { borderColor: colorTheme.line, backgroundColor: colorTheme.surface }]}>
+        <Icon name="plus" size={18} color={theme.accent} stroke={2.4} />
       </Pressable>
     </View>
   );
@@ -341,33 +351,37 @@ function ScanRow({ onScan, onAdd }: { onScan: () => void; onAdd: () => void }) {
 
 // ── Group / class labels ────────────────────────────────────────────────────
 function GroupHeader({ label, total, color }: { label: string; total: number; color: string }) {
+  const colorTheme = useThemeColors();
   return (
     <View style={styles.groupHead}>
-      <Text style={styles.groupLabel}>{label}</Text>
+      <Text style={[styles.groupLabel, { color: colorTheme.ink2 }]}>{label}</Text>
       <Text style={[styles.groupTotal, { color }]}>RM {fmt(total)}</Text>
     </View>
   );
 }
 
 function ClassChip({ label, sub }: { label: string; sub: string }) {
+  const colorTheme = useThemeColors();
   return (
     <View style={styles.classChipRow}>
-      <Text style={styles.classChipLabel}>{label}</Text>
-      <Text style={styles.classChipSub}>{sub}</Text>
+      <Text style={[styles.classChipLabel, { color: colorTheme.ink2 }]}>{label}</Text>
+      <Text style={[styles.classChipSub, { color: colorTheme.ink2 }]}>{sub}</Text>
     </View>
   );
 }
 
 function PriceStamp({ asOf, refreshing, onRefresh }: { asOf: string | null; refreshing: boolean; onRefresh: () => void }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   return (
-    <View style={styles.priceStamp}>
+    <View style={[styles.priceStamp, { borderBottomColor: colorTheme.line, backgroundColor: colorTheme.surface2 }]}>
       <View style={styles.liveDot} />
-      <Text style={styles.priceStampText}>Prices as of {timeOf(asOf) || ''} today</Text>
-      <Pressable onPress={onRefresh} style={styles.refreshBtn} hitSlop={6}>
+      <Text style={[styles.priceStampText, { color: colorTheme.ink2 }]}>Prices as of {timeOf(asOf) || ''} today</Text>
+      <Pressable onPress={onRefresh} style={[styles.refreshBtn, { backgroundColor: theme.accentTint }]} hitSlop={6}>
         {refreshing ? (
-          <ActivityIndicator size="small" color={colors.accent} />
+          <ActivityIndicator size="small" color={theme.accent} />
         ) : (
-          <Text style={styles.refreshText}>↻ Refresh</Text>
+          <Text style={[styles.refreshText, { color: theme.accent }]}>↻ Refresh</Text>
         )}
       </Pressable>
     </View>
@@ -396,6 +410,7 @@ function AssetClassCard({
   onTapManual: (id: string) => void;
   onTapGroup: (symbol: string) => void;
 }) {
+  const colorTheme = useThemeColors();
   const holdings = g.accounts.filter((x) => isHolding(x.account)).map((x) => x.account);
   const manual = g.accounts.filter((x) => !isHolding(x.account));
   const hGroups = groupHoldings(holdings, accountValues);
@@ -404,7 +419,7 @@ function AssetClassCard({
   return (
     <>
       <ClassChip label={hasH ? `${g.label} · Live prices` : g.label} sub={`RM ${fmt(g.total)}`} />
-      <View style={styles.classCard}>
+      <View style={[styles.classCard, { backgroundColor: colorTheme.surface }]}>
         {hasH && <PriceStamp asOf={pricesAsOf} refreshing={refreshing} onRefresh={onRefresh} />}
         {hGroups.map((grp, i) => {
           const profit = grp.cost != null && grp.cost > 0 ? holdingProfit(grp.value, grp.cost) : null;
@@ -422,6 +437,8 @@ function AssetClassCard({
 }
 
 function ManualRowD({ icon, name, sub, value, isLast, onPress, customIcon }: { icon: IconName; name: string; sub: string; value: number; isLast: boolean; onPress: () => void; customIcon?: string | null }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const inst = matchInstitution(name);
   const isCustomImage = customIcon && (
     customIcon.startsWith('data:') ||
@@ -431,23 +448,23 @@ function ManualRowD({ icon, name, sub, value, isLast, onPress, customIcon }: { i
     customIcon.startsWith('/')
   );
   return (
-    <Pressable onPress={onPress} style={[styles.row, !isLast && styles.rowDivider]}>
+    <Pressable onPress={onPress} style={[styles.row, !isLast && [styles.rowDivider, { borderBottomColor: colorTheme.line }]]}>
       {inst ? (
         <InstitutionBadge inst={inst} size={36} />
       ) : isCustomImage ? (
-        <View style={[styles.rowTile, { overflow: 'hidden' }]}>
+        <View style={[styles.rowTile, { backgroundColor: theme.accentTint, overflow: 'hidden' }]}>
           <Image source={{ uri: customIcon }} style={{ width: 36, height: 36 }} resizeMode="cover" />
         </View>
       ) : (
-        <View style={styles.rowTile}>
-          <Icon name={icon} size={16} color={colors.accent} />
+        <View style={[styles.rowTile, { backgroundColor: theme.accentTint }]}>
+          <Icon name={icon} size={16} color={theme.accent} />
         </View>
       )}
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={styles.rowName} numberOfLines={1}>{name}</Text>
-        <Text style={styles.rowSub} numberOfLines={1}>{sub}</Text>
+        <Text style={[styles.rowName, { color: colorTheme.ink }]} numberOfLines={1}>{name}</Text>
+        <Text style={[styles.rowSub, { color: colorTheme.ink2 }]} numberOfLines={1}>{sub}</Text>
       </View>
-      <Text style={styles.rowVal}>RM {fmt(value)}</Text>
+      <Text style={[styles.rowVal, { color: colorTheme.ink }]}>RM {fmt(value)}</Text>
     </Pressable>
   );
 }
@@ -467,6 +484,8 @@ function HoldingRowD({
   isLast: boolean;
   onPress: () => void;
 }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const badge = badgeFor(grp.sub, grp.symbol);
   const unitPx = price ? toQuantityUnitPrice(grp.symbol, price.priceMYR) : null;
   const ch = price?.change24 ?? null;
@@ -474,39 +493,40 @@ function HoldingRowD({
   const up = (profit?.profit ?? 0) >= 0;
   const tick = grp.sub === 'commodity' ? (grp.symbol.startsWith('SI') ? 'XAG' : 'XAU') : grp.ticker;
   return (
-    <Pressable onPress={onPress} style={[styles.row, !isLast && styles.rowDivider]}>
+    <Pressable onPress={onPress} style={[styles.row, !isLast && [styles.rowDivider, { borderBottomColor: colorTheme.line }]]}>
       <View style={[styles.badge, { backgroundColor: badge.bg }]}>
         <Text style={[styles.badgeTick, { color: badge.clr }]} numberOfLines={1}>{tick}</Text>
         <Text style={[styles.badgeLbl, { color: badge.clr }]}>{badge.lbl}</Text>
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={styles.rowName} numberOfLines={1}>{grp.name}</Text>
+        <Text style={[styles.rowName, { color: colorTheme.ink }]} numberOfLines={1}>{grp.name}</Text>
         <View style={styles.holdMetaRow}>
-          <Text style={styles.holdMeta} numberOfLines={1}>
+          <Text style={[styles.holdMeta, { color: colorTheme.ink2 }]} numberOfLines={1}>
             {grp.quantity} {unitPx != null ? `× RM ${fmtPx(unitPx)}` : grp.ticker}
           </Text>
           {ch != null && (
-            <Text style={[styles.chChip, { color: chUp ? '#1a9962' : colors.red, backgroundColor: chUp ? colors.accentTint : '#fff0ef' }]}>
+            <Text style={[styles.chChip, { color: chUp ? '#1a9962' : colorTheme.red, backgroundColor: chUp ? theme.accentTint : '#fff0ef' }]}>
               {chUp ? '+' : ''}{ch.toFixed(2)}%
             </Text>
           )}
         </View>
       </View>
       <View style={{ alignItems: 'flex-end' }}>
-        <Text style={styles.rowVal}>RM {fmt(grp.value)}</Text>
+        <Text style={[styles.rowVal, { color: colorTheme.ink }]}>RM {fmt(grp.value)}</Text>
         {profit && (
-          <Text style={[styles.rowProfit, { color: up ? colors.accent : colors.red }]}>
+          <Text style={[styles.rowProfit, { color: up ? theme.accent : colorTheme.red }]}>
             {up ? '+' : '−'}
             {profitMode === 'percent' && profit.pct != null ? `${Math.abs(profit.pct).toFixed(1)}%` : `RM ${fmt(Math.abs(profit.profit))}`}
           </Text>
         )}
       </View>
-      <Icon name="chevronRight" size={15} color={colors.ink3} />
+      <Icon name="chevronRight" size={15} color={colorTheme.ink3} />
     </Pressable>
   );
 }
 
 function LiabilityRowD({ name, cls, value, isLast, onPress, customIcon }: { name: string; cls: string; value: number; isLast: boolean; onPress: () => void; customIcon?: string | null }) {
+  const colorTheme = useThemeColors();
   const inst = matchInstitution(name);
   const isCustomImage = customIcon && (
     customIcon.startsWith('data:') ||
@@ -516,7 +536,7 @@ function LiabilityRowD({ name, cls, value, isLast, onPress, customIcon }: { name
     customIcon.startsWith('/')
   );
   return (
-    <Pressable onPress={onPress} style={[styles.row, !isLast && styles.rowDivider]}>
+    <Pressable onPress={onPress} style={[styles.row, !isLast && [styles.rowDivider, { borderBottomColor: colorTheme.line }]]}>
       {inst ? (
         <InstitutionBadge inst={inst} size={36} />
       ) : isCustomImage ? (
@@ -525,16 +545,16 @@ function LiabilityRowD({ name, cls, value, isLast, onPress, customIcon }: { name
         </View>
       ) : (
         <View style={[styles.rowTile, { backgroundColor: '#fff0ef' }]}>
-          <Icon name="scale" size={16} color={colors.red} />
+          <Icon name="scale" size={16} color={colorTheme.red} />
         </View>
       )}
       <View style={{ flex: 1, minWidth: 0 }}>
         <View style={styles.liabNameRow}>
-          <Text style={styles.rowName} numberOfLines={1}>{name}</Text>
-          <Text style={styles.liabChip}>{cls}</Text>
+          <Text style={[styles.rowName, { color: colorTheme.ink }]} numberOfLines={1}>{name}</Text>
+          <Text style={[styles.liabChip, { color: colorTheme.red }]}>{cls}</Text>
         </View>
       </View>
-      <Text style={[styles.rowVal, { color: colors.red }]}>-RM {fmt(value)}</Text>
+      <Text style={[styles.rowVal, { color: colorTheme.red }]}>-RM {fmt(value)}</Text>
     </Pressable>
   );
 }
@@ -562,16 +582,18 @@ function AccountRow({
   profitMode: ValueMode;
   onPress: () => void;
 }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   return (
-    <Pressable onPress={onPress} style={[styles.acctRow, styles.divider]}>
+    <Pressable onPress={onPress} style={[styles.acctRow, styles.divider, { borderTopColor: colorTheme.line2 }]}>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={styles.acctName} numberOfLines={1}>{name}</Text>
-        {meta ? <Text style={styles.acctMeta} numberOfLines={1}>{meta}</Text> : null}
+        <Text style={[styles.acctName, { color: colorTheme.ink }]} numberOfLines={1}>{name}</Text>
+        {meta ? <Text style={[styles.acctMeta, { color: colorTheme.ink2 }]} numberOfLines={1}>{meta}</Text> : null}
       </View>
       <View style={{ alignItems: 'flex-end' }}>
-        <Text style={styles.acctVal}>RM {fmt(value)}</Text>
+        <Text style={[styles.acctVal, { color: colorTheme.ink2 }]}>RM {fmt(value)}</Text>
         {profit && (
-          <Text style={[styles.profit, { color: profit.profit >= 0 ? colors.accent : RED2 }]}>
+          <Text style={[styles.profit, { color: profit.profit >= 0 ? theme.accent : RED2 }]}>
             {profit.profit >= 0 ? '+' : '−'}
             {profitMode === 'percent' && profit.pct != null
               ? `${Math.abs(profit.pct).toFixed(1)}%`
@@ -579,7 +601,7 @@ function AccountRow({
           </Text>
         )}
       </View>
-      <Icon name="chevronRight" size={16} color={colors.ink3} />
+      <Icon name="chevronRight" size={16} color={colorTheme.ink3} />
     </Pressable>
   );
 }
@@ -587,6 +609,8 @@ function AccountRow({
 /** Add a new account: kind → class → name → opening value, or a live holding (optionally preset to a ticker). */
 function AddAccountModal({ visible, preset, onClose }: { visible: boolean; preset?: TickerResult | null; onClose: () => void }) {
   const insets = useSafeAreaInsets();
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const { addAccount, addHolding } = useAppData();
   const [kind, setKind] = useState<AccountKind>('asset');
   const [cls, setCls] = useState('cash');
@@ -669,14 +693,14 @@ function AddAccountModal({ visible, preset, onClose }: { visible: boolean; prese
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
       <Pressable style={styles.backdrop} onPress={close} />
-      <View style={[styles.sheet, { paddingBottom: insets.bottom + 18 }]}>
-        <View style={styles.handle} />
+      <View style={[styles.sheet, { paddingBottom: insets.bottom + 18, backgroundColor: colorTheme.bg }]}>
+        <View style={[styles.handle, { backgroundColor: colorTheme.line }]} />
         <View style={styles.sheetHead}>
-          <Text style={styles.sheetTitle}>New account</Text>
-          <Pressable onPress={close} hitSlop={8}><Icon name="x" size={20} color={colors.ink2} /></Pressable>
+          <Text style={[styles.sheetTitle, { color: colorTheme.ink }]}>New account</Text>
+          <Pressable onPress={close} hitSlop={8}><Icon name="x" size={20} color={colorTheme.ink2} /></Pressable>
         </View>
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <View style={styles.toggle}>
+          <View style={[styles.toggle, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line2 }]}>
             {(['asset', 'liability'] as AccountKind[]).map((k) => {
               const on = kind === k;
               return (
@@ -687,21 +711,21 @@ function AddAccountModal({ visible, preset, onClose }: { visible: boolean; prese
             })}
           </View>
 
-          <Text style={styles.fieldLabel}>Type</Text>
+          <Text style={[styles.fieldLabel, { color: colorTheme.ink2 }]}>Type</Text>
           <View style={styles.classGrid}>
             {classesFor(kind).map((c) => {
               const on = cls === c.id;
               return (
-                <Pressable key={c.id} onPress={() => setCls(c.id)} style={[styles.classChip, on && styles.classChipOn]}>
-                  <Icon name={c.icon as IconName} size={15} color={on ? colors.accent : colors.ink3} />
-                  <Text style={[styles.classChipText, on && { color: colors.accentInk }]}>{c.label}</Text>
+                <Pressable key={c.id} onPress={() => setCls(c.id)} style={[styles.classChip, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line }, on && [styles.classChipOn, { borderColor: theme.accent, backgroundColor: theme.accentTint }]]}>
+                  <Icon name={c.icon as IconName} size={15} color={on ? theme.accent : colorTheme.ink3} />
+                  <Text style={[styles.classChipText, { color: colorTheme.ink2 }, on && { color: theme.accentInk }]}>{c.label}</Text>
                 </Pressable>
               );
             })}
           </View>
 
           {isInvest && (
-            <View style={[styles.toggle, { marginTop: 18, marginBottom: 0 }]}>
+            <View style={[styles.toggle, { marginTop: 18, marginBottom: 0, backgroundColor: colorTheme.surface2, borderColor: colorTheme.line2 }]}>
               {([[true, 'Live holding'], [false, 'Manual value']] as const).map(([m, label]) => {
                 const on = holdingMode === m;
                 return (
@@ -715,32 +739,32 @@ function AddAccountModal({ visible, preset, onClose }: { visible: boolean; prese
 
           {isHoldingType ? (
             <>
-              <Text style={[styles.fieldLabel, { marginTop: 18 }]}>Investment</Text>
-              <Pressable onPress={() => setSearchOpen(true)} style={styles.pickerBtn}>
-                <Icon name="search" size={16} color={colors.accent} />
-                <Text style={[styles.pickerText, !coin && { color: colors.ink2 }]} numberOfLines={1}>
+              <Text style={[styles.fieldLabel, { marginTop: 18, color: colorTheme.ink2 }]}>Investment</Text>
+              <Pressable onPress={() => setSearchOpen(true)} style={[styles.pickerBtn, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line }]}>
+                <Icon name="search" size={16} color={theme.accent} />
+                <Text style={[styles.pickerText, !coin && { color: colorTheme.ink2 }]} numberOfLines={1}>
                   {coin ? `${coin.name} · ${qtyUnit}` : 'Search crypto, stocks, gold or silver…'}
                 </Text>
               </Pressable>
 
-              <Text style={[styles.fieldLabel, { marginTop: 18 }]}>{qtyLabel}</Text>
-              <View style={styles.amountRow}>
-                <TextInput value={qtyText} onChangeText={setQtyText} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={colors.ink3} style={styles.amountInput} />
-                {coin ? <Text style={styles.rm}>{qtyUnit}</Text> : null}
+              <Text style={[styles.fieldLabel, { marginTop: 18, color: colorTheme.ink2 }]}>{qtyLabel}</Text>
+              <View style={[styles.amountRow, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line }]}>
+                <TextInput value={qtyText} onChangeText={setQtyText} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={colorTheme.ink3} style={[styles.amountInput, { color: colorTheme.ink }]} />
+                {coin ? <Text style={[styles.rm, { color: colorTheme.ink2 }]}>{qtyUnit}</Text> : null}
               </View>
 
-              <Text style={[styles.fieldLabel, { marginTop: 18 }]}>Invested amount (optional)</Text>
-              <View style={styles.amountRow}>
-                <Text style={styles.rm}>RM</Text>
-                <TextInput value={costText} onChangeText={setCostText} keyboardType="decimal-pad" placeholder="what you paid" placeholderTextColor={colors.ink3} style={styles.amountInput} />
+              <Text style={[styles.fieldLabel, { marginTop: 18, color: colorTheme.ink2 }]}>Invested amount (optional)</Text>
+              <View style={[styles.amountRow, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line }]}>
+                <Text style={[styles.rm, { color: colorTheme.ink2 }]}>RM</Text>
+                <TextInput value={costText} onChangeText={setCostText} keyboardType="decimal-pad" placeholder="what you paid" placeholderTextColor={colorTheme.ink3} style={[styles.amountInput, { color: colorTheme.ink }]} />
               </View>
 
-              <Text style={[styles.fieldLabel, { marginTop: 18 }]}>Name (optional)</Text>
-              <TextInput value={name} onChangeText={setName} placeholder="e.g. My holding" placeholderTextColor={colors.ink3} style={styles.textInput} />
+              <Text style={[styles.fieldLabel, { marginTop: 18, color: colorTheme.ink2 }]}>Name (optional)</Text>
+              <TextInput value={name} onChangeText={setName} placeholder="e.g. My holding" placeholderTextColor={colorTheme.ink3} style={[styles.textInput, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line, color: colorTheme.ink }]} />
             </>
           ) : (
             <>
-              <Text style={[styles.fieldLabel, { marginTop: 18 }]}>Account</Text>
+              <Text style={[styles.fieldLabel, { marginTop: 18, color: colorTheme.ink2 }]}>Account</Text>
               <InstitutionField
                 value={name}
                 onChangeText={setName}
@@ -749,18 +773,18 @@ function AddAccountModal({ visible, preset, onClose }: { visible: boolean; prese
               />
 
               <View style={[styles.labelRow, { marginTop: 18 }]}>
-                <Text style={styles.fieldLabel}>{kind === 'asset' ? 'Current value' : 'Outstanding amount'}</Text>
+                <Text style={[styles.fieldLabel, { color: colorTheme.ink2 }]}>{kind === 'asset' ? 'Current value' : 'Outstanding amount'}</Text>
                 <ScanBalanceButton onResult={(n) => setValueText(String(n))} />
               </View>
-              <View style={styles.amountRow}>
-                <Text style={styles.rm}>RM</Text>
-                <TextInput value={valueText} onChangeText={setValueText} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colors.ink3} style={styles.amountInput} />
+              <View style={[styles.amountRow, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line }]}>
+                <Text style={[styles.rm, { color: colorTheme.ink2 }]}>RM</Text>
+                <TextInput value={valueText} onChangeText={setValueText} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colorTheme.ink3} style={[styles.amountInput, { color: colorTheme.ink }]} />
               </View>
             </>
           )}
 
           {/* Custom icon picker */}
-          <Text style={[styles.fieldLabel, { marginTop: 18 }]}>Custom Icon (Optional)</Text>
+          <Text style={[styles.fieldLabel, { marginTop: 18, color: colorTheme.ink2 }]}>Custom Icon (Optional)</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6 }}>
             <Pressable
               onPress={pickCustomIcon}
@@ -768,9 +792,9 @@ function AddAccountModal({ visible, preset, onClose }: { visible: boolean; prese
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 8,
-                backgroundColor: colors.surface2,
+                backgroundColor: colorTheme.surface2,
                 borderWidth: 1.5,
-                borderColor: customIcon ? colors.accent : colors.line,
+                borderColor: customIcon ? theme.accent : colorTheme.line,
                 borderRadius: radius.sm,
                 paddingVertical: 10,
                 paddingHorizontal: 16,
@@ -779,9 +803,9 @@ function AddAccountModal({ visible, preset, onClose }: { visible: boolean; prese
               {customIcon ? (
                 <Image source={{ uri: customIcon }} style={{ width: 20, height: 20, borderRadius: 4 }} />
               ) : (
-                <Icon name="image" size={18} color={colors.accent} />
+                <Icon name="image" size={18} color={theme.accent} />
               )}
-              <Text style={{ fontSize: 13, fontFamily: uiFont(700), color: colors.accent }}>
+              <Text style={{ fontSize: 13, fontFamily: uiFont(700), color: theme.accent }}>
                 {customIcon ? 'Change icon' : 'Choose from gallery'}
               </Text>
             </Pressable>
@@ -794,7 +818,7 @@ function AddAccountModal({ visible, preset, onClose }: { visible: boolean; prese
                   backgroundColor: '#fff0ef',
                 }}
               >
-                <Icon name="trash" size={16} color={colors.red} />
+                <Icon name="trash" size={16} color={colorTheme.red} />
               </Pressable>
             )}
           </View>
@@ -839,6 +863,8 @@ function HoldingGroupSheet({
   onAddMore: (coin: TickerResult) => void;
 }) {
   const insets = useSafeAreaInsets();
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   if (lots.length === 0) return <Modal visible={false} transparent />;
 
   const grp = groupHoldings(lots, accountValues)[0];
@@ -850,24 +876,24 @@ function HoldingGroupSheet({
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={[styles.sheet, { paddingBottom: insets.bottom + 18 }]}>
-        <View style={styles.handle} />
+      <View style={[styles.sheet, { paddingBottom: insets.bottom + 18, backgroundColor: colorTheme.bg }]}>
+        <View style={[styles.handle, { backgroundColor: colorTheme.line }]} />
         <View style={styles.sheetHead}>
-          <Text style={styles.sheetTitle} numberOfLines={1}>{grp.name}</Text>
-          <Pressable onPress={onClose} hitSlop={8}><Icon name="x" size={20} color={colors.ink2} /></Pressable>
+          <Text style={[styles.sheetTitle, { color: colorTheme.ink }]} numberOfLines={1}>{grp.name}</Text>
+          <Pressable onPress={onClose} hitSlop={8}><Icon name="x" size={20} color={colorTheme.ink2} /></Pressable>
         </View>
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={styles.holdingSummary}>
-            <Text style={styles.holdingTicker}>{grp.ticker}</Text>
+            <Text style={[styles.holdingTicker, { color: theme.accent, backgroundColor: theme.accentTint }]}>{grp.ticker}</Text>
             <View style={{ flex: 1 }}>
-              <Text style={styles.holdingPrice}>
+              <Text style={[styles.holdingPrice, { color: colorTheme.ink2 }]}>
                 {grp.quantity} {grp.ticker}{price ? ` · RM ${fmt(price.priceMYR)} each` : ''}
               </Text>
-              <Text style={styles.holdingValue}>= RM {fmt(grp.value)}</Text>
+              <Text style={[styles.holdingValue, { color: colorTheme.ink }]}>= RM {fmt(grp.value)}</Text>
             </View>
           </View>
           {totalP && (
-            <Text style={[styles.profitLine, { color: totalP.profit >= 0 ? colors.accent : RED2 }]}>
+            <Text style={[styles.profitLine, { color: totalP.profit >= 0 ? theme.accent : RED2 }]}>
               {totalP.profit >= 0 ? '▲ +' : '▼ −'}RM {fmt(Math.abs(totalP.profit))}
               {totalP.pct != null ? ` (${totalP.profit >= 0 ? '+' : '−'}${Math.abs(totalP.pct).toFixed(1)}%)` : ''} on RM {fmt(grp.cost as number)} invested
             </Text>
@@ -910,6 +936,8 @@ function HoldingGroupSheet({
 /** Manage one account: update balance, rename, reclassify, view history, delete. */
 function AccountSheet({ account, onClose }: { account: Account | null; onClose: () => void }) {
   const insets = useSafeAreaInsets();
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const { balanceEntries, accountValues, prices, setBalance, updateAccount, deleteAccount, updateHoldingQuantity, setHoldingCost } = useAppData();
   const [name, setName] = useState('');
   const [cls, setCls] = useState('cash');
@@ -990,22 +1018,22 @@ function AccountSheet({ account, onClose }: { account: Account | null; onClose: 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={[styles.sheet, { paddingBottom: insets.bottom + 18 }]}>
-        <View style={styles.handle} />
+      <View style={[styles.sheet, { paddingBottom: insets.bottom + 18, backgroundColor: colorTheme.bg }]}>
+        <View style={[styles.handle, { backgroundColor: colorTheme.line }]} />
         <View style={styles.sheetHead}>
-          <Text style={styles.sheetTitle} numberOfLines={1}>{account.name}</Text>
-          <Pressable onPress={onClose} hitSlop={8}><Icon name="x" size={20} color={colors.ink2} /></Pressable>
+          <Text style={[styles.sheetTitle, { color: colorTheme.ink }]} numberOfLines={1}>{account.name}</Text>
+          <Pressable onPress={onClose} hitSlop={8}><Icon name="x" size={20} color={colorTheme.ink2} /></Pressable>
         </View>
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {holding ? (
             <>
               <View style={styles.holdingSummary}>
-                <Text style={styles.holdingTicker}>{account.ticker}</Text>
+                <Text style={[styles.holdingTicker, { color: theme.accent, backgroundColor: theme.accentTint }]}>{account.ticker}</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.holdingPrice}>
+                  <Text style={[styles.holdingPrice, { color: colorTheme.ink2 }]}>
                     {prices[account.symbol as string] ? `RM ${fmt(prices[account.symbol as string].priceMYR)} each` : 'Price unavailable'}
                   </Text>
-                  <Text style={styles.holdingValue}>= RM {fmt(accountValues[account.id] ?? 0)}</Text>
+                  <Text style={[styles.holdingValue, { color: colorTheme.ink }]}>= RM {fmt(accountValues[account.id] ?? 0)}</Text>
                 </View>
               </View>
 
@@ -1013,55 +1041,55 @@ function AccountSheet({ account, onClose }: { account: Account | null; onClose: 
                 const p = holdingProfit(accountValues[account.id] ?? 0, account.cost);
                 const up = p.profit >= 0;
                 return (
-                  <Text style={[styles.profitLine, { color: up ? colors.accent : RED2 }]}>
+                  <Text style={[styles.profitLine, { color: up ? theme.accent : RED2 }]}>
                     {up ? '▲' : '▼'} {up ? '+' : '−'}RM {fmt(Math.abs(p.profit))}
                     {p.pct != null ? ` (${up ? '+' : '−'}${Math.abs(p.pct).toFixed(1)}%)` : ''} on RM {fmt(account.cost)} invested
                   </Text>
                 );
               })()}
 
-              <Text style={[styles.fieldLabel, { marginTop: 18 }]}>Quantity</Text>
-              <View style={styles.amountRow}>
-                <TextInput value={qtyText} onChangeText={setQtyText} keyboardType="decimal-pad" selectTextOnFocus style={styles.amountInput} />
-                <Text style={styles.rm}>{account.ticker}</Text>
+              <Text style={[styles.fieldLabel, { marginTop: 18, color: colorTheme.ink2 }]}>Quantity</Text>
+              <View style={[styles.amountRow, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line }]}>
+                <TextInput value={qtyText} onChangeText={setQtyText} keyboardType="decimal-pad" selectTextOnFocus style={[styles.amountInput, { color: colorTheme.ink }]} />
+                <Text style={[styles.rm, { color: colorTheme.ink2 }]}>{account.ticker}</Text>
               </View>
 
-              <Text style={[styles.fieldLabel, { marginTop: 18 }]}>Invested amount (cost)</Text>
-              <View style={styles.amountRow}>
-                <Text style={styles.rm}>RM</Text>
-                <TextInput value={costText} onChangeText={setCostText} keyboardType="decimal-pad" placeholder="what you paid" placeholderTextColor={colors.ink3} style={styles.amountInput} />
+              <Text style={[styles.fieldLabel, { marginTop: 18, color: colorTheme.ink2 }]}>Invested amount (cost)</Text>
+              <View style={[styles.amountRow, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line }]}>
+                <Text style={[styles.rm, { color: colorTheme.ink2 }]}>RM</Text>
+                <TextInput value={costText} onChangeText={setCostText} keyboardType="decimal-pad" placeholder="what you paid" placeholderTextColor={colorTheme.ink3} style={[styles.amountInput, { color: colorTheme.ink }]} />
               </View>
 
-              <Text style={[styles.fieldLabel, { marginTop: 18 }]}>Name</Text>
-              <TextInput value={name} onChangeText={setName} style={styles.textInput} />
+              <Text style={[styles.fieldLabel, { marginTop: 18, color: colorTheme.ink2 }]}>Name</Text>
+              <TextInput value={name} onChangeText={setName} style={[styles.textInput, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line, color: colorTheme.ink }]} />
             </>
           ) : (
             <>
               <View style={styles.labelRow}>
-                <Text style={styles.fieldLabel}>{account.kind === 'asset' ? 'Current value' : 'Outstanding amount'}</Text>
+                <Text style={[styles.fieldLabel, { color: colorTheme.ink2 }]}>{account.kind === 'asset' ? 'Current value' : 'Outstanding amount'}</Text>
                 <ScanBalanceButton onResult={(n) => setValueText(String(n))} />
               </View>
-              <View style={styles.amountRow}>
-                <Text style={styles.rm}>RM</Text>
-                <TextInput value={valueText} onChangeText={setValueText} keyboardType="decimal-pad" selectTextOnFocus style={styles.amountInput} />
+              <View style={[styles.amountRow, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line }]}>
+                <Text style={[styles.rm, { color: colorTheme.ink2 }]}>RM</Text>
+                <TextInput value={valueText} onChangeText={setValueText} keyboardType="decimal-pad" selectTextOnFocus style={[styles.amountInput, { color: colorTheme.ink }]} />
               </View>
-              <Text style={styles.hint}>Saving a new value records it as of today.</Text>
+              <Text style={[styles.hint, { color: colorTheme.ink2 }]}>Saving a new value records it as of today.</Text>
 
-              <Text style={[styles.fieldLabel, { marginTop: 18 }]}>Account</Text>
+              <Text style={[styles.fieldLabel, { marginTop: 18, color: colorTheme.ink2 }]}>Account</Text>
               <InstitutionField
                 value={name}
                 onChangeText={setName}
                 onPick={() => { if (account.kind === 'asset') setCls('cash'); }}
               />
 
-              <Text style={[styles.fieldLabel, { marginTop: 18 }]}>Type</Text>
+              <Text style={[styles.fieldLabel, { marginTop: 18, color: colorTheme.ink2 }]}>Type</Text>
               <View style={styles.classGrid}>
                 {classesFor(account.kind).map((c) => {
                   const on = cls === c.id;
                   return (
-                    <Pressable key={c.id} onPress={() => setCls(c.id)} style={[styles.classChip, on && styles.classChipOn]}>
-                      <Icon name={c.icon as IconName} size={15} color={on ? colors.accent : colors.ink3} />
-                      <Text style={[styles.classChipText, on && { color: colors.accentInk }]}>{c.label}</Text>
+                    <Pressable key={c.id} onPress={() => setCls(c.id)} style={[styles.classChip, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line }, on && [styles.classChipOn, { borderColor: theme.accent, backgroundColor: theme.accentTint }]]}>
+                      <Icon name={c.icon as IconName} size={15} color={on ? theme.accent : colorTheme.ink3} />
+                      <Text style={[styles.classChipText, { color: colorTheme.ink2 }, on && { color: theme.accentInk }]}>{c.label}</Text>
                     </Pressable>
                   );
                 })}
@@ -1071,12 +1099,12 @@ function AccountSheet({ account, onClose }: { account: Account | null; onClose: 
 
           {history.length > 1 && (
             <>
-              <Text style={[styles.fieldLabel, { marginTop: 18 }]}>History</Text>
+              <Text style={[styles.fieldLabel, { marginTop: 18, color: colorTheme.ink2 }]}>History</Text>
               <Card style={{ overflow: 'hidden' }}>
                 {history.map((e, i) => (
-                  <View key={e.id} style={[styles.histRow, i > 0 && styles.divider]}>
-                    <Text style={styles.histDate}>{shortDate(e.asOf)}</Text>
-                    <Text style={styles.histVal}>RM {fmt(e.value)}</Text>
+                  <View key={e.id} style={[styles.histRow, i > 0 && [styles.divider, { borderTopColor: colorTheme.line2 }]]}>
+                    <Text style={[styles.histDate, { color: colorTheme.ink2 }]}>{shortDate(e.asOf)}</Text>
+                    <Text style={[styles.histVal, { color: colorTheme.ink }]}>RM {fmt(e.value)}</Text>
                   </View>
                 ))}
               </Card>
@@ -1084,7 +1112,7 @@ function AccountSheet({ account, onClose }: { account: Account | null; onClose: 
           )}
 
           {/* Custom icon picker */}
-          <Text style={[styles.fieldLabel, { marginTop: 18 }]}>Custom Icon (Optional)</Text>
+          <Text style={[styles.fieldLabel, { marginTop: 18, color: colorTheme.ink2 }]}>Custom Icon (Optional)</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6 }}>
             <Pressable
               onPress={pickCustomIcon}
@@ -1092,9 +1120,9 @@ function AccountSheet({ account, onClose }: { account: Account | null; onClose: 
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 8,
-                backgroundColor: colors.surface2,
+                backgroundColor: colorTheme.surface2,
                 borderWidth: 1.5,
-                borderColor: customIcon ? colors.accent : colors.line,
+                borderColor: customIcon ? theme.accent : colorTheme.line,
                 borderRadius: radius.sm,
                 paddingVertical: 10,
                 paddingHorizontal: 16,
@@ -1103,9 +1131,9 @@ function AccountSheet({ account, onClose }: { account: Account | null; onClose: 
               {customIcon ? (
                 <Image source={{ uri: customIcon }} style={{ width: 20, height: 20, borderRadius: 4 }} />
               ) : (
-                <Icon name="image" size={18} color={colors.accent} />
+                <Icon name="image" size={18} color={theme.accent} />
               )}
-              <Text style={{ fontSize: 13, fontFamily: uiFont(700), color: colors.accent }}>
+              <Text style={{ fontSize: 13, fontFamily: uiFont(700), color: theme.accent }}>
                 {customIcon ? 'Change icon' : 'Choose from gallery'}
               </Text>
             </Pressable>
@@ -1118,7 +1146,7 @@ function AccountSheet({ account, onClose }: { account: Account | null; onClose: 
                   backgroundColor: '#fff0ef',
                 }}
               >
-                <Icon name="trash" size={16} color={colors.red} />
+                <Icon name="trash" size={16} color={colorTheme.red} />
               </Pressable>
             )}
           </View>
@@ -1140,16 +1168,16 @@ function AccountSheet({ account, onClose }: { account: Account | null; onClose: 
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
-  scanBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.accentTint },
-  scanText: { fontFamily: uiFont(700), fontSize: 13, color: colors.accent },
+  root: { flex: 1 },
+  scanBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
+  scanText: { fontFamily: uiFont(700), fontSize: 13 },
   profit: { fontFamily: numFont(700), fontSize: 12, marginTop: 2 },
   profitLine: { fontFamily: uiFont(600), fontSize: 13, marginTop: 12 },
 
   /* nav */
   nav: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingBottom: 10 },
-  navBtn: { width: 36, height: 36, borderRadius: 999, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', ...shadowCard },
-  navTitle: { flex: 1, textAlign: 'center', fontFamily: uiFont(700), fontSize: 16, color: colors.ink },
+  navBtn: { width: 36, height: 36, borderRadius: 999, alignItems: 'center', justifyContent: 'center', ...shadowCard },
+  navTitle: { flex: 1, textAlign: 'center', fontFamily: uiFont(700), fontSize: 16 },
 
   /* hero */
   hero: { margin: 16, marginTop: 0, borderRadius: 26, padding: 20, overflow: 'hidden', backgroundColor: '#1b6b48', position: 'relative' },
@@ -1160,7 +1188,7 @@ const styles = StyleSheet.create({
   heroToggleBtn: { paddingHorizontal: 14, paddingVertical: 4, borderRadius: 16 },
   heroToggleBtnOn: { backgroundColor: '#fff' },
   heroToggleText: { fontFamily: uiFont(700), fontSize: 11, color: 'rgba(255,255,255,0.6)' },
-  heroToggleTextOn: { color: colors.accentInk },
+  heroToggleTextOn: {},
   heroSign: { fontFamily: numFont(700), fontSize: 34, color: '#fff', marginRight: 2 },
   heroNum: { fontFamily: numFont(700), fontSize: 46, color: '#fff' },
   deltaChip: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, marginBottom: 15 },
@@ -1173,95 +1201,95 @@ const styles = StyleSheet.create({
 
   /* scan row */
   scanRow: { flexDirection: 'row', gap: 9, marginHorizontal: 16, marginBottom: 4 },
-  scanBanner: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.accentInk, borderRadius: 16, padding: 10, paddingRight: 14, ...platformShadow(colors.accent, 0.3, 14, { width: 0, height: 4 }, 3) },
+  scanBanner: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 16, padding: 10, paddingRight: 14 },
   scanIcon: { width: 30, height: 30, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
   scanTitle: { fontFamily: uiFont(700), fontSize: 13, color: '#fff' },
   scanSub: { fontFamily: uiFont(500), fontSize: 11, color: 'rgba(255,255,255,0.85)', marginTop: 1 },
-  addBtn: { width: 50, height: 50, borderRadius: 14, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  addBtn: { width: 50, height: 50, borderRadius: 14, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
 
   /* group + class labels */
   groupHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 4 },
-  groupLabel: { fontFamily: uiFont(700), fontSize: 12, color: colors.ink2, letterSpacing: 0.4 },
+  groupLabel: { fontFamily: uiFont(700), fontSize: 12, letterSpacing: 0.4 },
   groupTotal: { fontFamily: numFont(700), fontSize: 13 },
   classChipRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4 },
-  classChipLabel: { fontFamily: uiFont(700), fontSize: 11, color: colors.ink2, letterSpacing: 1, textTransform: 'uppercase' },
-  classChipSub: { fontFamily: numFont(600), fontSize: 11, color: colors.ink2 },
-  classCard: { backgroundColor: colors.surface, borderRadius: 18, marginHorizontal: 16, marginTop: 4, overflow: 'hidden', ...shadowCard },
+  classChipLabel: { fontFamily: uiFont(700), fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' },
+  classChipSub: { fontFamily: numFont(600), fontSize: 11 },
+  classCard: { borderRadius: 18, marginHorizontal: 16, marginTop: 4, overflow: 'hidden', ...shadowCard },
 
   /* price stamp */
-  priceStamp: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 18, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.surface2 },
+  priceStamp: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 18, paddingVertical: 8, borderBottomWidth: 1 },
   liveDot: { width: 7, height: 7, borderRadius: 999, backgroundColor: '#42e893' },
-  priceStampText: { flex: 1, fontFamily: uiFont(500), fontSize: 11, color: colors.ink2 },
-  refreshBtn: { backgroundColor: colors.accentTint, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 3, minWidth: 64, alignItems: 'center' },
-  refreshText: { fontFamily: uiFont(700), fontSize: 11, color: colors.accent },
+  priceStampText: { flex: 1, fontFamily: uiFont(500), fontSize: 11 },
+  refreshBtn: { borderRadius: 8, paddingHorizontal: 9, paddingVertical: 3, minWidth: 64, alignItems: 'center' },
+  refreshText: { fontFamily: uiFont(700), fontSize: 11 },
 
   /* rows */
   row: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 18, paddingVertical: 11 },
-  rowDivider: { borderBottomWidth: 1, borderBottomColor: colors.line },
-  rowTile: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.accentTint, alignItems: 'center', justifyContent: 'center' },
-  rowName: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink },
-  rowSub: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink2, marginTop: 1 },
-  rowVal: { fontFamily: numFont(700), fontSize: 14, color: colors.ink },
+  rowDivider: { borderBottomWidth: 1 },
+  rowTile: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  rowName: { fontFamily: uiFont(600), fontSize: 13 },
+  rowSub: { fontFamily: uiFont(500), fontSize: 11, marginTop: 1 },
+  rowVal: { fontFamily: numFont(700), fontSize: 14 },
   rowProfit: { fontFamily: numFont(700), fontSize: 11.5, marginTop: 1 },
   badge: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   badgeTick: { fontFamily: numFont(700), fontSize: 11, lineHeight: 13 },
   badgeLbl: { fontFamily: uiFont(500), fontSize: 11, opacity: 0.75, lineHeight: 9 },
   holdMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
-  holdMeta: { fontFamily: numFont(500), fontSize: 11, color: colors.ink2, flexShrink: 1 },
+  holdMeta: { fontFamily: numFont(500), fontSize: 11, flexShrink: 1 },
   chChip: { fontFamily: numFont(700), fontSize: 11, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1, overflow: 'hidden' },
   liabNameRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  liabChip: { fontFamily: uiFont(600), fontSize: 11, color: colors.red, backgroundColor: '#fff0ef', borderRadius: 7, paddingHorizontal: 7, paddingVertical: 2, overflow: 'hidden' },
-  emptyTitle: { fontFamily: uiFont(700), fontSize: 17, color: colors.ink, marginTop: 12 },
-  emptySub: { fontFamily: uiFont(500), fontSize: 13.5, color: colors.ink2, textAlign: 'center', marginTop: 6, lineHeight: 19 },
+  liabChip: { fontFamily: uiFont(600), fontSize: 11, backgroundColor: '#fff0ef', borderRadius: 7, paddingHorizontal: 7, paddingVertical: 2, overflow: 'hidden' },
+  emptyTitle: { fontFamily: uiFont(700), fontSize: 17, marginTop: 12 },
+  emptySub: { fontFamily: uiFont(500), fontSize: 13.5, textAlign: 'center', marginTop: 6, lineHeight: 19 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, marginBottom: 10 },
-  sectionTotal: { fontFamily: numFont(700), fontSize: 14, color: colors.ink2 },
+  sectionTotal: { fontFamily: numFont(700), fontSize: 14 },
   classHead: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 15, paddingTop: 13, paddingBottom: 4 },
-  classIcon: { width: 30, height: 30, borderRadius: 9, backgroundColor: colors.accentTint, alignItems: 'center', justifyContent: 'center' },
-  className: { flex: 1, fontFamily: uiFont(700), fontSize: 14.5, color: colors.ink },
-  classTotal: { fontFamily: numFont(700), fontSize: 13.5, color: colors.ink2 },
+  classIcon: { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  className: { flex: 1, fontFamily: uiFont(700), fontSize: 14.5 },
+  classTotal: { fontFamily: numFont(700), fontSize: 13.5 },
   acctRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 15, paddingVertical: 12, marginTop: 2 },
-  divider: { borderTopWidth: 1, borderTopColor: colors.line2 },
-  acctName: { fontFamily: uiFont(600), fontSize: 14, color: colors.ink },
-  acctMeta: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, marginTop: 2 },
-  acctVal: { fontFamily: numFont(600), fontSize: 13.5, color: colors.ink2 },
-  asOf: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, textAlign: 'center', marginTop: 16 },
+  divider: { borderTopWidth: 1 },
+  acctName: { fontFamily: uiFont(600), fontSize: 14 },
+  acctMeta: { fontFamily: uiFont(500), fontSize: 11.5, marginTop: 2 },
+  acctVal: { fontFamily: numFont(600), fontSize: 13.5 },
+  asOf: { fontFamily: uiFont(500), fontSize: 11.5, textAlign: 'center', marginTop: 16 },
   subRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  subChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line2 },
-  subChipOn: { backgroundColor: colors.accentInk, borderColor: colors.accentInk },
-  subChipText: { fontFamily: uiFont(700), fontSize: 13, color: colors.ink2 },
+  subChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
+  subChipOn: {},
+  subChipText: { fontFamily: uiFont(700), fontSize: 13 },
   subChipTextOn: { color: '#fff' },
-  pickerBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, paddingHorizontal: 14, paddingVertical: 14 },
-  pickerText: { flex: 1, fontFamily: uiFont(600), fontSize: 15, color: colors.ink },
+  pickerBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 14, paddingVertical: 14 },
+  pickerText: { flex: 1, fontFamily: uiFont(600), fontSize: 15 },
   holdingSummary: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  holdingTicker: { fontFamily: uiFont(700), fontSize: 15, color: colors.accent, backgroundColor: colors.accentTint, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, overflow: 'hidden' },
-  holdingPrice: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2 },
-  holdingValue: { fontFamily: numFont(700), fontSize: 18, color: colors.ink, marginTop: 2 },
-  footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 18, paddingTop: 12, backgroundColor: colors.bg, borderTopWidth: 1, borderTopColor: colors.line2 },
+  holdingTicker: { fontFamily: uiFont(700), fontSize: 15, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, overflow: 'hidden' },
+  holdingPrice: { fontFamily: uiFont(500), fontSize: 12.5 },
+  holdingValue: { fontFamily: numFont(700), fontSize: 18, marginTop: 2 },
+  footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 18, paddingTop: 12, borderTopWidth: 1 },
 
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(16,32,24,0.4)' },
-  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: colors.bg, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, paddingHorizontal: 18, paddingTop: 10, maxHeight: '88%' },
-  handle: { alignSelf: 'center', width: 40, height: 5, borderRadius: 999, backgroundColor: colors.line, marginBottom: 12 },
+  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, paddingHorizontal: 18, paddingTop: 10, maxHeight: '88%' },
+  handle: { alignSelf: 'center', width: 40, height: 5, borderRadius: 999, marginBottom: 12 },
   sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  sheetTitle: { flex: 1, fontFamily: uiFont(700), fontSize: 19, color: colors.ink, marginRight: 12 },
-  toggle: { flexDirection: 'row', backgroundColor: colors.surface2, borderRadius: 999, padding: 4, marginBottom: 18, borderWidth: 1, borderColor: colors.line2 },
+  sheetTitle: { flex: 1, fontFamily: uiFont(700), fontSize: 19, marginRight: 12 },
+  toggle: { flexDirection: 'row', borderRadius: 999, padding: 4, marginBottom: 18, borderWidth: 1 },
   toggleBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 9, borderRadius: 999 },
-  toggleBtnOn: { backgroundColor: colors.surface, ...shadowToggle },
-  toggleText: { fontFamily: uiFont(600), fontSize: 14, color: colors.ink2 },
-  toggleTextOn: { color: colors.ink },
-  fieldLabel: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2, marginBottom: 8 },
+  toggleBtnOn: { ...shadowToggle },
+  toggleText: { fontFamily: uiFont(600), fontSize: 14 },
+  toggleTextOn: { },
+  fieldLabel: { fontFamily: uiFont(600), fontSize: 12.5, marginBottom: 8 },
   labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   classGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  classChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 999, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.line },
-  classChipOn: { borderColor: colors.accent, backgroundColor: colors.accentTint },
-  classChipText: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink2 },
-  textInput: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, paddingHorizontal: 14, paddingVertical: 13, fontFamily: uiFont(600), fontSize: 16, color: colors.ink },
-  amountRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, paddingHorizontal: 14 },
-  rm: { fontFamily: numFont(600), fontSize: 18, color: colors.ink2 },
-  amountInput: { flex: 1, fontFamily: numFont(700), fontSize: 24, color: colors.ink, paddingVertical: 12 },
-  hint: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, marginTop: 6 },
+  classChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 999, borderWidth: 1.5 },
+  classChipOn: {},
+  classChipText: { fontFamily: uiFont(600), fontSize: 13 },
+  textInput: { borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 14, paddingVertical: 13, fontFamily: uiFont(600), fontSize: 16 },
+  amountRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 14 },
+  rm: { fontFamily: numFont(600), fontSize: 18 },
+  amountInput: { flex: 1, fontFamily: numFont(700), fontSize: 24, paddingVertical: 12 },
+  hint: { fontFamily: uiFont(500), fontSize: 11.5, marginTop: 6 },
   histRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 15, paddingVertical: 11 },
-  histDate: { fontFamily: uiFont(500), fontSize: 13, color: colors.ink2 },
-  histVal: { fontFamily: numFont(600), fontSize: 13.5, color: colors.ink },
+  histDate: { fontFamily: uiFont(500), fontSize: 13 },
+  histVal: { fontFamily: numFont(600), fontSize: 13.5 },
   deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 16, marginTop: 4 },
   deleteText: { fontFamily: uiFont(700), fontSize: 14.5, color: '#b3261e' },
 });

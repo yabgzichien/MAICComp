@@ -1,4 +1,7 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { getMeta, setMeta } from '../db/metaRepo';
+import { useColorSchemeMode } from './colorScheme';
+import { ACCENT_PRESETS, DEFAULT_ACCENT_PRESET_ID, type AccentPreset } from './accentPresets';
 
 export interface AccentTheme {
   accent: string;
@@ -7,44 +10,75 @@ export interface AccentTheme {
   accentTint: string;
 }
 
-/** Default green (matches theme.ts). */
-export const GREEN_ACCENT: AccentTheme = {
-  accent: '#1f8a5b',
-  accentInk: '#1c6b48',
-  accentSoft: '#dbece5',
-  accentTint: '#eff7f4',
+/** Default green, light mode (matches theme.ts). */
+export const GREEN_ACCENT: AccentTheme = ACCENT_PRESETS.find((p) => p.id === DEFAULT_ACCENT_PRESET_ID)!.theme.light;
+
+/** Alert amber/yellow  used while a duplicate warning is showing. `accent`/`accentInk` are the
+ *  same fill in both schemes (self-contained, same reasoning as the accent presets); only the
+ *  tint/soft washes differ for dark mode. */
+const ALERT_ACCENT: { light: AccentTheme; dark: AccentTheme } = {
+  light: { accent: '#d98a00', accentInk: '#8a5a00', accentSoft: '#f6e3bf', accentTint: '#fdf4e3' },
+  dark: { accent: '#d98a00', accentInk: '#8a5a00', accentSoft: '#46360e', accentTint: '#312814' },
 };
 
-/** Alert amber/yellow  used while a duplicate warning is showing. */
-export const ALERT_ACCENT: AccentTheme = {
-  accent: '#d98a00',
-  accentInk: '#8a5a00',
-  accentSoft: '#f6e3bf',
-  accentTint: '#fdf4e3',
-};
+const ACCENT_PRESET_KEY = 'accent_preset_id';
 
 interface AccentCtx {
   theme: AccentTheme;
   alert: boolean;
   setAlert: (on: boolean) => void;
+  presetId: string;
+  setPresetId: (id: string) => void;
+  presets: AccentPreset[];
 }
 
-const Ctx = createContext<AccentCtx>({ theme: GREEN_ACCENT, alert: false, setAlert: () => {} });
+const Ctx = createContext<AccentCtx>({
+  theme: GREEN_ACCENT,
+  alert: false,
+  setAlert: () => {},
+  presetId: DEFAULT_ACCENT_PRESET_ID,
+  setPresetId: () => {},
+  presets: ACCENT_PRESETS,
+});
 
 /**
- * Holds the app's active accent. When `alert` is on, the whole app's accent
- * flips to amber/yellow (buttons, chips, progress, Pip) to signal a warning.
+ * Holds the app's active accent: the user's chosen preset (persisted in app_meta), resolved
+ * against the current light/dark scheme, unless `alert` is on, in which case the whole app's
+ * accent flips to amber/yellow (buttons, chips, progress, Pip) to signal a duplicate-transaction
+ * warning  that override always wins.
  */
 export function AccentProvider({ children }: { children: React.ReactNode }) {
+  const { resolvedScheme } = useColorSchemeMode();
   const [alert, setAlert] = useState(false);
-  const value = useMemo<AccentCtx>(
-    () => ({ theme: alert ? ALERT_ACCENT : GREEN_ACCENT, alert, setAlert }),
-    [alert]
-  );
+  const [presetId, setPresetIdState] = useState(DEFAULT_ACCENT_PRESET_ID);
+
+  useEffect(() => {
+    getMeta(ACCENT_PRESET_KEY).then((saved) => {
+      if (saved && ACCENT_PRESETS.some((p) => p.id === saved)) setPresetIdState(saved);
+    });
+  }, []);
+
+  const setPresetId = (id: string) => {
+    setPresetIdState(id);
+    void setMeta(ACCENT_PRESET_KEY, id);
+  };
+
+  const value = useMemo<AccentCtx>(() => {
+    const preset = ACCENT_PRESETS.find((p) => p.id === presetId) ?? ACCENT_PRESETS[0];
+    return {
+      theme: alert ? ALERT_ACCENT[resolvedScheme] : preset.theme[resolvedScheme],
+      alert,
+      setAlert,
+      presetId,
+      setPresetId,
+      presets: ACCENT_PRESETS,
+    };
+  }, [alert, presetId, resolvedScheme]);
+
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
-/** The current accent palette (green or alert-yellow). */
+/** The current accent palette (chosen preset, or alert-yellow while a warning is showing). */
 export function useAccent(): AccentTheme {
   return useContext(Ctx).theme;
 }
@@ -53,4 +87,10 @@ export function useAccent(): AccentTheme {
 export function useAccentAlert(): { alert: boolean; setAlert: (on: boolean) => void } {
   const { alert, setAlert } = useContext(Ctx);
   return { alert, setAlert };
+}
+
+/** Read/set the user's chosen accent preset (Settings screen). */
+export function useAccentPreset(): { presetId: string; setPresetId: (id: string) => void; presets: AccentPreset[] } {
+  const { presetId, setPresetId, presets } = useContext(Ctx);
+  return { presetId, setPresetId, presets };
 }

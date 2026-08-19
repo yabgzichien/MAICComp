@@ -1,9 +1,12 @@
 import {
+  AGING_DAYS,
   applyPayment,
   apportionCents,
   computeItemized,
   computeSplit,
   DEFAULT_SURCHARGES,
+  groupOpenSharesByPerson,
+  oldestOverdueDays,
   openReceivableTotal,
   outstanding,
   SELF,
@@ -323,3 +326,76 @@ describe('suggestSettlement', () => {
     expect(hit).toBeNull();
   });
 });
+
+describe('groupOpenSharesByPerson', () => {
+  const TODAY = '2026-06-15';
+
+  it('returns empty array when there are no open shares', () => {
+    expect(groupOpenSharesByPerson([], TODAY)).toEqual([]);
+  });
+
+  it('groups multiple shares for the same person and avoids cent rounding drift', () => {
+    const shares: OpenShare[] = [
+      { shareId: 's1', personId: 'p1', personName: 'Ali', outstanding: 33.33, billDate: '2026-06-01', merchant: 'Lunch' },
+      { shareId: 's2', personId: 'p1', personName: 'Ali', outstanding: 33.33, billDate: '2026-06-05', merchant: 'Dinner' },
+      { shareId: 's3', personId: 'p1', personName: 'Ali', outstanding: 33.34, billDate: '2026-06-10', merchant: 'Supper' },
+    ];
+    const grouped = groupOpenSharesByPerson(shares, TODAY);
+    expect(grouped).toHaveLength(1);
+    expect(grouped[0].personId).toBe('p1');
+    expect(grouped[0].name).toBe('Ali');
+    expect(grouped[0].total).toBe(100.0);
+    expect(grouped[0].shares).toHaveLength(3);
+  });
+
+  it('sorts debtors by total debt descending', () => {
+    const shares: OpenShare[] = [
+      { shareId: 's1', personId: 'p1', personName: 'Ali', outstanding: 25.0, billDate: '2026-06-01', merchant: 'Cafe' },
+      { shareId: 's2', personId: 'p2', personName: 'Siti', outstanding: 120.5, billDate: '2026-06-02', merchant: 'Dinner' },
+      { shareId: 's3', personId: 'p3', personName: 'Raj', outstanding: 75.0, billDate: '2026-06-03', merchant: 'Groceries' },
+    ];
+    const grouped = groupOpenSharesByPerson(shares, TODAY);
+    expect(grouped.map((g) => g.name)).toEqual(['Siti', 'Raj', 'Ali']);
+    expect(grouped.map((g) => g.total)).toEqual([120.5, 75.0, 25.0]);
+  });
+
+  it('sorts each person\'s bills oldest first by billDate', () => {
+    const shares: OpenShare[] = [
+      { shareId: 's2', personId: 'p1', personName: 'Ali', outstanding: 10.0, billDate: '2026-06-10', merchant: 'Recent' },
+      { shareId: 's1', personId: 'p1', personName: 'Ali', outstanding: 20.0, billDate: '2026-06-01', merchant: 'Oldest' },
+      { shareId: 's3', personId: 'p1', personName: 'Ali', outstanding: 15.0, billDate: '2026-06-05', merchant: 'Middle' },
+    ];
+    const grouped = groupOpenSharesByPerson(shares, TODAY);
+    expect(grouped[0].shares.map((s) => s.shareId)).toEqual(['s1', 's3', 's2']);
+  });
+
+  it('computes oldestDays correctly relative to today', () => {
+    const shares: OpenShare[] = [
+      { shareId: 's1', personId: 'p1', personName: 'Ali', outstanding: 20.0, billDate: '2026-06-01', merchant: 'Old' }, // 14 days
+      { shareId: 's2', personId: 'p1', personName: 'Ali', outstanding: 10.0, billDate: '2026-06-10', merchant: 'New' }, // 5 days
+    ];
+    const grouped = groupOpenSharesByPerson(shares, TODAY);
+    expect(grouped[0].oldestDays).toBe(14);
+  });
+});
+
+describe('oldestOverdueDays and AGING_DAYS', () => {
+  const TODAY = '2026-06-15';
+
+  it('exports AGING_DAYS as 14', () => {
+    expect(AGING_DAYS).toBe(14);
+  });
+
+  it('returns 0 when there are no open shares', () => {
+    expect(oldestOverdueDays([], TODAY)).toBe(0);
+  });
+
+  it('returns the maximum oldestDays across all debtors', () => {
+    const shares: OpenShare[] = [
+      { shareId: 's1', personId: 'p1', personName: 'Ali', outstanding: 20.0, billDate: '2026-06-05', merchant: 'Cafe' }, // 10 days
+      { shareId: 's2', personId: 'p2', personName: 'Siti', outstanding: 50.0, billDate: '2026-05-25', merchant: 'Dinner' }, // 21 days
+    ];
+    expect(oldestOverdueDays(shares, TODAY)).toBe(21);
+  });
+});
+

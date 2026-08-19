@@ -4,6 +4,7 @@ import { catColorsForHue } from '../lib/catColors';
 import { fmt } from '../lib/format';
 import type { Category, CategorySuggestion } from '../lib/types';
 import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
 import { colors, numFont, platformShadow, radius, shadowCard, uiFont } from '../theme';
 import { Icon, type IconName } from './Icon';
 import { Pip, type PipExpr } from './Pip';
@@ -11,14 +12,15 @@ import { Pip, type PipExpr } from './Pip';
 /* ── text helpers ── */
 
 export function Eyebrow({ children, style }: { children: React.ReactNode; style?: any }) {
-  return <Text style={[styles.eyebrow, style]}>{children}</Text>;
+  const colorTheme = useThemeColors();
+  return <Text style={[styles.eyebrow, { color: colorTheme.ink2 }, style]}>{children}</Text>;
 }
 
 export function Amount({
   value,
   size = 17,
   weight = 700,
-  color = colors.ink,
+  color,
   cur = true,
 }: {
   value: number;
@@ -27,6 +29,8 @@ export function Amount({
   color?: string;
   cur?: boolean;
 }) {
+  const colorTheme = useThemeColors();
+  color = color ?? colorTheme.ink;
   return (
     <Text style={{ fontFamily: numFont(weight), fontSize: size, color }}>
       {cur && (
@@ -40,7 +44,12 @@ export function Amount({
 /* ── surfaces ── */
 
 export function Card({ children, style }: { children: React.ReactNode; style?: ViewStyle | ViewStyle[] }) {
-  return <View style={[styles.card, style]}>{children}</View>;
+  const colorTheme = useThemeColors();
+  return (
+    <View style={[styles.card, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line2 }, style]}>
+      {children}
+    </View>
+  );
 }
 
 /* ── category visuals ── */
@@ -95,16 +104,21 @@ export function CategoryChip({
   onPress: () => void;
 }) {
   const theme = useAccent();
+  const colorTheme = useThemeColors();
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.chip, selected && { borderColor: theme.accent, backgroundColor: theme.accentTint }]}
+      style={[
+        styles.chip,
+        { backgroundColor: colorTheme.surface, borderColor: colorTheme.line },
+        selected && { borderColor: theme.accent, backgroundColor: theme.accentTint },
+      ]}
       accessibilityRole="radio"
       accessibilityLabel={category.label}
       accessibilityState={{ selected }}
     >
       <CatBadge category={category} size={34} rad={10} />
-      <Text style={styles.chipLabel} numberOfLines={1}>
+      <Text style={[styles.chipLabel, { color: colorTheme.ink }]} numberOfLines={1}>
         {category.label}
       </Text>
       {suggested && !selected && (
@@ -125,16 +139,23 @@ export function CategoryChip({
 /* ── Pip speech ── */
 
 export function Bubble({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
-  return <View style={[styles.bubble, style]}>{children}</View>;
+  const colorTheme = useThemeColors();
+  return (
+    <View style={[styles.bubble, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line }, style]}>
+      {children}
+    </View>
+  );
 }
 
 /** Standard body text inside a bubble (use <B> for emphasis). */
 export function BubbleText({ children }: { children: React.ReactNode }) {
-  return <Text style={styles.bubbleText}>{children}</Text>;
+  const colorTheme = useThemeColors();
+  return <Text style={[styles.bubbleText, { color: colorTheme.ink }]}>{children}</Text>;
 }
 
 export function B({ children }: { children: React.ReactNode }) {
-  return <Text style={styles.bold}>{children}</Text>;
+  const colorTheme = useThemeColors();
+  return <Text style={[styles.bold, { color: colorTheme.ink }]}>{children}</Text>;
 }
 
 export function PipSays({
@@ -162,7 +183,7 @@ export function IconButton({
   name,
   onPress,
   size = 20,
-  color = colors.ink,
+  color,
   accessibilityLabel,
 }: {
   name: IconName;
@@ -172,14 +193,15 @@ export function IconButton({
   /** Icon-only buttons have no visible text, so screen readers need this to announce anything. */
   accessibilityLabel?: string;
 }) {
+  const colorTheme = useThemeColors();
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.iconBtn, { backgroundColor: colorTheme.surface }, pressed && styles.pressed]}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? name}
     >
-      <Icon name={name} size={size} color={color} />
+      <Icon name={name} size={size} color={color ?? colorTheme.ink} />
     </Pressable>
   );
 }
@@ -233,10 +255,11 @@ export function TopBar({
   onClose?: () => void;
   right?: React.ReactNode;
 }) {
+  const colorTheme = useThemeColors();
   return (
     <View style={styles.topbar}>
       {onBack && <IconButton name="chevronLeft" onPress={onBack} accessibilityLabel="Go back" />}
-      <Text style={styles.topbarTitle} accessibilityRole="header">
+      <Text style={[styles.topbarTitle, { color: colorTheme.ink }]} accessibilityRole="header">
         {title}
       </Text>
       {right}
@@ -247,8 +270,9 @@ export function TopBar({
 
 export function ProgressTrack({ pct, height = 7 }: { pct: number; height?: number }) {
   const theme = useAccent();
+  const colorTheme = useThemeColors();
   return (
-    <View style={[styles.track, { height }]}>
+    <View style={[styles.track, { height, backgroundColor: colorTheme.line }]}>
       <View style={{ width: `${Math.max(0, Math.min(100, pct))}%`, height: '100%', borderRadius: 999, backgroundColor: theme.accent }} />
     </View>
   );
@@ -258,13 +282,15 @@ export type ValueMode = 'amount' | 'percent';
 
 /** Small RM / % segmented toggle. */
 export function ValueToggle({ mode, onChange }: { mode: ValueMode; onChange: (m: ValueMode) => void }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   return (
-    <View style={styles.vt}>
+    <View style={[styles.vt, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line2 }]}>
       {(['amount', 'percent'] as ValueMode[]).map((m) => {
         const on = mode === m;
         return (
-          <Pressable key={m} onPress={() => onChange(m)} style={[styles.vtBtn, on && styles.vtBtnOn]}>
-            <Text style={[styles.vtText, on && styles.vtTextOn]}>{m === 'amount' ? 'RM' : '%'}</Text>
+          <Pressable key={m} onPress={() => onChange(m)} style={[styles.vtBtn, on && { backgroundColor: theme.accentInk }]}>
+            <Text style={[styles.vtText, { color: colorTheme.ink2 }, on && styles.vtTextOn]}>{m === 'amount' ? 'RM' : '%'}</Text>
           </Pressable>
         );
       })}
@@ -273,26 +299,22 @@ export function ValueToggle({ mode, onChange }: { mode: ValueMode; onChange: (m:
 }
 
 const styles = StyleSheet.create({
-  vt: { flexDirection: 'row', backgroundColor: colors.surface2, borderRadius: 999, padding: 3, borderWidth: 1, borderColor: colors.line2 },
+  vt: { flexDirection: 'row', borderRadius: 999, padding: 3, borderWidth: 1 },
   vtBtn: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999 },
-  vtBtnOn: { backgroundColor: colors.accentInk },
   // ink3 is decoration-only (~2.2-2.5:1 contrast); these carry meaning (the unselected
   // toggle option, section labels) so they get ink2.
-  vtText: { fontFamily: uiFont(700), fontSize: 12.5, color: colors.ink2 },
+  vtText: { fontFamily: uiFont(700), fontSize: 12.5 },
   vtTextOn: { color: '#fff' },
   eyebrow: {
     fontFamily: uiFont(700),
     fontSize: 11.5,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: colors.ink2,
   },
-  bold: { fontFamily: uiFont(700), color: colors.ink },
+  bold: { fontFamily: uiFont(700) },
   card: {
-    backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.line2,
     ...shadowCard,
   },
   chip: {
@@ -302,12 +324,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 11,
     borderRadius: radius.sm,
-    backgroundColor: colors.surface,
     borderWidth: 1.5,
-    borderColor: colors.line,
   },
-  chipSelected: { borderColor: colors.accent, backgroundColor: colors.accentTint },
-  chipLabel: { fontFamily: uiFont(600), fontSize: 14.5, color: colors.ink, flex: 1 },
+  chipLabel: { fontFamily: uiFont(600), fontSize: 14.5, flex: 1 },
   learnedTag: {
     position: 'absolute',
     top: -8,
@@ -315,48 +334,41 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.accentSoft,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 999,
   },
-  learnedTagText: { fontFamily: uiFont(700), fontSize: 11, color: colors.accentInk },
+  learnedTagText: { fontFamily: uiFont(700), fontSize: 11 },
   checkCircle: {
     width: 22,
     height: 22,
     borderRadius: 999,
-    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   bubble: {
-    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.line,
     borderRadius: 20,
     borderBottomLeftRadius: 6,
     paddingVertical: 14,
     paddingHorizontal: 16,
     ...shadowCard,
   },
-  bubbleText: { fontFamily: uiFont(500), fontSize: 15.5, lineHeight: 21, color: colors.ink },
+  bubbleText: { fontFamily: uiFont(500), fontSize: 15.5, lineHeight: 21 },
   iconBtn: {
     width: 42,
     height: 42,
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surface,
     ...shadowCard,
   },
   pressed: { transform: [{ scale: 0.92 }] },
   btnPrimary: {
-    backgroundColor: colors.accentInk,
     borderRadius: 999,
     paddingHorizontal: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    ...platformShadow(colors.accent, 0.4, 12, { width: 0, height: 6 }, 4),
   },
   btnRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9 },
   btnLabel: { fontFamily: uiFont(600), fontSize: 16, color: colors.onAccent },
@@ -368,6 +380,6 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 6,
   },
-  topbarTitle: { flex: 1, fontFamily: uiFont(700), fontSize: 18, color: colors.ink },
-  track: { borderRadius: 999, backgroundColor: colors.line, overflow: 'hidden', width: '100%' },
+  topbarTitle: { flex: 1, fontFamily: uiFont(700), fontSize: 18 },
+  track: { borderRadius: 999, overflow: 'hidden', width: '100%' },
 });

@@ -8,8 +8,10 @@ import { PROTECTED_CATEGORY_IDS } from '../db/categoriesRepo';
 import { catColorsForHue } from '../lib/catColors';
 import { confirmAction } from '../lib/platformAlert';
 import type { TxnType } from '../lib/types';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
 import { useAppData } from '../state/store';
-import { colors, radius, shadowToggle, uiFont } from '../theme';
+import { radius, shadowToggle, uiFont } from '../theme';
 
 const EXPENSE_ICONS: IconName[] = ['home', 'cart', 'utensils', 'car', 'signal', 'heart', 'book', 'bag', 'play', 'shield', 'receipt', 'dots'];
 const INCOME_ICONS: IconName[] = ['wallet', 'store', 'car', 'gift', 'trending', 'percent', 'sparkles', 'return', 'dots'];
@@ -17,6 +19,8 @@ const HUE_CHOICES = [12, 42, 70, 120, 162, 200, 248, 286, 330];
 
 export function CategoriesScreen({ onBack }: { onBack: () => void }) {
   const insets = useSafeAreaInsets();
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const { categories, addCategory, deleteCategory } = useAppData();
 
   const [kind, setKind] = useState<TxnType>('expense');
@@ -67,18 +71,18 @@ export function CategoriesScreen({ onBack }: { onBack: () => void }) {
   };
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: colorTheme.bg }]}>
       <View style={{ paddingTop: insets.top + 4 }}>
         <TopBar title="Categories" onBack={onBack} />
       </View>
       <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: insets.bottom + 40 }} keyboardShouldPersistTaps="handled">
         {/* kind toggle */}
-        <View style={styles.toggle}>
+        <View style={[styles.toggle, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line2 }]}>
           {(['expense', 'income'] as TxnType[]).map((k) => {
             const on = kind === k;
             return (
-              <Pressable key={k} onPress={() => setKind(k)} style={[styles.toggleBtn, on && styles.toggleBtnOn]}>
-                <Text style={[styles.toggleText, on && styles.toggleTextOn]}>{k === 'expense' ? 'Expense' : 'Income'}</Text>
+              <Pressable key={k} onPress={() => setKind(k)} style={[styles.toggleBtn, on && [styles.toggleBtnOn, { backgroundColor: colorTheme.surface }]]}>
+                <Text style={[styles.toggleText, { color: colorTheme.ink2 }, on && { color: colorTheme.ink }]}>{k === 'expense' ? 'Expense' : 'Income'}</Text>
               </Pressable>
             );
           })}
@@ -88,13 +92,13 @@ export function CategoriesScreen({ onBack }: { onBack: () => void }) {
         <Eyebrow style={{ marginBottom: 10 }}>Your {kind} categories</Eyebrow>
         <Card style={{ overflow: 'hidden' }}>
           {list.map((c, i) => (
-            <View key={c.id} style={[styles.row, i > 0 && styles.divider]}>
+            <View key={c.id} style={[styles.row, i > 0 && [styles.divider, { borderTopColor: colorTheme.line2 }]]}>
               <CatBadge category={c} size={38} />
-              <Text style={styles.rowLabel} numberOfLines={1}>
+              <Text style={[styles.rowLabel, { color: colorTheme.ink }]} numberOfLines={1}>
                 {c.label}
               </Text>
               {PROTECTED_CATEGORY_IDS.includes(c.id) ? (
-                <Text style={styles.defaultTag}>locked</Text>
+                <Text style={[styles.defaultTag, { color: colorTheme.ink2 }]}>locked</Text>
               ) : (
                 <Pressable onPress={() => confirmDelete(c.id, c.label)} hitSlop={8} style={styles.delBtn}>
                   <Icon name="trash" size={17} color="#b3261e" />
@@ -113,20 +117,20 @@ export function CategoriesScreen({ onBack }: { onBack: () => void }) {
               value={name}
               onChangeText={setName}
               placeholder={kind === 'income' ? 'e.g. Freelance' : 'Category name'}
-              placeholderTextColor={colors.ink3}
-              style={styles.input}
+              placeholderTextColor={colorTheme.ink3}
+              style={[styles.input, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line, color: colorTheme.ink }]}
               maxLength={22}
             />
           </View>
 
           <View style={{ gap: 9 }}>
-            <Text style={styles.pickLabel}>Icon</Text>
+            <Text style={[styles.pickLabel, { color: colorTheme.ink2 }]}>Icon</Text>
             <View style={styles.choiceWrap}>
               {iconChoices.map((ic) => {
                 const on = ic === icon;
                 return (
-                  <Pressable key={ic} onPress={() => setIcon(ic)} style={[styles.iconChoice, on && styles.iconChoiceOn]}>
-                    <Icon name={ic} size={20} color={on ? colors.accent : colors.ink2} stroke={1.9} />
+                  <Pressable key={ic} onPress={() => setIcon(ic)} style={[styles.iconChoice, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line }, on && { borderColor: theme.accent, backgroundColor: theme.accentTint }]}>
+                    <Icon name={ic} size={20} color={on ? theme.accent : colorTheme.ink2} stroke={1.9} />
                   </Pressable>
                 );
               })}
@@ -134,27 +138,28 @@ export function CategoriesScreen({ onBack }: { onBack: () => void }) {
                 onPress={pickCustomIcon}
                 style={[
                   styles.iconChoice,
-                  (icon.startsWith('data:') || icon.startsWith('file:') || icon.startsWith('content:') || icon.startsWith('http') || icon.startsWith('/')) && styles.iconChoiceOn,
+                  { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line },
+                  (icon.startsWith('data:') || icon.startsWith('file:') || icon.startsWith('content:') || icon.startsWith('http') || icon.startsWith('/')) && { borderColor: theme.accent, backgroundColor: theme.accentTint },
                   { minWidth: 68, flexDirection: 'row', gap: 4, paddingHorizontal: 6 }
                 ]}
               >
                 {(icon.startsWith('data:') || icon.startsWith('file:') || icon.startsWith('content:') || icon.startsWith('http') || icon.startsWith('/')) ? (
                   <Image source={{ uri: icon }} style={{ width: 22, height: 22, borderRadius: 4 }} resizeMode="cover" />
                 ) : (
-                  <Icon name="image" size={17} color={colors.accent} stroke={2.0} />
+                  <Icon name="image" size={17} color={theme.accent} stroke={2.0} />
                 )}
-                <Text style={{ fontSize: 10, fontFamily: uiFont(700), color: colors.accent }}>Gallery</Text>
+                <Text style={{ fontSize: 10, fontFamily: uiFont(700), color: theme.accent }}>Gallery</Text>
               </Pressable>
             </View>
           </View>
 
           <View style={{ gap: 9 }}>
-            <Text style={styles.pickLabel}>Color</Text>
+            <Text style={[styles.pickLabel, { color: colorTheme.ink2 }]}>Color</Text>
             <View style={styles.choiceWrap}>
               {HUE_CHOICES.map((h) => {
                 const on = h === hue;
                 return (
-                  <Pressable key={h} onPress={() => setHue(h)} style={[styles.hueChoice, { backgroundColor: catColorsForHue(h).solid }, on && styles.hueChoiceOn]}>
+                  <Pressable key={h} onPress={() => setHue(h)} style={[styles.hueChoice, { backgroundColor: catColorsForHue(h).solid }, on && [styles.hueChoiceOn, { borderColor: colorTheme.ink }]]}>
                     {on && <Icon name="check" size={14} color="#fff" stroke={2.6} />}
                   </Pressable>
                 );
@@ -173,51 +178,42 @@ export function CategoriesScreen({ onBack }: { onBack: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+  root: { flex: 1 },
   toggle: {
     flexDirection: 'row',
-    backgroundColor: colors.surface2,
     borderRadius: 999,
     padding: 4,
     marginBottom: 18,
     borderWidth: 1,
-    borderColor: colors.line2,
   },
   toggleBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 9, borderRadius: 999 },
-  toggleBtnOn: { backgroundColor: colors.surface, ...shadowToggle },
-  toggleText: { fontFamily: uiFont(600), fontSize: 14, color: colors.ink2 },
-  toggleTextOn: { color: colors.ink },
+  toggleBtnOn: { ...shadowToggle },
+  toggleText: { fontFamily: uiFont(600), fontSize: 14 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 15, paddingVertical: 12 },
-  divider: { borderTopWidth: 1, borderTopColor: colors.line2 },
-  rowLabel: { flex: 1, fontFamily: uiFont(600), fontSize: 15, color: colors.ink },
-  defaultTag: { fontFamily: uiFont(600), fontSize: 11.5, color: colors.ink2 },
+  divider: { borderTopWidth: 1 },
+  rowLabel: { flex: 1, fontFamily: uiFont(600), fontSize: 15 },
+  defaultTag: { fontFamily: uiFont(600), fontSize: 11.5 },
   delBtn: { padding: 6 },
   previewRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   input: {
     flex: 1,
-    backgroundColor: colors.surface2,
     borderWidth: 1,
-    borderColor: colors.line,
     borderRadius: radius.sm,
     paddingHorizontal: 13,
     paddingVertical: 12,
     fontFamily: uiFont(600),
     fontSize: 15,
-    color: colors.ink,
   },
-  pickLabel: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2 },
+  pickLabel: { fontFamily: uiFont(600), fontSize: 12.5 },
   choiceWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
   iconChoice: {
     width: 42,
     height: 42,
     borderRadius: 12,
-    backgroundColor: colors.surface2,
     borderWidth: 1.5,
-    borderColor: colors.line,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconChoiceOn: { borderColor: colors.accent, backgroundColor: colors.accentTint },
   hueChoice: { width: 36, height: 36, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
-  hueChoiceOn: { borderWidth: 2.5, borderColor: colors.ink },
+  hueChoiceOn: { borderWidth: 2.5 },
 });

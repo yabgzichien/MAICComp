@@ -2,7 +2,8 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Pip } from './Pip';
 import { PrimaryButton, BtnLabel } from './ui';
-import { colors, uiFont } from '../theme';
+import { useThemeColors } from '../state/colorScheme';
+import { uiFont } from '../theme';
 
 type Props = {
   children: React.ReactNode;
@@ -42,23 +43,39 @@ export class ErrorBoundary extends React.Component<Props, State> {
     if (!this.state.hasError) return this.props.children;
     if (this.props.fallback) return this.props.fallback(this.reset);
     return this.props.compact ? (
-      <View style={styles.compact}>
-        <Text style={styles.compactText}>{this.props.title ?? "Couldn't render this"}</Text>
-        {this.props.message && <Text style={styles.compactSub}>{this.props.message}</Text>}
-      </View>
+      <CompactFallback title={this.props.title} message={this.props.message} />
     ) : (
-      <View style={styles.full}>
-        <Pip size={72} expr="curious" />
-        <Text style={styles.title}>{this.props.title ?? 'Something went wrong'}</Text>
-        <Text style={styles.message}>
-          {this.props.message ?? "This screen hit a snag. Your data is safe. Try again, and if it keeps happening, restart the app."}
-        </Text>
-        <PrimaryButton onPress={this.reset} height={48}>
-          <BtnLabel>Try again</BtnLabel>
-        </PrimaryButton>
-      </View>
+      <FullFallback title={this.props.title} message={this.props.message} onReset={this.reset} />
     );
   }
+}
+
+/** Class components can't call hooks, so the fallback UI (which needs the reactive theme) lives
+ *  in these small function components instead. */
+function CompactFallback({ title, message }: { title?: string; message?: string }) {
+  const colorTheme = useThemeColors();
+  return (
+    <View style={[styles.compact, { borderColor: colorTheme.line, backgroundColor: colorTheme.surface2 }]}>
+      <Text style={[styles.compactText, { color: colorTheme.ink }]}>{title ?? "Couldn't render this"}</Text>
+      {message && <Text style={[styles.compactSub, { color: colorTheme.ink2 }]}>{message}</Text>}
+    </View>
+  );
+}
+
+function FullFallback({ title, message, onReset }: { title?: string; message?: string; onReset: () => void }) {
+  const colorTheme = useThemeColors();
+  return (
+    <View style={[styles.full, { backgroundColor: colorTheme.bg }]}>
+      <Pip size={72} expr="curious" />
+      <Text style={[styles.title, { color: colorTheme.ink }]}>{title ?? 'Something went wrong'}</Text>
+      <Text style={[styles.message, { color: colorTheme.ink2 }]}>
+        {message ?? "This screen hit a snag. Your data is safe. Try again, and if it keeps happening, restart the app."}
+      </Text>
+      <PrimaryButton onPress={onReset} height={48}>
+        <BtnLabel>Try again</BtnLabel>
+      </PrimaryButton>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -68,20 +85,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 14,
     padding: 32,
-    backgroundColor: colors.bg,
   },
-  title: { fontFamily: uiFont(700), fontSize: 17, color: colors.ink, textAlign: 'center' },
-  message: { fontFamily: uiFont(500), fontSize: 13.5, color: colors.ink2, textAlign: 'center', lineHeight: 19, marginBottom: 6 },
+  title: { fontFamily: uiFont(700), fontSize: 17, textAlign: 'center' },
+  message: { fontFamily: uiFont(500), fontSize: 13.5, textAlign: 'center', lineHeight: 19, marginBottom: 6 },
   compact: {
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.surface2,
     gap: 4,
   },
-  compactText: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink },
-  compactSub: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, textAlign: 'center' },
+  compactText: { fontFamily: uiFont(600), fontSize: 13 },
+  compactSub: { fontFamily: uiFont(500), fontSize: 11.5, textAlign: 'center' },
 });

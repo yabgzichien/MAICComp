@@ -3,7 +3,9 @@ import React, { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CLASS_BY_ID, type LinkEffect } from '../lib/networth';
 import type { Account } from '../lib/types';
-import { colors, radius, uiFont } from '../theme';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
+import { radius, uiFont } from '../theme';
 import { Icon, type IconName } from './Icon';
 
 /**
@@ -35,6 +37,8 @@ export function AccountLinkField({
   required?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const active = accounts.filter((a) => !a.archived);
   if (active.length === 0) return null;
   const sel = active.find((a) => a.id === selectedId) ?? null;
@@ -46,25 +50,32 @@ export function AccountLinkField({
 
   return (
     <View>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={[styles.label, { color: colorTheme.ink2 }]}>{label}</Text>
 
-      <Pressable onPress={() => setOpen(true)} style={styles.trigger}>
+      <Pressable onPress={() => setOpen(true)} style={[styles.trigger, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line }]}>
         {sel ? (
-          <Icon name={(CLASS_BY_ID[sel.cls]?.icon ?? 'wallet') as IconName} size={16} color={colors.ink2} />
+          <Icon name={(CLASS_BY_ID[sel.cls]?.icon ?? 'wallet') as IconName} size={16} color={colorTheme.ink2} />
         ) : null}
-        <Text style={[styles.triggerText, !sel && styles.triggerPlaceholder]} numberOfLines={1}>
+        <Text
+          style={[
+            styles.triggerText,
+            { color: colorTheme.ink },
+            !sel && [styles.triggerPlaceholder, { color: colorTheme.ink3 }],
+          ]}
+          numberOfLines={1}
+        >
           {sel ? sel.name : required ? 'Select account' : 'None'}
         </Text>
-        <Icon name="chevronDown" size={18} color={colors.ink3} />
+        <Icon name="chevronDown" size={18} color={colorTheme.ink3} />
       </Pressable>
 
       {sel && effect && onEffect && (
-        <View style={styles.effectRow}>
+        <View style={[styles.effectRow, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line2 }]}>
           {(['subtract', 'add'] as LinkEffect[]).map((e) => {
             const on = effect === e;
             return (
-              <Pressable key={e} onPress={() => onEffect(e)} style={[styles.effectBtn, on && styles.effectBtnOn]}>
-                <Text style={[styles.effectText, on && styles.effectTextOn]}>
+              <Pressable key={e} onPress={() => onEffect(e)} style={[styles.effectBtn, on && { backgroundColor: theme.accentInk }]}>
+                <Text style={[styles.effectText, { color: colorTheme.ink2 }, on && styles.effectTextOn]}>
                   {e === 'subtract' ? `Reduces ${sel.name}` : `Adds to ${sel.name}`}
                 </Text>
               </Pressable>
@@ -76,8 +87,8 @@ export function AccountLinkField({
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setOpen(false)} />
         <View style={styles.menuWrap} pointerEvents="box-none">
-          <View style={styles.menu}>
-            <Text style={styles.menuTitle}>Account</Text>
+          <View style={[styles.menu, { backgroundColor: colorTheme.bg, borderColor: colorTheme.line2 }]}>
+            <Text style={[styles.menuTitle, { color: colorTheme.ink2 }]}>Account</Text>
             <ScrollView style={styles.menuScroll} keyboardShouldPersistTaps="handled">
               {!required && <Option label="None" active={!selectedId} onPress={() => choose(null)} />}
               {active.map((a) => (
@@ -108,53 +119,48 @@ function Option({
   active: boolean;
   onPress: () => void;
 }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   return (
-    <Pressable onPress={onPress} style={[styles.option, active && styles.optionOn]}>
-      {icon ? <Icon name={icon} size={16} color={active ? colors.accent : colors.ink3} /> : <View style={styles.optionIconSpacer} />}
-      <Text style={[styles.optionText, active && styles.optionTextOn]} numberOfLines={1}>
+    <Pressable onPress={onPress} style={[styles.option, active && { backgroundColor: theme.accentTint }]}>
+      {icon ? <Icon name={icon} size={16} color={active ? theme.accent : colorTheme.ink3} /> : <View style={styles.optionIconSpacer} />}
+      <Text style={[styles.optionText, { color: colorTheme.ink }, active && { color: theme.accentInk }]} numberOfLines={1}>
         {label}
       </Text>
-      {active && <Icon name="check" size={16} color={colors.accent} stroke={2.4} />}
+      {active && <Icon name="check" size={16} color={theme.accent} stroke={2.4} />}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  label: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2, marginBottom: 8 },
+  label: { fontFamily: uiFont(600), fontSize: 12.5, marginBottom: 8 },
   trigger: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.line,
     borderRadius: radius.sm,
     paddingHorizontal: 14,
     paddingVertical: 13,
   },
-  triggerText: { flex: 1, fontFamily: uiFont(600), fontSize: 16, color: colors.ink },
-  triggerPlaceholder: { color: colors.ink3 },
-  effectRow: { flexDirection: 'row', backgroundColor: colors.surface2, borderRadius: 999, padding: 3, marginTop: 10, borderWidth: 1, borderColor: colors.line2 },
+  triggerText: { flex: 1, fontFamily: uiFont(600), fontSize: 16 },
+  triggerPlaceholder: {},
+  effectRow: { flexDirection: 'row', borderRadius: 999, padding: 3, marginTop: 10, borderWidth: 1 },
   effectBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: 999 },
-  effectBtnOn: { backgroundColor: colors.accentInk },
-  effectText: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2 },
+  effectText: { fontFamily: uiFont(600), fontSize: 12.5 },
   effectTextOn: { color: '#fff' },
 
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(16,32,24,0.4)' },
   menuWrap: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
   menu: {
-    backgroundColor: colors.bg,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.line2,
     paddingVertical: 8,
     maxHeight: '70%',
   },
-  menuTitle: { fontFamily: uiFont(700), fontSize: 13, color: colors.ink2, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 6 },
+  menuTitle: { fontFamily: uiFont(700), fontSize: 13, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 6 },
   menuScroll: { flexGrow: 0 },
   option: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 13 },
-  optionOn: { backgroundColor: colors.accentTint },
   optionIconSpacer: { width: 16 },
-  optionText: { flex: 1, fontFamily: uiFont(600), fontSize: 15, color: colors.ink },
-  optionTextOn: { color: colors.accentInk },
+  optionText: { flex: 1, fontFamily: uiFont(600), fontSize: 15 },
 });

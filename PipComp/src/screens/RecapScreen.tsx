@@ -17,8 +17,12 @@ import { getBenchmark } from '../lib/belanjawanku';
 import { benchmarkGaps, gapTrend } from '../lib/belanjawankuBudget';
 import { netWorthSeries } from '../lib/networth';
 import type { Category } from '../lib/types';
+import { useAccent } from '../state/accent';
+import type { AccentTheme } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
+import type { StructuralColors } from '../theme';
 import { useAppData } from '../state/store';
-import { colors, numFont, platformShadow, shadowCard, uiFont } from '../theme';
+import { numFont, platformShadow, shadowCard, uiFont } from '../theme';
 
 /** The 'YYYY-MM' before the given one. */
 function prevMonthKey(mk: string): string {
@@ -39,18 +43,18 @@ const TINT = {
   ncfDown: '#ff8a7a',
 } as const;
 
-function statusColor(st: CategoryBudgetStatus): string {
-  if (st === 'ok') return colors.accent;
-  if (st === 'warn') return colors.amber;
-  return colors.red;
+function statusColor(st: CategoryBudgetStatus, theme: AccentTheme, colorTheme: StructuralColors): string {
+  if (st === 'ok') return theme.accent;
+  if (st === 'warn') return colorTheme.amber;
+  return colorTheme.red;
 }
-function statusBg(st: CategoryBudgetStatus): string {
-  if (st === 'ok') return colors.accentTint;
+function statusBg(st: CategoryBudgetStatus, theme: AccentTheme): string {
+  if (st === 'ok') return theme.accentTint;
   if (st === 'warn') return TINT.amberTint;
   return TINT.redTint;
 }
-function statusBorder(st: CategoryBudgetStatus): string {
-  if (st === 'ok') return colors.accentSoft;
+function statusBorder(st: CategoryBudgetStatus, theme: AccentTheme): string {
+  if (st === 'ok') return theme.accentSoft;
   if (st === 'warn') return TINT.amberSoft;
   return TINT.redSoft;
 }
@@ -149,8 +153,10 @@ function IncomeHero({
 
 // ── Category row (target vs actual) ───────────────────────────────────────────
 function CategoryRow({ cat, spent, alloc, isLast }: { cat: Category; spent: number; alloc: number; isLast: boolean }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const st = categoryStatus(spent, alloc);
-  const color = statusColor(st);
+  const color = statusColor(st, theme, colorTheme);
   const ratio = alloc > 0 ? spent / alloc : spent > 0 ? 1.45 : 0;
   const pct = Math.round(ratio * 100);
   const over = spent > alloc;
@@ -158,17 +164,17 @@ function CategoryRow({ cat, spent, alloc, isLast }: { cat: Category; spent: numb
   const mainPct = Math.min(ratio, 1) * 100;
 
   return (
-    <View style={[styles.catRow, !isLast && styles.divider]}>
+    <View style={[styles.catRow, !isLast && [styles.divider, { borderTopColor: colorTheme.line }]]}>
       <View style={styles.catTop}>
         <View style={styles.catIconLabel}>
           <CatBadge category={cat} size={30} rad={9} />
-          <Text style={styles.catLabel} numberOfLines={1}>{cat.label}</Text>
+          <Text style={[styles.catLabel, { color: colorTheme.ink }]} numberOfLines={1}>{cat.label}</Text>
         </View>
         <View style={styles.catNums}>
-          <Text style={styles.catActual}>RM {fmt(spent)}</Text>
-          <Text style={styles.catTarget}> / {fmt(alloc)}</Text>
+          <Text style={[styles.catActual, { color: colorTheme.ink }]}>RM {fmt(spent)}</Text>
+          <Text style={[styles.catTarget, { color: colorTheme.ink2 }]}> / {fmt(alloc)}</Text>
         </View>
-        <View style={[styles.badge, { backgroundColor: statusBg(st), borderColor: statusBorder(st) }]}>
+        <View style={[styles.badge, { backgroundColor: statusBg(st, theme), borderColor: statusBorder(st, theme) }]}>
           <Text style={[styles.badgeText, { color }]}>
             {diff === 0 ? 'On target' : over ? `+${fmt(diff)}` : `−${fmt(diff)}`}
           </Text>
@@ -182,7 +188,7 @@ function CategoryRow({ cat, spent, alloc, isLast }: { cat: Category; spent: numb
 
       <View style={styles.catFoot}>
         <Text style={[styles.catPct, { color }]}>{pct}% of budget</Text>
-        <Text style={styles.catBudget}>budget RM {fmt(alloc)}</Text>
+        <Text style={[styles.catBudget, { color: colorTheme.ink2 }]}>budget RM {fmt(alloc)}</Text>
       </View>
     </View>
   );
@@ -192,8 +198,10 @@ type InsightType = 'good' | 'warn' | 'caution';
 
 // ── Insight row ───────────────────────────────────────────────────────────────
 function InsightRow({ type, text, isLast }: { type: InsightType; text: string; isLast: boolean }) {
-  const color = type === 'good' ? colors.accent : type === 'warn' ? colors.red : colors.amber;
-  const bg = type === 'good' ? colors.accentTint : type === 'warn' ? TINT.redTint : TINT.amberTint;
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
+  const color = type === 'good' ? theme.accent : type === 'warn' ? colorTheme.red : colorTheme.amber;
+  const bg = type === 'good' ? theme.accentTint : type === 'warn' ? TINT.redTint : TINT.amberTint;
   const path =
     type === 'good'
       ? 'M3 7l3 3 6-6'
@@ -201,19 +209,21 @@ function InsightRow({ type, text, isLast }: { type: InsightType; text: string; i
       ? 'M7 3.5v4M7 9.5h.01'
       : 'M7 4v3.5M7 9h.01';
   return (
-    <View style={[styles.insightRow, !isLast && styles.divider]}>
+    <View style={[styles.insightRow, !isLast && [styles.divider, { borderTopColor: colorTheme.line }]]}>
       <View style={[styles.insightIcon, { backgroundColor: bg }]}>
         <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
           <Path d={path} stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
         </Svg>
       </View>
-      <Text style={styles.insightText}>{text}</Text>
+      <Text style={[styles.insightText, { color: colorTheme.ink }]}>{text}</Text>
     </View>
   );
 }
 
-export function RecapScreen({ onBack, onOpenCalendar }: { onBack: () => void; onOpenCalendar?: (month: string) => void }) {
+export function RecapScreen({ onBack, onOpenCalendar, onOpenExport }: { onBack: () => void; onOpenCalendar?: (month: string) => void; onOpenExport?: (month: string) => void }) {
   const insets = useSafeAreaInsets();
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const { transactions, catById, snapshots, accounts, balanceEntries, householdProfile, guideCity } = useAppData();
 
   const snapshotMonths = useMemo(() => Object.keys(snapshots), [snapshots]);
@@ -311,17 +321,17 @@ export function RecapScreen({ onBack, onOpenCalendar }: { onBack: () => void; on
   const stripRef = useRef<ScrollView>(null);
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: colorTheme.bg }]}>
       {/* Nav bar */}
       <View style={[styles.nav, { paddingTop: insets.top + 6 }]}>
-        <Pressable onPress={onBack} style={styles.navBtn}>
+        <Pressable onPress={onBack} style={[styles.navBtn, { backgroundColor: colorTheme.surface }]}>
           <Svg width={10} height={17} viewBox="0 0 10 17" fill="none">
-            <Path d="M8.5 1.5L1.5 8.5l7 7" stroke={colors.ink2} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            <Path d="M8.5 1.5L1.5 8.5l7 7" stroke={colorTheme.ink2} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
         </Pressable>
-        <Text style={styles.navTitle}>Monthly Recap</Text>
-        <Pressable onPress={() => setPickerOpen(true)} style={styles.navBtn} accessibilityRole="button" accessibilityLabel="Select month">
-          <Svg width={17} height={17} viewBox="0 0 18 18" fill="none" stroke={colors.ink2} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
+        <Text style={[styles.navTitle, { color: colorTheme.ink }]}>Monthly Recap</Text>
+        <Pressable onPress={() => setPickerOpen(true)} style={[styles.navBtn, { backgroundColor: colorTheme.surface }]} accessibilityRole="button" accessibilityLabel="Select month">
+          <Svg width={17} height={17} viewBox="0 0 18 18" fill="none" stroke={colorTheme.ink2} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
             <Rect x={3} y={4} width={12} height={11} rx={2} />
             <Path d="M3 7.5h12M6.5 2.5v3M11.5 2.5v3M6.5 11l1.6 1.6L11.5 9" />
           </Svg>
@@ -329,14 +339,26 @@ export function RecapScreen({ onBack, onOpenCalendar }: { onBack: () => void; on
         {onOpenCalendar && (
           <Pressable
             onPress={() => onOpenCalendar(month)}
-            style={[styles.navBtn, { marginLeft: 6 }]}
+            style={[styles.navBtn, { backgroundColor: colorTheme.surface, marginLeft: 6 }]}
             accessibilityRole="button"
             accessibilityLabel="Open calendar view"
           >
-            <Svg width={17} height={17} viewBox="0 0 18 18" fill="none" stroke={colors.accent} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
+            <Svg width={17} height={17} viewBox="0 0 18 18" fill="none" stroke={theme.accent} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
               <Rect x={3} y={3} width={12} height={12} rx={2} />
               <Path d="M3 7h12M6.5 1.5v3M11.5 1.5v3" />
               <Path d="M6 10.5h2M10 10.5h2M6 13h2M10 13h2" />
+            </Svg>
+          </Pressable>
+        )}
+        {onOpenExport && (
+          <Pressable
+            onPress={() => onOpenExport(month)}
+            style={[styles.navBtn, { backgroundColor: colorTheme.surface, marginLeft: 6 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Export financial report"
+          >
+            <Svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke={theme.accent} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+              <Path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
             </Svg>
           </Pressable>
         )}
@@ -354,8 +376,20 @@ export function RecapScreen({ onBack, onOpenCalendar }: { onBack: () => void; on
         {displayMonths.map((mk) => {
           const on = mk === month;
           return (
-            <Pressable key={mk} onPress={() => setSelected(mk)} style={[styles.monthChip, on && styles.monthChipOn]}>
-              <Text style={[styles.monthChipText, on && styles.monthChipTextOn]}>{monthLabel(mk, false)}</Text>
+            <Pressable
+              key={mk}
+              onPress={() => setSelected(mk)}
+              style={[
+                styles.monthChip,
+                { backgroundColor: colorTheme.surface, borderColor: colorTheme.line },
+                on && {
+                  backgroundColor: theme.accentInk,
+                  borderColor: theme.accentInk,
+                  ...platformShadow(theme.accent, 0.28, 10, { width: 0, height: 3 }, 0),
+                },
+              ]}
+            >
+              <Text style={[styles.monthChipText, { color: colorTheme.ink2 }, on && styles.monthChipTextOn]}>{monthLabel(mk, false)}</Text>
             </Pressable>
           );
         })}
@@ -378,8 +412,8 @@ export function RecapScreen({ onBack, onOpenCalendar }: { onBack: () => void; on
           <>
             {/* Spending breakdown */}
             <View style={styles.sectionHead}>
-              <Text style={styles.sectionLabel}>Spending</Text>
-              <Text style={styles.sectionSub}>RM {fmt(statement.expenses)}</Text>
+              <Text style={[styles.sectionLabel, { color: colorTheme.ink2 }]}>Spending</Text>
+              <Text style={[styles.sectionSub, { color: colorTheme.ink2 }]}>RM {fmt(statement.expenses)}</Text>
             </View>
             <Card style={styles.listCard}>
               {budgetedIds.map((id, i) => (
@@ -392,24 +426,24 @@ export function RecapScreen({ onBack, onOpenCalendar }: { onBack: () => void; on
                 />
               ))}
               {unbudgetedSpent > 0 && (
-                <View style={[styles.catRow, styles.divider]}>
+                <View style={[styles.catRow, styles.divider, { borderTopColor: colorTheme.line }]}>
                   <View style={styles.catIconLabel}>
-                    <View style={styles.unbudgetedIcon}>
-                      <Icon name="dots" size={16} color={colors.ink3} />
+                    <View style={[styles.unbudgetedIcon, { backgroundColor: colorTheme.surface2 }]}>
+                      <Icon name="dots" size={16} color={colorTheme.ink3} />
                     </View>
-                    <Text style={styles.catLabel}>Unbudgeted</Text>
+                    <Text style={[styles.catLabel, { color: colorTheme.ink }]}>Unbudgeted</Text>
                   </View>
-                  <Text style={styles.catActual}>RM {fmt(unbudgetedSpent)}</Text>
+                  <Text style={[styles.catActual, { color: colorTheme.ink }]}>RM {fmt(unbudgetedSpent)}</Text>
                 </View>
               )}
             </Card>
 
             {/* Where to improve */}
             <View style={styles.improveHead}>
-              <View style={styles.improveTab} />
-              <Text style={styles.sectionLabel}>Where to improve</Text>
-              <View style={styles.signalPill}>
-                <Text style={styles.signalText}>{insights.length} signals</Text>
+              <View style={[styles.improveTab, { backgroundColor: theme.accent }]} />
+              <Text style={[styles.sectionLabel, { color: colorTheme.ink2 }]}>Where to improve</Text>
+              <View style={[styles.signalPill, { backgroundColor: theme.accentSoft }]}>
+                <Text style={[styles.signalText, { color: theme.accentInk }]}>{insights.length} signals</Text>
               </View>
             </View>
             <Card style={styles.listCard}>
@@ -420,19 +454,43 @@ export function RecapScreen({ onBack, onOpenCalendar }: { onBack: () => void; on
           </>
         ) : (
           <View style={styles.emptyPad}>
-            <Text style={styles.emptyText}>Category breakdown not available for this month.</Text>
+            <Text style={[styles.emptyText, { color: colorTheme.ink2 }]}>Category breakdown not available for this month.</Text>
           </View>
         )}
 
-        <View style={{ height: 8 }} />
+        {onOpenExport && (
+          <Pressable
+            onPress={() => onOpenExport(month)}
+            style={({ pressed }) => [
+              styles.exportCard,
+              { backgroundColor: colorTheme.surface, borderColor: colorTheme.line },
+              pressed && { opacity: 0.9 },
+            ]}
+          >
+            <View style={[styles.exportIconWrap, { backgroundColor: theme.accentTint }]}>
+              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={theme.accent} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <Path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+              </Svg>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.exportCardTitle, { color: colorTheme.ink }]}>Export {monthLabel(month)} Statement</Text>
+              <Text style={[styles.exportCardSub, { color: colorTheme.ink2 }]}>Generate PDF, Excel (.xlsx), CSV, or HTML bookkeeping files.</Text>
+            </View>
+            <Svg width={16} height={16} viewBox="0 0 16 16" fill="none" stroke={colorTheme.ink3} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <Path d="M6 3l5 5-5 5" />
+            </Svg>
+          </Pressable>
+        )}
+
+        <View style={{ height: 16 }} />
       </ScrollView>
 
       {/* Month dropdown  reliable selector on every platform (web mouse can't drag the strip) */}
       <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setPickerOpen(false)}>
-          <Pressable style={[styles.modalSheet, { paddingBottom: insets.bottom + 16 }]} onPress={() => {}}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Select month</Text>
+          <Pressable style={[styles.modalSheet, { backgroundColor: colorTheme.surface, paddingBottom: insets.bottom + 16 }]} onPress={() => {}}>
+            <View style={[styles.modalHandle, { backgroundColor: colorTheme.line }]} />
+            <Text style={[styles.modalTitle, { color: colorTheme.ink2 }]}>Select month</Text>
             <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
               {months.map((mk) => {
                 const on = mk === month;
@@ -443,12 +501,12 @@ export function RecapScreen({ onBack, onOpenCalendar }: { onBack: () => void; on
                       setSelected(mk);
                       setPickerOpen(false);
                     }}
-                    style={[styles.monthOption, on && styles.monthOptionOn]}
+                    style={[styles.monthOption, on && { backgroundColor: theme.accentTint }]}
                   >
-                    <Text style={[styles.monthOptionText, on && styles.monthOptionTextOn]}>{monthLabel(mk)}</Text>
+                    <Text style={[styles.monthOptionText, { color: colorTheme.ink }, on && { color: theme.accentInk, fontFamily: uiFont(700) }]}>{monthLabel(mk)}</Text>
                     {on && (
                       <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
-                        <Path d="M3 8.5l3.2 3.2L13 5" stroke={colors.accent} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
+                        <Path d="M3 8.5l3.2 3.2L13 5" stroke={theme.accent} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
                       </Svg>
                     )}
                   </Pressable>
@@ -465,19 +523,18 @@ export function RecapScreen({ onBack, onOpenCalendar }: { onBack: () => void; on
 const HERO_NUM = numFont(700);
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+  root: { flex: 1 },
 
   // nav
   nav: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingBottom: 12 },
-  navBtn: { width: 36, height: 36, borderRadius: 999, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', ...shadowCard },
-  navTitle: { flex: 1, textAlign: 'center', fontFamily: uiFont(700), fontSize: 16, color: colors.ink },
+  navBtn: { width: 36, height: 36, borderRadius: 999, alignItems: 'center', justifyContent: 'center', ...shadowCard },
+  navTitle: { flex: 1, textAlign: 'center', fontFamily: uiFont(700), fontSize: 16 },
 
   // month picker  keep the strip its natural height; pills must not stretch vertically
   monthScroll: { flexGrow: 0, flexShrink: 0 },
   monthStrip: { paddingHorizontal: 16, paddingTop: 2, paddingBottom: 10, gap: 6, alignItems: 'center' },
-  monthChip: { paddingHorizontal: 17, paddingVertical: 6, borderRadius: 20, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.line, ...shadowCard },
-  monthChipOn: { backgroundColor: colors.accentInk, borderColor: colors.accentInk, ...platformShadow(colors.accent, 0.28, 10, { width: 0, height: 3 }, 0) },
-  monthChipText: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2 },
+  monthChip: { paddingHorizontal: 17, paddingVertical: 6, borderRadius: 20, borderWidth: 1.5, ...shadowCard },
+  monthChipText: { fontFamily: uiFont(500), fontSize: 12.5 },
   monthChipTextOn: { fontFamily: uiFont(700), color: '#fff' },
 
   // hero
@@ -508,49 +565,63 @@ const styles = StyleSheet.create({
 
   // section headers
   sectionHead: { paddingHorizontal: 18, paddingTop: 16, paddingBottom: 4, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
-  sectionLabel: { fontFamily: uiFont(700), fontSize: 12, letterSpacing: 0.3, color: colors.ink2 },
-  sectionSub: { fontFamily: numFont(600), fontSize: 12, color: colors.ink2 },
+  sectionLabel: { fontFamily: uiFont(700), fontSize: 12, letterSpacing: 0.3 },
+  sectionSub: { fontFamily: numFont(600), fontSize: 12 },
   improveHead: { paddingHorizontal: 18, paddingTop: 16, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 9 },
-  improveTab: { width: 4, height: 18, borderRadius: 2, backgroundColor: colors.accent },
-  signalPill: { marginLeft: 'auto', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 9, backgroundColor: colors.accentSoft },
-  signalText: { fontFamily: uiFont(700), fontSize: 11, color: colors.accentInk },
+  improveTab: { width: 4, height: 18, borderRadius: 2 },
+  signalPill: { marginLeft: 'auto', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 9 },
+  signalText: { fontFamily: uiFont(700), fontSize: 11 },
 
   listCard: { marginHorizontal: 16, marginTop: 4, borderRadius: 20, overflow: 'hidden' },
 
   // category row
   catRow: { paddingHorizontal: 16, paddingVertical: 11 },
-  divider: { borderTopWidth: 1, borderTopColor: colors.line },
+  divider: { borderTopWidth: 1 },
   catTop: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
   catIconLabel: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 },
-  catLabel: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink, flexShrink: 1 },
+  catLabel: { fontFamily: uiFont(600), fontSize: 13, flexShrink: 1 },
   catNums: { flexDirection: 'row', alignItems: 'baseline' },
-  catActual: { fontFamily: numFont(700), fontSize: 13.5, color: colors.ink },
-  catTarget: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink2 },
+  catActual: { fontFamily: numFont(700), fontSize: 13.5 },
+  catTarget: { fontFamily: uiFont(500), fontSize: 11 },
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 7, borderWidth: 1 },
   badgeText: { fontFamily: uiFont(700), fontSize: 11 },
   barTrack: { height: 5, borderRadius: 3, backgroundColor: 'rgba(20,40,30,0.07)', overflow: 'hidden' },
   barFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 3 },
   catFoot: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
   catPct: { fontFamily: uiFont(600), fontSize: 11 },
-  catBudget: { fontFamily: uiFont(400), fontSize: 11, color: colors.ink2 },
-  unbudgetedIcon: { width: 30, height: 30, borderRadius: 9, backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center' },
+  catBudget: { fontFamily: uiFont(400), fontSize: 11 },
+  unbudgetedIcon: { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
 
   // insight row
   insightRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingHorizontal: 16, paddingVertical: 11 },
   insightIcon: { width: 26, height: 26, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
-  insightText: { flex: 1, fontFamily: uiFont(500), fontSize: 12.5, lineHeight: 19, color: colors.ink },
+  insightText: { flex: 1, fontFamily: uiFont(500), fontSize: 12.5, lineHeight: 19 },
 
   // empty
   emptyPad: { paddingHorizontal: 24, paddingVertical: 40, alignItems: 'center' },
-  emptyText: { fontFamily: uiFont(500), fontSize: 13, lineHeight: 21, color: colors.ink2, textAlign: 'center' },
+  emptyText: { fontFamily: uiFont(500), fontSize: 13, lineHeight: 21, textAlign: 'center' },
 
   // month dropdown
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(16,32,24,0.35)', justifyContent: 'flex-end' },
-  modalSheet: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 16, paddingTop: 10 },
-  modalHandle: { alignSelf: 'center', width: 38, height: 4, borderRadius: 999, backgroundColor: colors.line, marginBottom: 12 },
-  modalTitle: { fontFamily: uiFont(700), fontSize: 13, letterSpacing: 0.3, color: colors.ink2, marginBottom: 6, paddingHorizontal: 4 },
+  modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 16, paddingTop: 10 },
+  modalHandle: { alignSelf: 'center', width: 38, height: 4, borderRadius: 999, marginBottom: 12 },
+  modalTitle: { fontFamily: uiFont(700), fontSize: 13, letterSpacing: 0.3, marginBottom: 6, paddingHorizontal: 4 },
   monthOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 14, borderRadius: 14 },
-  monthOptionOn: { backgroundColor: colors.accentTint },
-  monthOptionText: { fontFamily: uiFont(600), fontSize: 15, color: colors.ink },
-  monthOptionTextOn: { fontFamily: uiFont(700), color: colors.accentInk },
+  monthOptionText: { fontFamily: uiFont(600), fontSize: 15 },
+
+  // export card
+  exportCard: {
+    marginHorizontal: 16,
+    marginTop: 18,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    ...shadowCard,
+  },
+  exportIconWrap: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  exportCardTitle: { fontFamily: uiFont(700), fontSize: 13.5 },
+  exportCardSub: { fontFamily: uiFont(400), fontSize: 11.5, marginTop: 2 },
 });

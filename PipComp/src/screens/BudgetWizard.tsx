@@ -13,11 +13,15 @@ import { buildBelanjawankuBudget } from '../lib/belanjawankuBudget';
 import { averageMonthlySpend, allocatedTotal, leftover } from '../lib/budget';
 import { fmt } from '../lib/format';
 import { baselineExplanation, computeIncomeBaseline } from '../lib/incomeBaseline';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
 import { useAppData } from '../state/store';
-import { colors, numFont, radius, uiFont } from '../theme';
+import { numFont, radius, uiFont } from '../theme';
 
 export function BudgetWizard({ onDone }: { onDone: () => void }) {
   const insets = useSafeAreaInsets();
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const {
     transactions,
     categories,
@@ -115,12 +119,12 @@ export function BudgetWizard({ onDone }: { onDone: () => void }) {
   const chosenCats = expenseCats.filter((c) => chosen.has(c.id));
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: colorTheme.bg }]}>
       <View style={{ paddingTop: insets.top + 4 }}>
         <TopBar
           title="Set up budget"
           onBack={() => (step === 0 ? onDone() : setStep((s) => s - 1))}
-          right={<Text style={styles.counter}>{step + 1}/3</Text>}
+          right={<Text style={[styles.counter, { color: colorTheme.ink2 }]}>{step + 1}/3</Text>}
         />
         <View style={{ paddingHorizontal: 18, paddingTop: 2 }}>
           <ProgressTrack pct={((step + 1) / 3) * 100} height={5} />
@@ -132,26 +136,26 @@ export function BudgetWizard({ onDone }: { onDone: () => void }) {
           <>
             <Eyebrow style={{ marginBottom: 10 }}>Expected monthly income</Eyebrow>
             <Card style={styles.incomeCard}>
-              <Text style={styles.rm}>RM</Text>
+              <Text style={[styles.rm, { color: colorTheme.ink2 }]}>RM</Text>
               <TextInput
                 value={incomeText}
                 onChangeText={setIncomeText}
                 keyboardType="decimal-pad"
                 placeholder="0.00"
-                placeholderTextColor={colors.ink3}
-                style={styles.incomeInput}
+                placeholderTextColor={colorTheme.ink3}
+                style={[styles.incomeInput, { color: colorTheme.ink }]}
                 autoFocus
               />
             </Card>
             {income6.months > 0 && (
               <>
                 {income6.irregular ? (
-                  <Text style={styles.hint}>
+                  <Text style={[styles.hint, { color: colorTheme.ink2 }]}>
                     Your income swings between RM {fmt(income6.low)} and RM {fmt(income6.high)}, so Pip
                     suggests planning against RM {fmt(income6.baseline)}. {baselineExplanation(income6)}
                   </Text>
                 ) : (
-                  <Text style={styles.hint}>Your recent average is RM {fmt(income6.average)}.</Text>
+                  <Text style={[styles.hint, { color: colorTheme.ink2 }]}>Your recent average is RM {fmt(income6.average)}.</Text>
                 )}
               </>
             )}
@@ -166,11 +170,11 @@ export function BudgetWizard({ onDone }: { onDone: () => void }) {
                 would overstate a budget that covers three of them. */}
             <Pressable
               onPress={useGuideCategories}
-              style={({ pressed }) => [styles.secondaryBtn, { marginBottom: 14, opacity: pressed ? 0.8 : 1 }]}
+              style={({ pressed }) => [styles.secondaryBtn, { backgroundColor: colorTheme.surface, borderColor: theme.accentSoft, marginBottom: 14, opacity: pressed ? 0.8 : 1 }]}
               accessibilityRole="button"
             >
-              <Icon name="scale" size={15} color={colors.accent} />
-              <Text style={styles.secondaryText}>Use the guide's categories</Text>
+              <Icon name="scale" size={15} color={theme.accent} />
+              <Text style={[styles.secondaryText, { color: theme.accent }]}>Use the guide's categories</Text>
             </Pressable>
             <View style={styles.grid}>
               {expenseCats.map((c) => (
@@ -192,52 +196,52 @@ export function BudgetWizard({ onDone }: { onDone: () => void }) {
           <>
             <Eyebrow style={{ marginBottom: 10 }}>Allocate amounts</Eyebrow>
             <View style={styles.guideInfoRow}>
-              <Text style={styles.guideInfoLabel}>Belanjawanku</Text>
+              <Text style={[styles.guideInfoLabel, { color: colorTheme.ink2 }]}>Belanjawanku</Text>
               <InfoButton entry="belanjawanku" />
             </View>
             <PrimaryButton onPress={fillFromGuide} height={44}>
-              <Icon name="scale" size={16} color={colors.accentInk} />
+              <Icon name="scale" size={16} color={theme.accentInk} />
               <BtnLabel>Start from Belanjawanku</BtnLabel>
             </PrimaryButton>
             <Pressable
               onPress={() => setPickingHousehold(true)}
-              style={({ pressed }) => [styles.guideRow, { opacity: pressed ? 0.8 : 1 }]}
+              style={({ pressed }) => [styles.guideRow, { borderColor: colorTheme.line2, backgroundColor: colorTheme.surface2, opacity: pressed ? 0.8 : 1 }]}
               accessibilityRole="button"
             >
-              <Text style={styles.guideRowText} numberOfLines={1}>
+              <Text style={[styles.guideRowText, { color: colorTheme.ink2 }]} numberOfLines={1}>
                 {benchmark.profileLabel} · {benchmark.cityLabel}
               </Text>
-              <Text style={styles.guideRowChange}>Change</Text>
+              <Text style={[styles.guideRowChange, { color: theme.accent }]}>Change</Text>
             </Pressable>
-            {guideNotice ? <Text style={styles.guideNotice}>{guideNotice}</Text> : null}
+            {guideNotice ? <Text style={[styles.guideNotice, { color: colorTheme.ink2 }]}>{guideNotice}</Text> : null}
             <View style={{ height: 12 }} />
-            <Pressable onPress={autoFill} style={({ pressed }) => [styles.secondaryBtn, { opacity: pressed ? 0.8 : 1 }]}>
-              <Icon name="sparkles" size={15} color={colors.accent} />
-              <Text style={styles.secondaryText}>Auto-fill from my history instead</Text>
+            <Pressable onPress={autoFill} style={({ pressed }) => [styles.secondaryBtn, { backgroundColor: colorTheme.surface, borderColor: theme.accentSoft, opacity: pressed ? 0.8 : 1 }]}>
+              <Icon name="sparkles" size={15} color={theme.accent} />
+              <Text style={[styles.secondaryText, { color: theme.accent }]}>Auto-fill from my history instead</Text>
             </Pressable>
             <View style={{ height: 14 }} />
 
             {/* Savings sits at the top of the list, ahead of every spending row, because that is
                 literally what pay-yourself-first means. */}
-            <Card style={[styles.allocRow, styles.savingsRow]}>
-              <View style={styles.savingsBadge}>
-                <Icon name="shield" size={18} color={colors.accent} />
+            <Card style={[styles.allocRow, styles.savingsRow, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]}>
+              <View style={[styles.savingsBadge, { backgroundColor: colorTheme.surface }]}>
+                <Icon name="shield" size={18} color={theme.accent} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.allocLabel} numberOfLines={1}>Kept for savings</Text>
+                <Text style={[styles.allocLabel, { color: colorTheme.ink }]} numberOfLines={1}>Kept for savings</Text>
                 {benchmark.savings > 0 && (
-                  <Text style={styles.allocGuide} numberOfLines={1}>Guide: RM {fmt(benchmark.savings)}</Text>
+                  <Text style={[styles.allocGuide, { color: colorTheme.ink2 }]} numberOfLines={1}>Guide: RM {fmt(benchmark.savings)}</Text>
                 )}
               </View>
-              <View style={styles.allocInputWrap}>
-                <Text style={styles.rmSmall}>RM</Text>
+              <View style={[styles.allocInputWrap, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line }]}>
+                <Text style={[styles.rmSmall, { color: colorTheme.ink2 }]}>RM</Text>
                 <TextInput
                   value={savingsText}
                   onChangeText={setSavingsText}
                   keyboardType="decimal-pad"
                   placeholder="0"
-                  placeholderTextColor={colors.ink3}
-                  style={styles.allocInput}
+                  placeholderTextColor={colorTheme.ink3}
+                  style={[styles.allocInput, { color: colorTheme.ink }]}
                   accessibilityLabel="Monthly savings"
                 />
               </View>
@@ -249,23 +253,23 @@ export function BudgetWizard({ onDone }: { onDone: () => void }) {
                 <Card key={c.id} style={styles.allocRow}>
                   <CatBadge category={c} size={36} />
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.allocLabel} numberOfLines={1}>{c.label}</Text>
+                    <Text style={[styles.allocLabel, { color: colorTheme.ink }]} numberOfLines={1}>{c.label}</Text>
                     {line && (
-                      <Text style={styles.allocGuide} numberOfLines={1}>
+                      <Text style={[styles.allocGuide, { color: colorTheme.ink2 }]} numberOfLines={1}>
                         Guide: RM {fmt(line.amount)}
                         {line.categoryIds.length > 1 ? ` for ${line.label.toLowerCase()}` : ''}
                       </Text>
                     )}
                   </View>
-                  <View style={styles.allocInputWrap}>
-                    <Text style={styles.rmSmall}>RM</Text>
+                  <View style={[styles.allocInputWrap, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line }]}>
+                    <Text style={[styles.rmSmall, { color: colorTheme.ink2 }]}>RM</Text>
                     <TextInput
                       value={amounts[c.id] ?? ''}
                       onChangeText={(v) => setAmounts((p) => ({ ...p, [c.id]: v }))}
                       keyboardType="decimal-pad"
                       placeholder="0"
-                      placeholderTextColor={colors.ink3}
-                      style={styles.allocInput}
+                      placeholderTextColor={colorTheme.ink3}
+                      style={[styles.allocInput, { color: colorTheme.ink }]}
                     />
                   </View>
                 </Card>
@@ -276,20 +280,20 @@ export function BudgetWizard({ onDone }: { onDone: () => void }) {
       </ScrollView>
 
       {/* footer */}
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+      <View style={[styles.footer, { backgroundColor: colorTheme.bg, borderTopColor: colorTheme.line2, paddingBottom: insets.bottom + 16 }]}>
         {step === 2 && (
           <View style={{ marginBottom: 10 }}>
             <View style={styles.summary}>
-              <Text style={styles.summaryText}>
+              <Text style={[styles.summaryText, { color: colorTheme.ink2 }]}>
                 Allocated <Amount value={total} size={13} weight={700} /> of <Amount value={income} size={13} weight={700} />
               </Text>
-              <Text style={[styles.summaryText, { color: left < 0 ? '#c5402f' : colors.accentInk }]}>
+              <Text style={[styles.summaryText, { color: left < 0 ? '#c5402f' : theme.accentInk }]}>
                 {left < 0 ? `Over by RM ${fmt(-left)}` : `RM ${fmt(left)} left`}
               </Text>
             </View>
             {/* Named explicitly so the savings commitment is never silently folded into "left". */}
             {savings > 0 && (
-              <Text style={styles.savingsFootnote}>Plus RM {fmt(savings)} kept for savings.</Text>
+              <Text style={[styles.savingsFootnote, { color: colorTheme.ink2 }]}>Plus RM {fmt(savings)} kept for savings.</Text>
             )}
           </View>
         )}
@@ -337,32 +341,32 @@ export function BudgetWizard({ onDone }: { onDone: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
-  counter: { fontFamily: uiFont(700), fontSize: 13, color: colors.ink2 },
+  root: { flex: 1 },
+  counter: { fontFamily: uiFont(700), fontSize: 13 },
   incomeCard: { flexDirection: 'row', alignItems: 'center', padding: 18, gap: 8 },
-  rm: { fontFamily: numFont(600), fontSize: 22, color: colors.ink2 },
-  incomeInput: { flex: 1, fontFamily: numFont(700), fontSize: 30, color: colors.ink, padding: 0 },
-  rmSmall: { fontFamily: numFont(600), fontSize: 14, color: colors.ink2 },
-  hint: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 10, marginLeft: 2 },
+  rm: { fontFamily: numFont(600), fontSize: 22 },
+  incomeInput: { flex: 1, fontFamily: numFont(700), fontSize: 30, padding: 0 },
+  rmSmall: { fontFamily: numFont(600), fontSize: 14 },
+  hint: { fontFamily: uiFont(500), fontSize: 12.5, marginTop: 10, marginLeft: 2 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -5 },
   gridCell: { width: '50%', paddingHorizontal: 5, paddingBottom: 10 },
   allocRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, marginBottom: 10 },
-  allocLabel: { fontFamily: uiFont(600), fontSize: 14.5, color: colors.ink },
-  allocGuide: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, marginTop: 2 },
-  guideRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 10, paddingHorizontal: 12, paddingVertical: 9, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.line2, backgroundColor: colors.surface2 },
-  guideRowText: { flex: 1, fontFamily: uiFont(600), fontSize: 13, color: colors.ink2 },
-  guideRowChange: { fontFamily: uiFont(700), fontSize: 12.5, color: colors.accent },
-  guideNotice: { fontFamily: uiFont(500), fontSize: 12.5, lineHeight: 18, color: colors.ink2, marginTop: 10 },
+  allocLabel: { fontFamily: uiFont(600), fontSize: 14.5 },
+  allocGuide: { fontFamily: uiFont(500), fontSize: 11.5, marginTop: 2 },
+  guideRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 10, paddingHorizontal: 12, paddingVertical: 9, borderRadius: radius.sm, borderWidth: 1 },
+  guideRowText: { flex: 1, fontFamily: uiFont(600), fontSize: 13 },
+  guideRowChange: { fontFamily: uiFont(700), fontSize: 12.5 },
+  guideNotice: { fontFamily: uiFont(500), fontSize: 12.5, lineHeight: 18, marginTop: 10 },
   guideInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
-  guideInfoLabel: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2 },
-  secondaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 999, borderWidth: 1, borderColor: colors.accentSoft, backgroundColor: colors.surface },
-  secondaryText: { fontFamily: uiFont(700), fontSize: 13, color: colors.accent },
-  allocInputWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.surface2, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 10 },
-  allocInput: { fontFamily: numFont(700), fontSize: 16, color: colors.ink, minWidth: 80, textAlign: 'right', paddingVertical: 8 },
-  footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 18, paddingTop: 12, backgroundColor: colors.bg, borderTopWidth: 1, borderTopColor: colors.line2 },
+  guideInfoLabel: { fontFamily: uiFont(600), fontSize: 12.5 },
+  secondaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 999, borderWidth: 1 },
+  secondaryText: { fontFamily: uiFont(700), fontSize: 13 },
+  allocInputWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: radius.sm, borderWidth: 1, paddingHorizontal: 10 },
+  allocInput: { fontFamily: numFont(700), fontSize: 16, minWidth: 80, textAlign: 'right', paddingVertical: 8 },
+  footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 18, paddingTop: 12, borderTopWidth: 1 },
   summary: { flexDirection: 'row', justifyContent: 'space-between' },
-  savingsRow: { backgroundColor: colors.accentTint, borderColor: colors.accentSoft },
-  savingsBadge: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
-  savingsFootnote: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, marginTop: 6 },
-  summaryText: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink2 },
+  savingsRow: {},
+  savingsBadge: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  savingsFootnote: { fontFamily: uiFont(500), fontSize: 12, marginTop: 6 },
+  summaryText: { fontFamily: uiFont(600), fontSize: 13 },
 });

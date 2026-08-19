@@ -10,6 +10,7 @@ import type { MemoryMap } from './types';
 
 /** Look up a suggestion by an already-normalized key. */
 export function suggestByKey(memory: MemoryMap, key: string): string | null {
+  if (!key) return null;
   return memory[key] ?? null;
 }
 

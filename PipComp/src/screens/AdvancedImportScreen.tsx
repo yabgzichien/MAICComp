@@ -37,203 +37,18 @@ import {
   PrimaryButton,
   TopBar,
 } from '../components/ui';
-import { addAccount } from '../db/accountsRepo';
-import { ACCOUNT_CLASSES } from '../lib/networth';
+import { addAccount, listAccounts } from '../db/accountsRepo';
+import { DROP, type Account, type ExtractedTxn } from '../lib/types';
 import { todayISO } from '../lib/duplicates';
-import { DROP, type ExtractedTxn } from '../lib/types';
+import { defaultLinkEffect } from '../lib/networth';
+import { buildPrompt, parseJSON, type ParsedAccount, type ParseResult } from '../lib/advancedImport';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
 import { useAppData } from '../state/store';
-import { colors, radius, uiFont } from '../theme';
+import { radius, uiFont } from '../theme';
 import { ImportReviewScreen } from './ImportReviewScreen';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Prompt builder
-// ─────────────────────────────────────────────────────────────────────────────
-
-function buildPrompt(): string {
-  return `Parse every transaction AND every account balance from the uploaded file(s) into JSON. Files may be bank statements, e-wallet exports, investment reports, loan statements, Google Sheets, Excel, CSV, or any financial record.
-
-──────────────────────────────────────
-SECTION 1 — TRANSACTIONS
-──────────────────────────────────────
-For each transaction row found, output:
-- date: YYYY-MM-DD
-- description: clean merchant / payee name (remove codes, reference numbers, trailing digits)
-- amount: NEGATIVE for expenses / debits, POSITIVE for income / credits
-- category: describe the category freely based on what you actually see in the document.
-    • Use plain English (e.g. "restaurant", "petrol", "salary", "online shopping", "electricity bill").
-    • If the document itself labels it, use that label.
-    • If you genuinely cannot tell, write "?".
-    • NEVER invent or guess a category when there is no evidence in the document.
-- account: specific account name as printed on the document (e.g. "Maybank Savings", "Touch 'n Go eWallet"), or "Unknown" if not stated.
-
-Skip ONLY: running balance lines, statement totals, opening/closing balances, disclosures, headers/footers.
-
-──────────────────────────────────────
-SECTION 2 — ACCOUNT BALANCES
-──────────────────────────────────────
-For each distinct account / holding in the file(s), output one entry:
-- name: account name as shown in the document
-- type: one of → "Cash", "Investments", "Mortgage", "Personal Loan", "Credit Card", "Pay Later", "Car Loan"
-- balance: current balance as a POSITIVE number (outstanding amount for loans/cards)
-- currency: 3-letter code (e.g. "MYR", "USD") — use "MYR" if not stated
-- as_of: YYYY-MM-DD date of the balance reading, or the statement end date
-- notes: ticker symbol for investments (e.g. "AAPL", "BTC"), or null
-
-──────────────────────────────────────
-REPLY FORMAT — ONLY a JSON code block, no other text:
-──────────────────────────────────────
-
-\`\`\`json
-{
-  "statement": {
-    "issuer": "<institution name or 'Multiple'>",
-    "period": { "start": "YYYY-MM-DD", "end": "YYYY-MM-DD" }
-  },
-  "transactions": [
-    { "date": "YYYY-MM-DD", "description": "...", "amount": -0.00, "category": "...", "account": "..." }
-  ],
-  "accounts": [
-    { "name": "...", "type": "Cash", "balance": 0.00, "currency": "MYR", "as_of": "YYYY-MM-DD", "notes": null }
-  ]
-}
-\`\`\`
-
-## Rules
-- NEVER fabricate or hallucinate. Only output what is in the document.
-- NEVER skip, truncate, or omit transactions. Read every page of every file. Output every single row.
-- If multiple files are uploaded, process each fully then merge into the single arrays.
-- If the statement spans a year boundary and only shows month/day, infer the year from the statement period.
-- Do not ask questions, do not refuse, do not offer to split into multiple responses.
-- If your output gets cut off, stop mid-JSON and I will reply 'continue' so you can finish. Do not stop early.`;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Types for the parsed LLM output
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface LLMTxn {
-  date?: unknown;
-  description?: unknown;
-  amount?: unknown;
-  category?: unknown;
-  account?: unknown;
-}
-
-interface LLMAccount {
-  name?: unknown;
-  type?: unknown;
-  balance?: unknown;
-  currency?: unknown;
-  as_of?: unknown;
-  notes?: unknown;
-}
-
-interface LLMOutput {
-  transactions?: LLMTxn[];
-  accounts?: LLMAccount[];
-}
-
-// Parsed account ready to commit to the DB.
-export interface ParsedAccount {
-  name: string;
-  cls: string;       // ACCOUNT_CLASSES id
-  clsLabel: string;  // human label
-  kind: 'asset' | 'liability';
-  balance: number;
-  asOf: string;
-  notes: string | null;
-  include: boolean;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TYPE → cls mapping
-// ─────────────────────────────────────────────────────────────────────────────
-
-const TYPE_TO_CLS: Record<string, string> = {
-  cash: 'cash',
-  investments: 'investments',
-  investment: 'investments',
-  mortgage: 'mortgage',
-  'personal loan': 'personal',
-  personal: 'personal',
-  'credit card': 'credit_card',
-  creditcard: 'credit_card',
-  'pay later': 'pay_later',
-  paylater: 'pay_later',
-  'car loan': 'car',
-  car: 'car',
-};
-
-function resolveClsId(rawType: string): string {
-  const key = rawType.toLowerCase().trim();
-  return TYPE_TO_CLS[key] ?? 'cash'; // default to cash if unknown
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// JSON parser
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface ParseResult {
-  transactions: ExtractedTxn[];
-  accounts: ParsedAccount[];
-}
-
-function parseJSON(raw: string): ParseResult {
-  const stripped = raw
-    .replace(/^```(?:json)?\s*/im, '')
-    .replace(/\s*```\s*$/im, '')
-    .trim();
-
-  const parsed: unknown = JSON.parse(stripped);
-  if (typeof parsed !== 'object' || parsed === null) throw new Error('Not a JSON object.');
-  const obj = parsed as LLMOutput;
-
-  // ── Transactions ──
-  const txnRows = Array.isArray(obj.transactions) ? obj.transactions : [];
-  const transactions: ExtractedTxn[] = txnRows.map((r): ExtractedTxn => {
-    const rawAmt = typeof r.amount === 'number' ? r.amount : Number(r.amount ?? 0);
-    const absAmt = Math.abs(rawAmt);
-    const type = rawAmt >= 0 ? 'income' : 'expense';
-    const merchant =
-      (typeof r.description === 'string' && r.description.trim()) ||
-      (typeof r.account === 'string' && r.account.trim()) ||
-      'Unknown';
-    const rawDate = typeof r.date === 'string' ? r.date.trim() : '';
-    const date = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null;
-    const categoryHint =
-      typeof r.category === 'string' && r.category.trim() ? r.category.trim() : null;
-    return { merchant, amount: absAmt, type, date, method: null, categoryHint };
-  });
-
-  // ── Accounts ──
-  const accRows = Array.isArray(obj.accounts) ? obj.accounts : [];
-  const today = todayISO();
-  const accounts: ParsedAccount[] = accRows.map((r): ParsedAccount => {
-    const name =
-      typeof r.name === 'string' && r.name.trim() ? r.name.trim() : 'Unnamed Account';
-    const clsId = typeof r.type === 'string' ? resolveClsId(r.type) : 'cash';
-    const meta = ACCOUNT_CLASSES.find((c) => c.id === clsId) ?? ACCOUNT_CLASSES[0];
-    const balance = Math.abs(
-      typeof r.balance === 'number' ? r.balance : Number(r.balance ?? 0)
-    );
-    const rawDate = typeof r.as_of === 'string' ? r.as_of.trim() : '';
-    const asOf = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : today;
-    const notes =
-      typeof r.notes === 'string' && r.notes.trim() ? r.notes.trim() : null;
-    return {
-      name,
-      cls: clsId,
-      clsLabel: meta.label,
-      kind: meta.kind,
-      balance,
-      asOf,
-      notes,
-      include: true,
-    };
-  });
-
-  return { transactions, accounts };
-}
+export type { ParsedAccount, ParseResult };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LLM link chips
@@ -246,15 +61,20 @@ const LLM_LINKS = [
 ];
 
 function LLMChip({ label, url, emoji }: { label: string; url: string; emoji: string }) {
+  const colorTheme = useThemeColors();
   return (
     <Pressable
       onPress={() => Linking.openURL(url)}
-      style={({ pressed }) => [styles.llmChip, { opacity: pressed ? 0.82 : 1 }]}
+      style={({ pressed }) => [
+        styles.llmChip,
+        { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line },
+        { opacity: pressed ? 0.82 : 1 },
+      ]}
       accessibilityRole="link"
       accessibilityLabel={`Open ${label}`}
     >
       <Text style={styles.llmEmoji}>{emoji}</Text>
-      <Text style={styles.llmLabel}>{label}</Text>
+      <Text style={[styles.llmLabel, { color: colorTheme.ink }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -270,6 +90,8 @@ function AccountReviewList({
   accounts: ParsedAccount[];
   onChange: (updated: ParsedAccount[]) => void;
 }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const toggle = (i: number) => {
     const next = accounts.map((a, j) => (j === i ? { ...a, include: !a.include } : a));
     onChange(next);
@@ -281,13 +103,14 @@ function AccountReviewList({
     <View style={{ gap: 8 }}>
       {accounts.map((acc, i) => {
         const isAsset = acc.kind === 'asset';
-        const dot = isAsset ? colors.accent : colors.amber;
+        const dot = isAsset ? theme.accent : colorTheme.amber;
         return (
           <Pressable
             key={i}
             onPress={() => toggle(i)}
             style={[
               styles.accRow,
+              { borderBottomColor: colorTheme.line },
               !acc.include && { opacity: 0.45 },
             ]}
           >
@@ -295,7 +118,8 @@ function AccountReviewList({
             <View
               style={[
                 styles.tick,
-                acc.include && { backgroundColor: colors.accent, borderColor: colors.accent },
+                { borderColor: colorTheme.line },
+                acc.include && { backgroundColor: theme.accent, borderColor: theme.accent },
               ]}
             >
               {acc.include && (
@@ -307,9 +131,9 @@ function AccountReviewList({
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <View style={[styles.kindDot, { backgroundColor: dot }]} />
-                <Text style={styles.accName} numberOfLines={1}>{acc.name}</Text>
+                <Text style={[styles.accName, { color: colorTheme.ink }]} numberOfLines={1}>{acc.name}</Text>
               </View>
-              <Text style={styles.accMeta}>
+              <Text style={[styles.accMeta, { color: colorTheme.ink3 }]}>
                 {acc.clsLabel}
                 {acc.notes ? ` · ${acc.notes}` : ''}
                 {' · '}{acc.asOf}
@@ -317,7 +141,7 @@ function AccountReviewList({
             </View>
 
             {/* Balance */}
-            <Text style={[styles.accBalance, { color: isAsset ? colors.accent : colors.amber }]}>
+            <Text style={[styles.accBalance, { color: isAsset ? theme.accent : colorTheme.amber }]}>
               {isAsset ? '+' : '−'}RM{acc.balance.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </Text>
           </Pressable>
@@ -343,12 +167,15 @@ type Phase =
 
 export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
   const insets = useSafeAreaInsets();
-  const { commitCategorized, refreshAll } = useAppData();
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
+  const { commitCategorized, recordBalanceLink, refreshAll } = useAppData();
 
   const [phase, setPhase] = useState<Phase>('guide');
   const [jsonText, setJsonText] = useState('');
   const [parsedTxns, setParsedTxns] = useState<ExtractedTxn[]>([]);
   const [parsedAccounts, setParsedAccounts] = useState<ParsedAccount[]>([]);
+  const [updateAccountBalances, setUpdateAccountBalances] = useState(true);
   const [error, setError] = useState('');
   const [txnCount, setTxnCount] = useState(0);
   const [txnSkipped, setTxnSkipped] = useState(0);
@@ -414,8 +241,10 @@ export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
     try {
       // 1. Commit the chosen accounts to the Net Worth DB.
       const toSave = parsedAccounts.filter((a) => a.include);
+      const newlyCreatedAccounts: Account[] = [];
       for (const acc of toSave) {
-        await addAccount(acc.name, acc.kind, acc.cls, acc.balance, acc.asOf);
+        const createdAcc = await addAccount(acc.name, acc.kind, acc.cls, acc.balance, acc.asOf);
+        newlyCreatedAccounts.push(createdAcc);
         savedAcc++;
       }
 
@@ -425,8 +254,37 @@ export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
       setTxnSkipped(assignments.filter((a) => a === DROP).length);
       setAccCount(savedAcc);
 
-      // Refresh so Net Worth screen picks up new accounts.
-      if (savedAcc > 0) await refreshAll();
+      // 3. Update account balances with imported transactions if option enabled.
+      if (updateAccountBalances) {
+        const existingAccounts = await listAccounts();
+        const allAccounts = [
+          ...newlyCreatedAccounts,
+          ...existingAccounts.filter((e) => !newlyCreatedAccounts.some((n) => n.id === e.id)),
+        ];
+
+        const today = todayISO();
+        for (let i = 0; i < txns.length; i++) {
+          if (assignments[i] === DROP) continue;
+          const txn = txns[i];
+
+          let targetAccount: Account | null = null;
+          if (txn.account) {
+            const searchName = txn.account.trim().toLowerCase();
+            targetAccount = allAccounts.find((a) => a.name.trim().toLowerCase() === searchName) || null;
+          }
+          if (!targetAccount && allAccounts.length === 1) {
+            targetAccount = allAccounts[0];
+          }
+
+          if (targetAccount) {
+            const effect = defaultLinkEffect(targetAccount.kind, txn.type);
+            await recordBalanceLink(targetAccount.id, txn.amount, effect, txn.date ?? today);
+          }
+        }
+      }
+
+      // Refresh so Net Worth screen picks up new accounts and balance entries.
+      await refreshAll();
 
       setPhase('done');
     } catch (e) {
@@ -441,16 +299,18 @@ export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
       // No transactions: skip review and commit accounts only (empty assignments).
       void commitAll([], []);
       return (
-        <View style={[styles.root, { alignItems: 'center', justifyContent: 'center' }]}>
-          <ActivityIndicator color={colors.accent} />
+        <View style={[styles.root, { backgroundColor: colorTheme.bg, alignItems: 'center', justifyContent: 'center' }]}>
+          <ActivityIndicator color={theme.accent} />
         </View>
       );
     }
     return (
       <ImportReviewScreen
         items={parsedTxns}
-        onCancel={() => setPhase('accountReview')}
+        onCancel={() => setPhase(parsedAccounts.length > 0 ? 'accountReview' : 'pasting')}
         onConfirm={commitAll}
+        updateAccountBalances={updateAccountBalances}
+        onToggleUpdateAccountBalances={setUpdateAccountBalances}
       />
     );
   }
@@ -459,7 +319,7 @@ export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
   // Main render
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: colorTheme.bg }]}>
       <View style={{ paddingTop: insets.top + 4 }}>
         <TopBar title="Advanced Import" onBack={onClose} />
       </View>
@@ -495,12 +355,12 @@ export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
           <>
             <Card style={{ padding: 16, marginTop: 18, gap: 10 }}>
               {txnCount > 0 && (
-                <Text style={styles.doneText}>
+                <Text style={[styles.doneText, { color: colorTheme.ink2 }]}>
                   Transaction categories were filled in from what Pip has learned. Tweak them in your transactions list.
                 </Text>
               )}
               {accCount > 0 && (
-                <Text style={styles.doneText}>
+                <Text style={[styles.doneText, { color: colorTheme.ink2 }]}>
                   Accounts are now visible in <B>Net Worth</B>. Tap any account there to update balances over time.
                 </Text>
               )}
@@ -517,18 +377,18 @@ export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
         {/* ── SAVING ── */}
         {phase === 'saving' && (
           <Card style={[styles.busyCard, { marginTop: 18 }]}>
-            <ActivityIndicator color={colors.accent} />
-            <Text style={styles.busyText}>Saving your data…</Text>
+            <ActivityIndicator color={theme.accent} />
+            <Text style={[styles.busyText, { color: colorTheme.ink2 }]}>Saving your data…</Text>
           </Card>
         )}
 
         {/* ── ERROR ── */}
         {phase === 'error' && (
           <>
-            <Card style={[styles.errorCard, { marginTop: 18 }]}>
+            <Card style={[styles.errorCard, { borderColor: `${colorTheme.red}44`, backgroundColor: `${colorTheme.red}08` }, { marginTop: 18 }]}>
               <View style={styles.errorRow}>
-                <Icon name="alert" size={16} color={colors.red} />
-                <Text style={styles.errorText}>{error}</Text>
+                <Icon name="alert" size={16} color={colorTheme.red} />
+                <Text style={[styles.errorText, { color: colorTheme.red }]}>{error}</Text>
               </View>
             </Card>
             <View style={{ marginTop: 14 }}>
@@ -550,10 +410,10 @@ export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
 
               {/* Legend */}
               <View style={styles.legendRow}>
-                <View style={[styles.kindDot, { backgroundColor: colors.accent }]} />
-                <Text style={styles.legendText}>Asset</Text>
-                <View style={[styles.kindDot, { backgroundColor: colors.amber, marginLeft: 12 }]} />
-                <Text style={styles.legendText}>Liability (outstanding balance)</Text>
+                <View style={[styles.kindDot, { backgroundColor: theme.accent }]} />
+                <Text style={[styles.legendText, { color: colorTheme.ink2 }]}>Asset</Text>
+                <View style={[styles.kindDot, { backgroundColor: colorTheme.amber, marginLeft: 12 }]} />
+                <Text style={[styles.legendText, { color: colorTheme.ink2 }]}>Liability (outstanding balance)</Text>
               </View>
 
               <Card style={{ padding: 14, marginTop: 10 }}>
@@ -562,6 +422,36 @@ export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
                   onChange={setParsedAccounts}
                 />
               </Card>
+
+              {parsedTxns.length > 0 && (
+                <Card style={{ padding: 14, marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <Pressable
+                    onPress={() => setUpdateAccountBalances((prev) => !prev)}
+                    hitSlop={6}
+                    style={{ padding: 2 }}
+                  >
+                    <View
+                      style={[
+                        styles.tick,
+                        { borderColor: colorTheme.line },
+                        updateAccountBalances && { backgroundColor: theme.accent, borderColor: theme.accent },
+                      ]}
+                    >
+                      {updateAccountBalances && (
+                        <Text style={{ color: '#fff', fontSize: 11, fontFamily: uiFont(800), lineHeight: 14 }}>✓</Text>
+                      )}
+                    </View>
+                  </Pressable>
+                  <Pressable style={{ flex: 1 }} onPress={() => setUpdateAccountBalances((prev) => !prev)}>
+                    <Text style={[styles.accName, { color: colorTheme.ink }]}>
+                      Update asset & liability balances
+                    </Text>
+                    <Text style={[styles.accMeta, { color: colorTheme.ink3, marginTop: 2 }]}>
+                      Apply imported income and expenses to adjust asset and liability account balances
+                    </Text>
+                  </Pressable>
+                </Card>
+              )}
             </View>
 
             <View style={{ marginTop: 18, gap: 10 }}>
@@ -577,7 +467,7 @@ export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
                 </PrimaryButton>
               )}
               <Pressable onPress={() => setPhase('pasting')} style={styles.backLink}>
-                <Text style={styles.backLinkText}>← Back to paste</Text>
+                <Text style={[styles.backLinkText, { color: colorTheme.ink3 }]}>← Back to paste</Text>
               </Pressable>
             </View>
           </>
@@ -588,44 +478,48 @@ export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
           <>
             {/* Step 1 */}
             <View style={styles.stepHeader}>
-              <View style={styles.stepBadge}><Text style={styles.stepNum}>1</Text></View>
-              <Text style={styles.stepTitle}>Copy Prompt</Text>
+              <View style={[styles.stepBadge, { backgroundColor: theme.accent }]}><Text style={styles.stepNum}>1</Text></View>
+              <Text style={[styles.stepTitle, { color: colorTheme.ink }]}>Copy Prompt</Text>
             </View>
 
             <Card style={{ padding: 18, gap: 14 }}>
               <Pressable
                 onPress={copyPrompt}
-                style={({ pressed }) => [styles.copyBtn, pressed && { opacity: 0.88 }]}
+                style={({ pressed }) => [
+                  styles.copyBtn,
+                  { backgroundColor: theme.accentTint, borderColor: theme.accentSoft },
+                  pressed && { opacity: 0.88 },
+                ]}
                 accessibilityRole="button"
                 accessibilityLabel="Copy prompt to clipboard"
               >
-                <Icon name="receipt" size={18} color={colors.accent} />
-                <Text style={styles.copyBtnText}>
+                <Icon name="receipt" size={18} color={theme.accent} />
+                <Text style={[styles.copyBtnText, { color: theme.accent }]}>
                   {copied ? '✓ Prompt copied!' : 'Copy Prompt'}
                 </Text>
               </Pressable>
 
-              <Text style={styles.copyHint}>
+              <Text style={[styles.copyHint, { color: colorTheme.ink2 }]}>
                 Paste the prompt and attach your file(s): statements, spreadsheets, or any financial export. Multiple files are fine.
               </Text>
 
               <View>
-                <Text style={styles.openInLabel}>Open in</Text>
+                <Text style={[styles.openInLabel, { color: colorTheme.ink3 }]}>Open in</Text>
                 <View style={styles.llmRow}>
                   {LLM_LINKS.map((l) => <LLMChip key={l.label} {...l} />)}
                 </View>
               </View>
 
-              <View style={styles.tipRow}>
-                <Icon name="sparkles" size={13} color={colors.amber} />
-                <Text style={styles.tipText}>
+              <View style={[styles.tipRow, { backgroundColor: `${colorTheme.amber}12` }]}>
+                <Icon name="sparkles" size={13} color={colorTheme.amber} />
+                <Text style={[styles.tipText, { color: colorTheme.ink2 }]}>
                   For large or multi-page files, enable <B>thinking / reasoning mode</B> for best results.
                 </Text>
               </View>
 
               {/* What gets imported summary */}
-              <View style={styles.coversBox}>
-                <Text style={styles.coversTitle}>The prompt covers:</Text>
+              <View style={[styles.coversBox, { backgroundColor: colorTheme.surface2 }]}>
+                <Text style={[styles.coversTitle, { color: colorTheme.ink2 }]}>The prompt covers:</Text>
                 {[
                   'Transactions (expenses, income)',
                   'Cash & savings account balances',
@@ -633,8 +527,8 @@ export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
                   'Liabilities (loans, credit cards, BNPL)',
                 ].map((line) => (
                   <View key={line} style={styles.coversRow}>
-                    <Text style={styles.coversDot}>✓</Text>
-                    <Text style={styles.coversText}>{line}</Text>
+                    <Text style={[styles.coversDot, { color: theme.accent }]}>✓</Text>
+                    <Text style={[styles.coversText, { color: colorTheme.ink2 }]}>{line}</Text>
                   </View>
                 ))}
               </View>
@@ -642,18 +536,18 @@ export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
               {/* Prompt preview */}
               <View>
                 <Eyebrow style={{ marginBottom: 8 }}>Prompt preview</Eyebrow>
-                <View style={styles.promptBox}>
+                <View style={[styles.promptBox, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line }]}>
                   <TextInput
                     multiline
                     editable={false}
                     selectTextOnFocus
                     value={prompt}
-                    style={styles.promptText}
+                    style={[styles.promptText, { color: colorTheme.ink2 }]}
                     scrollEnabled={false}
                     accessibilityLabel="Prompt text, selectable"
                   />
                 </View>
-                <Text style={styles.promptNote}>
+                <Text style={[styles.promptNote, { color: colorTheme.ink3 }]}>
                   Long-press to select all and copy if the button above doesn't work.
                 </Text>
               </View>
@@ -661,19 +555,19 @@ export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
 
             {/* Arrow */}
             <View style={styles.arrowRow}>
-              <View style={styles.arrowLine} />
-              <Text style={styles.arrowIcon}>↓</Text>
-              <View style={styles.arrowLine} />
+              <View style={[styles.arrowLine, { backgroundColor: colorTheme.line }]} />
+              <Text style={[styles.arrowIcon, { color: colorTheme.ink3 }]}>↓</Text>
+              <View style={[styles.arrowLine, { backgroundColor: colorTheme.line }]} />
             </View>
 
             {/* Step 2 */}
             <View style={styles.stepHeader}>
-              <View style={styles.stepBadge}><Text style={styles.stepNum}>2</Text></View>
-              <Text style={styles.stepTitle}>Import Result</Text>
+              <View style={[styles.stepBadge, { backgroundColor: theme.accent }]}><Text style={styles.stepNum}>2</Text></View>
+              <Text style={[styles.stepTitle, { color: colorTheme.ink }]}>Import Result</Text>
             </View>
 
             <Card style={{ padding: 18, gap: 14 }}>
-              <Text style={styles.copyHint}>
+              <Text style={[styles.copyHint, { color: colorTheme.ink2 }]}>
                 Copy the entire JSON block from the AI and paste it below.
               </Text>
 
@@ -685,8 +579,11 @@ export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
                   setPhase((prev) => (prev === 'guide' ? 'pasting' : prev));
                 }}
                 placeholder={'{\n  "transactions": [ … ],\n  "accounts": [ … ]\n}'}
-                placeholderTextColor={colors.ink3}
-                style={styles.jsonInput}
+                placeholderTextColor={colorTheme.ink3}
+                style={[
+                  styles.jsonInput,
+                  { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line, color: colorTheme.ink },
+                ]}
                 textAlignVertical="top"
                 autoCorrect={false}
                 autoCapitalize="none"
@@ -711,78 +608,78 @@ export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+  root: { flex: 1 },
 
   stepHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 22, marginBottom: 10 },
-  stepBadge: { width: 26, height: 26, borderRadius: 13, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  stepBadge: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   stepNum: { fontFamily: uiFont(800), fontSize: 13, color: '#fff' },
-  stepTitle: { fontFamily: uiFont(700), fontSize: 16, color: colors.ink },
+  stepTitle: { fontFamily: uiFont(700), fontSize: 16 },
 
   copyBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     paddingVertical: 13, borderRadius: radius.sm,
-    backgroundColor: colors.accentTint, borderWidth: 1.5, borderColor: colors.accentSoft,
+    borderWidth: 1.5,
   },
-  copyBtnText: { fontFamily: uiFont(700), fontSize: 15, color: colors.accent },
+  copyBtnText: { fontFamily: uiFont(700), fontSize: 15 },
 
-  copyHint: { fontFamily: uiFont(500), fontSize: 13, color: colors.ink2, lineHeight: 19, textAlign: 'center' },
+  copyHint: { fontFamily: uiFont(500), fontSize: 13, lineHeight: 19, textAlign: 'center' },
 
-  openInLabel: { fontFamily: uiFont(600), fontSize: 12, color: colors.ink3, textAlign: 'center', marginBottom: 8 },
+  openInLabel: { fontFamily: uiFont(600), fontSize: 12, textAlign: 'center', marginBottom: 8 },
   llmRow: { flexDirection: 'row', justifyContent: 'center', gap: 10, flexWrap: 'wrap' },
-  llmChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 14, borderRadius: radius.sm, backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line },
+  llmChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 14, borderRadius: radius.sm, borderWidth: 1 },
   llmEmoji: { fontSize: 15 },
-  llmLabel: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink },
+  llmLabel: { fontFamily: uiFont(600), fontSize: 13 },
 
-  tipRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 7, backgroundColor: `${colors.amber}12`, borderRadius: radius.sm, padding: 11 },
-  tipText: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, flex: 1, lineHeight: 18 },
+  tipRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 7, borderRadius: radius.sm, padding: 11 },
+  tipText: { fontFamily: uiFont(500), fontSize: 12.5, flex: 1, lineHeight: 18 },
 
-  coversBox: { backgroundColor: colors.surface2, borderRadius: radius.sm, padding: 12, gap: 6 },
-  coversTitle: { fontFamily: uiFont(700), fontSize: 12, color: colors.ink2, marginBottom: 4 },
+  coversBox: { borderRadius: radius.sm, padding: 12, gap: 6 },
+  coversTitle: { fontFamily: uiFont(700), fontSize: 12, marginBottom: 4 },
   coversRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  coversDot: { fontFamily: uiFont(700), fontSize: 12, color: colors.accent, width: 14 },
-  coversText: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, flex: 1 },
+  coversDot: { fontFamily: uiFont(700), fontSize: 12, width: 14 },
+  coversText: { fontFamily: uiFont(500), fontSize: 12.5, flex: 1 },
 
-  promptBox: { backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, padding: 12, maxHeight: 180, overflow: 'hidden' },
-  promptText: { fontFamily: uiFont(400), fontSize: 11, color: colors.ink2, lineHeight: 16 },
-  promptNote: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, marginTop: 6, textAlign: 'center' },
+  promptBox: { borderWidth: 1, borderRadius: radius.sm, padding: 12, maxHeight: 180, overflow: 'hidden' },
+  promptText: { fontFamily: uiFont(400), fontSize: 11, lineHeight: 16 },
+  promptNote: { fontFamily: uiFont(500), fontSize: 11.5, marginTop: 6, textAlign: 'center' },
 
   arrowRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 6, paddingHorizontal: 24 },
-  arrowLine: { flex: 1, height: 1, backgroundColor: colors.line },
-  arrowIcon: { fontFamily: uiFont(400), fontSize: 18, color: colors.ink3 },
+  arrowLine: { flex: 1, height: 1 },
+  arrowIcon: { fontFamily: uiFont(400), fontSize: 18 },
 
   jsonInput: {
-    backgroundColor: colors.surface2, borderWidth: 1.5, borderColor: colors.line,
+    borderWidth: 1.5,
     borderRadius: radius.sm, padding: 12, height: 160,
-    fontFamily: uiFont(400), fontSize: 12, color: colors.ink, lineHeight: 18,
+    fontFamily: uiFont(400), fontSize: 12, lineHeight: 18,
   },
 
   // Account review
   accRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingVertical: 10, paddingHorizontal: 4,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   tick: {
     width: 20, height: 20, borderRadius: 5,
-    borderWidth: 1.5, borderColor: colors.line,
+    borderWidth: 1.5,
     alignItems: 'center', justifyContent: 'center',
   },
   kindDot: { width: 7, height: 7, borderRadius: 4 },
-  accName: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.ink, flex: 1 },
-  accMeta: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, marginTop: 1 },
+  accName: { fontFamily: uiFont(700), fontSize: 13.5, flex: 1 },
+  accMeta: { fontFamily: uiFont(500), fontSize: 11.5, marginTop: 1 },
   accBalance: { fontFamily: uiFont(700), fontSize: 13, flexShrink: 0 },
 
   legendRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  legendText: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2 },
+  legendText: { fontFamily: uiFont(500), fontSize: 12 },
 
   backLink: { alignItems: 'center', paddingVertical: 8 },
-  backLinkText: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink3 },
+  backLinkText: { fontFamily: uiFont(600), fontSize: 13 },
 
   // Done / saving / error
   busyCard: { padding: 22, alignItems: 'center', gap: 12 },
-  busyText: { fontFamily: uiFont(500), fontSize: 13, color: colors.ink2, textAlign: 'center' },
-  doneText: { fontFamily: uiFont(500), fontSize: 13.5, lineHeight: 20, color: colors.ink2 },
-  errorCard: { borderWidth: 1.5, borderColor: `${colors.red}44`, backgroundColor: `${colors.red}08`, borderRadius: radius.md, padding: 14 },
+  busyText: { fontFamily: uiFont(500), fontSize: 13, textAlign: 'center' },
+  doneText: { fontFamily: uiFont(500), fontSize: 13.5, lineHeight: 20 },
+  errorCard: { borderWidth: 1.5, borderRadius: radius.md, padding: 14 },
   errorRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  errorText: { fontFamily: uiFont(500), fontSize: 13.5, color: colors.red, flex: 1, lineHeight: 19 },
+  errorText: { fontFamily: uiFont(500), fontSize: 13.5, flex: 1, lineHeight: 19 },
 });

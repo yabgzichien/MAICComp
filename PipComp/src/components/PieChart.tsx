@@ -1,6 +1,6 @@
 import React from 'react';
 import Svg, { Circle, G } from 'react-native-svg';
-import { colors } from '../theme';
+import { useThemeColors } from '../state/colorScheme';
 
 export interface PieSlice {
   value: number;
@@ -9,6 +9,7 @@ export interface PieSlice {
 
 /** Donut chart drawn with stroke-dash arcs (react-native-svg). */
 export function PieChart({ data, size = 210, thickness = 34 }: { data: PieSlice[]; size?: number; thickness?: number }) {
+  const colorTheme = useThemeColors();
   const r = (size - thickness) / 2;
   const C = 2 * Math.PI * r;
   const total = data.reduce((s, d) => s + d.value, 0);
@@ -17,7 +18,7 @@ export function PieChart({ data, size = 210, thickness = 34 }: { data: PieSlice[
   if (total <= 0) {
     return (
       <Svg width={size} height={size}>
-        <Circle cx={cx} cy={cx} r={r} fill="none" stroke={colors.line} strokeWidth={thickness} />
+        <Circle cx={cx} cy={cx} r={r} fill="none" stroke={colorTheme.line} strokeWidth={thickness} />
       </Svg>
     );
   }

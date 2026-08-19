@@ -2,12 +2,15 @@ import React from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { GLOSSARY } from '../lib/glossary';
 import { useGlossary } from '../state/glossary';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
 import { colors, radius, uiFont } from '../theme';
 
 /** Small circular "i" badge that opens the glossary modal for `entry`. Place inline next to a
  *  label/eyebrow (row + gap), same role as LenderConsole's InfoButton (app/shared.tsx). */
 export function InfoButton({ entry, color }: { entry: string; color?: string }) {
   const { open } = useGlossary();
+  const colorTheme = useThemeColors();
   const term = GLOSSARY[entry]?.term ?? 'this';
   return (
     <Pressable
@@ -17,7 +20,7 @@ export function InfoButton({ entry, color }: { entry: string; color?: string }) 
       accessibilityLabel={`What is ${term}?`}
       style={({ pressed }) => [styles.badge, pressed && styles.pressed]}
     >
-      <Text style={[styles.badgeText, color ? { color } : null]}>i</Text>
+      <Text style={[styles.badgeText, { color: colorTheme.ink3 }, color ? { color } : null]}>i</Text>
     </Pressable>
   );
 }
@@ -26,6 +29,8 @@ export function InfoButton({ entry, color }: { entry: string; color?: string }) 
  *  Mount once near the app root (see App.tsx) so any InfoButton can open it. */
 export function GlossaryModal() {
   const { openEntry, close } = useGlossary();
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   if (!openEntry) return <Modal visible={false} transparent />;
   const entry = GLOSSARY[openEntry];
   if (!entry) return <Modal visible={false} transparent />;
@@ -34,18 +39,18 @@ export function GlossaryModal() {
     <Modal visible transparent animationType="fade" onRequestClose={close}>
       <Pressable style={styles.backdrop} onPress={close} />
       <View style={[styles.center, { pointerEvents: 'box-none' }]}>
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: colorTheme.surface }]}>
           <View style={styles.head}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.eyebrow}>Glossary</Text>
-              <Text style={styles.title}>{entry.term}</Text>
+              <Text style={[styles.eyebrow, { color: colorTheme.ink3 }]}>Glossary</Text>
+              <Text style={[styles.title, { color: colorTheme.ink }]}>{entry.term}</Text>
             </View>
-            <Pressable onPress={close} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close" style={styles.closeBtn}>
-              <Text style={styles.closeText}>✕</Text>
+            <Pressable onPress={close} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close" style={[styles.closeBtn, { backgroundColor: colorTheme.surface2 }]}>
+              <Text style={[styles.closeText, { color: colorTheme.ink2 }]}>✕</Text>
             </Pressable>
           </View>
-          <Text style={styles.short}>{entry.short}</Text>
-          <Text style={styles.body}>{entry.body}</Text>
+          <Text style={[styles.short, { color: theme.accentInk }]}>{entry.short}</Text>
+          <Text style={[styles.body, { color: colorTheme.ink2 }]}>{entry.body}</Text>
         </View>
       </View>
     </Modal>
@@ -67,14 +72,12 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     fontWeight: '700',
     fontSize: 11,
-    color: colors.ink3,
   },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(14,24,18,0.46)' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
   card: {
     width: '100%',
     maxWidth: 380,
-    backgroundColor: colors.surface,
     borderRadius: radius.md,
     padding: 20,
   },
@@ -84,19 +87,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: colors.ink3,
     marginBottom: 4,
   },
-  title: { fontFamily: uiFont(800), fontSize: 18, color: colors.ink },
+  title: { fontFamily: uiFont(800), fontSize: 18 },
   closeBtn: {
     width: 28,
     height: 28,
     borderRadius: 8,
-    backgroundColor: colors.surface2,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  closeText: { fontSize: 13, color: colors.ink2 },
-  short: { fontFamily: uiFont(600), fontSize: 13.5, color: colors.accentInk, lineHeight: 19, marginBottom: 10 },
-  body: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, lineHeight: 19 },
+  closeText: { fontSize: 13 },
+  short: { fontFamily: uiFont(600), fontSize: 13.5, lineHeight: 19, marginBottom: 10 },
+  body: { fontFamily: uiFont(500), fontSize: 12.5, lineHeight: 19 },
 });

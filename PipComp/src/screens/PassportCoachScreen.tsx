@@ -19,6 +19,8 @@ import { LenderRequirements } from '../components/LenderRequirements';
 import { BORROWER_TOUR_STEPS, clampTourStep } from '../lib/tourSteps';
 import { useAppData } from '../state/store';
 import { useCreditProfile } from '../state/useCreditProfile';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
 import { colors, numFont, uiFont } from '../theme';
 
 const COACH_TIMEOUT_MS = 12_000;
@@ -68,14 +70,16 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 
 /** One before→after row inside a delta card. */
 function DeltaRow({ label, from, to, highlight }: { label: string; from: string; to: string; highlight?: boolean }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const changed = from !== to;
   return (
     <View style={styles.deltaRow}>
-      <Text style={styles.deltaLabel}>{label}</Text>
+      <Text style={[styles.deltaLabel, { color: colorTheme.ink2 }]}>{label}</Text>
       <View style={styles.deltaValues}>
-        <Text style={styles.deltaFrom}>{from}</Text>
-        <Icon name="chevronRight" size={13} color={colors.ink3} />
-        <Text style={[styles.deltaTo, changed && highlight && { color: colors.accent }]}>{to}</Text>
+        <Text style={[styles.deltaFrom, { color: colorTheme.ink2 }]}>{from}</Text>
+        <Icon name="chevronRight" size={13} color={colorTheme.ink3} />
+        <Text style={[styles.deltaTo, { color: colorTheme.ink }, changed && highlight && { color: theme.accent }]}>{to}</Text>
       </View>
     </View>
   );
@@ -90,36 +94,38 @@ function SimCard({
   tone: 'plan' | 'whatif';
   onStart?: (lever: CoachLever) => void;
 }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const s = action.sim;
   return (
-    <Card style={tone === 'whatif' ? [styles.simCard, styles.simCardWhatIf] : styles.simCard}>
+    <Card style={tone === 'whatif' ? [styles.simCard, styles.simCardWhatIf, { borderColor: theme.accent }] : styles.simCard}>
       <View style={styles.simHead}>
-        <Text style={styles.simLabel}>{action.label}</Text>
-        <View style={styles.magPill}>
-          <Text style={styles.magText}>{action.magnitude}</Text>
+        <Text style={[styles.simLabel, { color: colorTheme.ink }]}>{action.label}</Text>
+        <View style={[styles.magPill, { backgroundColor: theme.accentTint }]}>
+          <Text style={[styles.magText, { color: theme.accent }]}>{action.magnitude}</Text>
         </View>
       </View>
       <DeltaRow label="Score" from={String(s.scoreFrom)} to={String(s.scoreTo)} highlight />
       <DeltaRow label="Confidence" from={pct(s.confidenceFrom)} to={pct(s.confidenceTo)} highlight />
       <DeltaRow label="Policy outcome" from={decisionLabel(s.decisionFrom)} to={decisionLabel(s.decisionTo)} highlight />
       <DeltaRow label="Amount" from={rm(s.maxAmountFrom)} to={rm(s.maxAmountTo)} highlight />
-      {!action.changed && action.note && <Text style={styles.flatNote}>{action.note}</Text>}
+      {!action.changed && action.note && <Text style={[styles.flatNote, { color: colorTheme.ink2 }]}>{action.note}</Text>}
       {action.sourceHint && (
         <View style={styles.hintRow}>
-          <Icon name="scale" size={13} color={colors.ink2} stroke={2} />
-          <Text style={styles.hintText}>{action.sourceHint}</Text>
+          <Icon name="scale" size={13} color={colorTheme.ink2} stroke={2} />
+          <Text style={[styles.hintText, { color: colorTheme.ink2 }]}>{action.sourceHint}</Text>
         </View>
       )}
       {action.survivesDipPct !== undefined && (
         <View style={styles.stressRow}>
-          <Icon name="alert" size={13} color={action.survivesDipPct >= 20 ? colors.accent : colors.amber} stroke={2} />
-          <Text style={[styles.stressText, { color: action.survivesDipPct >= 20 ? colors.accentInk : '#a05c00' }]}>
+          <Icon name="alert" size={13} color={action.survivesDipPct >= 20 ? theme.accent : colorTheme.amber} stroke={2} />
+          <Text style={[styles.stressText, { color: action.survivesDipPct >= 20 ? theme.accentInk : '#a05c00' }]}>
             {stressLabel(action.survivesDipPct)}
           </Text>
         </View>
       )}
       {tone === 'plan' && onStart && (
-        <Pressable onPress={() => onStart(action.lever)} style={styles.startBtn}>
+        <Pressable onPress={() => onStart(action.lever)} style={[styles.startBtn, { backgroundColor: theme.accentInk }]}>
           <Text style={styles.startBtnText}>{START_LABEL[action.lever]}</Text>
           <Icon name="chevronRight" size={15} color={colors.onAccent} stroke={2.4} />
         </Pressable>
@@ -135,6 +141,8 @@ export function PassportCoachScreen({
   onBack: () => void;
   onStart?: (lever: CoachLever) => void;
 }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const insets = useSafeAreaInsets();
   const { coachInput } = useCreditProfile();
   const { tourActive, tourStepIndex } = useAppData();
@@ -235,7 +243,7 @@ export function PassportCoachScreen({
   }, [activeTourAnchor, chips.length]);
 
   return (
-    <FadeIn style={styles.root}>
+    <FadeIn style={[styles.root, { backgroundColor: colorTheme.bg }]}>
       <View style={{ paddingTop: insets.top + 4 }}>
         <TopBar title="Build my score" onBack={onBack} />
       </View>
@@ -243,19 +251,19 @@ export function PassportCoachScreen({
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 24 }} showsVerticalScrollIndicator={false}>
         {/* Baseline */}
         <Card style={styles.baseCard}>
-          <Text style={styles.baseKicker}>WHERE YOU STAND</Text>
+          <Text style={[styles.baseKicker, { color: colorTheme.ink2 }]}>WHERE YOU STAND</Text>
           <View style={styles.baseRow}>
-            <Text style={styles.baseBand}>{b.band}</Text>
-            <Text style={styles.baseScore}>{b.score}<Text style={styles.baseScoreDenom}>/900</Text></Text>
+            <Text style={[styles.baseBand, { color: colorTheme.ink }]}>{b.band}</Text>
+            <Text style={[styles.baseScore, { color: theme.accent }]}>{b.score}<Text style={[styles.baseScoreDenom, { color: colorTheme.ink2 }]}>/900</Text></Text>
           </View>
-          <Text style={styles.baseSub}>
+          <Text style={[styles.baseSub, { color: colorTheme.ink2 }]}>
             {pct(b.confidence)} data confidence · current policy outcome: {decisionLabel(b.decision).toLowerCase()}
             {b.maxAmount > 0 ? ` up to ${rm(b.maxAmount)}` : ''}
           </Text>
           {plan.diagnosis.constraint !== 'none' && (
-            <View style={styles.blockerRow}>
-              <Text style={styles.blockerLabel}>BIGGEST BLOCKER</Text>
-              <Text style={styles.blockerText}>{plan.diagnosis.label}</Text>
+            <View style={[styles.blockerRow, { borderTopColor: colorTheme.line }]}>
+              <Text style={[styles.blockerLabel, { color: colorTheme.ink2 }]}>BIGGEST BLOCKER</Text>
+              <Text style={[styles.blockerText, { color: colorTheme.red }]}>{plan.diagnosis.label}</Text>
             </View>
           )}
         </Card>
@@ -263,7 +271,7 @@ export function PassportCoachScreen({
         {/* Lender strip  the flywheel: pick whose published criteria to coach against */}
         {dir && selectedLender && (
           <>
-            <Text style={styles.sectionLabel}>COACHING AGAINST</Text>
+            <Text style={[styles.sectionLabel, { color: colorTheme.ink2 }]}>COACHING AGAINST</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.lenderRow}>
               {dir.lenders.map((l) => {
                 const active = l.id === selectedLender.id;
@@ -275,11 +283,18 @@ export function PassportCoachScreen({
                       setLenderId(l.id);
                       setSelected(null); // what-if chips are ladder-specific
                     }}
-                    style={[styles.lenderCard, active && styles.lenderCardActive]}
+                    style={[
+                      styles.lenderCard,
+                      { backgroundColor: colorTheme.surface, borderColor: colorTheme.line },
+                      active && [styles.lenderCardActive, { borderColor: theme.accent, backgroundColor: theme.accentTint }],
+                    ]}
                   >
                     <View style={styles.lenderHead}>
                       <View style={[styles.lenderDot, { backgroundColor: l.brandColor }]} />
-                      <Text style={[styles.lenderName, active && styles.lenderNameActive]} numberOfLines={2}>
+                      <Text
+                        style={[styles.lenderName, { color: colorTheme.ink }, active && [styles.lenderNameActive, { color: theme.accentInk }]]}
+                        numberOfLines={2}
+                      >
                         {l.name}
                       </Text>
                     </View>
@@ -305,7 +320,7 @@ export function PassportCoachScreen({
             {dir.offline ? (
               <Text style={styles.offlineNote}>Lender directory unreachable. Coaching against the generic Pip ladder.</Text>
             ) : (
-              <Text style={styles.lenderBlurb}>{selectedLender.blurb}</Text>
+              <Text style={[styles.lenderBlurb, { color: colorTheme.ink2 }]}>{selectedLender.blurb}</Text>
             )}
             {/* The bars the plan below is coaching toward, with the borrower's own standing
                 marked against each one. Open by default: "what am I short of" is the question
@@ -327,27 +342,32 @@ export function PassportCoachScreen({
         )}
 
         {/* Pip's take (AI narration, provenance-tagged) */}
-        <Card style={styles.pipCard}>
+        <Card style={[styles.pipCard, { backgroundColor: theme.accentSoft }]}>
           <View style={styles.pipHead}>
             <CoinMascot size={34} float />
-            <Text style={styles.pipTitle}>Pip's take</Text>
-            <View style={[styles.provTag, narration?.ai ? styles.provAi : styles.provComputed]}>
-              <Text style={[styles.provText, { color: narration?.ai ? colors.accent : colors.ink3 }]}>
+            <Text style={[styles.pipTitle, { color: theme.accentInk }]}>Pip's take</Text>
+            <View
+              style={[
+                styles.provTag,
+                narration?.ai ? [styles.provAi, { backgroundColor: theme.accentTint }] : [styles.provComputed, { backgroundColor: colorTheme.surface }],
+              ]}
+            >
+              <Text style={[styles.provText, { color: narration?.ai ? theme.accent : colorTheme.ink3 }]}>
                 {busy ? '…' : narration?.ai ? 'AI' : 'Summary'}
               </Text>
             </View>
           </View>
           {busy && !narration ? (
-            <ActivityIndicator size="small" color={colors.accent} style={{ alignSelf: 'flex-start', marginTop: 6 }} />
+            <ActivityIndicator size="small" color={theme.accent} style={{ alignSelf: 'flex-start', marginTop: 6 }} />
           ) : (
-            <Text style={styles.pipText}>{narration?.text ?? coachPlanFallback(plan)}</Text>
+            <Text style={[styles.pipText, { color: colorTheme.ink }]}>{narration?.text ?? coachPlanFallback(plan)}</Text>
           )}
         </Card>
 
         {/* Ranked plan */}
         {plan.actions.length > 0 ? (
           <>
-            <Text style={styles.sectionLabel}>YOUR NEXT STEPS</Text>
+            <Text style={[styles.sectionLabel, { color: colorTheme.ink2 }]}>YOUR NEXT STEPS</Text>
             {plan.actions.map((a, i) =>
               i === 0 ? (
                 <TourAnchor key={a.lever} id="coach-hero-card" activeId={activeTourAnchor}>
@@ -360,15 +380,15 @@ export function PassportCoachScreen({
           </>
         ) : (
           <Card style={styles.doneCard}>
-            <Icon name="check" size={20} color={colors.accent} stroke={2.4} />
-            <Text style={styles.doneText}>You're making the most of your current data. Keep logging new transactions to hold your standing.</Text>
+            <Icon name="check" size={20} color={theme.accent} stroke={2.4} />
+            <Text style={[styles.doneText, { color: colorTheme.ink2 }]}>You're making the most of your current data. Keep logging new transactions to hold your standing.</Text>
           </Card>
         )}
 
         {/* What-if chips */}
         {plan.whatIfs.length > 0 && (
           <>
-            <Text style={styles.sectionLabel}>TRY A WHAT-IF</Text>
+            <Text style={[styles.sectionLabel, { color: colorTheme.ink2 }]}>TRY A WHAT-IF</Text>
             {/* Two nested anchors, one per tour step. 'whatif-chips' frames just the chip row
                 while the step is still asking for a tap; once a chip has been tapped the tour
                 moves to 'whatif-result', which spans the chips AND the simulation card so the
@@ -385,24 +405,28 @@ export function PassportCoachScreen({
                         setSelected(selected === i ? null : i);
                         emitTourSignal('coach-chip-tapped');
                       }}
-                      style={[styles.chip, selected === i && styles.chipActive]}
+                      style={[
+                        styles.chip,
+                        { backgroundColor: colorTheme.surface, borderColor: colorTheme.line },
+                        selected === i && [styles.chipActive, { backgroundColor: theme.accentInk, borderColor: theme.accentInk }],
+                      ]}
                     >
-                      <Text style={[styles.chipText, selected === i && styles.chipTextActive]}>{w.magnitude}</Text>
+                      <Text style={[styles.chipText, { color: colorTheme.ink2 }, selected === i && styles.chipTextActive]}>{w.magnitude}</Text>
                     </Pressable>
                   ))}
                 </View>
               </TourAnchor>
               {surplusAllFlat && (
                 <>
-                  <Text style={styles.blockedNote}>{surplusWhatIfs[0].note}</Text>
+                  <Text style={[styles.blockedNote, { color: colorTheme.ink2 }]}>{surplusWhatIfs[0].note}</Text>
                   {/* The benchmark comparison stays useful even when trimming cannot move today's
                       offer: it is about where the money is going, not what a lender would lend.
                       Suppressing it here would hide the one piece of advice this borrower can
                       still act on. */}
                   {plan.benchmarkNote && (
                     <View style={styles.hintRow}>
-                      <Icon name="scale" size={13} color={colors.ink2} stroke={2} />
-                      <Text style={styles.hintText}>Worth knowing either way. {plan.benchmarkNote}</Text>
+                      <Icon name="scale" size={13} color={colorTheme.ink2} stroke={2} />
+                      <Text style={[styles.hintText, { color: colorTheme.ink2 }]}>Worth knowing either way. {plan.benchmarkNote}</Text>
                     </View>
                   )}
                 </>
@@ -417,72 +441,72 @@ export function PassportCoachScreen({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+  root: { flex: 1 },
 
   baseCard: { padding: 18, borderRadius: 20 },
-  baseKicker: { fontFamily: uiFont(600), fontSize: 11, letterSpacing: 1, color: colors.ink2, marginBottom: 8 },
+  baseKicker: { fontFamily: uiFont(600), fontSize: 11, letterSpacing: 1, marginBottom: 8 },
   baseRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
-  baseBand: { fontFamily: uiFont(700), fontSize: 22, color: colors.ink },
-  baseScore: { fontFamily: numFont(700), fontSize: 22, color: colors.accent },
-  baseScoreDenom: { fontFamily: uiFont(500), fontSize: 13, color: colors.ink2 },
-  baseSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 8, lineHeight: 17 },
-  blockerRow: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.line },
-  blockerLabel: { fontFamily: uiFont(600), fontSize: 11, letterSpacing: 1, color: colors.ink2, marginBottom: 3 },
-  blockerText: { fontFamily: uiFont(700), fontSize: 14, color: colors.red },
+  baseBand: { fontFamily: uiFont(700), fontSize: 22 },
+  baseScore: { fontFamily: numFont(700), fontSize: 22 },
+  baseScoreDenom: { fontFamily: uiFont(500), fontSize: 13 },
+  baseSub: { fontFamily: uiFont(500), fontSize: 12.5, marginTop: 8, lineHeight: 17 },
+  blockerRow: { marginTop: 12, paddingTop: 12, borderTopWidth: 1 },
+  blockerLabel: { fontFamily: uiFont(600), fontSize: 11, letterSpacing: 1, marginBottom: 3 },
+  blockerText: { fontFamily: uiFont(700), fontSize: 14 },
 
   lenderRow: { gap: 8, paddingRight: 4 },
-  lenderCard: { width: 150, backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1.5, borderColor: colors.line, padding: 12, gap: 10, justifyContent: 'space-between' },
-  lenderCardActive: { borderColor: colors.accent, backgroundColor: colors.accentTint },
+  lenderCard: { width: 150, borderRadius: 14, borderWidth: 1.5, padding: 12, gap: 10, justifyContent: 'space-between' },
+  lenderCardActive: {},
   lenderHead: { flexDirection: 'row', gap: 7, alignItems: 'flex-start' },
   lenderDot: { width: 10, height: 10, borderRadius: 999, marginTop: 3 },
-  lenderName: { flex: 1, fontFamily: uiFont(700), fontSize: 12.5, color: colors.ink, lineHeight: 16 },
-  lenderNameActive: { color: colors.accentInk },
+  lenderName: { flex: 1, fontFamily: uiFont(700), fontSize: 12.5, lineHeight: 16 },
+  lenderNameActive: {},
   verdictPill: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
   verdictPillOk: { backgroundColor: colors.accentSoft },
   verdictPillRefer: { backgroundColor: '#fdf1dc' },
   verdictPillNo: { backgroundColor: '#fdeaea' },
   verdictText: { fontFamily: uiFont(700), fontSize: 11 },
-  lenderBlurb: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, marginTop: 8, lineHeight: 16 },
+  lenderBlurb: { fontFamily: uiFont(500), fontSize: 11.5, marginTop: 8, lineHeight: 16 },
   offlineNote: { fontFamily: uiFont(500), fontSize: 11.5, color: '#a05c00', marginTop: 8, lineHeight: 16 },
 
-  pipCard: { padding: 16, borderRadius: 18, marginTop: 12, backgroundColor: colors.accentSoft },
+  pipCard: { padding: 16, borderRadius: 18, marginTop: 12 },
   pipHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  pipTitle: { fontFamily: uiFont(700), fontSize: 14, color: colors.accentInk, flex: 1 },
+  pipTitle: { fontFamily: uiFont(700), fontSize: 14, flex: 1 },
   provTag: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
-  provAi: { backgroundColor: colors.accentTint },
-  provComputed: { backgroundColor: colors.surface },
+  provAi: {},
+  provComputed: {},
   provText: { fontFamily: uiFont(700), fontSize: 11, letterSpacing: 0.5 },
-  pipText: { fontFamily: uiFont(500), fontSize: 13, color: colors.ink, lineHeight: 19, marginTop: 10 },
+  pipText: { fontFamily: uiFont(500), fontSize: 13, lineHeight: 19, marginTop: 10 },
 
-  sectionLabel: { fontFamily: uiFont(600), fontSize: 11, letterSpacing: 1, color: colors.ink2, marginTop: 20, marginBottom: 8 },
+  sectionLabel: { fontFamily: uiFont(600), fontSize: 11, letterSpacing: 1, marginTop: 20, marginBottom: 8 },
 
   simCard: { padding: 16, borderRadius: 16, marginBottom: 10 },
-  simCardWhatIf: { borderWidth: 1.5, borderColor: colors.accent, marginTop: 4 },
+  simCardWhatIf: { borderWidth: 1.5, marginTop: 4 },
   simHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  simLabel: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.ink, flex: 1, marginRight: 10 },
-  magPill: { backgroundColor: colors.accentTint, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  magText: { fontFamily: numFont(700), fontSize: 11.5, color: colors.accent },
+  simLabel: { fontFamily: uiFont(700), fontSize: 13.5, flex: 1, marginRight: 10 },
+  magPill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+  magText: { fontFamily: numFont(700), fontSize: 11.5 },
 
   deltaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 5 },
-  deltaLabel: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2 },
+  deltaLabel: { fontFamily: uiFont(500), fontSize: 12.5 },
   deltaValues: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  deltaFrom: { fontFamily: numFont(600), fontSize: 12.5, color: colors.ink2 },
-  deltaTo: { fontFamily: numFont(700), fontSize: 13, color: colors.ink },
-  flatNote: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, marginTop: 8, fontStyle: 'italic' },
+  deltaFrom: { fontFamily: numFont(600), fontSize: 12.5 },
+  deltaTo: { fontFamily: numFont(700), fontSize: 13 },
+  flatNote: { fontFamily: uiFont(500), fontSize: 11.5, marginTop: 8, fontStyle: 'italic' },
   hintRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 8 },
-  hintText: { flex: 1, fontFamily: uiFont(500), fontSize: 11.5, lineHeight: 16, color: colors.ink2 },
+  hintText: { flex: 1, fontFamily: uiFont(500), fontSize: 11.5, lineHeight: 16 },
   stressRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
   stressText: { fontFamily: uiFont(600), fontSize: 11.5, flex: 1, lineHeight: 15 },
-  startBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: colors.accentInk, borderRadius: 12, paddingVertical: 11, marginTop: 12 },
+  startBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, borderRadius: 12, paddingVertical: 11, marginTop: 12 },
   startBtnText: { fontFamily: uiFont(700), fontSize: 13, color: colors.onAccent },
 
   doneCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16, marginTop: 8 },
-  doneText: { fontFamily: uiFont(500), fontSize: 13, color: colors.ink2, flex: 1, lineHeight: 18 },
+  doneText: { fontFamily: uiFont(500), fontSize: 13, flex: 1, lineHeight: 18 },
 
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { backgroundColor: colors.surface, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: colors.line },
-  chipActive: { backgroundColor: colors.accentInk, borderColor: colors.accentInk },
-  chipText: { fontFamily: numFont(600), fontSize: 12.5, color: colors.ink2 },
+  chip: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1 },
+  chipActive: {},
+  chipText: { fontFamily: numFont(600), fontSize: 12.5 },
   chipTextActive: { color: colors.onAccent },
-  blockedNote: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, marginTop: 4, lineHeight: 17 },
+  blockedNote: { fontFamily: uiFont(500), fontSize: 12, marginTop: 4, lineHeight: 17 },
 });

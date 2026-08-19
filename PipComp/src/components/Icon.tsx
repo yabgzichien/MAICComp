@@ -1,6 +1,7 @@
 import React from 'react';
 import Svg, { Circle, Line, Path, Rect, G } from 'react-native-svg';
 import { colors } from '../theme';
+import { useThemeColors } from '../state/colorScheme';
 
 /**
  * Monoline icon set ported from the design (icons.jsx). Stroked glyphs on a
@@ -11,7 +12,7 @@ export type IconName =
   | 'camera' | 'image' | 'plus' | 'check' | 'sparkles' | 'x' | 'chevronRight' | 'chevronLeft'
   | 'chevronDown' | 'scan' | 'trending' | 'clock' | 'arrowRight' | 'search' | 'gallery' | 'wallet'
   | 'trash' | 'sliders' | 'gear' | 'alert' | 'pencil' | 'gift' | 'return' | 'percent'
-  | 'home' | 'scale' | 'signal' | 'book' | 'shield' | 'store';
+  | 'home' | 'scale' | 'signal' | 'book' | 'shield' | 'store' | 'download' | 'file' | 'table';
 
 type RenderFn = (stroke: string, sw: number) => React.ReactNode;
 
@@ -276,23 +277,48 @@ const ICONS: Record<IconName, RenderFn> = {
       <Path d="M9.5 20v-5h5v5" />
     </G>
   ),
+  download: (s, w) => (
+    <G fill="none" stroke={s} strokeWidth={w}>
+      <Path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+      <Path d="M7 10l5 5 5-5" />
+      <Line x1={12} y1={15} x2={12} y2={3} />
+    </G>
+  ),
+  file: (s, w) => (
+    <G fill="none" stroke={s} strokeWidth={w}>
+      <Path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+      <Path d="M14 2v6h6" />
+      <Line x1={16} y1={13} x2={8} y2={13} />
+      <Line x1={16} y1={17} x2={8} y2={17} />
+    </G>
+  ),
+  table: (s, w) => (
+    <G fill="none" stroke={s} strokeWidth={w}>
+      <Rect x={3} y={3} width={18} height={18} rx={2} />
+      <Line x1={3} y1={9} x2={21} y2={9} />
+      <Line x1={3} y1={15} x2={21} y2={15} />
+      <Line x1={9} y1={3} x2={9} y2={21} />
+      <Line x1={15} y1={3} x2={15} y2={21} />
+    </G>
+  ),
 };
 
 export function Icon({
   name,
   size = 22,
   stroke = 1.8,
-  color = colors.ink,
+  color,
 }: {
   name: IconName;
   size?: number;
   stroke?: number;
   color?: string;
 }) {
+  const colorTheme = useThemeColors();
   const render = ICONS[name] ?? ICONS.dots;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round">
-      {render(color, stroke)}
+      {render(color ?? colorTheme.ink, stroke)}
     </Svg>
   );
 }

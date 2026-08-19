@@ -13,8 +13,9 @@ import { suggestSettlement } from '../lib/split';
 import { DROP, type Category, type CategorySuggestion, type ExtractedTxn, type SplitDraft, type TxnType } from '../lib/types';
 import type { IconName } from '../components/Icon';
 import { useAccent, useAccentAlert } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
 import { useAppData } from '../state/store';
-import { colors, numFont, shadowToggle, uiFont } from '../theme';
+import { numFont, shadowToggle, uiFont } from '../theme';
 
 /**
  * An inbound row the user confirmed is a friend paying them back. It is deliberately NOT saved
@@ -60,6 +61,7 @@ export function CategorizeScreen({
   const ledgerAtOpen = useRef(transactions).current;
   const linkedAccount = useMemo(() => (linkId ? accounts.find((a) => a.id === linkId) ?? null : null), [linkId, accounts]);
   const theme = useAccent();
+  const colorTheme = useThemeColors();
   const { setAlert } = useAccentAlert();
   const today = useMemo(() => todayISO(), []);
 
@@ -242,17 +244,17 @@ export function CategorizeScreen({
   };
 
   if (!hasSteps) {
-    return <View style={styles.root} />;
+    return <View style={[styles.root, { backgroundColor: colorTheme.bg }]} />;
   }
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: colorTheme.bg }]}>
       <View style={{ paddingTop: insets.top + 4 }}>
         <TopBar
           title="Categorize"
           onBack={() => go(-1)}
           right={
-            <Text style={styles.counter}>
+            <Text style={[styles.counter, { color: colorTheme.ink2 }]}>
               {safeStep + 1}/{stepIndices.length}
             </Text>
           }
@@ -291,16 +293,16 @@ export function CategorizeScreen({
           {/* amount + date focus (both editable) */}
           <Card style={[styles.focus, { alignItems: 'flex-start' }]}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.focusMerchant} numberOfLines={1}>
+              <Text style={[styles.focusMerchant, { color: colorTheme.ink }]} numberOfLines={1}>
                 {item!.merchant}
               </Text>
               {linkedAccount ? (
                 <View style={styles.acctRow}>
-                  <Icon name={(CLASS_BY_ID[linkedAccount.cls]?.icon ?? 'wallet') as IconName} size={12} color={colors.ink3} />
-                  <Text style={styles.focusSub} numberOfLines={1}>{linkedAccount.name}</Text>
+                  <Icon name={(CLASS_BY_ID[linkedAccount.cls]?.icon ?? 'wallet') as IconName} size={12} color={colorTheme.ink3} />
+                  <Text style={[styles.focusSub, { color: colorTheme.ink2 }]} numberOfLines={1}>{linkedAccount.name}</Text>
                 </View>
               ) : item!.method ? (
-                <Text style={styles.focusSub}>{item!.method}</Text>
+                <Text style={[styles.focusSub, { color: colorTheme.ink2 }]}>{item!.method}</Text>
               ) : null}
               <DateEditor value={item!.date} onChange={setDate} />
               <RemarkEditor value={item!.remark ?? null} onChange={setRemark} />
@@ -309,19 +311,23 @@ export function CategorizeScreen({
           </Card>
 
           {!isIncome && !showBanner && (
-            <Pressable onPress={() => setSplitting(true)} style={styles.splitRow} hitSlop={4}>
-              <Icon name="gift" size={17} color={colors.accent} />
+            <Pressable
+              onPress={() => setSplitting(true)}
+              style={[styles.splitRow, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line }]}
+              hitSlop={4}
+            >
+              <Icon name="gift" size={17} color={theme.accent} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.splitTitle}>
+                <Text style={[styles.splitTitle, { color: colorTheme.ink }]}>
                   {activeSplit ? `Your share: RM ${fmt(activeSplit.ownShare)}` : 'Split with friends'}
                 </Text>
-                <Text style={styles.splitSub} numberOfLines={1}>
+                <Text style={[styles.splitSub, { color: colorTheme.ink2 }]} numberOfLines={1}>
                   {activeSplit
                     ? `RM ${fmt(activeSplit.gross - activeSplit.ownShare)} owed back to you`
                     : 'Paid for the table? Record only your share'}
                 </Text>
               </View>
-              <Icon name="chevronRight" size={17} color={colors.ink3} />
+              <Icon name="chevronRight" size={17} color={colorTheme.ink3} />
             </Pressable>
           )}
 
@@ -331,7 +337,7 @@ export function CategorizeScreen({
                 <Icon name="alert" size={18} color={theme.accentInk} stroke={2} />
                 <Text style={[styles.bannerTitle, { color: theme.accentInk }]}>Possible duplicate</Text>
               </View>
-              <Text style={styles.bannerText}>
+              <Text style={[styles.bannerText, { color: colorTheme.ink }]}>
                 You already logged <B>{item!.merchant}</B> for RM {fmt(item!.amount)} on {dupDay}. Record it again?
               </Text>
               <View style={styles.bannerBtns}>
@@ -354,7 +360,7 @@ export function CategorizeScreen({
                   {settlementHit!.partial ? 'Part of a repayment?' : 'Paying you back?'}
                 </Text>
               </View>
-              <Text style={styles.bannerText}>
+              <Text style={[styles.bannerText, { color: colorTheme.ink }]}>
                 This looks like <B>{settlementHit!.share.personName}</B> settling{' '}
                 {settlementHit!.partial ? 'part of ' : ''}what they owe you for{' '}
                 <B>{settlementHit!.share.merchant}</B> (RM {fmt(settlementHit!.share.outstanding)} outstanding).
@@ -377,12 +383,18 @@ export function CategorizeScreen({
             </View>
           ) : (
             <>
-              <View style={styles.typeToggle}>
+              <View style={[styles.typeToggle, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line2 }]}>
                 {(['expense', 'income'] as TxnType[]).map((k) => {
                   const on = item!.type === k;
                   return (
-                    <Pressable key={k} onPress={() => setType(k)} style={[styles.typeBtn, on && styles.typeBtnOn]}>
-                      <Text style={[styles.typeText, on && styles.typeTextOn]}>{k === 'expense' ? 'Expense' : 'Income'}</Text>
+                    <Pressable
+                      key={k}
+                      onPress={() => setType(k)}
+                      style={[styles.typeBtn, on && styles.typeBtnOn, on && { backgroundColor: colorTheme.surface }]}
+                    >
+                      <Text style={[styles.typeText, { color: colorTheme.ink2 }, on && styles.typeTextOn, on && { color: colorTheme.ink }]}>
+                        {k === 'expense' ? 'Expense' : 'Income'}
+                      </Text>
                     </Pressable>
                   );
                 })}
@@ -399,9 +411,12 @@ export function CategorizeScreen({
                 </View>
               ))}
               <View style={styles.gridCell}>
-                <Pressable onPress={() => setAdding(true)} style={styles.addChip}>
-                  <Icon name="plus" size={16} color={colors.accent} stroke={2.2} />
-                  <Text style={styles.addChipText}>New category</Text>
+                <Pressable
+                  onPress={() => setAdding(true)}
+                  style={[styles.addChip, { borderColor: theme.accentSoft, backgroundColor: theme.accentTint }]}
+                >
+                  <Icon name="plus" size={16} color={theme.accent} stroke={2.2} />
+                  <Text style={[styles.addChipText, { color: theme.accent }]}>New category</Text>
                 </Pressable>
               </View>
               </View>
@@ -411,10 +426,15 @@ export function CategorizeScreen({
       </ScrollView>
 
       {!showBanner && !showSettlement && (
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+        <View
+          style={[
+            styles.footer,
+            { paddingBottom: insets.bottom + 16, backgroundColor: colorTheme.bg, borderTopColor: colorTheme.line2 },
+          ]}
+        >
           <Pressable onPress={dropCurrent} style={styles.dropLink} hitSlop={6}>
-            <Icon name="x" size={14} color={colors.ink3} />
-            <Text style={styles.dropLinkText}>Don’t record this one</Text>
+            <Icon name="x" size={14} color={colorTheme.ink3} />
+            <Text style={[styles.dropLinkText, { color: colorTheme.ink2 }]}>Don’t record this one</Text>
           </Pressable>
           <PrimaryButton onPress={() => go(1)} disabled={!sel || sel === DROP}>
             {isLast ? (
@@ -462,6 +482,8 @@ export function CategorizeScreen({
 
 /** Tap the amount to edit it inline. */
 function AmountEditor({ value, income, onChange }: { value: number; income: boolean; onChange: (n: number) => void }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(value.toFixed(2));
 
@@ -478,7 +500,7 @@ function AmountEditor({ value, income, onChange }: { value: number; income: bool
   if (editing) {
     return (
       <View style={styles.amountEditRow}>
-        <Text style={styles.rmPrefix}>RM</Text>
+        <Text style={[styles.rmPrefix, { color: colorTheme.ink2 }]}>RM</Text>
         <TextInput
           value={text}
           onChangeText={setText}
@@ -487,7 +509,7 @@ function AmountEditor({ value, income, onChange }: { value: number; income: bool
           selectTextOnFocus
           onBlur={commit}
           onSubmitEditing={commit}
-          style={styles.amountInput}
+          style={[styles.amountInput, { borderColor: theme.accent, color: colorTheme.ink, backgroundColor: colorTheme.surface2 }]}
         />
       </View>
     );
@@ -495,14 +517,16 @@ function AmountEditor({ value, income, onChange }: { value: number; income: bool
 
   return (
     <Pressable onPress={() => setEditing(true)} hitSlop={8} style={styles.amountTap}>
-      <Amount value={value} size={26} weight={700} color={income ? colors.accent : colors.ink} />
-      <Icon name="pencil" size={15} color={colors.ink3} />
+      <Amount value={value} size={26} weight={700} color={income ? theme.accent : colorTheme.ink} />
+      <Icon name="pencil" size={15} color={colorTheme.ink3} />
     </Pressable>
   );
 }
 
 /** Tap the date to edit it inline, as a `YYYY-MM-DD` string (mirrors AmountEditor). */
 function DateEditor({ value, onChange }: { value: string | null; onChange: (d: string | null) => void }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(value ?? '');
 
@@ -524,21 +548,21 @@ function DateEditor({ value, onChange }: { value: string | null; onChange: (d: s
         value={text}
         onChangeText={setText}
         placeholder="YYYY-MM-DD"
-        placeholderTextColor={colors.ink3}
+        placeholderTextColor={colorTheme.ink3}
         autoFocus
         selectTextOnFocus
         onBlur={commit}
         onSubmitEditing={commit}
-        style={styles.dateInput}
+        style={[styles.dateInput, { borderColor: theme.accent, color: colorTheme.ink, backgroundColor: colorTheme.surface2 }]}
       />
     );
   }
 
   return (
     <Pressable onPress={() => setEditing(true)} hitSlop={8} style={styles.dateTap}>
-      <Icon name="clock" size={13} color={colors.ink3} />
-      <Text style={styles.dateText}>{value ? fullDateWithWeekday(value) : 'Add date'}</Text>
-      <Icon name="pencil" size={13} color={colors.ink3} />
+      <Icon name="clock" size={13} color={colorTheme.ink3} />
+      <Text style={[styles.dateText, { color: colorTheme.ink2 }]}>{value ? fullDateWithWeekday(value) : 'Add date'}</Text>
+      <Icon name="pencil" size={13} color={colorTheme.ink3} />
     </Pressable>
   );
 }
@@ -546,6 +570,8 @@ function DateEditor({ value, onChange }: { value: string | null; onChange: (d: s
 /** Tap to add or edit a short free-text remark (mirrors DateEditor). Never extracted from the
  *  screenshot; purely something the user types during review. */
 function RemarkEditor({ value, onChange }: { value: string | null; onChange: (r: string | null) => void }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(value ?? '');
 
@@ -565,26 +591,26 @@ function RemarkEditor({ value, onChange }: { value: string | null; onChange: (r:
         value={text}
         onChangeText={setText}
         placeholder="Add a remark"
-        placeholderTextColor={colors.ink3}
+        placeholderTextColor={colorTheme.ink3}
         autoFocus
         onBlur={commit}
         onSubmitEditing={commit}
-        style={styles.remarkInput}
+        style={[styles.remarkInput, { borderColor: theme.accent, color: colorTheme.ink, backgroundColor: colorTheme.surface2 }]}
       />
     );
   }
 
   return (
     <Pressable onPress={() => setEditing(true)} hitSlop={8} style={styles.dateTap}>
-      <Icon name="pencil" size={13} color={colors.ink3} />
-      <Text style={styles.dateText} numberOfLines={1}>{value || 'Add a remark'}</Text>
+      <Icon name="pencil" size={13} color={colorTheme.ink3} />
+      <Text style={[styles.dateText, { color: colorTheme.ink2 }]} numberOfLines={1}>{value || 'Add a remark'}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
-  counter: { fontFamily: uiFont(700), fontSize: 13, color: colors.ink2 },
+  root: { flex: 1 },
+  counter: { fontFamily: uiFont(700), fontSize: 13 },
   focus: {
     marginTop: 14,
     paddingHorizontal: 18,
@@ -593,58 +619,49 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  focusMerchant: { fontFamily: uiFont(700), fontSize: 16, color: colors.ink },
-  focusSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 2, flexShrink: 1 },
+  focusMerchant: { fontFamily: uiFont(700), fontSize: 16 },
+  focusSub: { fontFamily: uiFont(500), fontSize: 12.5, marginTop: 2, flexShrink: 1 },
   acctRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
   dateTap: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6, alignSelf: 'flex-start', maxWidth: '100%' },
-  dateText: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2, flexShrink: 1 },
+  dateText: { fontFamily: uiFont(600), fontSize: 12.5, flexShrink: 1 },
   remarkInput: {
     fontFamily: uiFont(600),
     fontSize: 12.5,
-    color: colors.ink,
     marginTop: 6,
     minWidth: 160,
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 8,
-    backgroundColor: colors.surface2,
     borderWidth: 1,
-    borderColor: colors.accent,
   },
   dateInput: {
     fontFamily: uiFont(600),
     fontSize: 12.5,
-    color: colors.ink,
     marginTop: 6,
     minWidth: 120,
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 8,
-    backgroundColor: colors.surface2,
     borderWidth: 1,
-    borderColor: colors.accent,
   },
   amountTap: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   amountEditRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  rmPrefix: { fontFamily: numFont(600), fontSize: 16, color: colors.ink2 },
+  rmPrefix: { fontFamily: numFont(600), fontSize: 16 },
   amountInput: {
     fontFamily: numFont(700),
     fontSize: 24,
-    color: colors.ink,
     minWidth: 96,
     textAlign: 'right',
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 10,
-    backgroundColor: colors.surface2,
     borderWidth: 1,
-    borderColor: colors.accent,
   },
-  typeToggle: { flexDirection: 'row', backgroundColor: colors.surface2, borderRadius: 999, padding: 4, marginTop: 16, borderWidth: 1, borderColor: colors.line2 },
+  typeToggle: { flexDirection: 'row', borderRadius: 999, padding: 4, marginTop: 16, borderWidth: 1 },
   typeBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: 999 },
-  typeBtnOn: { backgroundColor: colors.surface, ...shadowToggle },
-  typeText: { fontFamily: uiFont(600), fontSize: 13.5, color: colors.ink2 },
-  typeTextOn: { color: colors.ink },
+  typeBtnOn: { ...shadowToggle },
+  typeText: { fontFamily: uiFont(600), fontSize: 13.5 },
+  typeTextOn: {},
   grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12, marginHorizontal: -5 },
   gridCell: { width: '50%', paddingHorizontal: 5, paddingBottom: 10 },
   addChip: {
@@ -655,11 +672,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: colors.accentSoft,
     borderStyle: 'dashed',
-    backgroundColor: colors.accentTint,
   },
-  addChipText: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.accent },
+  addChipText: { fontFamily: uiFont(700), fontSize: 13.5 },
   splitRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -668,12 +683,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 14,
-    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.line,
   },
-  splitTitle: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.ink },
-  splitSub: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, marginTop: 2 },
+  splitTitle: { fontFamily: uiFont(700), fontSize: 13.5 },
+  splitSub: { fontFamily: uiFont(500), fontSize: 11.5, marginTop: 2 },
   incomeNote: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -681,15 +694,13 @@ const styles = StyleSheet.create({
     marginTop: 16,
     padding: 14,
     borderRadius: 14,
-    backgroundColor: colors.accentTint,
     borderWidth: 1,
-    borderColor: colors.accentSoft,
   },
-  incomeNoteText: { fontFamily: uiFont(600), fontSize: 14, color: colors.accentInk },
+  incomeNoteText: { fontFamily: uiFont(600), fontSize: 14 },
   banner: { marginTop: 16, padding: 16, borderRadius: 18, borderWidth: 1 },
   bannerHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   bannerTitle: { fontFamily: uiFont(700), fontSize: 14.5 },
-  bannerText: { fontFamily: uiFont(500), fontSize: 14, lineHeight: 20, color: colors.ink, marginBottom: 14 },
+  bannerText: { fontFamily: uiFont(500), fontSize: 14, lineHeight: 20, marginBottom: 14 },
   bannerBtns: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   ghostBtn: { paddingHorizontal: 16, paddingVertical: 12 },
   ghostText: { fontFamily: uiFont(700), fontSize: 14.5 },
@@ -700,10 +711,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     paddingHorizontal: 18,
     paddingTop: 10,
-    backgroundColor: colors.bg,
     borderTopWidth: 1,
-    borderTopColor: colors.line2,
   },
   dropLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, marginBottom: 2 },
-  dropLinkText: { fontFamily: uiFont(600), fontSize: 13.5, color: colors.ink2 },
+  dropLinkText: { fontFamily: uiFont(600), fontSize: 13.5 },
 });

@@ -29,7 +29,9 @@ import { emitTourSignal } from '../lib/tourSignals';
 import { BORROWER_TOUR_STEPS, branchForDecision, clampTourStep, stepsForBranch } from '../lib/tourSteps';
 import { isControlLocked } from '../lib/tourDrive';
 import { PassportCeremonyScreen } from './PassportCeremonyScreen';
+import { useAccent } from '../state/accent';
 import { colors, numFont, platformShadow, uiFont } from '../theme';
+import { useThemeColors } from '../state/colorScheme';
 
 function formatDate(iso: string): string {
   try {
@@ -58,6 +60,8 @@ function decisionLabel(d: Decision): string {
 }
 
 export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () => {} }: { onBack: () => void; onOpenKyc?: () => void; onOpenLoans?: () => void }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const insets = useSafeAreaInsets();
   const { profile, score, dataConfidence, coverage, momentum, coachInput, incomeQuality, spendingProfile, obligations, standing } = useCreditProfile();
   const { kyc, occupation, loanApplications, loanProducts, repaymentSummary, accountValues, tourActive, tourRunning, tourStepIndex, tourBranch, setTourBranch } = useAppData();
@@ -415,19 +419,19 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
   // eKYC gate.
   if (!kyc) {
     return (
-      <View style={styles.root}>
+      <View style={[styles.root, { backgroundColor: colorTheme.bg }]}>
         <View style={{ paddingTop: insets.top + 4 }}>
           <TopBar title="Credit Passport" onBack={onBack} />
         </View>
         <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: insets.bottom + 30 }}>
           <Card style={styles.centerCard}>
             <Icon name="alert" size={30} color="#a05c00" />
-            <Text style={styles.gateTitle}>Verify your identity first</Text>
-            <Text style={styles.gateBody}>
+            <Text style={[styles.gateTitle, { color: colorTheme.ink }]}>Verify your identity first</Text>
+            <Text style={[styles.gateBody, { color: colorTheme.ink2 }]}>
               Your Credit Passport is what lenders verify to offer you financing, so it must be bound to your verified
               identity. This is a one-time check.
             </Text>
-            <Pressable style={styles.gateBtn} onPress={onOpenKyc}>
+            <Pressable style={[styles.gateBtn, { backgroundColor: theme.accentInk }]} onPress={onOpenKyc}>
               <Text style={styles.gateBtnText}>Verify identity</Text>
             </Pressable>
           </Card>
@@ -461,15 +465,15 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
   const holder = passport.holder;
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: colorTheme.bg }]}>
       <View style={{ paddingTop: insets.top + 4 }}>
         <TopBar title="Credit Passport" onBack={onBack} />
       </View>
-      <Text style={styles.subtitle}>Share your verified score with any lender</Text>
+      <Text style={[styles.subtitle, { color: colorTheme.ink2 }]}>Share your verified score with any lender</Text>
 
       <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: insets.bottom + 30 }} showsVerticalScrollIndicator={false}>
         <TourAnchor id="passport-card" activeId={activeTourAnchor}>
-        <FadeIn key={passport.issuedAt} style={styles.passportCard}>
+        <FadeIn key={passport.issuedAt} style={[styles.passportCard, { backgroundColor: colorTheme.surface }]}>
           {/* Dark header strip */}
           <View style={styles.header}>
             <View style={styles.headerTopRow}>
@@ -506,46 +510,46 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
 
           {/* Perforated divider */}
           <View style={styles.perfRow}>
-            <View style={[styles.perfNotch, { left: -13, borderTopRightRadius: 13, borderBottomRightRadius: 13 }]} />
+            <View style={[styles.perfNotch, { backgroundColor: colorTheme.bg, left: -13, borderTopRightRadius: 13, borderBottomRightRadius: 13 }]} />
             <View style={styles.perfLine} />
-            <View style={[styles.perfNotch, { right: -13, borderTopLeftRadius: 13, borderBottomLeftRadius: 13 }]} />
+            <View style={[styles.perfNotch, { backgroundColor: colorTheme.bg, right: -13, borderTopLeftRadius: 13, borderBottomLeftRadius: 13 }]} />
           </View>
 
           {/* Footer */}
-          <View style={styles.footer}>
+          <View style={[styles.footer, { backgroundColor: colorTheme.surface }]}>
             <View style={styles.datesRow}>
               <View>
-                <Text style={styles.dateLabel}>Issued</Text>
-                <Text style={styles.dateValue}>{formatDate(passport.issuedAt)}</Text>
+                <Text style={[styles.dateLabel, { color: colorTheme.ink2 }]}>Issued</Text>
+                <Text style={[styles.dateValue, { color: colorTheme.ink }]}>{formatDate(passport.issuedAt)}</Text>
               </View>
-              <View style={styles.dateDivider} />
+              <View style={[styles.dateDivider, { backgroundColor: colorTheme.line }]} />
               <View>
-                <Text style={styles.dateLabel}>Valid until</Text>
-                <Text style={styles.dateValue}>{formatDate(passport.validUntil)}</Text>
+                <Text style={[styles.dateLabel, { color: colorTheme.ink2 }]}>Valid until</Text>
+                <Text style={[styles.dateValue, { color: colorTheme.ink }]}>{formatDate(passport.validUntil)}</Text>
               </View>
-              <View style={styles.dateDivider} />
+              <View style={[styles.dateDivider, { backgroundColor: colorTheme.line }]} />
               <View style={{ alignItems: 'flex-end' }}>
-                <Text style={styles.dateLabel}>Confidence</Text>
-                <Text style={[styles.dateValue, { color: colors.accent }]}>{Math.round(dataConfidence.confidence * 100)}%</Text>
+                <Text style={[styles.dateLabel, { color: colorTheme.ink2 }]}>Confidence</Text>
+                <Text style={[styles.dateValue, { color: theme.accent }]}>{Math.round(dataConfidence.confidence * 100)}%</Text>
               </View>
             </View>
 
-            <View style={styles.signedBadge}>
+            <View style={[styles.signedBadge, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]}>
               <Svg width={13} height={15} viewBox="0 0 14 16" fill="none">
-                <Path d="M7 1L1.5 4v5.2C1.5 12.8 3.9 15.2 7 16c3.1-.8 5.5-3.2 5.5-6.8V4L7 1z" fill={colors.accentSoft} stroke={colors.accent} strokeWidth={1.2} strokeLinejoin="round" />
-                <Path d="M4.5 8.5l2 2 3-3.5" stroke={colors.accent} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                <Path d="M7 1L1.5 4v5.2C1.5 12.8 3.9 15.2 7 16c3.1-.8 5.5-3.2 5.5-6.8V4L7 1z" fill={theme.accentSoft} stroke={theme.accent} strokeWidth={1.2} strokeLinejoin="round" />
+                <Path d="M4.5 8.5l2 2 3-3.5" stroke={theme.accent} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
-              <Text style={styles.signedText}>Cryptographically signed</Text>
-              <View style={styles.algoChip}><Text style={styles.algoText}>Ed25519</Text></View>
+              <Text style={[styles.signedText, { color: theme.accentInk }]}>Cryptographically signed</Text>
+              <View style={[styles.algoChip, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line }]}><Text style={[styles.algoText, { color: colorTheme.ink2 }]}>Ed25519</Text></View>
             </View>
 
             {Platform.OS === 'web' && (
-              <Text style={styles.webKeyNote}>Demo key stored in this browser · use the app on a phone for a device-secured key.</Text>
+              <Text style={[styles.webKeyNote, { color: colorTheme.ink2 }]}>Demo key stored in this browser · use the app on a phone for a device-secured key.</Text>
             )}
 
             <Pressable onPress={regenerate} style={styles.regenBtn}>
-              <Icon name="return" size={13} color={colors.ink3} />
-              <Text style={styles.regenText}>Regenerate passport</Text>
+              <Icon name="return" size={13} color={colorTheme.ink3} />
+              <Text style={[styles.regenText, { color: colorTheme.ink2 }]}>Regenerate passport</Text>
             </Pressable>
           </View>
         </FadeIn>
@@ -553,12 +557,12 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
 
         {/* Request financing  direct-apply straight to the chosen lender console */}
         <Card style={styles.reqCard}>
-          <Text style={styles.reqTitle}>Request financing</Text>
-          <Text style={styles.reqSub}>Pick a lender and send this signed passport straight to them to apply. Only your signed aggregates travel, never your raw transactions.</Text>
+          <Text style={[styles.reqTitle, { color: colorTheme.ink }]}>Request financing</Text>
+          <Text style={[styles.reqSub, { color: colorTheme.ink2 }]}>Pick a lender and send this signed passport straight to them to apply. Only your signed aggregates travel, never your raw transactions.</Text>
 
           {lenders.length > 0 && (
             <>
-              <Text style={styles.reqLabel}>Lender</Text>
+              <Text style={[styles.reqLabel, { color: colorTheme.ink2 }]}>Lender</Text>
               <View style={styles.lenderList}>
                 {lenders.map((l) => {
                   const on = selectedLender?.id === l.id;
@@ -567,17 +571,17 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
                     <Pressable
                       key={l.id}
                       onPress={() => selectLender(l.id)}
-                      style={[styles.lenderRow, on && styles.lenderRowOn]}
+                      style={[styles.lenderRow, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line }, on && [styles.lenderRowOn, { backgroundColor: theme.accentTint, borderColor: theme.accent }]]}
                       accessibilityRole="radio"
                       accessibilityState={{ selected: on }}
                       accessibilityLabel={outcome ? `${l.name}. ${outcome.headline}. ${outcome.detail}` : l.name}
                     >
                       <View style={[styles.lenderDot, { backgroundColor: l.brandColor }]} />
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.lenderName} numberOfLines={1}>{l.name}</Text>
+                        <Text style={[styles.lenderName, { color: colorTheme.ink }]} numberOfLines={1}>{l.name}</Text>
                         {/* Rate and entry bar on the row itself: comparing lenders is the whole
                             point of this list, and price is half of that comparison. */}
-                        <Text style={styles.lenderTerms}>{criteriaSummary(lenderCriteria(l))}</Text>
+                        <Text style={[styles.lenderTerms, { color: theme.accentInk }]}>{criteriaSummary(lenderCriteria(l))}</Text>
                         {outcome && (
                           <View style={styles.outcomeBlock}>
                             <View style={[styles.outcomeChip, { backgroundColor: decisionColor(outcome.decision) + '1a' }]}>
@@ -586,7 +590,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
                           </View>
                         )}
                       </View>
-                      {on && <Icon name="check" size={16} color={colors.accentInk} stroke={2.6} />}
+                      {on && <Icon name="check" size={16} color={theme.accentInk} stroke={2.6} />}
                     </Pressable>
                   );
                 })}
@@ -606,32 +610,32 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
           )}
 
           {/* Borrowing power  the graduated limit (repayment record + affordability, minus exposure). */}
-          <View style={[styles.powerBox, lenders.length > 0 && { marginTop: 16 }]}>
+          <View style={[styles.powerBox, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }, lenders.length > 0 && { marginTop: 16 }]}>
             <View style={styles.powerHeader}>
-              <Text style={styles.powerLabel}>Borrowing power</Text>
-              <Text style={styles.powerAmount}>
+              <Text style={[styles.powerLabel, { color: colorTheme.ink2 }]}>Borrowing power</Text>
+              <Text style={[styles.powerAmount, { color: theme.accentInk }]}>
                 RM{borrowing.available.toLocaleString('en-MY')}
-                <Text style={styles.powerOf}> of RM{borrowing.limit.toLocaleString('en-MY')}</Text>
+                <Text style={[styles.powerOf, { color: colorTheme.ink2 }]}> of RM{borrowing.limit.toLocaleString('en-MY')}</Text>
               </Text>
             </View>
-            <Text style={styles.powerReason}>{borrowing.reason}</Text>
+            <Text style={[styles.powerReason, { color: colorTheme.ink2 }]}>{borrowing.reason}</Text>
           </View>
 
-          <Text style={[styles.reqLabel, { marginTop: 16 }]}>Amount</Text>
+          <Text style={[styles.reqLabel, { color: colorTheme.ink2, marginTop: 16 }]}>Amount</Text>
           <View style={styles.stepperRow}>
-            <Pressable onPress={() => stepAmount(-500)} style={({ pressed }) => [styles.stepperBtn, pressed && styles.stepperPressed]}>
-              <Icon name="chevronLeft" size={18} color={colors.accent} />
+            <Pressable onPress={() => stepAmount(-500)} style={({ pressed }) => [styles.stepperBtn, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }, pressed && styles.stepperPressed]}>
+              <Icon name="chevronLeft" size={18} color={theme.accent} />
             </Pressable>
             <View style={{ flex: 1, alignItems: 'center' }}>
               <Amount value={effectiveAmount} size={22} />
-              <Text style={styles.stepperHint}>RM{requestFloor.toLocaleString('en-MY')}–{requestCeiling.toLocaleString('en-MY')}</Text>
+              <Text style={[styles.stepperHint, { color: colorTheme.ink3 }]}>RM{requestFloor.toLocaleString('en-MY')}–{requestCeiling.toLocaleString('en-MY')}</Text>
             </View>
-            <Pressable onPress={() => stepAmount(500)} style={({ pressed }) => [styles.stepperBtn, pressed && styles.stepperPressed]}>
-              <Icon name="chevronRight" size={18} color={colors.accent} />
+            <Pressable onPress={() => stepAmount(500)} style={({ pressed }) => [styles.stepperBtn, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }, pressed && styles.stepperPressed]}>
+              <Icon name="chevronRight" size={18} color={theme.accent} />
             </Pressable>
           </View>
 
-          <Text style={[styles.reqLabel, { marginTop: 16 }]}>Purpose</Text>
+          <Text style={[styles.reqLabel, { color: colorTheme.ink2, marginTop: 16 }]}>Purpose</Text>
           <View style={styles.purposeWrap}>
             {PURPOSE_CATEGORIES.map((c) => {
               const on = purpose === c;
@@ -639,11 +643,11 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
                 <Pressable
                   key={c}
                   onPress={() => { setPurpose(c); setSendResult(null); }}
-                  style={[styles.purposeChip, on && styles.purposeChipOn]}
+                  style={[styles.purposeChip, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line }, on && [styles.purposeChipOn, { backgroundColor: theme.accentTint, borderColor: theme.accent }]]}
                   accessibilityRole="radio"
                   accessibilityState={{ selected: on }}
                 >
-                  <Text style={[styles.purposeChipText, on && styles.purposeChipTextOn]}>{PURPOSE_LABELS[c]}</Text>
+                  <Text style={[styles.purposeChipText, { color: colorTheme.ink2 }, on && [styles.purposeChipTextOn, { color: theme.accentInk }]]}>{PURPOSE_LABELS[c]}</Text>
                 </Pressable>
               );
             })}
@@ -657,7 +661,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
               <Text style={[styles.outcomeBannerTitle, { color: decisionColor(selectedOutcome.decision) }]}>
                 {selectedOutcome.headline}
               </Text>
-              <Text style={styles.outcomeBannerBody}>
+              <Text style={[styles.outcomeBannerBody, { color: colorTheme.ink2 }]}>
                 {selectedOutcome.detail}
                 {selectedOutcome.decision === 'approve' ? " You'll still choose whether to take it." : ''}
               </Text>
@@ -670,7 +674,8 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
               disabled={sendBusy || sendLocked || tourBlocksSend}
               style={({ pressed }) => [
                 styles.sendBtn,
-                (sendLocked || tourBlocksSend) && styles.sendBtnLocked,
+                { backgroundColor: theme.accentInk },
+                (sendLocked || tourBlocksSend) && [styles.sendBtnLocked, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line }],
                 (sendBusy || pressed) && { opacity: 0.92 },
               ]}
               accessibilityRole="button"
@@ -680,25 +685,25 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
                 <ActivityIndicator size="small" color={colors.onAccent} />
               ) : sendLocked ? (
                 <>
-                  <Icon name="check" size={15} color={colors.ink3} stroke={2.6} />
-                  <Text style={[styles.sendBtnText, { color: colors.ink3 }]}>Request sent</Text>
+                  <Icon name="check" size={15} color={colorTheme.ink3} stroke={2.6} />
+                  <Text style={[styles.sendBtnText, { color: colorTheme.ink3 }]}>Request sent</Text>
                 </>
               ) : (
                 <>
-                  <Text style={[styles.sendBtnText, tourBlocksSend && { color: colors.ink3 }]}>
+                  <Text style={[styles.sendBtnText, tourBlocksSend && { color: colorTheme.ink3 }]}>
                     {selectedLender && selectedLender.id !== 'offline' ? `Send to ${selectedLender.name.split(' ')[0]}` : 'Send request to lender'}
                   </Text>
-                  <Icon name="arrowRight" size={16} color={tourBlocksSend ? colors.ink3 : colors.onAccent} />
+                  <Icon name="arrowRight" size={16} color={tourBlocksSend ? colorTheme.ink3 : colors.onAccent} />
                 </>
               )}
             </Pressable>
           </TourAnchor>
           {sendLocked ? (
-            <Text style={styles.sendLockedHint}>Change the amount, purpose, or lender to send another request.</Text>
+            <Text style={[styles.sendLockedHint, { color: colorTheme.ink3 }]}>Change the amount, purpose, or lender to send another request.</Text>
           ) : tourBlocksSend ? (
             // Says WHY rather than leaving a dead button: the judge is mid-tour and this is the
             // act they haven't reached yet.
-            <Text style={styles.sendLockedHint}>The guided tour sends this for real in act 6. Keep going and it unlocks.</Text>
+            <Text style={[styles.sendLockedHint, { color: colorTheme.ink3 }]}>The guided tour sends this for real in act 6. Keep going and it unlocks.</Text>
           ) : null}
 
           {sendResult && sendResult.status === 'filed' && (
@@ -710,7 +715,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
                 <Text style={styles.sentBadgeText}>Sent successfully</Text>
               </View>
               <View style={styles.resultHeader}>
-                <Text style={styles.resultTitle} numberOfLines={1}>
+                <Text style={[styles.resultTitle, { color: colorTheme.ink }]} numberOfLines={1}>
                   {selectedLender && selectedLender.id !== 'offline' ? `Sent to ${selectedLender.name}` : 'Sent to lender'}
                 </Text>
                 <View style={[styles.decisionPill, { backgroundColor: decisionColor(sendResult.decision.decision) + '1a' }]}>
@@ -722,11 +727,11 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
               {sendResult.decision.maxAmount > 0 && (
                 <View style={styles.offerAmounts}>
                   <View>
-                    <Text style={styles.amountLabel}>Offered</Text>
+                    <Text style={[styles.amountLabel, { color: colorTheme.ink2 }]}>Offered</Text>
                     <Amount value={sendResult.decision.maxAmount} size={18} />
                   </View>
                   <View>
-                    <Text style={styles.amountLabel}>Installment / mo</Text>
+                    <Text style={[styles.amountLabel, { color: colorTheme.ink2 }]}>Installment / mo</Text>
                     <Amount value={sendResult.decision.installment} size={18} />
                   </View>
                 </View>
@@ -735,13 +740,13 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
                 <View style={styles.reasonsBlock}>
                   {sendResult.decision.reasons.map((reason, idx) => (
                     <View key={idx} style={styles.reasonRow}>
-                      <Icon name="dots" size={6} color={colors.ink3} />
-                      <Text style={styles.reasonText}>{reason}</Text>
+                      <Icon name="dots" size={6} color={colorTheme.ink3} />
+                      <Text style={[styles.reasonText, { color: colorTheme.ink2 }]}>{reason}</Text>
                     </View>
                   ))}
                 </View>
               )}
-              <Text style={styles.resultFoot}>
+              <Text style={[styles.resultFoot, { color: colorTheme.ink3 }]}>
                 {filedFootText(sendResult.decision.decision, selectedLender && selectedLender.id !== 'offline' ? selectedLender.name : 'The lender')}
               </Text>
 
@@ -764,15 +769,15 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
                 </View>
                 <Text style={styles.sentBadgeText}>Already sent</Text>
               </View>
-              <Text style={styles.resultTitle}>
+              <Text style={[styles.resultTitle, { color: colorTheme.ink }]}>
                 {selectedLender && selectedLender.id !== 'offline' ? `Waiting in ${selectedLender.name}'s queue` : "Waiting in the lender's queue"}
               </Text>
-              <Text style={[styles.resultFoot, { marginTop: 6 }]}>This passport is already filed at this amount, so there is no need to send it again.</Text>
+              <Text style={[styles.resultFoot, { color: colorTheme.ink3, marginTop: 6 }]}>This passport is already filed at this amount, so there is no need to send it again.</Text>
             </FadeIn>
           )}
 
           {sendResult && sendResult.status === 'rejected' && (
-            <View style={[styles.noticeBox, styles.noticeError]}>
+            <View style={[styles.noticeBox, { backgroundColor: colorTheme.surface2 }, styles.noticeError]}>
               {sendResult.reasons.map((reason, idx) => (
                 <Text key={idx} style={[styles.noticeText, { color: DEC_RED }]}>{reason}</Text>
               ))}
@@ -780,29 +785,29 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
           )}
 
           {sendResult && sendResult.status === 'offline' && (
-            <View style={styles.noticeBox}>
-              <Text style={styles.noticeText}>Couldn't reach the lender console. Present your signed code offline instead, as described below.</Text>
+            <View style={[styles.noticeBox, { backgroundColor: colorTheme.surface2 }]}>
+              <Text style={[styles.noticeText, { color: colorTheme.ink2 }]}>Couldn't reach the lender console. Present your signed code offline instead, as described below.</Text>
             </View>
           )}
         </Card>
 
         {/* Offline fallback  the manual hand-over that keeps working with no connection */}
         <Card style={styles.fallbackCard}>
-          <Text style={styles.fallbackTitle}>Present offline instead</Text>
-          <Text style={styles.fallbackSub}>No connection to a lender? Share your signed code instead. Any lender can verify it offline, without a server.</Text>
+          <Text style={[styles.fallbackTitle, { color: colorTheme.ink }]}>Present offline instead</Text>
+          <Text style={[styles.fallbackSub, { color: colorTheme.ink2 }]}>No connection to a lender? Share your signed code instead. Any lender can verify it offline, without a server.</Text>
           <View style={styles.codeRow}>
-            <View style={styles.codeField}>
+            <View style={[styles.codeField, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line }]}>
               <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-                <Rect x={5} y={11} width={14} height={11} rx={2} stroke={colors.accent} strokeWidth={2} />
-                <Path d="M8 11V7a4 4 0 018 0v4" stroke={colors.accent} strokeWidth={2} strokeLinecap="round" />
+                <Rect x={5} y={11} width={14} height={11} rx={2} stroke={theme.accent} strokeWidth={2} />
+                <Path d="M8 11V7a4 4 0 018 0v4" stroke={theme.accent} strokeWidth={2} strokeLinecap="round" />
               </Svg>
-              <Text style={styles.codeText} numberOfLines={1}>{shortCode}</Text>
+              <Text style={[styles.codeText, { color: colorTheme.ink2 }]} numberOfLines={1}>{shortCode}</Text>
             </View>
-            <Pressable onPress={handleCopy} style={[styles.copyBtn, styles.copyBtnOutline, copied && styles.copyBtnDone]}>
-              <Text style={[styles.copyText, styles.copyTextOutline, copied && styles.copyTextDone]}>{copied ? '✓ Copied' : 'Copy'}</Text>
+            <Pressable onPress={handleCopy} style={[styles.copyBtn, { backgroundColor: theme.accentInk }, [styles.copyBtnOutline, { borderColor: colorTheme.line }], copied && [styles.copyBtnDone, { backgroundColor: theme.accentSoft }]]}>
+              <Text style={[styles.copyText, [styles.copyTextOutline, { color: colorTheme.ink }], copied && [styles.copyTextDone, { color: theme.accentInk }]]}>{copied ? '✓ Copied' : 'Copy'}</Text>
             </Pressable>
-            <Pressable onPress={handleShare} style={[styles.copyBtn, shared && styles.copyBtnDone]}>
-              <Text style={[styles.copyText, shared && styles.copyTextDone]}>{shared ? '✓ Shared' : 'Share'}</Text>
+            <Pressable onPress={handleShare} style={[styles.copyBtn, { backgroundColor: theme.accentInk }, shared && [styles.copyBtnDone, { backgroundColor: theme.accentSoft }]]}>
+              <Text style={[styles.copyText, shared && [styles.copyTextDone, { color: theme.accentInk }]]}>{shared ? '✓ Shared' : 'Share'}</Text>
             </Pressable>
           </View>
         </Card>
@@ -812,20 +817,19 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
-  subtitle: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, textAlign: 'center', marginTop: 2, marginBottom: 4 },
+  root: { flex: 1 },
+  subtitle: { fontFamily: uiFont(500), fontSize: 12.5, textAlign: 'center', marginTop: 2, marginBottom: 4 },
 
   centerCard: { padding: 32, alignItems: 'center', gap: 14, marginTop: 20 },
 
-  gateTitle: { fontFamily: uiFont(700), fontSize: 17, color: colors.ink, marginTop: 12, textAlign: 'center' },
-  gateBody: { fontFamily: uiFont(500), fontSize: 13.5, color: colors.ink2, lineHeight: 20, textAlign: 'center', marginTop: 8 },
-  gateBtn: { alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 999, backgroundColor: colors.accentInk, marginTop: 18, alignSelf: 'stretch' },
+  gateTitle: { fontFamily: uiFont(700), fontSize: 17, marginTop: 12, textAlign: 'center' },
+  gateBody: { fontFamily: uiFont(500), fontSize: 13.5, lineHeight: 20, textAlign: 'center', marginTop: 8 },
+  gateBtn: { alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 999, marginTop: 18, alignSelf: 'stretch' },
   gateBtnText: { fontFamily: uiFont(700), fontSize: 14.5, color: colors.onAccent },
 
   /* passport card */
   passportCard: {
     borderRadius: 24,
-    backgroundColor: colors.surface,
     ...platformShadow('#0a1810', 0.28, 30, { width: 0, height: 18 }, 8),
   },
   header: { backgroundColor: colors.passportDark, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 },
@@ -845,68 +849,68 @@ const styles = StyleSheet.create({
   scorePillText: { fontFamily: uiFont(700), fontSize: 11, color: 'rgba(255,255,255,0.82)' },
 
   codeRow: { flexDirection: 'row', gap: 8, marginTop: 14, alignSelf: 'stretch' },
-  codeField: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surface2, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: colors.line },
-  codeText: { flex: 1, fontFamily: numFont(500), fontSize: 12, color: colors.ink2 },
-  copyBtn: { borderRadius: 10, paddingHorizontal: 16, justifyContent: 'center', backgroundColor: colors.accentInk },
-  copyBtnOutline: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.line },
-  copyBtnDone: { backgroundColor: colors.accentSoft },
+  codeField: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1 },
+  codeText: { flex: 1, fontFamily: numFont(500), fontSize: 12 },
+  copyBtn: { borderRadius: 10, paddingHorizontal: 16, justifyContent: 'center' },
+  copyBtnOutline: { backgroundColor: 'transparent', borderWidth: 1 },
+  copyBtnDone: {},
   copyText: { fontFamily: uiFont(700), fontSize: 12.5, color: '#fff' },
-  copyTextOutline: { color: colors.ink },
-  copyTextDone: { color: colors.accentInk },
+  copyTextOutline: {},
+  copyTextDone: {},
 
   perfRow: { height: 26, justifyContent: 'center' },
-  perfNotch: { position: 'absolute', width: 26, height: 26, backgroundColor: colors.bg },
+  perfNotch: { position: 'absolute', width: 26, height: 26 },
   perfLine: { marginHorizontal: 14, borderTopWidth: 2, borderStyle: 'dashed', borderColor: 'rgba(20,40,30,0.13)' },
 
-  footer: { padding: 20, backgroundColor: colors.surface, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
+  footer: { padding: 20, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
   datesRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  dateLabel: { fontFamily: uiFont(600), fontSize: 11, color: colors.ink2, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 3 },
-  dateValue: { fontFamily: numFont(600), fontSize: 12.5, color: colors.ink },
-  dateDivider: { width: 1, backgroundColor: colors.line },
-  signedBadge: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: colors.accentTint, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: colors.accentSoft, marginBottom: 12 },
-  signedText: { flex: 1, fontFamily: uiFont(600), fontSize: 11.5, color: colors.accentInk },
-  algoChip: { backgroundColor: colors.surface2, borderRadius: 5, paddingHorizontal: 7, paddingVertical: 2, borderWidth: 1, borderColor: colors.line },
-  algoText: { fontFamily: numFont(700), fontSize: 11, color: colors.ink2, letterSpacing: 0.3 },
-  webKeyNote: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink2, textAlign: 'center', marginBottom: 10, lineHeight: 14 },
+  dateLabel: { fontFamily: uiFont(600), fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 3 },
+  dateValue: { fontFamily: numFont(600), fontSize: 12.5 },
+  dateDivider: { width: 1 },
+  signedBadge: { flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, marginBottom: 12 },
+  signedText: { flex: 1, fontFamily: uiFont(600), fontSize: 11.5 },
+  algoChip: { borderRadius: 5, paddingHorizontal: 7, paddingVertical: 2, borderWidth: 1 },
+  algoText: { fontFamily: numFont(700), fontSize: 11, letterSpacing: 0.3 },
+  webKeyNote: { fontFamily: uiFont(500), fontSize: 11, textAlign: 'center', marginBottom: 10, lineHeight: 14 },
   regenBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 4 },
-  regenText: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2 },
+  regenText: { fontFamily: uiFont(600), fontSize: 12.5 },
 
   /* request financing */
   reqCard: { padding: 18, marginTop: 16 },
-  reqTitle: { fontFamily: uiFont(700), fontSize: 16, color: colors.ink },
-  reqSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, lineHeight: 18, marginTop: 4, marginBottom: 14 },
-  reqLabel: { fontFamily: uiFont(700), fontSize: 11, color: colors.ink2, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 },
+  reqTitle: { fontFamily: uiFont(700), fontSize: 16 },
+  reqSub: { fontFamily: uiFont(500), fontSize: 12.5, lineHeight: 18, marginTop: 4, marginBottom: 14 },
+  reqLabel: { fontFamily: uiFont(700), fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 },
   lenderList: { gap: 8 },
-  lenderRow: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 12, paddingVertical: 11, borderRadius: 12, backgroundColor: colors.surface2, borderWidth: 1.5, borderColor: colors.line },
-  lenderRowOn: { backgroundColor: colors.accentTint, borderColor: colors.accent },
+  lenderRow: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 12, paddingVertical: 11, borderRadius: 12, borderWidth: 1.5 },
+  lenderRowOn: {},
   lenderDot: { width: 12, height: 12, borderRadius: 999 },
-  lenderName: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.ink },
-  lenderTerms: { fontFamily: numFont(600), fontSize: 11.5, color: colors.accentInk, marginTop: 4 },
+  lenderName: { fontFamily: uiFont(700), fontSize: 13.5 },
+  lenderTerms: { fontFamily: numFont(600), fontSize: 11.5, marginTop: 4 },
   outcomeBlock: { marginTop: 7, gap: 4, alignItems: 'flex-start' },
   outcomeChip: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 },
   outcomeChipText: { fontFamily: uiFont(700), fontSize: 11.5 },
   outcomeBanner: { marginTop: 18, borderRadius: 12, borderWidth: 1.5, padding: 12 },
   outcomeBannerTitle: { fontFamily: uiFont(700), fontSize: 13.5 },
-  outcomeBannerBody: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, lineHeight: 18, marginTop: 4 },
+  outcomeBannerBody: { fontFamily: uiFont(500), fontSize: 12.5, lineHeight: 18, marginTop: 4 },
   stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  stepperBtn: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentTint, borderWidth: 1, borderColor: colors.accentSoft },
+  stepperBtn: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   stepperPressed: { transform: [{ scale: 0.92 }] },
-  stepperHint: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink3, marginTop: 3 },
-  powerBox: { backgroundColor: colors.accentTint, borderRadius: 12, borderWidth: 1, borderColor: colors.accentSoft, padding: 12 },
+  stepperHint: { fontFamily: uiFont(500), fontSize: 11, marginTop: 3 },
+  powerBox: { borderRadius: 12, borderWidth: 1, padding: 12 },
   powerHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 },
-  powerLabel: { fontFamily: uiFont(700), fontSize: 11, color: colors.ink2, letterSpacing: 0.8, textTransform: 'uppercase' },
-  powerAmount: { fontFamily: uiFont(800), fontSize: 15, color: colors.accentInk },
-  powerOf: { fontFamily: uiFont(600), fontSize: 12, color: colors.ink2 },
-  powerReason: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, lineHeight: 16, marginTop: 6 },
+  powerLabel: { fontFamily: uiFont(700), fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
+  powerAmount: { fontFamily: uiFont(800), fontSize: 15 },
+  powerOf: { fontFamily: uiFont(600), fontSize: 12 },
+  powerReason: { fontFamily: uiFont(500), fontSize: 11.5, lineHeight: 16, marginTop: 6 },
   purposeWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  purposeChip: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 999, backgroundColor: colors.surface2, borderWidth: 1.5, borderColor: colors.line },
-  purposeChipOn: { backgroundColor: colors.accentTint, borderColor: colors.accent },
-  purposeChipText: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink2 },
-  purposeChipTextOn: { color: colors.accentInk },
-  sendBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 52, borderRadius: 999, backgroundColor: colors.accentInk, marginTop: 18 },
-  sendBtnLocked: { backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line },
+  purposeChip: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 999, borderWidth: 1.5 },
+  purposeChipOn: {},
+  purposeChipText: { fontFamily: uiFont(600), fontSize: 13 },
+  purposeChipTextOn: {},
+  sendBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 52, borderRadius: 999, marginTop: 18 },
+  sendBtnLocked: { borderWidth: 1 },
   sendBtnText: { fontFamily: uiFont(700), fontSize: 15, color: colors.onAccent },
-  sendLockedHint: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, textAlign: 'center', marginTop: 8, lineHeight: 16 },
+  sendLockedHint: { fontFamily: uiFont(500), fontSize: 11.5, textAlign: 'center', marginTop: 8, lineHeight: 16 },
 
   resultBox: {
     marginTop: 16,
@@ -920,23 +924,23 @@ const styles = StyleSheet.create({
   sentCheckCircle: { width: 18, height: 18, borderRadius: 9, backgroundColor: DEC_GREEN, alignItems: 'center', justifyContent: 'center' },
   sentBadgeText: { fontFamily: uiFont(700), fontSize: 11.5, color: DEC_GREEN, letterSpacing: 0.2, textTransform: 'uppercase' },
   resultHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  resultTitle: { flex: 1, marginRight: 8, fontFamily: uiFont(700), fontSize: 13.5, color: colors.ink },
+  resultTitle: { flex: 1, marginRight: 8, fontFamily: uiFont(700), fontSize: 13.5 },
   decisionPill: { borderRadius: 999, paddingHorizontal: 11, paddingVertical: 4 },
   decisionPillText: { fontFamily: uiFont(700), fontSize: 12 },
   offerAmounts: { flexDirection: 'row', gap: 28, marginTop: 12 },
-  amountLabel: { fontFamily: uiFont(600), fontSize: 11, color: colors.ink2, marginBottom: 3 },
+  amountLabel: { fontFamily: uiFont(600), fontSize: 11, marginBottom: 3 },
   reasonsBlock: { marginTop: 12, gap: 5 },
   reasonRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 7 },
-  reasonText: { flex: 1, fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, lineHeight: 18 },
-  resultFoot: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, marginTop: 12 },
+  reasonText: { flex: 1, fontFamily: uiFont(500), fontSize: 12.5, lineHeight: 18 },
+  resultFoot: { fontFamily: uiFont(500), fontSize: 11.5, marginTop: 12 },
   acceptBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: 999, backgroundColor: DEC_GREEN, marginTop: 14 },
   acceptBtnText: { fontFamily: uiFont(700), fontSize: 14.5, color: colors.onAccent },
-  noticeBox: { marginTop: 14, backgroundColor: colors.surface2, borderRadius: 12, padding: 12, gap: 4 },
+  noticeBox: { marginTop: 14, borderRadius: 12, padding: 12, gap: 4 },
   noticeError: { backgroundColor: '#c5402f14' },
-  noticeText: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, lineHeight: 18 },
+  noticeText: { fontFamily: uiFont(500), fontSize: 12.5, lineHeight: 18 },
 
   /* offline fallback */
   fallbackCard: { padding: 18, marginTop: 14 },
-  fallbackTitle: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.ink },
-  fallbackSub: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, lineHeight: 17, marginTop: 4 },
+  fallbackTitle: { fontFamily: uiFont(700), fontSize: 13.5 },
+  fallbackSub: { fontFamily: uiFont(500), fontSize: 12, lineHeight: 17, marginTop: 4 },
 });

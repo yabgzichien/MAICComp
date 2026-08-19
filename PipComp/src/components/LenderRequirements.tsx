@@ -22,21 +22,19 @@ import {
   type RequirementStatus,
 } from '../lib/lenderCriteria';
 import type { LenderProfile } from '../lib/lenderDirectory';
-import { colors, numFont, uiFont } from '../theme';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
+import { numFont, uiFont } from '../theme';
 import { Icon } from './Icon';
-
-const STATUS_COLOR: Record<RequirementStatus, string> = {
-  met: colors.accentInk,
-  unmet: colors.amber,
-  info: colors.ink3,
-};
 
 /** An unmet bar is amber, never red: it is something to work toward (that is what Build my
  *  score is for), not a rejection. */
 function StatusDot({ status }: { status: RequirementStatus }) {
-  if (status === 'info') return <Icon name="dots" size={7} color={colors.ink3} />;
-  if (status === 'met') return <Icon name="check" size={13} color={colors.accentInk} stroke={2.6} />;
-  return <Icon name="alert" size={13} color={colors.amber} stroke={2.2} />;
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
+  if (status === 'info') return <Icon name="dots" size={7} color={colorTheme.ink3} />;
+  if (status === 'met') return <Icon name="check" size={13} color={theme.accentInk} stroke={2.6} />;
+  return <Icon name="alert" size={13} color={colorTheme.amber} stroke={2.2} />;
 }
 
 export function LenderRequirements({
@@ -52,6 +50,13 @@ export function LenderRequirements({
   style?: any;
 }) {
   const [open, setOpen] = useState(initiallyOpen);
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
+  const statusColor: Record<RequirementStatus, string> = {
+    met: theme.accentInk,
+    unmet: colorTheme.amber,
+    info: colorTheme.ink3,
+  };
   const criteria = lenderCriteria(lender);
   const rows = requirementRows(criteria, you);
   const tiers = tierRows(criteria, you);
@@ -60,7 +65,7 @@ export function LenderRequirements({
   const yourTier = you ? reachableTier(criteria, you) : null;
 
   return (
-    <View style={[styles.box, style]}>
+    <View style={[styles.box, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line }, style]}>
       <Pressable
         onPress={() => setOpen((o) => !o)}
         style={styles.head}
@@ -69,51 +74,51 @@ export function LenderRequirements({
         accessibilityLabel={`${lender.name} requirements and rates. ${criteriaSummary(criteria)}`}
       >
         <View style={{ flex: 1 }}>
-          <Text style={styles.title} numberOfLines={1}>
+          <Text style={[styles.title, { color: colorTheme.ink }]} numberOfLines={1}>
             What {lender.name} looks for
           </Text>
-          <Text style={styles.summary} numberOfLines={2}>
+          <Text style={[styles.summary, { color: colorTheme.ink2 }]} numberOfLines={2}>
             {criteriaBarsSummary(criteria)}
           </Text>
         </View>
-        <View style={styles.rateChip}>
-          <Text style={styles.rateChipText}>{aprRangeLabel(criteria)}</Text>
+        <View style={[styles.rateChip, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]}>
+          <Text style={[styles.rateChipText, { color: theme.accentInk }]}>{aprRangeLabel(criteria)}</Text>
         </View>
-        <Icon name={open ? 'chevronDown' : 'chevronRight'} size={15} color={colors.ink3} />
+        <Icon name={open ? 'chevronDown' : 'chevronRight'} size={15} color={colorTheme.ink3} />
       </Pressable>
 
       {open && (
-        <View style={styles.body}>
-          <Text style={styles.sectionLabel}>THEIR REQUIREMENTS</Text>
+        <View style={[styles.body, { borderTopColor: colorTheme.line2 }]}>
+          <Text style={[styles.sectionLabel, { color: colorTheme.ink2 }]}>THEIR REQUIREMENTS</Text>
           {rows.map((r) => (
             <View key={r.id} style={styles.reqRow}>
               <View style={styles.reqIcon}>
                 <StatusDot status={r.status} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.reqLabel}>{r.label}</Text>
-                {r.detail && <Text style={[styles.reqDetail, { color: STATUS_COLOR[r.status] }]}>{r.detail}</Text>}
+                <Text style={[styles.reqLabel, { color: colorTheme.ink }]}>{r.label}</Text>
+                {r.detail && <Text style={[styles.reqDetail, { color: statusColor[r.status] }]}>{r.detail}</Text>}
               </View>
             </View>
           ))}
 
-          <Text style={[styles.sectionLabel, { marginTop: 14 }]}>THEIR RATES</Text>
+          <Text style={[styles.sectionLabel, { color: colorTheme.ink2 }, { marginTop: 14 }]}>THEIR RATES</Text>
           {tiers.map((t) => (
-            <View key={t.id} style={[styles.tierRow, yourTier?.id === t.id && styles.tierRowYours]}>
+            <View key={t.id} style={[styles.tierRow, { borderTopColor: colorTheme.line2 }, yourTier?.id === t.id && { backgroundColor: theme.accentTint, borderRadius: 8, paddingHorizontal: 8 }]}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.tierLabel} numberOfLines={1}>
+                <Text style={[styles.tierLabel, { color: colorTheme.ink }]} numberOfLines={1}>
                   {t.label}
                   {yourTier?.id === t.id ? ' · your tier today' : ''}
                 </Text>
-                <Text style={styles.tierTerms}>
+                <Text style={[styles.tierTerms, { color: colorTheme.ink2 }]}>
                   Score {t.minScore}+ · RM{Math.round(t.minAmount).toLocaleString('en-MY')}–
                   {Math.round(t.maxAmount).toLocaleString('en-MY')} · {t.tenorMonths} months
                 </Text>
               </View>
-              <Text style={[styles.tierApr, you && !t.qualified && styles.tierAprLocked]}>{aprPct(t.apr)}</Text>
+              <Text style={[styles.tierApr, { color: theme.accentInk }, you && !t.qualified && { color: colorTheme.ink3 }]}>{aprPct(t.apr)}</Text>
             </View>
           ))}
-          <Text style={styles.foot}>
+          <Text style={[styles.foot, { color: colorTheme.ink3 }]}>
             Published by {lender.name}. Repayment terms run {tenorRangeLabel(criteria)}. Your rate is the tier your
             score and recorded history reach, and the amount is capped by what your cash flow supports.
           </Text>
@@ -124,27 +129,25 @@ export function LenderRequirements({
 }
 
 const styles = StyleSheet.create({
-  box: { backgroundColor: colors.surface2, borderRadius: 14, borderWidth: 1, borderColor: colors.line, overflow: 'hidden' },
+  box: { borderRadius: 14, borderWidth: 1, overflow: 'hidden' },
   head: { flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 12, paddingVertical: 11 },
-  title: { fontFamily: uiFont(700), fontSize: 12.5, color: colors.ink },
-  summary: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, marginTop: 2, lineHeight: 15 },
-  rateChip: { backgroundColor: colors.accentTint, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4, borderWidth: 1, borderColor: colors.accentSoft },
-  rateChipText: { fontFamily: numFont(700), fontSize: 11, color: colors.accentInk },
+  title: { fontFamily: uiFont(700), fontSize: 12.5 },
+  summary: { fontFamily: uiFont(500), fontSize: 11.5, marginTop: 2, lineHeight: 15 },
+  rateChip: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4, borderWidth: 1 },
+  rateChipText: { fontFamily: numFont(700), fontSize: 11 },
 
-  body: { paddingHorizontal: 12, paddingBottom: 12, borderTopWidth: 1, borderTopColor: colors.line2 },
-  sectionLabel: { fontFamily: uiFont(700), fontSize: 10.5, letterSpacing: 0.9, color: colors.ink2, marginTop: 12, marginBottom: 6 },
+  body: { paddingHorizontal: 12, paddingBottom: 12, borderTopWidth: 1 },
+  sectionLabel: { fontFamily: uiFont(700), fontSize: 10.5, letterSpacing: 0.9, marginTop: 12, marginBottom: 6 },
 
   reqRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingVertical: 4 },
   reqIcon: { width: 15, alignItems: 'center', paddingTop: 2 },
-  reqLabel: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink, lineHeight: 17 },
+  reqLabel: { fontFamily: uiFont(500), fontSize: 12, lineHeight: 17 },
   reqDetail: { fontFamily: uiFont(600), fontSize: 11.5, marginTop: 1 },
 
-  tierRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7, borderTopWidth: 1, borderTopColor: colors.line2 },
-  tierRowYours: { backgroundColor: colors.accentTint, borderRadius: 8, paddingHorizontal: 8 },
-  tierLabel: { fontFamily: uiFont(700), fontSize: 12, color: colors.ink },
-  tierTerms: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink2, marginTop: 2, lineHeight: 15 },
-  tierApr: { fontFamily: numFont(700), fontSize: 13.5, color: colors.accentInk },
-  tierAprLocked: { color: colors.ink3 },
+  tierRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7, borderTopWidth: 1 },
+  tierLabel: { fontFamily: uiFont(700), fontSize: 12 },
+  tierTerms: { fontFamily: uiFont(500), fontSize: 11, marginTop: 2, lineHeight: 15 },
+  tierApr: { fontFamily: numFont(700), fontSize: 13.5 },
 
-  foot: { fontFamily: uiFont(500), fontSize: 11, color: colors.ink3, lineHeight: 15, marginTop: 10 },
+  foot: { fontFamily: uiFont(500), fontSize: 11, lineHeight: 15, marginTop: 10 },
 });

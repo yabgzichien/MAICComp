@@ -19,7 +19,9 @@ import { fmt } from '../lib/format';
 import { dependableSurplus, serviceableCapacity, type IncomeFloor } from '../lib/incomeFloor';
 import type { ExpenseStructure } from '../lib/spendingProfile';
 import type { DetectedObligation } from '../lib/obligations';
-import { colors, numFont, uiFont } from '../theme';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
+import { numFont, uiFont } from '../theme';
 
 const CHART_HEIGHT = 78;
 const SWEEP_MS = 700;
@@ -35,14 +37,12 @@ const SWEEP_MS = 700;
  * ratio — visibly different in hue but not in weight, which is no help at a glance or to a
  * colour-blind reader. These three land at roughly 2.7:1 and 2.3:1 between neighbours.
  */
-const BUCKET = {
-  /** Near-black: heaviest, already spoken for. */
-  committed: colors.ink,
-  /** Deep green: compressible, never removable. */
-  essential: colors.accentInk,
-  /** Light green, the top of the app's existing band ramp: the borrower's freedom, not a vice. */
-  flexible: '#3ab07a',
-} as const;
+/** Light green, the top of the app's existing band ramp: the borrower's freedom, not a vice. */
+const FLEXIBLE_COLOR = '#3ab07a';
+// `committed` tracks colorTheme.ink (heaviest, already spoken for) and is resolved inside each
+// component below since it needs the live hook. `essential` (deep green: compressible, never
+// removable) tracks the user's accent preset, so it is read live via useAccent() at each call
+// site below instead of living in this static map.
 
 /** "2026-03" → "Mar". Pure and locale-free (Hermes has locale-data gaps, see lib/format.ts). */
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -58,9 +58,11 @@ const rm = (n: number): string => `RM${fmt(Math.round(Math.abs(n))).replace(/\.0
 /** One month's bar. Months that fell below the floor are marked rather than hidden — the
  *  exceptions are the honest part of the claim. */
 function IncomeBar({ total, max, below, delay }: { total: number; max: number; below: boolean; delay: number }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const target = max > 0 ? Math.max(2, (total / max) * CHART_HEIGHT) : 2;
   const h = useEasedFrom(0, target, SWEEP_MS + delay);
-  return <View style={[styles.bar, { height: h, backgroundColor: below ? colors.amber : colors.accent }]} />;
+  return <View style={[styles.bar, { height: h, backgroundColor: below ? colorTheme.amber : theme.accent }]} />;
 }
 
 /**
@@ -70,21 +72,22 @@ function IncomeBar({ total, max, below, delay }: { total: number; max: number; b
  * but a line the borrower cleared in 5 of 6 months is a number a lender can underwrite.
  */
 export function IncomeFloorCard({ floor, sourceCount }: { floor: IncomeFloor; sourceCount: number }) {
+  const colorTheme = useThemeColors();
   const max = floor.months.reduce((m, x) => Math.max(m, x.total), 0);
   // Fewer months than the floor needs: show what exists, promise nothing.
   if (!floor.reliable) {
     return (
       <Card style={styles.card}>
         <View style={styles.head}>
-          <Text style={styles.kicker}>HOW YOU EARN</Text>
+          <Text style={[styles.kicker, { color: colorTheme.ink2 }]}>HOW YOU EARN</Text>
           <InfoButton entry="income_floor" />
         </View>
-        <Text style={styles.thinTitle}>
+        <Text style={[styles.thinTitle, { color: colorTheme.ink }]}>
           {floor.monthsWithIncome === 0
             ? 'No income recorded yet'
             : `${floor.monthsWithIncome} month${floor.monthsWithIncome === 1 ? '' : 's'} recorded`}
         </Text>
-        <Text style={styles.body}>
+        <Text style={[styles.body, { color: colorTheme.ink2 }]}>
           Add a little more history and we can show the income you can count on, not just an average.
         </Text>
       </Card>
@@ -98,15 +101,15 @@ export function IncomeFloorCard({ floor, sourceCount }: { floor: IncomeFloor; so
   return (
     <Card style={styles.card}>
       <View style={styles.head}>
-        <Text style={styles.kicker}>HOW YOU EARN</Text>
+        <Text style={[styles.kicker, { color: colorTheme.ink2 }]}>HOW YOU EARN</Text>
         <InfoButton entry="income_floor" />
       </View>
 
-      <Text style={styles.hero}>
+      <Text style={[styles.hero, { color: colorTheme.ink }]}>
         {rm(floor.floor)}
-        <Text style={styles.heroSuffix}> you can count on</Text>
+        <Text style={[styles.heroSuffix, { color: colorTheme.ink2 }]}> you can count on</Text>
       </Text>
-      <Text style={styles.sub}>
+      <Text style={[styles.sub, { color: colorTheme.ink2 }]}>
         Cleared in {floor.monthsAtOrAboveFloor} of your last {floor.monthsWithIncome} months
       </Text>
 
@@ -120,22 +123,27 @@ export function IncomeFloorCard({ floor, sourceCount }: { floor: IncomeFloor; so
           {/* The floor, drawn across every month. Lives INSIDE the plot row, whose height is
               exactly CHART_HEIGHT — anchoring it to the outer container instead would offset it
               by the month-label row and silently draw the line at the wrong level. */}
-          <View style={[styles.floorLine, { bottom: max > 0 ? (floor.floor / max) * CHART_HEIGHT : 0 }]} />
+          <View
+            style={[
+              styles.floorLine,
+              { backgroundColor: colorTheme.ink, bottom: max > 0 ? (floor.floor / max) * CHART_HEIGHT : 0 },
+            ]}
+          />
         </View>
         <View style={styles.monthRow}>
           {floor.months.map((m) => (
-            <Text key={m.key} style={styles.monthLabel} numberOfLines={1}>
+            <Text key={m.key} style={[styles.monthLabel, { color: colorTheme.ink3 }]} numberOfLines={1}>
               {monthLabel(m.key)}
             </Text>
           ))}
         </View>
       </View>
 
-      <Text style={styles.stats}>
+      <Text style={[styles.stats, { color: colorTheme.ink3 }]}>
         Average {rm(floor.average)} · Best {rm(floor.best)} · {sourceCount} source{sourceCount === 1 ? '' : 's'}
       </Text>
 
-      <Text style={styles.body}>
+      <Text style={[styles.body, { color: colorTheme.ink2 }]}>
         {floor.floor > floor.average
           ? 'One weak month pulls your average below what you normally earn. The floor is the fairer number, and the one a lender can rely on.'
           : 'Your income moves month to month. That is normal for the work you do, and a lender can still underwrite the floor.'}
@@ -165,17 +173,19 @@ export function ExpenseStructureCard({
   floor: IncomeFloor;
   obligations: DetectedObligation[];
 }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const [open, setOpen] = useState(false);
 
   if (structure.monthlyTotal <= 0) {
     return (
       <Card style={styles.card}>
         <View style={styles.head}>
-          <Text style={styles.kicker}>HOW YOU SPEND</Text>
+          <Text style={[styles.kicker, { color: colorTheme.ink2 }]}>HOW YOU SPEND</Text>
           <InfoButton entry="committed_spend" />
         </View>
-        <Text style={styles.thinTitle}>No spending recorded yet</Text>
-        <Text style={styles.body}>Once there is some spending here we can show how much of your month is already spoken for.</Text>
+        <Text style={[styles.thinTitle, { color: colorTheme.ink }]}>No spending recorded yet</Text>
+        <Text style={[styles.body, { color: colorTheme.ink2 }]}>Once there is some spending here we can show how much of your month is already spoken for.</Text>
       </Card>
     );
   }
@@ -188,26 +198,26 @@ export function ExpenseStructureCard({
   return (
     <Card style={styles.card}>
       <View style={styles.head}>
-        <Text style={styles.kicker}>HOW YOU SPEND</Text>
+        <Text style={[styles.kicker, { color: colorTheme.ink2 }]}>HOW YOU SPEND</Text>
         <InfoButton entry="committed_spend" />
       </View>
 
       {floor.reliable ? (
         <>
-          <Text style={[styles.hero, short && { color: colors.amber }]}>
+          <Text style={[styles.hero, { color: colorTheme.ink }, short && { color: colorTheme.amber }]}>
             {rm(surplus)}
-            <Text style={styles.heroSuffix}>{short ? ' short in a weak month' : ' left over, even in a weak month'}</Text>
+            <Text style={[styles.heroSuffix, { color: colorTheme.ink2 }]}>{short ? ' short in a weak month' : ' left over, even in a weak month'}</Text>
           </Text>
-          <Text style={styles.sub}>
+          <Text style={[styles.sub, { color: colorTheme.ink2 }]}>
             {short
               ? `In your weakest months, spending runs ahead of income. ${rm(flexible)} of it is flexible.`
               : `Your ${rm(floor.floor)} floor, after ${rm(monthlyTotal)} of typical spending`}
           </Text>
         </>
       ) : (
-        <Text style={styles.hero}>
+        <Text style={[styles.hero, { color: colorTheme.ink }]}>
           {rm(monthlyTotal)}
-          <Text style={styles.heroSuffix}> a month, typically</Text>
+          <Text style={[styles.heroSuffix, { color: colorTheme.ink2 }]}> a month, typically</Text>
         </Text>
       )}
 
@@ -219,15 +229,15 @@ export function ExpenseStructureCard({
           `${rm(essentialVariable)}, flexible ${rm(flexible)}.`
         }
       >
-        {committed > 0 && <Segment amount={committed} total={monthlyTotal} color={BUCKET.committed} />}
-        {essentialVariable > 0 && <Segment amount={essentialVariable} total={monthlyTotal} color={BUCKET.essential} />}
-        {flexible > 0 && <Segment amount={flexible} total={monthlyTotal} color={BUCKET.flexible} />}
+        {committed > 0 && <Segment amount={committed} total={monthlyTotal} color={colorTheme.ink} />}
+        {essentialVariable > 0 && <Segment amount={essentialVariable} total={monthlyTotal} color={theme.accentInk} />}
+        {flexible > 0 && <Segment amount={flexible} total={monthlyTotal} color={FLEXIBLE_COLOR} />}
       </View>
 
       <View style={styles.legend}>
-        {committed > 0 && <LegendItem color={BUCKET.committed} label="Committed" amount={committed} note="fixed" />}
-        {essentialVariable > 0 && <LegendItem color={BUCKET.essential} label="Essential" amount={essentialVariable} note="can compress" />}
-        {flexible > 0 && <LegendItem color={BUCKET.flexible} label="Flexible" amount={flexible} note="could redirect" />}
+        {committed > 0 && <LegendItem color={colorTheme.ink} label="Committed" amount={committed} note="fixed" />}
+        {essentialVariable > 0 && <LegendItem color={theme.accentInk} label="Essential" amount={essentialVariable} note="can compress" />}
+        {flexible > 0 && <LegendItem color={FLEXIBLE_COLOR} label="Flexible" amount={flexible} note="could redirect" />}
       </View>
 
       {obligations.length > 0 && (
@@ -239,22 +249,22 @@ export function ExpenseStructureCard({
             style={styles.obligationsToggle}
             hitSlop={6}
           >
-            <Icon name={open ? 'chevronDown' : 'chevronRight'} size={13} color={colors.ink2} stroke={2} />
-            <Text style={styles.obligationsToggleText}>
+            <Icon name={open ? 'chevronDown' : 'chevronRight'} size={13} color={colorTheme.ink2} stroke={2} />
+            <Text style={[styles.obligationsToggleText, { color: colorTheme.ink2 }]}>
               The {rm(committed)} you are committed to ({obligations.length} item{obligations.length === 1 ? '' : 's'})
             </Text>
           </Pressable>
           {open && (
-            <FadeIn style={styles.obligationsBody} duration={220} offset={4}>
+            <FadeIn style={[styles.obligationsBody, { backgroundColor: colorTheme.surface2 }]} duration={220} offset={4}>
               {obligations.map((o, i) => (
                 <View key={i} style={styles.obligationRow}>
                   <View style={styles.obligationHead}>
-                    <Text style={styles.obligationLabel} numberOfLines={1}>
+                    <Text style={[styles.obligationLabel, { color: colorTheme.ink }]} numberOfLines={1}>
                       {o.label}
                     </Text>
-                    <Text style={styles.obligationAmount}>{rm(o.monthlyAmount)}</Text>
+                    <Text style={[styles.obligationAmount, { color: colorTheme.ink }]}>{rm(o.monthlyAmount)}</Text>
                   </View>
-                  <Text style={styles.obligationMeta}>
+                  <Text style={[styles.obligationMeta, { color: colorTheme.ink3 }]}>
                     {o.kind} · seen in {o.monthsObserved} months
                   </Text>
                 </View>
@@ -264,7 +274,7 @@ export function ExpenseStructureCard({
         </View>
       )}
 
-      <Text style={styles.body}>
+      <Text style={[styles.body, { color: colorTheme.ink2 }]}>
         {committed <= 0
           ? 'Nothing recurring was detected, so none of your month is locked into fixed commitments yet.'
           : `${Math.round(structure.committedRatio * 100)}% of your spending is locked in. ` +
@@ -299,6 +309,8 @@ export function MonthVsNormalCard({
   floor: IncomeFloor;
   structure: ExpenseStructure;
 }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const hasSpend = structure.monthlyTotal > 0;
   if (!floor.reliable && !hasSpend) return null;
 
@@ -312,7 +324,7 @@ export function MonthVsNormalCard({
           the committed/essential/flexible split below, and each has its own glossary entry.
           Same pattern as the score+band pair of (i) buttons under the credit gauge. */}
       <View style={styles.head}>
-        <Text style={styles.kicker}>AGAINST YOUR NORMAL</Text>
+        <Text style={[styles.kicker, { color: colorTheme.ink2 }]}>AGAINST YOUR NORMAL</Text>
         <View style={styles.headInfoGroup}>
           <InfoButton entry="income_floor" />
           {hasSpend && <InfoButton entry="committed_spend" />}
@@ -328,8 +340,8 @@ export function MonthVsNormalCard({
             `your usual floor of ${rm(floor.floor)}.`
           }
         >
-          <Text style={styles.compareValue}>{rm(monthIncome)}</Text>
-          <Text style={[styles.compareDelta, { color: above ? colors.accent : colors.amber }]}>
+          <Text style={[styles.compareValue, { color: colorTheme.ink }]}>{rm(monthIncome)}</Text>
+          <Text style={[styles.compareDelta, { color: above ? theme.accent : colorTheme.amber }]}>
             {above ? '▲' : '▼'} {rm(delta)} {above ? 'above' : 'below'} your usual {rm(floor.floor)}
           </Text>
         </View>
@@ -345,16 +357,16 @@ export function MonthVsNormalCard({
               `variable ${rm(essentialVariable)}, flexible ${rm(flexible)}.`
             }
           >
-            {committed > 0 && <Segment amount={committed} total={monthlyTotal} color={BUCKET.committed} />}
-            {essentialVariable > 0 && <Segment amount={essentialVariable} total={monthlyTotal} color={BUCKET.essential} />}
-            {flexible > 0 && <Segment amount={flexible} total={monthlyTotal} color={BUCKET.flexible} />}
+            {committed > 0 && <Segment amount={committed} total={monthlyTotal} color={colorTheme.ink} />}
+            {essentialVariable > 0 && <Segment amount={essentialVariable} total={monthlyTotal} color={theme.accentInk} />}
+            {flexible > 0 && <Segment amount={flexible} total={monthlyTotal} color={FLEXIBLE_COLOR} />}
           </View>
           {/* Compact legend: the recap is a glance, so the buckets carry a figure each and no
               explanatory note. The credit screen is where the fuller reading lives. */}
           <View style={styles.compactLegend}>
-            {committed > 0 && <CompactLegendItem color={BUCKET.committed} label="Committed" amount={committed} />}
-            {essentialVariable > 0 && <CompactLegendItem color={BUCKET.essential} label="Essential" amount={essentialVariable} />}
-            {flexible > 0 && <CompactLegendItem color={BUCKET.flexible} label="Flexible" amount={flexible} />}
+            {committed > 0 && <CompactLegendItem color={colorTheme.ink} label="Committed" amount={committed} />}
+            {essentialVariable > 0 && <CompactLegendItem color={theme.accentInk} label="Essential" amount={essentialVariable} />}
+            {flexible > 0 && <CompactLegendItem color={FLEXIBLE_COLOR} label="Flexible" amount={flexible} />}
           </View>
         </>
       )}
@@ -363,24 +375,26 @@ export function MonthVsNormalCard({
 }
 
 function CompactLegendItem({ color, label, amount }: { color: string; label: string; amount: number }) {
+  const colorTheme = useThemeColors();
   return (
     <View style={styles.compactLegendItem}>
       <View style={[styles.legendDot, { backgroundColor: color }]} />
-      <Text style={styles.compactLegendLabel}>{label}</Text>
-      <Text style={styles.compactLegendAmount}>{rm(amount)}</Text>
+      <Text style={[styles.compactLegendLabel, { color: colorTheme.ink2 }]}>{label}</Text>
+      <Text style={[styles.compactLegendAmount, { color: colorTheme.ink }]}>{rm(amount)}</Text>
     </View>
   );
 }
 
 function LegendItem({ color, label, amount, note }: { color: string; label: string; amount: number; note: string }) {
+  const colorTheme = useThemeColors();
   return (
     <View style={styles.legendItem}>
       <View style={styles.legendHead}>
         <View style={[styles.legendDot, { backgroundColor: color }]} />
-        <Text style={styles.legendLabel}>{label}</Text>
+        <Text style={[styles.legendLabel, { color: colorTheme.ink2 }]}>{label}</Text>
       </View>
-      <Text style={styles.legendAmount}>{rm(amount)}</Text>
-      <Text style={styles.legendNote}>{note}</Text>
+      <Text style={[styles.legendAmount, { color: colorTheme.ink }]}>{rm(amount)}</Text>
+      <Text style={[styles.legendNote, { color: colorTheme.ink3 }]}>{note}</Text>
     </View>
   );
 }
@@ -391,22 +405,22 @@ const styles = StyleSheet.create({
   // Deliberately NOT right-aligned: every other card's InfoButton sits packed right after its
   // kicker text (see `head` above), and this should read the same way, just with two icons.
   headInfoGroup: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  kicker: { fontFamily: uiFont(600), fontSize: 10.5, letterSpacing: 1, color: colors.ink2 },
+  kicker: { fontFamily: uiFont(600), fontSize: 10.5, letterSpacing: 1 },
 
-  hero: { fontFamily: numFont(700), fontSize: 26, color: colors.ink, marginTop: 10 },
-  heroSuffix: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink2 },
-  sub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 4, lineHeight: 18 },
-  thinTitle: { fontFamily: uiFont(700), fontSize: 15, color: colors.ink, marginTop: 10 },
-  body: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, marginTop: 10, lineHeight: 17.5 },
-  stats: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink3, marginTop: 10 },
+  hero: { fontFamily: numFont(700), fontSize: 26, marginTop: 10 },
+  heroSuffix: { fontFamily: uiFont(600), fontSize: 13 },
+  sub: { fontFamily: uiFont(500), fontSize: 12.5, marginTop: 4, lineHeight: 18 },
+  thinTitle: { fontFamily: uiFont(700), fontSize: 15, marginTop: 10 },
+  body: { fontFamily: uiFont(500), fontSize: 12, marginTop: 10, lineHeight: 17.5 },
+  stats: { fontFamily: uiFont(500), fontSize: 11.5, marginTop: 10 },
 
   chart: { marginTop: 14 },
   bars: { flexDirection: 'row', alignItems: 'flex-end', height: CHART_HEIGHT, gap: 4, position: 'relative' },
   barSlot: { flex: 1, justifyContent: 'flex-end' },
   bar: { borderRadius: 3, width: '100%' },
-  floorLine: { position: 'absolute', left: 0, right: 0, height: 2, borderRadius: 1, backgroundColor: colors.ink },
+  floorLine: { position: 'absolute', left: 0, right: 0, height: 2, borderRadius: 1 },
   monthRow: { flexDirection: 'row', gap: 4, marginTop: 5 },
-  monthLabel: { flex: 1, textAlign: 'center', fontFamily: uiFont(500), fontSize: 9.5, color: colors.ink3 },
+  monthLabel: { flex: 1, textAlign: 'center', fontFamily: uiFont(500), fontSize: 9.5 },
 
   stack: { flexDirection: 'row', height: 12, borderRadius: 999, overflow: 'hidden', marginTop: 14, gap: 2 },
   segment: { flexBasis: 0, height: 12 },
@@ -415,28 +429,28 @@ const styles = StyleSheet.create({
   legendItem: { flex: 1, gap: 1 },
   legendHead: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   legendDot: { width: 7, height: 7, borderRadius: 4 },
-  legendLabel: { fontFamily: uiFont(600), fontSize: 11, color: colors.ink2 },
-  legendAmount: { fontFamily: numFont(700), fontSize: 12.5, color: colors.ink },
-  legendNote: { fontFamily: uiFont(500), fontSize: 10, color: colors.ink3 },
+  legendLabel: { fontFamily: uiFont(600), fontSize: 11 },
+  legendAmount: { fontFamily: numFont(700), fontSize: 12.5 },
+  legendNote: { fontFamily: uiFont(500), fontSize: 10 },
 
   // Recap variant: the screen lays its own cards out with horizontal margins, so this one
   // carries them rather than relying on a parent's padding.
   recapCard: { marginHorizontal: 16, marginTop: 4, padding: 16, borderRadius: 20 },
   compactLegend: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 10, columnGap: 16, rowGap: 6 },
   compactLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  compactLegendLabel: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2 },
-  compactLegendAmount: { fontFamily: numFont(700), fontSize: 12, color: colors.ink },
+  compactLegendLabel: { fontFamily: uiFont(500), fontSize: 12 },
+  compactLegendAmount: { fontFamily: numFont(700), fontSize: 12 },
   compare: { marginTop: 10 },
-  compareValue: { fontFamily: numFont(700), fontSize: 24, color: colors.ink },
+  compareValue: { fontFamily: numFont(700), fontSize: 24 },
   compareDelta: { fontFamily: uiFont(600), fontSize: 12.5, marginTop: 3 },
 
   obligations: { marginTop: 12 },
   obligationsToggle: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  obligationsToggleText: { fontFamily: uiFont(600), fontSize: 12, color: colors.ink2, flex: 1 },
-  obligationsBody: { marginTop: 8, backgroundColor: colors.surface2, borderRadius: 10, padding: 10, gap: 8 },
+  obligationsToggleText: { fontFamily: uiFont(600), fontSize: 12, flex: 1 },
+  obligationsBody: { marginTop: 8, borderRadius: 10, padding: 10, gap: 8 },
   obligationRow: { gap: 2 },
   obligationHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  obligationLabel: { fontFamily: uiFont(600), fontSize: 12, color: colors.ink, flex: 1 },
-  obligationAmount: { fontFamily: numFont(700), fontSize: 12, color: colors.ink },
-  obligationMeta: { fontFamily: uiFont(500), fontSize: 10.5, color: colors.ink3 },
+  obligationLabel: { fontFamily: uiFont(600), fontSize: 12, flex: 1 },
+  obligationAmount: { fontFamily: numFont(700), fontSize: 12 },
+  obligationMeta: { fontFamily: uiFont(500), fontSize: 10.5 },
 });

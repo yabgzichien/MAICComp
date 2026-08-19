@@ -4,8 +4,10 @@ import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { catColorsForHue } from '../lib/catColors';
 import type { TxnType } from '../lib/types';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
 import { useAppData } from '../state/store';
-import { colors, radius, uiFont } from '../theme';
+import { radius, uiFont } from '../theme';
 import { Icon, type IconName } from './Icon';
 import { BtnLabel, CatBadge, PrimaryButton } from './ui';
 
@@ -26,6 +28,8 @@ export function AddCategoryModal({
   onCreated: (categoryId: string) => void;
 }) {
   const insets = useSafeAreaInsets();
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const { addCategory } = useAppData();
   const [name, setName] = useState('');
   const [icon, setIcon] = useState<string>('cart');
@@ -74,11 +78,11 @@ export function AddCategoryModal({
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose} />
       <View style={[styles.center, { pointerEvents: 'box-none' }]}>
-        <View style={[styles.card, { marginBottom: insets.bottom }]}>
+        <View style={[styles.card, { backgroundColor: colorTheme.surface, marginBottom: insets.bottom }]}>
           <View style={styles.head}>
-            <Text style={styles.title}>New {kind} category</Text>
+            <Text style={[styles.title, { color: colorTheme.ink }]}>New {kind} category</Text>
             <Pressable onPress={onClose} hitSlop={8}>
-              <Icon name="x" size={20} color={colors.ink2} />
+              <Icon name="x" size={20} color={colorTheme.ink2} />
             </Pressable>
           </View>
 
@@ -88,20 +92,20 @@ export function AddCategoryModal({
               value={name}
               onChangeText={setName}
               placeholder="Category name"
-              placeholderTextColor={colors.ink3}
-              style={styles.input}
+              placeholderTextColor={colorTheme.ink3}
+              style={[styles.input, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line, color: colorTheme.ink }]}
               maxLength={22}
               autoFocus
             />
           </View>
 
-          <Text style={styles.pickLabel}>Icon</Text>
+          <Text style={[styles.pickLabel, { color: colorTheme.ink2 }]}>Icon</Text>
           <View style={styles.choiceWrap}>
             {iconChoices.map((ic) => {
               const on = ic === icon;
               return (
-                <Pressable key={ic} onPress={() => setIcon(ic)} style={[styles.iconChoice, on && styles.iconChoiceOn]}>
-                  <Icon name={ic} size={20} color={on ? colors.accent : colors.ink2} stroke={1.9} />
+                <Pressable key={ic} onPress={() => setIcon(ic)} style={[styles.iconChoice, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line }, on && { borderColor: theme.accent, backgroundColor: theme.accentTint }]}>
+                  <Icon name={ic} size={20} color={on ? theme.accent : colorTheme.ink2} stroke={1.9} />
                 </Pressable>
               );
             })}
@@ -109,25 +113,26 @@ export function AddCategoryModal({
               onPress={pickCustomIcon}
               style={[
                 styles.iconChoice,
-                (icon.startsWith('data:') || icon.startsWith('file:') || icon.startsWith('content:') || icon.startsWith('http') || icon.startsWith('/')) && styles.iconChoiceOn,
+                { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line },
+                (icon.startsWith('data:') || icon.startsWith('file:') || icon.startsWith('content:') || icon.startsWith('http') || icon.startsWith('/')) && { borderColor: theme.accent, backgroundColor: theme.accentTint },
                 { minWidth: 68, flexDirection: 'row', gap: 4, paddingHorizontal: 6 }
               ]}
             >
               {(icon.startsWith('data:') || icon.startsWith('file:') || icon.startsWith('content:') || icon.startsWith('http') || icon.startsWith('/')) ? (
                 <Image source={{ uri: icon }} style={{ width: 22, height: 22, borderRadius: 4 }} resizeMode="cover" />
               ) : (
-                <Icon name="image" size={17} color={colors.accent} stroke={2.0} />
+                <Icon name="image" size={17} color={theme.accent} stroke={2.0} />
               )}
-              <Text style={{ fontSize: 10, fontFamily: uiFont(700), color: colors.accent }}>Gallery</Text>
+              <Text style={{ fontSize: 10, fontFamily: uiFont(700), color: theme.accent }}>Gallery</Text>
             </Pressable>
           </View>
 
-          <Text style={[styles.pickLabel, { marginTop: 14 }]}>Color</Text>
+          <Text style={[styles.pickLabel, { color: colorTheme.ink2, marginTop: 14 }]}>Color</Text>
           <View style={styles.choiceWrap}>
             {HUE_CHOICES.map((h) => {
               const on = h === hue;
               return (
-                <Pressable key={h} onPress={() => setHue(h)} style={[styles.hueChoice, { backgroundColor: catColorsForHue(h).solid }, on && styles.hueChoiceOn]}>
+                <Pressable key={h} onPress={() => setHue(h)} style={[styles.hueChoice, { backgroundColor: catColorsForHue(h).solid }, on && styles.hueChoiceOn, on && { borderColor: colorTheme.ink }]}>
                   {on && <Icon name="check" size={14} color="#fff" stroke={2.6} />}
                 </Pressable>
               );
@@ -149,35 +154,29 @@ export function AddCategoryModal({
 const styles = StyleSheet.create({
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(16,32,24,0.4)' },
   center: { flex: 1, justifyContent: 'flex-end', padding: 14 },
-  card: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: 18 },
+  card: { borderRadius: radius.lg, padding: 18 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
-  title: { fontFamily: uiFont(700), fontSize: 17, color: colors.ink },
+  title: { fontFamily: uiFont(700), fontSize: 17 },
   previewRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
   input: {
     flex: 1,
-    backgroundColor: colors.surface2,
     borderWidth: 1,
-    borderColor: colors.line,
     borderRadius: radius.sm,
     paddingHorizontal: 13,
     paddingVertical: 12,
     fontFamily: uiFont(600),
     fontSize: 15,
-    color: colors.ink,
   },
-  pickLabel: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2, marginBottom: 9 },
+  pickLabel: { fontFamily: uiFont(600), fontSize: 12.5, marginBottom: 9 },
   choiceWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
   iconChoice: {
     width: 42,
     height: 42,
     borderRadius: 12,
-    backgroundColor: colors.surface2,
     borderWidth: 1.5,
-    borderColor: colors.line,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconChoiceOn: { borderColor: colors.accent, backgroundColor: colors.accentTint },
   hueChoice: { width: 36, height: 36, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
-  hueChoiceOn: { borderWidth: 2.5, borderColor: colors.ink },
+  hueChoiceOn: { borderWidth: 2.5 },
 });

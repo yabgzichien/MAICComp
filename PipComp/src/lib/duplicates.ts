@@ -32,6 +32,7 @@ export function findDuplicate(
   today: string
 ): Transaction | null {
   const key = merchantKey(candidate.merchant);
+  if (!key) return null;
   const candDay = dayOf(candidate.date) ?? today;
   for (const s of saved) {
     if (s.merchantKey !== key) continue;

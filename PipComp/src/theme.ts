@@ -4,7 +4,29 @@ import { Platform } from 'react-native';
  * Design tokens for "Pip", ported from the approved design (styles.css :root).
  * `color-mix()` values were precomputed to static hex since RN can't evaluate them.
  */
-export const colors = {
+
+export interface StructuralColors {
+  bg: string;
+  surface: string;
+  surface2: string;
+  ink: string;
+  ink2: string;
+  ink3: string;
+  line: string;
+  line2: string;
+  amber: string;
+  red: string;
+  amberTint: string;
+  amberSoft: string;
+  redTint: string;
+  redSoft: string;
+}
+
+/** The original, always-light structural palette. Reactive consumers should read these
+ *  through `useThemeColors()` (src/state/colorScheme.tsx), not this constant directly —
+ *  it's kept here as the single source of truth for `colors` below (back-compat for any
+ *  call site not yet migrated to the reactive hook) and as the light half of the pair. */
+export const LIGHT_COLORS: StructuralColors = {
   bg: '#eef1ee',
   surface: '#ffffff',
   surface2: '#f6f8f6',
@@ -13,6 +35,41 @@ export const colors = {
   ink3: '#6a776f', // AA on white (4.69:1) — was #9aa7a0 (2.50:1, sub-AA)
   line: 'rgba(20,40,30,0.08)',
   line2: 'rgba(20,40,30,0.05)',
+  // status / decision accents (from the redesign tokens)
+  amber: '#9c6300', // AA on white (5.00:1) — was #d98a00 (2.77:1, sub-AA)
+  red: '#c0392b',
+  // Pale fills + borders for the amber/red verdict states, mirroring accentTint/accentSoft.
+  // Tints are deliberately shallow (5% mix, not 7%) — amber is dark enough that a 7% fill
+  // drops amber-on-tint under 4.5:1. Guarded by tools/contrastAudit/audit.js.
+  amberTint: '#faf7f2',
+  amberSoft: '#efe6d6',
+  redTint: '#fcf5f4',
+  redSoft: '#f5dfdd',
+} as const;
+
+/** Dark counterpart. `bg`/`ink` are anchored to the app's existing "dark card" tokens
+ *  (`passportDark`/`shotInk` below) rather than invented from scratch — those were already
+ *  a hand-picked dark-surface pair in this brand's hue. Every value here (and every accent
+ *  preset's `dark` variant in accentPresets.ts) is checked by tools/contrastAudit/audit.js. */
+export const DARK_COLORS: StructuralColors = {
+  bg: '#11231a',
+  surface: '#232f28',
+  surface2: '#1c2821',
+  ink: '#eaf3ee',
+  ink2: '#99a79f',
+  ink3: '#8a988f', // AA on surface (4.62:1)
+  line: 'rgba(234,243,238,0.10)',
+  line2: 'rgba(234,243,238,0.06)',
+  amber: '#e5ae00',
+  red: '#ff8c78',
+  amberTint: '#2b2413',
+  amberSoft: '#44330b',
+  redTint: '#321f1c',
+  redSoft: '#512923',
+} as const;
+
+export const colors = {
+  ...LIGHT_COLORS,
 
   accent: '#1f8a5b',
   accentInk: '#1c6b48', // color-mix(accent 70%, #14241c)
@@ -24,16 +81,6 @@ export const colors = {
   shotHead: '#11231a',
   shotInk: '#eaf3ee',
 
-  // status / decision accents (from the redesign tokens)
-  amber: '#9c6300', // AA on white (5.00:1) — was #d98a00 (2.77:1, sub-AA)
-  red: '#c0392b',
-  // Pale fills + borders for the amber/red verdict states, mirroring accentTint/accentSoft.
-  // Tints are deliberately shallow (5% mix, not 7%) — amber is dark enough that a 7% fill
-  // drops amber-on-tint under 4.5:1. Guarded by tools/contrastAudit/audit.js.
-  amberTint: '#faf7f2',
-  amberSoft: '#efe6d6',
-  redTint: '#fcf5f4',
-  redSoft: '#f5dfdd',
   deltaUp: '#42e893', // "+8 pts" up-arrow green on dark surfaces
   passportDark: '#11231a',
 } as const;

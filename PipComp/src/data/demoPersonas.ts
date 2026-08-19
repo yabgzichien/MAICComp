@@ -123,7 +123,7 @@ export const RECOMMENDED_DEMO_PROFILE: DemoProfileId =
 /** Can this persona be picked on the front door?
  *
  *  All three, since 2026-08-06. This used to withhold everything but the recommended ending, so
- *  a judge who finished one run, hit Profile → Reset & go to setup, and came back to try another
+ *  a judge who finished one run, hit Settings → Reset & go to setup, and came back to try another
  *  borrower found the other two rows dead — which is exactly the route the console's finale card
  *  now sends them down. The badge and the "start here" copy still steer the opening move; they
  *  no longer bar it.

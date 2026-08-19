@@ -8,7 +8,7 @@ import { suggestForMerchant } from '../lib/recommend';
 import { DROP, type CategorySuggestion, type ExtractedTxn, type SplitDraft, type Transaction } from '../lib/types';
 import { emitTourSignal } from '../lib/tourSignals';
 import { useAppData, type NewLearned } from '../state/store';
-import { colors } from '../theme';
+import { useThemeColors } from '../state/colorScheme';
 import { AttachScreen, type PickedImage } from './AttachScreen';
 import { CategorizeScreen, type PendingSettlement } from './CategorizeScreen';
 import { ExtractScreen } from './ExtractScreen';
@@ -41,6 +41,7 @@ export function AddFlow({
   initialPhase?: Phase;
 }) {
   const { commitCategorized, recordBalanceLink, settleShare, accounts, memory, categories, catById, tourActive } = useAppData();
+  const colorTheme = useThemeColors();
 
   const [phase, setPhase] = useState<Phase>(initialPhase);
   const [image, setImage] = useState<PickedImage | null>(null);
@@ -166,7 +167,7 @@ export function AddFlow({
   }
   if (phase === 'guessing') {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center', paddingHorizontal: 18 }}>
+      <View style={{ flex: 1, backgroundColor: colorTheme.bg, justifyContent: 'center', paddingHorizontal: 18 }}>
         <PipSays expr="think">
           <BubbleText>Thinking about your new merchants… this can take a few seconds.</BubbleText>
         </PipSays>

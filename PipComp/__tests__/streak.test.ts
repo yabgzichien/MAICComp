@@ -1,4 +1,4 @@
-import { computeStreak, type StreakInput } from '../src/lib/streak';
+import { computeStreak, lastActiveDay, type StreakInput } from '../src/lib/streak';
 
 const NOW = new Date('2026-06-10T12:00:00.000Z');
 
@@ -11,6 +11,43 @@ function day(offset: number): string {
 function t(offset: number, source: StreakInput['source'] = 'extracted'): StreakInput {
   return { date: day(offset), createdAt: day(offset) + 'T09:00:00Z', source };
 }
+
+describe('lastActiveDay', () => {
+  const todayUtc = Math.floor(NOW.getTime() / 86_400_000);
+
+  it('returns null for an empty transaction list', () => {
+    expect(lastActiveDay([], NOW)).toBeNull();
+  });
+
+  it('returns the UTC day number for a transaction today', () => {
+    expect(lastActiveDay([t(0)], NOW)).toBe(todayUtc);
+  });
+
+  it('returns the day number of the most recent activity among several', () => {
+    expect(lastActiveDay([t(5), t(2), t(7)], NOW)).toBe(todayUtc - 2);
+  });
+
+  it('ignores future-dated rows', () => {
+    // Offset -1 is tomorrow
+    expect(lastActiveDay([t(-1), t(1)], NOW)).toBe(todayUtc - 1);
+  });
+
+  it('prefers date over createdAt when both are present', () => {
+    const txn: StreakInput = {
+      date: day(3),
+      createdAt: day(1) + 'T09:00:00Z',
+    };
+    expect(lastActiveDay([txn], NOW)).toBe(todayUtc - 3);
+  });
+
+  it('falls back to createdAt when date is absent or null', () => {
+    const txn: StreakInput = {
+      date: null,
+      createdAt: day(2) + 'T10:00:00Z',
+    };
+    expect(lastActiveDay([txn], NOW)).toBe(todayUtc - 2);
+  });
+});
 
 describe('computeStreak', () => {
   it('is 0 for no transactions', () => {
@@ -50,3 +87,4 @@ describe('computeStreak', () => {
     expect(computeStreak([t(0, 'manual'), t(1, 'manual')], NOW)).toBe(2);
   });
 });
+

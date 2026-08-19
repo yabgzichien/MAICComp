@@ -16,6 +16,8 @@ import { notify } from '../lib/platformAlert';
 import { searchCrypto, resolveCryptoTickers } from '../prices';
 import type { TickerResult } from '../lib/prices';
 import type { Account, AccountKind } from '../lib/types';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
 import { useAppData } from '../state/store';
 import { colors, numFont, radius, uiFont } from '../theme';
 
@@ -32,6 +34,8 @@ const parseAmount = (s: string): number => Math.max(0, parseFloat(s.replace(/[^0
 
 export function BalanceScanScreen({ onClose }: { onClose: () => void }) {
   const insets = useSafeAreaInsets();
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const { accounts, accountValues, addAccount, addHolding, setBalance } = useAppData();
   const [phase, setPhase] = useState<Phase>('pick');
   const [error, setError] = useState('');
@@ -172,7 +176,7 @@ export function BalanceScanScreen({ onClose }: { onClose: () => void }) {
   const showingCreate = forceCreate || matches.length === 0;
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: colorTheme.bg }]}>
       <View style={{ paddingTop: insets.top + 4 }}>
         <TopBar title="Scan Balance" onBack={onClose} />
       </View>
@@ -192,7 +196,7 @@ export function BalanceScanScreen({ onClose }: { onClose: () => void }) {
         {phase === 'scanning' && (
           <>
             <PipSays expr="think"><BubbleText>Reading the screenshot…</BubbleText></PipSays>
-            <Card style={styles.busy}><ActivityIndicator color={colors.accent} /></Card>
+            <Card style={styles.busy}><ActivityIndicator color={theme.accent} /></Card>
           </>
         )}
 
@@ -218,26 +222,26 @@ export function BalanceScanScreen({ onClose }: { onClose: () => void }) {
               <View style={styles.detectedRow}>
                 <InstitutionBadge inst={institution} fallbackText={rawProvider} size={44} />
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={styles.detectedName} numberOfLines={1}>{institution?.name ?? rawProvider ?? 'Unrecognized provider'}</Text>
-                  <Text style={styles.detectedSub}>{institution ? (institution.kind === 'bank' ? 'Bank' : 'E-Wallet') : 'Not in our bank list. Type a name below'}</Text>
+                  <Text style={[styles.detectedName, { color: colorTheme.ink }]} numberOfLines={1}>{institution?.name ?? rawProvider ?? 'Unrecognized provider'}</Text>
+                  <Text style={[styles.detectedSub, { color: colorTheme.ink2 }]}>{institution ? (institution.kind === 'bank' ? 'Bank' : 'E-Wallet') : 'Not in our bank list. Type a name below'}</Text>
                 </View>
               </View>
 
-              <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Amount</Text>
-              <View style={styles.amountRow}>
-                <Text style={styles.rm}>RM</Text>
-                <TextInput value={amountText} onChangeText={setAmountText} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colors.ink3} style={styles.amountInput} autoFocus={amount === 0} />
+              <Text style={[styles.fieldLabel, { color: colorTheme.ink2, marginTop: 16 }]}>Amount</Text>
+              <View style={[styles.amountRow, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line }]}>
+                <Text style={[styles.rm, { color: colorTheme.ink2 }]}>RM</Text>
+                <TextInput value={amountText} onChangeText={setAmountText} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colorTheme.ink3} style={[styles.amountInput, { color: colorTheme.ink }]} autoFocus={amount === 0} />
               </View>
-              {amount === 0 && <Text style={styles.hint}>I couldn't read a clear amount. Enter it to continue.</Text>}
+              {amount === 0 && <Text style={[styles.hint, { color: colorTheme.ink2 }]}>I couldn't read a clear amount. Enter it to continue.</Text>}
             </Card>
 
             {!forceCreate && matches.length > 1 && !selectedMatchId && (
               <Card style={{ marginTop: 14, overflow: 'hidden' }}>
-                <Text style={styles.sectionLabel}>Which account?</Text>
+                <Text style={[styles.sectionLabel, { color: colorTheme.ink2 }]}>Which account?</Text>
                 {matches.map((m, i) => (
-                  <Pressable key={m.id} onPress={() => setSelectedMatchId(m.id)} style={[styles.matchRow, i > 0 && styles.divider]}>
-                    <Text style={styles.matchName} numberOfLines={1}>{m.name}</Text>
-                    <Text style={styles.matchVal}>RM {fmt(accountValues[m.id] ?? 0)}</Text>
+                  <Pressable key={m.id} onPress={() => setSelectedMatchId(m.id)} style={[styles.matchRow, i > 0 && [styles.divider, { borderTopColor: colorTheme.line2 }]]}>
+                    <Text style={[styles.matchName, { color: colorTheme.ink }]} numberOfLines={1}>{m.name}</Text>
+                    <Text style={[styles.matchVal, { color: colorTheme.ink2 }]}>RM {fmt(accountValues[m.id] ?? 0)}</Text>
                   </Pressable>
                 ))}
               </Card>
@@ -253,25 +257,29 @@ export function BalanceScanScreen({ onClose }: { onClose: () => void }) {
                   Add to {selectedAccount.name}'s balance (RM {fmt(currentVal)} + RM {fmt(amount)})
                 </SecondaryButton>
                 <Pressable onPress={() => setForceCreate(true)} hitSlop={6} style={styles.linkBtn}>
-                  <Text style={styles.linkText}>Not this account? Add as a new account instead</Text>
+                  <Text style={[styles.linkText, { color: theme.accent }]}>Not this account? Add as a new account instead</Text>
                 </Pressable>
               </View>
             )}
 
             {showingCreate && (
               <Card style={{ marginTop: 14, padding: 16 }}>
-                <Text style={styles.fieldLabel}>Name</Text>
-                <TextInput value={newName} onChangeText={setNewName} placeholder="Account name" placeholderTextColor={colors.ink3} style={styles.textInput} />
+                <Text style={[styles.fieldLabel, { color: colorTheme.ink2 }]}>Name</Text>
+                <TextInput value={newName} onChangeText={setNewName} placeholder="Account name" placeholderTextColor={colorTheme.ink3} style={[styles.textInput, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line, color: colorTheme.ink }]} />
 
                 {detectedKind === 'liability' && (
                   <>
-                    <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Type</Text>
+                    <Text style={[styles.fieldLabel, { color: colorTheme.ink2, marginTop: 16 }]}>Type</Text>
                     <View style={styles.classGrid}>
                       {classesFor('liability').map((c) => {
                         const on = newCls === c.id;
                         return (
-                          <Pressable key={c.id} onPress={() => setNewCls(c.id)} style={[styles.classChip, on && styles.classChipOn]}>
-                            <Text style={[styles.classChipText, on && { color: colors.accentInk }]}>{c.label}</Text>
+                          <Pressable
+                            key={c.id}
+                            onPress={() => setNewCls(c.id)}
+                            style={[styles.classChip, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line }, on && { borderColor: theme.accent, backgroundColor: theme.accentTint }]}
+                          >
+                            <Text style={[styles.classChipText, { color: colorTheme.ink2 }, on && { color: theme.accentInk }]}>{c.label}</Text>
                           </Pressable>
                         );
                       })}
@@ -287,7 +295,7 @@ export function BalanceScanScreen({ onClose }: { onClose: () => void }) {
                 </View>
                 {matches.length > 0 && (
                   <Pressable onPress={() => { setForceCreate(false); if (!selectedMatchId && matches.length === 1) setSelectedMatchId(matches[0].id); }} hitSlop={6} style={styles.linkBtn}>
-                    <Text style={styles.linkText}>Use an existing account instead</Text>
+                    <Text style={[styles.linkText, { color: theme.accent }]}>Use an existing account instead</Text>
                   </Pressable>
                 )}
               </Card>
@@ -300,26 +308,26 @@ export function BalanceScanScreen({ onClose }: { onClose: () => void }) {
             <PipSays expr="happy"><BubbleText>Found <B>{rows.length}</B> coin{rows.length === 1 ? '' : 's'}. Check each match and amount, then add them.</BubbleText></PipSays>
             <Card style={{ overflow: 'hidden', marginTop: 16 }}>
               {rows.map((r, i) => (
-                <View key={r.key} style={[styles.row, i > 0 && styles.divider]}>
-                  <Pressable onPress={() => setSearchKey(r.key)} style={styles.tickerBox}>
-                    <Text style={styles.tickerText}>{(r.coin?.ticker ?? r.ticker).slice(0, 4)}</Text>
+                <View key={r.key} style={[styles.row, i > 0 && [styles.divider, { borderTopColor: colorTheme.line2 }]]}>
+                  <Pressable onPress={() => setSearchKey(r.key)} style={[styles.tickerBox, { backgroundColor: theme.accentTint }]}>
+                    <Text style={[styles.tickerText, { color: theme.accent }]}>{(r.coin?.ticker ?? r.ticker).slice(0, 4)}</Text>
                   </Pressable>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Pressable onPress={() => setSearchKey(r.key)}>
-                      <Text style={[styles.coinName, !r.coin && { color: RED }]} numberOfLines={1}>
+                      <Text style={[styles.coinName, { color: colorTheme.ink }, !r.coin && { color: RED }]} numberOfLines={1}>
                         {r.coin ? r.coin.name : `No match for ${r.ticker} · tap to search`}
                       </Text>
                     </Pressable>
                     <View style={styles.qtyRow}>
-                      <TextInput value={r.qty} onChangeText={(v) => patch(r.key, { qty: v })} keyboardType="decimal-pad" style={styles.qtyInput} />
-                      <Text style={styles.qtyUnit}>{r.coin?.ticker ?? r.ticker}</Text>
+                      <TextInput value={r.qty} onChangeText={(v) => patch(r.key, { qty: v })} keyboardType="decimal-pad" style={[styles.qtyInput, { color: colorTheme.ink, backgroundColor: colorTheme.surface2, borderColor: colorTheme.line }]} />
+                      <Text style={[styles.qtyUnit, { color: colorTheme.ink2 }]}>{r.coin?.ticker ?? r.ticker}</Text>
                     </View>
                   </View>
-                  <Pressable onPress={() => remove(r.key)} hitSlop={8} style={styles.removeBtn}><Icon name="x" size={15} color={colors.ink3} /></Pressable>
+                  <Pressable onPress={() => remove(r.key)} hitSlop={8} style={[styles.removeBtn, { backgroundColor: colorTheme.surface2 }]}><Icon name="x" size={15} color={colorTheme.ink3} /></Pressable>
                 </View>
               ))}
             </Card>
-            <Text style={styles.hint}>Tap a coin to change the matched ticker. Values update live once added.</Text>
+            <Text style={[styles.hint, { color: colorTheme.ink2 }]}>Tap a coin to change the matched ticker. Values update live once added.</Text>
           </>
         )}
 
@@ -332,7 +340,7 @@ export function BalanceScanScreen({ onClose }: { onClose: () => void }) {
       </ScrollView>
 
       {phase === 'holdings' && (
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+        <View style={[styles.footer, { backgroundColor: colorTheme.bg, borderTopColor: colorTheme.line2, paddingBottom: insets.bottom + 16 }]}>
           <PrimaryButton onPress={confirmHoldings} disabled={importable.length === 0}>
             <Icon name="check" size={19} color="#fff" stroke={2.4} />
             <BtnLabel>Add {importable.length} holding{importable.length === 1 ? '' : 's'}</BtnLabel>
@@ -353,70 +361,79 @@ export function BalanceScanScreen({ onClose }: { onClose: () => void }) {
 }
 
 function SecondaryButton({ onPress, disabled, icon, children }: { onPress: () => void; disabled?: boolean; icon: IconName; children: React.ReactNode }) {
+  const theme = useAccent();
   return (
-    <Pressable onPress={onPress} disabled={disabled} style={({ pressed }) => [styles.secondaryBtn, { opacity: disabled ? 0.5 : pressed ? 0.85 : 1 }]}>
-      <Icon name={icon} size={17} color={colors.accent} />
-      <Text style={styles.secondaryBtnText}>{children}</Text>
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [
+        styles.secondaryBtn,
+        { backgroundColor: theme.accentTint, borderColor: theme.accentSoft, opacity: disabled ? 0.5 : pressed ? 0.85 : 1 },
+      ]}
+    >
+      <Icon name={icon} size={17} color={theme.accent} />
+      <Text style={[styles.secondaryBtnText, { color: theme.accent }]}>{children}</Text>
     </Pressable>
   );
 }
 
 function SourceButton({ icon, title, sub, onPress, disabled }: { icon: IconName; title: string; sub: string; onPress: () => void; disabled?: boolean }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   return (
-    <Pressable onPress={onPress} disabled={disabled} style={({ pressed }) => [styles.source, { opacity: disabled ? 0.6 : pressed ? 0.9 : 1 }]}>
-      <View style={styles.sourceIcon}><Icon name={icon} size={24} color={colors.accent} /></View>
+    <Pressable onPress={onPress} disabled={disabled} style={({ pressed }) => [styles.source, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line, opacity: disabled ? 0.6 : pressed ? 0.9 : 1 }]}>
+      <View style={[styles.sourceIcon, { backgroundColor: theme.accentTint }]}><Icon name={icon} size={24} color={theme.accent} /></View>
       <View style={{ flex: 1 }}>
-        <Text style={styles.sourceTitle}>{title}</Text>
-        <Text style={styles.sourceSub}>{sub}</Text>
+        <Text style={[styles.sourceTitle, { color: colorTheme.ink }]}>{title}</Text>
+        <Text style={[styles.sourceSub, { color: colorTheme.ink2 }]}>{sub}</Text>
       </View>
-      <Icon name="chevronRight" size={18} color={colors.ink3} />
+      <Icon name="chevronRight" size={18} color={colorTheme.ink3} />
     </Pressable>
   );
 }
 
 const RED = '#c5402f';
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+  root: { flex: 1 },
   busy: { marginTop: 22, padding: 24, alignItems: 'center' },
-  source: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.line, borderStyle: 'dashed' },
-  sourceIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: colors.accentTint, alignItems: 'center', justifyContent: 'center' },
-  sourceTitle: { fontFamily: uiFont(700), fontSize: 15.5, color: colors.ink },
-  sourceSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 1 },
+  source: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: radius.md, borderWidth: 1.5, borderStyle: 'dashed' },
+  sourceIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  sourceTitle: { fontFamily: uiFont(700), fontSize: 15.5 },
+  sourceSub: { fontFamily: uiFont(500), fontSize: 12.5, marginTop: 1 },
 
   detectedRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  detectedName: { fontFamily: uiFont(700), fontSize: 16, color: colors.ink },
-  detectedSub: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, marginTop: 2 },
+  detectedName: { fontFamily: uiFont(700), fontSize: 16 },
+  detectedSub: { fontFamily: uiFont(500), fontSize: 12, marginTop: 2 },
 
-  fieldLabel: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2, marginBottom: 8 },
-  textInput: { backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, paddingHorizontal: 14, paddingVertical: 13, fontFamily: uiFont(600), fontSize: 16, color: colors.ink },
-  amountRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, paddingHorizontal: 14 },
-  rm: { fontFamily: numFont(600), fontSize: 18, color: colors.ink2 },
-  amountInput: { flex: 1, fontFamily: numFont(700), fontSize: 24, color: colors.ink, paddingVertical: 12 },
-  hint: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, marginTop: 8 },
+  fieldLabel: { fontFamily: uiFont(600), fontSize: 12.5, marginBottom: 8 },
+  textInput: { borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 14, paddingVertical: 13, fontFamily: uiFont(600), fontSize: 16 },
+  amountRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 14 },
+  rm: { fontFamily: numFont(600), fontSize: 18 },
+  amountInput: { flex: 1, fontFamily: numFont(700), fontSize: 24, paddingVertical: 12 },
+  hint: { fontFamily: uiFont(500), fontSize: 11.5, marginTop: 8 },
 
   classGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  classChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 999, backgroundColor: colors.surface2, borderWidth: 1.5, borderColor: colors.line },
-  classChipOn: { borderColor: colors.accent, backgroundColor: colors.accentTint },
-  classChipText: { fontFamily: uiFont(600), fontSize: 13, color: colors.ink2 },
+  classChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 999, borderWidth: 1.5 },
+  classChipText: { fontFamily: uiFont(600), fontSize: 13 },
 
-  sectionLabel: { fontFamily: uiFont(700), fontSize: 11, color: colors.ink2, letterSpacing: 0.06, textTransform: 'uppercase', padding: 14, paddingBottom: 6 },
+  sectionLabel: { fontFamily: uiFont(700), fontSize: 11, letterSpacing: 0.06, textTransform: 'uppercase', padding: 14, paddingBottom: 6 },
   matchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingHorizontal: 14, paddingVertical: 12 },
-  matchName: { flex: 1, fontFamily: uiFont(600), fontSize: 14.5, color: colors.ink },
-  matchVal: { fontFamily: numFont(700), fontSize: 13.5, color: colors.ink2 },
+  matchName: { flex: 1, fontFamily: uiFont(600), fontSize: 14.5 },
+  matchVal: { fontFamily: numFont(700), fontSize: 13.5 },
 
-  secondaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 52, borderRadius: radius.md, backgroundColor: colors.accentTint, borderWidth: 1, borderColor: colors.accentSoft },
-  secondaryBtnText: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.accent, textAlign: 'center' },
+  secondaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 52, borderRadius: radius.md, borderWidth: 1 },
+  secondaryBtnText: { fontFamily: uiFont(700), fontSize: 13.5, textAlign: 'center' },
   linkBtn: { alignSelf: 'center', marginTop: 4, padding: 6 },
-  linkText: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.accent },
+  linkText: { fontFamily: uiFont(600), fontSize: 12.5 },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
-  divider: { borderTopWidth: 1, borderTopColor: colors.line2 },
-  tickerBox: { width: 40, height: 40, borderRadius: 11, backgroundColor: colors.accentTint, alignItems: 'center', justifyContent: 'center' },
-  tickerText: { fontFamily: uiFont(700), fontSize: 12, color: colors.accent },
-  coinName: { fontFamily: uiFont(600), fontSize: 14.5, color: colors.ink },
+  divider: { borderTopWidth: 1 },
+  tickerBox: { width: 40, height: 40, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  tickerText: { fontFamily: uiFont(700), fontSize: 12 },
+  coinName: { fontFamily: uiFont(600), fontSize: 14.5 },
   qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
-  qtyInput: { fontFamily: numFont(700), fontSize: 15, color: colors.ink, paddingVertical: 2, paddingHorizontal: 8, borderRadius: 8, backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line, minWidth: 90 },
-  qtyUnit: { fontFamily: uiFont(600), fontSize: 12.5, color: colors.ink2 },
-  removeBtn: { width: 26, height: 26, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface2 },
-  footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 18, paddingTop: 12, backgroundColor: colors.bg, borderTopWidth: 1, borderTopColor: colors.line2 },
+  qtyInput: { fontFamily: numFont(700), fontSize: 15, paddingVertical: 2, paddingHorizontal: 8, borderRadius: 8, borderWidth: 1, minWidth: 90 },
+  qtyUnit: { fontFamily: uiFont(600), fontSize: 12.5 },
+  removeBtn: { width: 26, height: 26, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 18, paddingTop: 12, borderTopWidth: 1 },
 });

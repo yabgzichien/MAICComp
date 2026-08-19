@@ -2,6 +2,8 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { BAND_ORDER, bandColors, colors, numFont, uiFont } from '../theme';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
 import type { CreditBand } from '../lib/creditScore';
 
 const SEGMENTS = BAND_ORDER.map((b) => bandColors[b]);
@@ -17,6 +19,8 @@ export function ScoreBandBar({
   height?: number;
 }) {
   const activeIdx = BAND_ORDER.indexOf(band);
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   return (
     <View>
       <View style={[styles.bar, { height }]}>
@@ -29,7 +33,7 @@ export function ScoreBandBar({
           {BAND_ORDER.map((b, i) => (
             <Text
               key={b}
-              style={[styles.label, { color: i === activeIdx ? colors.accentInk : colors.ink3, fontFamily: uiFont(i === activeIdx ? 700 : 400) }]}
+              style={[styles.label, { color: i === activeIdx ? theme.accentInk : colorTheme.ink3, fontFamily: uiFont(i === activeIdx ? 700 : 400) }]}
               numberOfLines={1}
             >
               {b}

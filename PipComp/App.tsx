@@ -13,7 +13,7 @@ import {
 } from '@expo-google-fonts/space-grotesk';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { AppState, Linking, Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomNav, type NavTab } from './src/components/BottomNav';
@@ -44,17 +44,21 @@ import { RecapScreen } from './src/screens/RecapScreen';
 import { CalendarScreen } from './src/screens/CalendarScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { AdvancedImportScreen } from './src/screens/AdvancedImportScreen';
+import { ExportScreen } from './src/screens/ExportScreen';
 import { GlossaryModal } from './src/components/InfoButton';
 import { AppAlertModal } from './src/components/AppAlertModal';
-import { AccentProvider } from './src/state/accent';
+import { AccentProvider, useAccent } from './src/state/accent';
 import { AlertHostProvider } from './src/state/alertHost';
+import { ColorSchemeProvider, useColorSchemeMode, useThemeColors } from './src/state/colorScheme';
 import { GlossaryProvider } from './src/state/glossary';
 import { DEMO_PROFILES } from './src/data/demoPersonas';
 import { AppDataProvider, useAppData } from './src/state/store';
 import { useNow } from './src/state/useNow';
-import { colors, platformShadow, uiFont } from './src/theme';
+import { useReminderSync } from './src/state/useReminderSync';
+import { syncStreakWidget } from './src/widget/syncStreakWidget';
+import { platformShadow, uiFont } from './src/theme';
 
-type Screen = 'home' | 'add' | 'settings' | 'categories' | 'transactions' | 'breakdown' | 'budget' | 'recap' | 'networth' | 'credit' | 'loans' | 'passport' | 'coach' | 'attacks' | 'kyc' | 'calendar' | 'advancedImport' | 'owed';
+type Screen = 'home' | 'add' | 'settings' | 'categories' | 'transactions' | 'breakdown' | 'budget' | 'recap' | 'networth' | 'credit' | 'loans' | 'passport' | 'coach' | 'attacks' | 'kyc' | 'calendar' | 'advancedImport' | 'owed' | 'export';
 
 /**
  * Web-only: a global :focus-visible outline so keyboard users get a visible focus indicator
@@ -63,20 +67,19 @@ type Screen = 'home' | 'add' | 'settings' | 'categories' | 'transactions' | 'bre
  * app's custom-styled surfaces. Injected once via a <style> tag rather than per-component,
  * since RN has no global stylesheet. No-op on native (there's no focus ring to add).
  */
-function useWebFocusRing() {
+function useWebFocusRing(accentColor: string) {
   React.useEffect(() => {
     if (Platform.OS !== 'web') return;
     const style = document.createElement('style');
-    style.textContent = `:focus-visible { outline: 2px solid ${colors.accent} !important; outline-offset: 2px !important; }`;
+    style.textContent = `:focus-visible { outline: 2px solid ${accentColor} !important; outline-offset: 2px !important; }`;
     document.head.appendChild(style);
     return () => {
       document.head.removeChild(style);
     };
-  }, []);
+  }, [accentColor]);
 }
 
 export default function App() {
-  useWebFocusRing();
   const [fontsLoaded] = useFonts({
     HankenGrotesk_400Regular,
     HankenGrotesk_500Medium,
@@ -89,23 +92,31 @@ export default function App() {
   });
 
   return (
-    <PhoneFrame>
-      <SafeAreaProvider>
-        <AppDataProvider>
-          <AccentProvider>
-            <GlossaryProvider>
-              <AlertHostProvider>
-                <ErrorBoundary>
-                  <Root fontsLoaded={fontsLoaded} />
-                </ErrorBoundary>
-              </AlertHostProvider>
-            </GlossaryProvider>
-          </AccentProvider>
-        </AppDataProvider>
-        <StatusBar style="dark" />
-      </SafeAreaProvider>
-    </PhoneFrame>
+    <ColorSchemeProvider>
+      <PhoneFrame>
+        <SafeAreaProvider>
+          <AppDataProvider>
+            <AccentProvider>
+              <GlossaryProvider>
+                <AlertHostProvider>
+                  <ErrorBoundary>
+                    <Root fontsLoaded={fontsLoaded} />
+                  </ErrorBoundary>
+                </AlertHostProvider>
+              </GlossaryProvider>
+            </AccentProvider>
+          </AppDataProvider>
+          <ThemedStatusBar />
+        </SafeAreaProvider>
+      </PhoneFrame>
+    </ColorSchemeProvider>
   );
+}
+
+/** Flips the native status bar's icon color with the resolved light/dark scheme. */
+function ThemedStatusBar() {
+  const { resolvedScheme } = useColorSchemeMode();
+  return <StatusBar style={resolvedScheme === 'dark' ? 'light' : 'dark'} />;
 }
 
 /**
@@ -124,35 +135,41 @@ function PhoneFrame({ children }: { children: React.ReactNode }) {
   // eslint-disable-next-line react-hooks/rules-of-hooks -- Platform.OS is constant for the life
   // of the app, so this early return never toggles hook order between renders.
   const { width } = useWindowDimensions();
+  const theme = useThemeColors();
+  const { resolvedScheme } = useColorSchemeMode();
+  const isDark = resolvedScheme === 'dark';
+  // Fake OS chrome only (desktop mock-phone bezel + status bar), not real app content, so a
+  // plain black/white flip is enough  no WCAG audit needed for decorative icons this small.
+  const chromeIcon = isDark ? '#fff' : '#000';
   const isNarrowBrowser = width < NARROW_BROWSER_MAX;
   if (isNarrowBrowser) {
-    return <View style={webStyles.fullBleed}>{children}</View>;
+    return <View style={[webStyles.fullBleed, { backgroundColor: theme.bg }]}>{children}</View>;
   }
   return (
-    <View style={webStyles.backdrop}>
-      <View style={webStyles.phone}>
-        <View style={[webStyles.statusBar, { pointerEvents: 'none' }]}>
+    <View style={[webStyles.backdrop, { backgroundColor: isDark ? '#0d1310' : '#d2d8d2' }]}>
+      <View style={[webStyles.phone, { backgroundColor: theme.bg, borderColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)' }]}>
+        <View style={[webStyles.statusBar, { backgroundColor: theme.bg, pointerEvents: 'none' }]}>
           <View style={webStyles.statusRow}>
-            <StatusClock />
+            <StatusClock color={chromeIcon} />
             <View style={webStyles.rightIcons}>
               {/* cellular signal */}
               <View style={webStyles.signal}>
                 {[4, 6, 8, 11].map((h) => (
-                  <View key={h} style={[webStyles.bar, { height: h }]} />
+                  <View key={h} style={[webStyles.bar, { height: h, backgroundColor: chromeIcon }]} />
                 ))}
               </View>
               {/* wifi */}
               <Svg width={17} height={12} viewBox="0 0 16 12">
                 <Path
                   d="M8 9.4a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6zM8 5.2c1.7 0 3.3.66 4.5 1.85l-1.35 1.5A4.6 4.6 0 0 0 8 8.2c-1.2 0-2.3.45-3.15 1.35L3.5 7.05A6.4 6.4 0 0 1 8 5.2zM8 1.2c2.8 0 5.4 1.1 7.3 3l-1.35 1.5A8.4 8.4 0 0 0 8 3.2 8.4 8.4 0 0 0 2.05 5.7L.7 4.2A10.3 10.3 0 0 1 8 1.2z"
-                  fill="#000"
+                  fill={chromeIcon}
                 />
               </Svg>
               {/* battery */}
               <Svg width={27} height={13} viewBox="0 0 27 13">
-                <Rect x="0.6" y="0.6" width="22" height="11.8" rx="3" fill="none" stroke="#000" strokeOpacity={0.35} />
-                <Rect x="2" y="2" width="17" height="9" rx="1.5" fill="#000" />
-                <Rect x="24" y="4" width="2.2" height="5" rx="1" fill="#000" fillOpacity={0.4} />
+                <Rect x="0.6" y="0.6" width="22" height="11.8" rx="3" fill="none" stroke={chromeIcon} strokeOpacity={0.35} />
+                <Rect x="2" y="2" width="17" height="9" rx="1.5" fill={chromeIcon} />
+                <Rect x="24" y="4" width="2.2" height="5" rx="1" fill={chromeIcon} fillOpacity={0.4} />
               </Svg>
             </View>
           </View>
@@ -165,11 +182,11 @@ function PhoneFrame({ children }: { children: React.ReactNode }) {
 }
 
 /** Live status-bar clock for the web phone-frame (24h H:MM, ticks each minute). */
-function StatusClock() {
+function StatusClock({ color }: { color: string }) {
   const now = useNow(30_000);
   const hh = now.getHours();
   const mm = String(now.getMinutes()).padStart(2, '0');
-  return <Text style={webStyles.clock}>{`${hh}:${mm}`}</Text>;
+  return <Text style={[webStyles.clock, { color }]}>{`${hh}:${mm}`}</Text>;
 }
 
 /** Judge-readable labels for the finale recap, one per interactive step. Persona-neutral: the
@@ -186,6 +203,12 @@ const TOUR_RECAP_LABELS: Record<string, string> = {
 
 function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
   const { ready, onboardingComplete, tourActive, tourPaused, tourStepIndex, tourBranch, setTourStep, pauseTour, exitTour, startTour, coverage, pendingOffers, activeDemoProfile, clearedByLenderNotice, dismissClearedByLenderNotice } = useAppData();
+  const accentTheme = useAccent();
+  const theme = useThemeColors();
+  useWebFocusRing(accentTheme.accent);
+  // Global rather than per-screen: the reminder ladder has to be re-armed whenever the app is
+  // opened or a transaction is saved, and neither is tied to any one screen. No-ops on web.
+  useReminderSync();
   const insets = useSafeAreaInsets();
   const [screen, setScreen] = useState<Screen>('home');
   /** Where the Attack Gallery's back button returns to. It has two entrances  the Settings row
@@ -196,13 +219,45 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
   const [txnFilter, setTxnFilter] = useState<string | null>(null);
   const [addInitial, setAddInitial] = useState<'attach' | 'import'>('attach');
   const [calendarMonth, setCalendarMonth] = useState<string | undefined>(undefined);
-  // Where to land after eKYC (Brief-level UI/UX P2.8): verifying from the Loans gate must
-  // return to Loans, not always to the Passport ceremony  whichever screen opened KYC wins.
+  const [exportMonth, setExportMonth] = useState<string | undefined>(undefined);
+  const [exportOrigin, setExportOrigin] = useState<Screen>('settings');
+  const openExport = (from: Screen, month?: string) => {
+    setExportOrigin(from);
+    setExportMonth(month);
+    setScreen('export');
+  };
   const [kycReturnTo, setKycReturnTo] = useState<Screen>('passport');
   const openKyc = (from: Screen) => {
     setKycReturnTo(from);
     setScreen('kyc');
   };
+
+  // Deep linking and Android widget tap handler
+  useEffect(() => {
+    const handleUrl = (url: string | null) => {
+      if (!url) return;
+      if (url.startsWith('pip://add') || url.endsWith('/add')) {
+        setAddInitial('attach');
+        setScreen('add');
+      } else if (url.startsWith('pip://dashboard') || url.endsWith('/home')) {
+        setScreen('home');
+      }
+    };
+
+    Linking.getInitialURL().then(handleUrl).catch(() => {});
+    const urlSub = Linking.addEventListener('url', (e) => handleUrl(e.url));
+    return () => urlSub.remove();
+  }, []);
+
+  // Sync widget when app resumes from background
+  useEffect(() => {
+    const appStateSub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        syncStreakWidget().catch(() => {});
+      }
+    });
+    return () => appStateSub.remove();
+  }, []);
 
   // Judge guided tour v2 (Interactive Judge Tour spec, 2026-07-16). `tourDrivenRef`
   // distinguishes a screen change the tour itself made from one the judge made by tapping
@@ -513,7 +568,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
     screen === 'home' ? 'home'
     : screen === 'transactions' ? 'activity'
     : screen === 'loans' ? 'loan'
-    : screen === 'settings' ? 'profile'
+    : screen === 'settings' ? 'settings'
     : null;
   const goTab = (t: NavTab) => {
     if (t === 'home') setScreen('home');
@@ -526,7 +581,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
 
   if (!fontsLoaded || !ready) {
     return (
-      <View style={[styles.fill, styles.center]}>
+      <View style={[styles.fill, styles.center, { backgroundColor: theme.bg }]}>
         <Pip size={96} expr="idle" float />
       </View>
     );
@@ -535,14 +590,14 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
   // One-time setup before the main app.
   if (!onboardingComplete) {
     return (
-      <View style={styles.fill}>
+      <View style={[styles.fill, { backgroundColor: theme.bg }]}>
         <OnboardingScreen />
       </View>
     );
   }
 
   return (
-    <View style={styles.fill}>
+    <View style={[styles.fill, { backgroundColor: theme.bg }]}>
       <View style={styles.fill}>
       {screen === 'home' && (
         <DashboardScreen
@@ -550,7 +605,6 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
             setAddInitial('attach');
             setScreen('add');
           }}
-          onOpenCategories={() => setScreen('categories')}
           onOpenAll={() => {
             setTxnFilter(null);
             setScreen('transactions');
@@ -582,15 +636,23 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
             setScreen('add');
           }}
           onAdvancedImport={() => setScreen('advancedImport')}
+          onOpenExport={() => openExport('settings')}
           onOpenAttacks={() => {
             setAttacksOrigin('settings');
             setScreen('attacks');
           }}
+          onOpenCategories={() => setScreen('categories')}
           onResetToOnboarding={() => setScreen('home')}
         />
       )}
       {screen === 'attacks' && <AttackGalleryScreen onBack={() => setScreen(attacksOrigin)} />}
       {screen === 'advancedImport' && <AdvancedImportScreen onClose={() => setScreen('settings')} />}
+      {screen === 'export' && (
+        <ExportScreen
+          initialMonth={exportMonth}
+          onBack={() => setScreen(exportOrigin)}
+        />
+      )}
       {screen === 'categories' && <CategoriesScreen onBack={() => setScreen('home')} />}
       {screen === 'transactions' && (
         <AllTransactionsScreen
@@ -615,6 +677,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
             setCalendarMonth(month);
             setScreen('calendar');
           }}
+          onOpenExport={(month) => openExport('recap', month)}
         />
       )}
       {screen === 'calendar' && (
@@ -729,7 +792,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1, backgroundColor: colors.bg },
+  fill: { flex: 1 },
   center: { alignItems: 'center', justifyContent: 'center' },
 });
 
@@ -740,14 +803,12 @@ const webStyles = StyleSheet.create({
   fullBleed: {
     flex: 1,
     minHeight: '100vh' as unknown as number,
-    backgroundColor: colors.bg,
   },
   backdrop: {
     flex: 1,
     minHeight: '100vh' as unknown as number,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#d2d8d2',
     padding: 16,
   },
   phone: {
@@ -757,15 +818,12 @@ const webStyles = StyleSheet.create({
     maxWidth: '100%' as unknown as number,
     borderRadius: 44,
     overflow: 'hidden',
-    backgroundColor: colors.bg,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.08)',
     ...platformShadow('#000000', 0.18, 40, { width: 0, height: 18 }, 0),
   },
   statusBar: {
     height: 50,
     justifyContent: 'center',
-    backgroundColor: colors.bg,
     zIndex: 10,
   },
   statusRow: {
@@ -777,7 +835,6 @@ const webStyles = StyleSheet.create({
   clock: {
     fontFamily: uiFont(700),
     fontSize: 16,
-    color: '#000',
     letterSpacing: 0.3,
   },
   rightIcons: {
@@ -793,7 +850,6 @@ const webStyles = StyleSheet.create({
   bar: {
     width: 3,
     borderRadius: 1,
-    backgroundColor: '#000',
   },
   island: {
     position: 'absolute',

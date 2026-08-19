@@ -8,8 +8,10 @@ import { fmt } from '../lib/format';
 import { suggestForMerchant } from '../lib/recommend';
 import type { ExtractedTxn } from '../lib/types';
 import { getLLM, llmErrorMessage } from '../llm';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
 import { useAppData } from '../state/store';
-import { colors, uiFont } from '../theme';
+import { uiFont } from '../theme';
 import type { PickedImage } from './AttachScreen';
 
 type Phase = 'scanning' | 'result' | 'error';
@@ -30,6 +32,8 @@ export function ExtractScreen({
   onDone: (items: ExtractedTxn[], linkId: string | null) => void;
 }) {
   const insets = useSafeAreaInsets();
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const { memory, catById, accounts, ensureDefaultAccount } = useAppData();
   const [phase, setPhase] = useState<Phase>(cachedItems ? 'result' : 'scanning');
   const [items, setItems] = useState<ExtractedTxn[]>(cachedItems ?? []);
@@ -108,7 +112,7 @@ export function ExtractScreen({
   const removeAt = (idx: number) => setItems((prev) => prev.filter((_, i) => i !== idx));
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: colorTheme.bg }]}>
       <ScrollView
         contentContainerStyle={{ paddingTop: insets.top + 4, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
@@ -147,10 +151,10 @@ export function ExtractScreen({
 
         {/* picked image preview with scanline */}
         <View style={{ paddingHorizontal: 18, paddingTop: 18 }}>
-          <Card style={styles.preview}>
-            <Image source={{ uri: image.uri }} style={styles.previewImg} resizeMode="contain" />
+          <Card style={[styles.preview, { backgroundColor: colorTheme.surface2 }]}>
+            <Image source={{ uri: image.uri }} style={[styles.previewImg, { backgroundColor: colorTheme.surface2 }]} resizeMode="contain" />
             {phase === 'scanning' && (
-              <Animated.View style={[styles.scanline, { transform: [{ translateY }] }]} />
+              <Animated.View style={[styles.scanline, { borderTopColor: theme.accent }, { transform: [{ translateY }] }]} />
             )}
           </Card>
         </View>
@@ -166,37 +170,37 @@ export function ExtractScreen({
             <Eyebrow style={{ marginBottom: 10 }}>Extracted items</Eyebrow>
             <Card style={{ overflow: 'hidden' }}>
               {withSuggestions.map((e, i) => (
-                <View key={i} style={[styles.itemRow, i > 0 && styles.divider]}>
-                  <View style={styles.initialBox}>
-                    <Text style={styles.initial}>{e.merchant.charAt(0).toUpperCase()}</Text>
+                <View key={i} style={[styles.itemRow, i > 0 && [styles.divider, { borderTopColor: colorTheme.line2 }]]}>
+                  <View style={[styles.initialBox, { backgroundColor: colorTheme.surface2 }]}>
+                    <Text style={[styles.initial, { color: colorTheme.ink2 }]}>{e.merchant.charAt(0).toUpperCase()}</Text>
                   </View>
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={styles.merchant} numberOfLines={1}>
+                    <Text style={[styles.merchant, { color: colorTheme.ink }]} numberOfLines={1}>
                       {e.merchant}
                     </Text>
                     {e.suggestion && catById[e.suggestion] ? (
                       <View style={styles.likely}>
-                        <Icon name="sparkles" size={11} color={colors.accentInk} />
-                        <Text style={styles.likelyText}>likely {catById[e.suggestion].label}</Text>
+                        <Icon name="sparkles" size={11} color={theme.accentInk} />
+                        <Text style={[styles.likelyText, { color: theme.accentInk }]}>likely {catById[e.suggestion].label}</Text>
                       </View>
                     ) : e.type === 'income' ? (
-                      <Text style={styles.incomeTag}>received</Text>
+                      <Text style={[styles.incomeTag, { color: theme.accent }]}>received</Text>
                     ) : null}
                   </View>
-                  <Amount value={e.amount} size={14} weight={600} color={e.type === 'income' ? colors.accent : colors.ink} />
-                  <Pressable onPress={() => removeAt(i)} hitSlop={8} style={styles.removeBtn}>
-                    <Icon name="x" size={15} color={colors.ink3} />
+                  <Amount value={e.amount} size={14} weight={600} color={e.type === 'income' ? theme.accent : colorTheme.ink} />
+                  <Pressable onPress={() => removeAt(i)} hitSlop={8} style={[styles.removeBtn, { backgroundColor: colorTheme.surface2 }]}>
+                    <Icon name="x" size={15} color={colorTheme.ink3} />
                   </Pressable>
                 </View>
               ))}
             </Card>
-            <Text style={styles.removeHint}>Tap ✕ to skip a row you don’t want to record.</Text>
+            <Text style={[styles.removeHint, { color: colorTheme.ink2 }]}>Tap ✕ to skip a row you don’t want to record.</Text>
           </View>
         )}
       </ScrollView>
 
       {/* sticky footer */}
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+      <View style={[styles.footer, { backgroundColor: colorTheme.bg, borderTopColor: colorTheme.line2 }, { paddingBottom: insets.bottom + 16 }]}>
         {phase === 'result' && items.length > 0 && (
           <PrimaryButton onPress={() => onDone(items, linkId)}>
             <BtnLabel>Sort {items.length} item{items.length > 1 ? 's' : ''}</BtnLabel>
@@ -215,9 +219,9 @@ export function ExtractScreen({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
-  preview: { overflow: 'hidden', backgroundColor: colors.surface2, padding: 0 },
-  previewImg: { width: '100%', height: PREVIEW_H, backgroundColor: colors.surface2 },
+  root: { flex: 1 },
+  preview: { overflow: 'hidden', padding: 0 },
+  previewImg: { width: '100%', height: PREVIEW_H },
   scanline: {
     position: 'absolute',
     left: 0,
@@ -226,25 +230,23 @@ const styles = StyleSheet.create({
     height: 28,
     backgroundColor: 'rgba(31,138,91,0.28)',
     borderTopWidth: 2,
-    borderTopColor: colors.accent,
   },
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 15, paddingVertical: 11 },
-  divider: { borderTopWidth: 1, borderTopColor: colors.line2 },
-  removeBtn: { width: 26, height: 26, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface2 },
-  removeHint: { fontFamily: uiFont(500), fontSize: 12, color: colors.ink2, marginTop: 10, marginLeft: 2 },
+  divider: { borderTopWidth: 1 },
+  removeBtn: { width: 26, height: 26, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  removeHint: { fontFamily: uiFont(500), fontSize: 12, marginTop: 10, marginLeft: 2 },
   initialBox: {
     width: 30,
     height: 30,
     borderRadius: 9,
-    backgroundColor: colors.surface2,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  initial: { fontFamily: uiFont(700), fontSize: 13, color: colors.ink2 },
-  merchant: { fontFamily: uiFont(600), fontSize: 14, color: colors.ink },
+  initial: { fontFamily: uiFont(700), fontSize: 13 },
+  merchant: { fontFamily: uiFont(600), fontSize: 14 },
   likely: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },
-  likelyText: { fontFamily: uiFont(600), fontSize: 11.5, color: colors.accentInk },
-  incomeTag: { fontFamily: uiFont(600), fontSize: 11.5, color: colors.accent, marginTop: 1 },
+  likelyText: { fontFamily: uiFont(600), fontSize: 11.5 },
+  incomeTag: { fontFamily: uiFont(600), fontSize: 11.5, marginTop: 1 },
   footer: {
     position: 'absolute',
     left: 0,
@@ -252,8 +254,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     paddingHorizontal: 18,
     paddingTop: 12,
-    backgroundColor: colors.bg,
     borderTopWidth: 1,
-    borderTopColor: colors.line2,
   },
 });

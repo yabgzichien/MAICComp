@@ -4,11 +4,13 @@ import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text } from 'react-native';
 import { getLLM, llmErrorMessage } from '../llm';
 import { notify } from '../lib/platformAlert';
+import { useAccent } from '../state/accent';
 import { colors, uiFont } from '../theme';
 import { Icon } from './Icon';
 
 /** Snap or pick a screenshot of a balance; the vision model reads the amount and reports it back. */
 export function ScanBalanceButton({ onResult }: { onResult: (amount: number) => void }) {
+  const theme = useAccent();
   const [busy, setBusy] = useState(false);
 
   const extract = async (res: ImagePicker.ImagePickerResult) => {
@@ -57,14 +59,22 @@ export function ScanBalanceButton({ onResult }: { onResult: (amount: number) => 
   };
 
   return (
-    <Pressable onPress={start} disabled={busy} style={({ pressed }) => [styles.btn, { opacity: busy ? 0.6 : pressed ? 0.85 : 1 }]}>
-      {busy ? <ActivityIndicator size="small" color={colors.accent} /> : <Icon name="scan" size={15} color={colors.accent} />}
-      <Text style={styles.text}>{busy ? 'Reading…' : 'Scan'}</Text>
+    <Pressable
+      onPress={start}
+      disabled={busy}
+      style={({ pressed }) => [
+        styles.btn,
+        { backgroundColor: theme.accentTint, borderColor: theme.accentSoft },
+        { opacity: busy ? 0.6 : pressed ? 0.85 : 1 },
+      ]}
+    >
+      {busy ? <ActivityIndicator size="small" color={theme.accent} /> : <Icon name="scan" size={15} color={theme.accent} />}
+      <Text style={[styles.text, { color: theme.accent }]}>{busy ? 'Reading…' : 'Scan'}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  btn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 999, backgroundColor: colors.accentTint, borderWidth: 1, borderColor: colors.accentSoft },
-  text: { fontFamily: uiFont(700), fontSize: 13, color: colors.accent },
+  btn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 999, borderWidth: 1 },
+  text: { fontFamily: uiFont(700), fontSize: 13 },
 });

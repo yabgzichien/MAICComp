@@ -69,17 +69,44 @@ function readTokens(relPath) {
   return extractHexAssignments(source);
 }
 
-const pipTheme = readTokens('PipComp/src/theme.ts');
+const pipThemeSrc = fs.readFileSync(path.join(__dirname, '../../..', 'PipComp/src/theme.ts'), 'utf8');
 const consoleTokensSrc = fs.readFileSync(path.join(__dirname, '../../../LenderConsole/app/tokens.ts'), 'utf8');
 // Two palettes (CLEAN, ALERT) share property names in the same file — split by the `const NAME:
 // Palette = { ... }` blocks so CLEAN's ink3 isn't shadowed by ALERT's ink3 in a flat regex pass.
-function readPaletteBlock(source, constName) {
-  const m = source.match(new RegExp(`const ${constName}: Palette = \\{([\\s\\S]*?)\\n\\};`));
-  if (!m) throw new Error(`Could not find palette block "${constName}" in tokens.ts`);
+function readPaletteBlock(source, constName, typeAnnotation) {
+  const m = source.match(new RegExp(`const ${constName}${typeAnnotation}\\s*=\\s*\\{([\\s\\S]*?)\\n\\}[;\\s]`));
+  if (!m) throw new Error(`Could not find palette block "${constName}" in source`);
   return extractHexAssignments(m[1]);
 }
-const consoleClean = readPaletteBlock(consoleTokensSrc, 'CLEAN');
-const consoleAlert = readPaletteBlock(consoleTokensSrc, 'ALERT');
+const consoleClean = readPaletteBlock(consoleTokensSrc, 'CLEAN', ': Palette');
+const consoleAlert = readPaletteBlock(consoleTokensSrc, 'ALERT', ': Palette');
+
+// theme.ts's `colors` export still holds the fixed, scheme-independent literals (accent*,
+// onAccent, shotHead/shotInk, deltaUp, passportDark) — the structural bg/surface/ink*/line*/
+// amber/red* properties moved out into LIGHT_COLORS/DARK_COLORS (dark-mode migration), which
+// share property names with each other so need the same block-isolation as CLEAN/ALERT above.
+const pipFixed = readPaletteBlock(pipThemeSrc, 'colors', '');
+const pipLight = readPaletteBlock(pipThemeSrc, 'LIGHT_COLORS', ': StructuralColors');
+const pipDark = readPaletteBlock(pipThemeSrc, 'DARK_COLORS', ': StructuralColors');
+const pipTheme = { ...pipLight, ...pipFixed }; // light-mode structural + fixed accent/onAccent
+
+// Same shadowing problem as CLEAN/ALERT above, but N-ways per preset AND per light/dark: the
+// Settings accent-color picker's presets (src/state/accentPresets.ts) all share the same
+// property names (accent/accentInk/accentSoft/accentTint) inside one array literal, twice each
+// (light + dark), so a flat regex pass would let every one of them stomp the last. Pull each
+// preset's `light: { ... }` and `dark: { ... }` objects out individually — safe to match on
+// `[^}]*` since neither object nests any braces of its own.
+function readAccentPresets(relPath) {
+  const source = fs.readFileSync(path.join(__dirname, '../../..', relPath), 'utf8');
+  const presets = [];
+  const re = /id:\s*'(\w+)'[\s\S]*?light:\s*\{([^}]*)\}[\s\S]*?dark:\s*\{([^}]*)\}/g;
+  let m;
+  while ((m = re.exec(source))) {
+    presets.push({ id: m[1], light: extractHexAssignments(m[2]), dark: extractHexAssignments(m[3]) });
+  }
+  return presets;
+}
+const accentPresets = readAccentPresets('PipComp/src/state/accentPresets.ts');
 
 // ── Known foreground/background pairings this codebase actually renders ────────────────────
 // One entry per real text/UI-color pairing (label, fg, bg, large-text-or-UI-component flag).
@@ -101,6 +128,40 @@ function pipPairs(t) {
     ['PipComp red on surface', t.red, t.surface, false],
   ];
 }
+// One preset's hex values, checked against the pairs the fixed green/amber tokens above are
+// checked against (buttons, chip text, tint-background text) — a bad preset should fail this
+// the same way a bad static token would. `light`/`dark` are AccentTheme objects (see
+// src/state/accentPresets.ts): `accent`/`accentInk` are identical between the two (self-contained
+// fills, used with onAccent/white text — accentInk's own luminance is too low to ever read as
+// *text* against anything darker than itself, so it can't also serve as a dark-mode tint-text
+// color); only `accentSoft`/`accentTint` differ, and dark-mode call sites use the structural
+// `ink` color (not accentInk) as the readable text/icon on top of those dark tints.
+function accentPresetPairs(preset) {
+  return [
+    [`AccentPreset ${preset.id} (light): onAccent on accentInk (buttons)`, '#ffffff', preset.light.accentInk, false],
+    [`AccentPreset ${preset.id} (light): accentInk on surface`, preset.light.accentInk, pipLight.surface, false],
+    [`AccentPreset ${preset.id} (light): accentInk on accentSoft (chips)`, preset.light.accentInk, preset.light.accentSoft, false],
+    [`AccentPreset ${preset.id} (light): accentInk on accentTint (tint bg)`, preset.light.accentInk, preset.light.accentTint, false],
+    [`AccentPreset ${preset.id} (dark): onAccent on accentInk (buttons)`, '#ffffff', preset.dark.accentInk, false],
+    [`AccentPreset ${preset.id} (dark): ink on accentSoft (chips)`, pipDark.ink, preset.dark.accentSoft, false],
+    [`AccentPreset ${preset.id} (dark): ink on accentTint (tint bg)`, pipDark.ink, preset.dark.accentTint, false],
+  ];
+}
+
+// The non-accent structural pairs (ink ladder + amber/red status colors), checked against
+// whichever scheme's own `surface`/tint tokens — same shape for light and dark.
+function structuralPairs(label, t) {
+  return [
+    [`${label} ink3 on surface`, t.ink3, t.surface, false],
+    [`${label} ink2 on surface`, t.ink2, t.surface, false],
+    [`${label} ink on surface`, t.ink, t.surface, false],
+    [`${label} amber on surface`, t.amber, t.surface, false],
+    [`${label} amber on amberTint (refer pill)`, t.amber, t.amberTint, false],
+    [`${label} red on redTint (decline pill)`, t.red, t.redTint, false],
+    [`${label} red on surface`, t.red, t.surface, false],
+  ];
+}
+
 function consolePairs(label, p) {
   return [
     [`${label} ink3 on surface`, p.ink3, p.surface, false],
@@ -115,6 +176,8 @@ function consolePairs(label, p) {
 
 const PAIRS = [
   ...pipPairs(pipTheme),
+  ...structuralPairs('PipComp dark', pipDark),
+  ...accentPresets.flatMap(accentPresetPairs),
   ...consolePairs('LenderConsole CLEAN', consoleClean),
   ...consolePairs('LenderConsole ALERT', consoleAlert),
 ];

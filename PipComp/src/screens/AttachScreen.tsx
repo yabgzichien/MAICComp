@@ -6,7 +6,9 @@ import { Icon, type IconName } from '../components/Icon';
 import { B, BubbleText, Card, PipSays, TopBar } from '../components/ui';
 import { notify } from '../lib/platformAlert';
 import { SAMPLE_STATEMENTS } from '../data/sampleStatements';
-import { colors, radius, uiFont } from '../theme';
+import { useAccent } from '../state/accent';
+import { useThemeColors } from '../state/colorScheme';
+import { radius, uiFont } from '../theme';
 
 export interface PickedImage {
   uri: string;
@@ -48,6 +50,8 @@ export function AttachScreen({
   showSamples?: boolean;
 }) {
   const insets = useSafeAreaInsets();
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   const [busy, setBusy] = useState(false);
   // Camera-vs-gallery is a detail of HOW you hand over a statement, not a separate thing to add,
   // so it stays folded away until the statement row is chosen. Open from the start during the
@@ -106,7 +110,7 @@ export function AttachScreen({
   };
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: colorTheme.bg }]}>
       <ScrollView
         contentContainerStyle={{ paddingTop: insets.top + 4, paddingBottom: insets.bottom + 30 }}
         showsVerticalScrollIndicator={false}
@@ -123,19 +127,19 @@ export function AttachScreen({
         </View>
 
         {!hasKey && (
-          <Pressable onPress={onManual} style={styles.keyNotice}>
-            <Icon name="sparkles" size={18} color={colors.accentInk} />
-            <Text style={styles.keyNoticeText}>
+          <Pressable onPress={onManual} style={[styles.keyNotice, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]}>
+            <Icon name="sparkles" size={18} color={theme.accentInk} />
+            <Text style={[styles.keyNoticeText, { color: theme.accentInk }]}>
               Scanning isn't available right now. Enter a transaction manually instead.
             </Text>
-            <Icon name="chevronRight" size={16} color={colors.accentInk} />
+            <Icon name="chevronRight" size={16} color={theme.accentInk} />
           </Pressable>
         )}
 
         {/* ── One purchase ── */}
         <View style={styles.group}>
-          <Text style={styles.groupLabel}>ONE PURCHASE</Text>
-          <Text style={styles.groupSub}>A single shop, on a single day.</Text>
+          <Text style={[styles.groupLabel, { color: colorTheme.ink2 }]}>ONE PURCHASE</Text>
+          <Text style={[styles.groupSub, { color: colorTheme.ink3 }]}>A single shop, on a single day.</Text>
           <View style={{ gap: 12, marginTop: 12 }}>
             <SourceButton
               icon="receipt"
@@ -156,8 +160,8 @@ export function AttachScreen({
 
         {/* ── Many transactions ── */}
         <View style={styles.group}>
-          <Text style={styles.groupLabel}>MANY TRANSACTIONS AT ONCE</Text>
-          <Text style={styles.groupSub}>A statement or wallet history, covering several days.</Text>
+          <Text style={[styles.groupLabel, { color: colorTheme.ink2 }]}>MANY TRANSACTIONS AT ONCE</Text>
+          <Text style={[styles.groupSub, { color: colorTheme.ink3 }]}>A statement or wallet history, covering several days.</Text>
           <View style={{ gap: 12, marginTop: 12 }}>
             <SourceButton
               icon="scan"
@@ -169,26 +173,31 @@ export function AttachScreen({
             />
 
             {statementOpen && (
-              <View style={styles.nested}>
+              <View style={[styles.nested, { borderLeftColor: theme.accentSoft }]}>
                 {showSamples && (
                   <>
-                    <Text style={styles.sampleLabel}>NO SCREENSHOT HANDY? TAP A SAMPLE</Text>
+                    <Text style={[styles.sampleLabel, { color: colorTheme.ink3 }]}>NO SCREENSHOT HANDY? TAP A SAMPLE</Text>
                     <ScrollView
                       horizontal
                       showsHorizontalScrollIndicator={false}
                       contentContainerStyle={{ gap: 12, paddingVertical: 4, paddingRight: 4 }}
                     >
                       {SAMPLE_STATEMENTS.map((s) => (
-                        <Pressable key={s.id} onPress={() => onPicked(s.image)} style={styles.sampleCard} disabled={busy}>
-                          <RNImage source={{ uri: s.image.uri }} style={styles.sampleThumb} resizeMode="cover" />
+                        <Pressable
+                          key={s.id}
+                          onPress={() => onPicked(s.image)}
+                          style={[styles.sampleCard, { backgroundColor: colorTheme.surface, borderColor: theme.accentSoft }]}
+                          disabled={busy}
+                        >
+                          <RNImage source={{ uri: s.image.uri }} style={[styles.sampleThumb, { backgroundColor: theme.accentTint }]} resizeMode="cover" />
                           <View style={{ padding: 10 }}>
-                            <Text style={styles.sampleTitle} numberOfLines={1}>{s.label}</Text>
-                            <Text style={styles.sampleSub} numberOfLines={1}>{s.provider}</Text>
+                            <Text style={[styles.sampleTitle, { color: colorTheme.ink }]} numberOfLines={1}>{s.label}</Text>
+                            <Text style={[styles.sampleSub, { color: colorTheme.ink2 }]} numberOfLines={1}>{s.provider}</Text>
                           </View>
                         </Pressable>
                       ))}
                     </ScrollView>
-                    <Text style={styles.sampleOr}>or use your own</Text>
+                    <Text style={[styles.sampleOr, { color: colorTheme.ink3 }]}>or use your own</Text>
                   </>
                 )}
                 <View style={{ flexDirection: 'row', gap: 10, marginTop: showSamples ? 12 : 0 }}>
@@ -208,7 +217,7 @@ export function AttachScreen({
           </View>
         </View>
 
-        <Text style={styles.hint}>
+        <Text style={[styles.hint, { color: colorTheme.ink2 }]}>
           Screenshots are sent to your chosen AI provider only to read the transactions. Manual entries stay on your device.
         </Text>
       </ScrollView>
@@ -233,6 +242,8 @@ function SourceButton({
    *  right, so it never promises a screen change it does not make. */
   expanded?: boolean;
 }) {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
   return (
     <Pressable
       onPress={onPress}
@@ -242,21 +253,23 @@ function SourceButton({
       accessibilityState={expanded === undefined ? undefined : { expanded }}
       style={({ pressed }) => [
         styles.source,
+        { backgroundColor: colorTheme.surface, borderColor: colorTheme.line },
         expanded && styles.sourceOn,
+        expanded && { borderColor: theme.accentSoft, backgroundColor: theme.accentTint },
         { opacity: disabled ? 0.6 : pressed ? 0.9 : 1 },
       ]}
     >
-      <View style={styles.sourceIcon}>
-        <Icon name={icon} size={24} color={colors.accent} />
+      <View style={[styles.sourceIcon, { backgroundColor: theme.accentTint }]}>
+        <Icon name={icon} size={24} color={theme.accent} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={styles.sourceTitle}>{title}</Text>
-        <Text style={styles.sourceSub}>{sub}</Text>
+        <Text style={[styles.sourceTitle, { color: colorTheme.ink }]}>{title}</Text>
+        <Text style={[styles.sourceSub, { color: colorTheme.ink2 }]}>{sub}</Text>
       </View>
       <Icon
         name={expanded === undefined ? 'chevronRight' : expanded ? 'chevronDown' : 'chevronRight'}
         size={18}
-        color={colors.ink3}
+        color={colorTheme.ink3}
       />
     </Pressable>
   );
@@ -274,21 +287,26 @@ function MiniButton({
   onPress: () => void;
   disabled?: boolean;
 }) {
+  const theme = useAccent();
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
-      style={({ pressed }) => [styles.mini, { opacity: disabled ? 0.6 : pressed ? 0.9 : 1 }]}
+      style={({ pressed }) => [
+        styles.mini,
+        { backgroundColor: theme.accentTint, borderColor: theme.accentSoft },
+        { opacity: disabled ? 0.6 : pressed ? 0.9 : 1 },
+      ]}
     >
-      <Icon name={icon} size={19} color={colors.accent} />
-      <Text style={styles.miniText}>{label}</Text>
+      <Icon name={icon} size={19} color={theme.accent} />
+      <Text style={[styles.miniText, { color: theme.accentInk }]}>{label}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+  root: { flex: 1 },
   keyNotice: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -297,15 +315,13 @@ const styles = StyleSheet.create({
     marginTop: 16,
     padding: 14,
     borderRadius: radius.sm,
-    backgroundColor: colors.accentTint,
     borderWidth: 1,
-    borderColor: colors.accentSoft,
   },
-  keyNoticeText: { flex: 1, fontFamily: uiFont(600), fontSize: 13.5, color: colors.accentInk },
+  keyNoticeText: { flex: 1, fontFamily: uiFont(600), fontSize: 13.5 },
   group: { paddingHorizontal: 18, paddingTop: 22 },
-  groupLabel: { fontFamily: uiFont(700), fontSize: 11, letterSpacing: 0.6, color: colors.ink2 },
-  groupSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink3, marginTop: 3 },
-  nested: { marginLeft: 14, paddingLeft: 14, borderLeftWidth: 2, borderLeftColor: colors.accentSoft },
+  groupLabel: { fontFamily: uiFont(700), fontSize: 11, letterSpacing: 0.6 },
+  groupSub: { fontFamily: uiFont(500), fontSize: 12.5, marginTop: 3 },
+  nested: { marginLeft: 14, paddingLeft: 14, borderLeftWidth: 2 },
   mini: {
     flex: 1,
     flexDirection: 'row',
@@ -314,53 +330,45 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 13,
     borderRadius: radius.sm,
-    backgroundColor: colors.accentTint,
     borderWidth: 1,
-    borderColor: colors.accentSoft,
   },
-  miniText: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.accentInk },
+  miniText: { fontFamily: uiFont(700), fontSize: 13.5 },
   source: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
     padding: 16,
     borderRadius: radius.md,
-    backgroundColor: colors.surface,
     borderWidth: 1.5,
-    borderColor: colors.line,
     borderStyle: 'dashed',
   },
-  sourceOn: { borderStyle: 'solid', borderColor: colors.accentSoft, backgroundColor: colors.accentTint },
+  sourceOn: { borderStyle: 'solid' },
   sourceIcon: {
     width: 48,
     height: 48,
     borderRadius: 14,
-    backgroundColor: colors.accentTint,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sourceTitle: { fontFamily: uiFont(700), fontSize: 15.5, color: colors.ink },
-  sourceSub: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink2, marginTop: 1 },
-  sampleLabel: { fontFamily: uiFont(700), fontSize: 11, letterSpacing: 0.5, color: colors.ink3, marginBottom: 10 },
+  sourceTitle: { fontFamily: uiFont(700), fontSize: 15.5 },
+  sourceSub: { fontFamily: uiFont(500), fontSize: 12.5, marginTop: 1 },
+  sampleLabel: { fontFamily: uiFont(700), fontSize: 11, letterSpacing: 0.5, marginBottom: 10 },
   sampleCard: {
     width: 150,
     borderRadius: radius.md,
-    backgroundColor: colors.surface,
     borderWidth: 1.5,
-    borderColor: colors.accentSoft,
     overflow: 'hidden',
   },
-  sampleThumb: { width: '100%', height: 96, backgroundColor: colors.accentTint },
-  sampleTitle: { fontFamily: uiFont(700), fontSize: 13.5, color: colors.ink },
-  sampleSub: { fontFamily: uiFont(500), fontSize: 11.5, color: colors.ink2, marginTop: 1 },
-  sampleOr: { fontFamily: uiFont(500), fontSize: 12.5, color: colors.ink3, marginTop: 12 },
+  sampleThumb: { width: '100%', height: 96 },
+  sampleTitle: { fontFamily: uiFont(700), fontSize: 13.5 },
+  sampleSub: { fontFamily: uiFont(500), fontSize: 11.5, marginTop: 1 },
+  sampleOr: { fontFamily: uiFont(500), fontSize: 12.5, marginTop: 12 },
   hint: {
     paddingHorizontal: 24,
     paddingTop: 26,
     textAlign: 'center',
     fontFamily: uiFont(500),
     fontSize: 12.5,
-    color: colors.ink2,
     lineHeight: 18,
   },
 });
