@@ -135,3 +135,17 @@ export function monthLabel(monthKey: string, full = true): string {
   if (idx < 0 || idx > 11) return monthKey;
   return full ? `${MONTHS[idx]} ${year}` : `${MONTHS_SHORT[idx]} '${year.slice(2)}`;
 }
+
+/** Add `months` calendar months to an ISO 'YYYY-MM-DD' date, clamping to the target month's
+ *  last day (handles e.g. Jan 31 + 1mo -> Feb 28). Shared by the loan repayment scheduler and
+ *  the recurring-commitment occurrence generator so month-end clamping stays in one place. */
+export function addMonthsClamped(isoDate: string, months: number): string {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  const target = new Date(Date.UTC(y, m - 1 + months, 1));
+  const lastDayOfTargetMonth = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  target.setUTCDate(Math.min(d, lastDayOfTargetMonth));
+  const yyyy = target.getUTCFullYear();
+  const mm = String(target.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(target.getUTCDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}

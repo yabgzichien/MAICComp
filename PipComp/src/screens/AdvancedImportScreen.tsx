@@ -12,6 +12,8 @@
 //   transactions.amount: NEGATIVE = expense/debit, POSITIVE = income/credit
 //   accounts.balance: always POSITIVE (outstanding amount for liabilities too)
 
+import * as DocumentPicker from 'expo-document-picker';
+import { File } from 'expo-file-system';
 import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -38,10 +40,12 @@ import {
   TopBar,
 } from '../components/ui';
 import { addAccount, listAccounts } from '../db/accountsRepo';
+import { addTransactions } from '../db/txnRepo';
 import { DROP, type Account, type ExtractedTxn } from '../lib/types';
 import { todayISO } from '../lib/duplicates';
+import { merchantKey } from '../lib/normalize';
 import { defaultLinkEffect } from '../lib/networth';
-import { buildPrompt, parseJSON, type ParsedAccount, type ParseResult } from '../lib/advancedImport';
+import { buildPrompt, parseJSON, type ParsedAccount, type ParsedCommitment, type ParsedTransfer, type ParseResult } from '../lib/advancedImport';
 import { useAccent } from '../state/accent';
 import { useThemeColors } from '../state/colorScheme';
 import { useAppData } from '../state/store';
@@ -169,17 +173,21 @@ export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
   const insets = useSafeAreaInsets();
   const theme = useAccent();
   const colorTheme = useThemeColors();
-  const { commitCategorized, recordBalanceLink, refreshAll } = useAppData();
+  const { commitCategorized, recordBalanceLink, refreshAll, setHoldingCost, updateHoldingQuantity, importParsedCommitments } = useAppData();
 
   const [phase, setPhase] = useState<Phase>('guide');
   const [jsonText, setJsonText] = useState('');
   const [parsedTxns, setParsedTxns] = useState<ExtractedTxn[]>([]);
   const [parsedAccounts, setParsedAccounts] = useState<ParsedAccount[]>([]);
+  const [parsedTransfers, setParsedTransfers] = useState<ParsedTransfer[]>([]);
+  const [parsedCommitments, setParsedCommitments] = useState<ParsedCommitment[]>([]);
   const [updateAccountBalances, setUpdateAccountBalances] = useState(true);
   const [error, setError] = useState('');
   const [txnCount, setTxnCount] = useState(0);
   const [txnSkipped, setTxnSkipped] = useState(0);
   const [accCount, setAccCount] = useState(0);
+  const [transferCount, setTransferCount] = useState(0);
+  const [commitmentCount, setCommitmentCount] = useState(0);
   const [copied, setCopied] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -201,23 +209,49 @@ export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
     }
   };
 
-  // ── Parse pasted JSON ─────────────────────────────────────────────────────
-  const handlePasteImport = () => {
-    const trimmed = jsonText.trim();
+  // ── Upload a JSON file from the device instead of pasting ────────────────
+  const [pickingFile, setPickingFile] = useState(false);
+  const pickJsonFile = async () => {
+    setPickingFile(true);
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: ['application/json', 'text/plain', 'text/*'],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (res.canceled || !res.assets?.length) return;
+      const asset = res.assets[0];
+      const text = await new File(asset.uri).text();
+      setJsonText(text);
+      setPhase('pasting');
+      handlePasteImport(text);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't read that file.");
+      setPhase('error');
+    } finally {
+      setPickingFile(false);
+    }
+  };
+
+  // ── Parse pasted (or uploaded) JSON ───────────────────────────────────────
+  const handlePasteImport = (text?: string) => {
+    const trimmed = (text ?? jsonText).trim();
     if (!trimmed) {
       setError('Paste the JSON from the AI response first.');
       setPhase('error');
       return;
     }
     try {
-      const { transactions, accounts } = parseJSON(trimmed);
-      if (transactions.length === 0 && accounts.length === 0) {
+      const { transactions, accounts, transfers, commitments } = parseJSON(trimmed);
+      if (transactions.length === 0 && accounts.length === 0 && transfers.length === 0 && commitments.length === 0) {
         setError('The JSON had no transactions or accounts. Check that you pasted the full reply.');
         setPhase('error');
         return;
       }
       setParsedTxns(transactions);
       setParsedAccounts(accounts);
+      setParsedTransfers(transfers);
+      setParsedCommitments(commitments);
       // If there are accounts to review, show that step first.
       if (accounts.length > 0) {
         setPhase('accountReview');
@@ -246,6 +280,12 @@ export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
         const createdAcc = await addAccount(acc.name, acc.kind, acc.cls, acc.balance, acc.asOf);
         newlyCreatedAccounts.push(createdAcc);
         savedAcc++;
+        // A version-2 export carries cost basis (and units, if the account was a live-priced
+        // holding). Cosmetic until the account also gets a symbol back in Net Worth — see
+        // isHolding() in lib/prices.ts, which requires both — but the invested amount survives
+        // the round trip either way.
+        if (acc.cost != null) await setHoldingCost(createdAcc.id, acc.cost);
+        if (acc.quantity != null) await updateHoldingQuantity(createdAcc.id, acc.quantity);
       }
 
       // 2. Commit transactions via the store.
@@ -281,7 +321,51 @@ export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
             await recordBalanceLink(targetAccount.id, txn.amount, effect, txn.date ?? today);
           }
         }
+
+        // 3b. A transfer moves money too, but only the source side is inferrable from a name
+        // match — a document names who it left, not reliably which account it landed in, so
+        // only the debit is applied. The full picture (target credited, holding cost/quantity
+        // moved) only exists for a transfer this app itself created via a DCA commitment tick.
+        if (parsedTransfers.length > 0) {
+          const existingAccounts2 = await listAccounts();
+          const allAccounts2 = [
+            ...newlyCreatedAccounts,
+            ...existingAccounts2.filter((e) => !newlyCreatedAccounts.some((n) => n.id === e.id)),
+          ];
+          for (const t of parsedTransfers) {
+            if (!t.account) continue;
+            const searchName = t.account.trim().toLowerCase();
+            const targetAccount = allAccounts2.find((a) => a.name.trim().toLowerCase() === searchName);
+            if (targetAccount) {
+              await recordBalanceLink(targetAccount.id, t.amount, 'subtract', t.date ?? today);
+            }
+          }
+        }
       }
+
+      // 4. Log transfers to the ledger (categoryId null, type 'transfer' — kept out of the
+      // income/expense pipeline per lib/types.ts's TxnType, same as a DCA commitment tick).
+      if (parsedTransfers.length > 0) {
+        await addTransactions(
+          parsedTransfers.map((t) => ({
+            merchantRaw: t.description || 'Transfer',
+            merchantKey: merchantKey(t.description || 'transfer'),
+            amount: t.amount,
+            type: 'transfer' as const,
+            date: t.date,
+            categoryId: null,
+            source: 'imported' as const,
+          }))
+        );
+      }
+      setTransferCount(parsedTransfers.length);
+
+      // 5. Recurring commitments, with their full occurrence history so the on-time record
+      // survives the device change this import usually represents.
+      if (parsedCommitments.length > 0) {
+        await importParsedCommitments(parsedCommitments);
+      }
+      setCommitmentCount(parsedCommitments.length);
 
       // Refresh so Net Worth screen picks up new accounts and balance entries.
       await refreshAll();
@@ -337,6 +421,8 @@ export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
                 Done!
                 {txnCount > 0 && <> Imported <B>{txnCount} transaction{txnCount === 1 ? '' : 's'}</B>{txnSkipped > 0 ? <> (skipped <B>{txnSkipped}</B> dup{txnSkipped === 1 ? '' : 's'})</> : ''}.</>}
                 {accCount > 0 && <> Added <B>{accCount} account{accCount === 1 ? '' : 's'}</B> to Net Worth.</>}
+                {transferCount > 0 && <> Logged <B>{transferCount} transfer{transferCount === 1 ? '' : 's'}</B>.</>}
+                {commitmentCount > 0 && <> Set up <B>{commitmentCount} recurring commitment{commitmentCount === 1 ? '' : 's'}</B>.</>}
               </>
             ) : phase === 'accountReview' ? (
               <>
@@ -568,8 +654,35 @@ export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
 
             <Card style={{ padding: 18, gap: 14 }}>
               <Text style={[styles.copyHint, { color: colorTheme.ink2 }]}>
-                Copy the entire JSON block from the AI and paste it below.
+                Copy the entire JSON block from the AI and paste it below, or upload a saved .json file.
               </Text>
+
+              <Pressable
+                onPress={pickJsonFile}
+                disabled={pickingFile}
+                style={({ pressed }) => [
+                  styles.copyBtn,
+                  { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line },
+                  (pressed || pickingFile) && { opacity: 0.85 },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Upload a JSON file from your device"
+              >
+                {pickingFile ? (
+                  <ActivityIndicator color={theme.accent} size="small" />
+                ) : (
+                  <Icon name="upload" size={17} color={colorTheme.ink} />
+                )}
+                <Text style={[styles.copyBtnText, { color: colorTheme.ink }]}>
+                  {pickingFile ? 'Reading file…' : 'Upload JSON File'}
+                </Text>
+              </Pressable>
+
+              <View style={styles.arrowRow}>
+                <View style={[styles.arrowLine, { backgroundColor: colorTheme.line }]} />
+                <Text style={[styles.orText, { color: colorTheme.ink3 }]}>or paste below</Text>
+                <View style={[styles.arrowLine, { backgroundColor: colorTheme.line }]} />
+              </View>
 
               <TextInput
                 multiline
@@ -591,7 +704,7 @@ export function AdvancedImportScreen({ onClose }: { onClose: () => void }) {
                 accessibilityLabel="Paste JSON here"
               />
 
-              <PrimaryButton onPress={handlePasteImport}>
+              <PrimaryButton onPress={() => handlePasteImport()}>
                 <Icon name="check" size={18} color="#fff" stroke={2.4} />
                 <BtnLabel>Parse & Review</BtnLabel>
               </PrimaryButton>
@@ -646,6 +759,7 @@ const styles = StyleSheet.create({
   arrowRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 6, paddingHorizontal: 24 },
   arrowLine: { flex: 1, height: 1 },
   arrowIcon: { fontFamily: uiFont(400), fontSize: 18 },
+  orText: { fontFamily: uiFont(600), fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.4 },
 
   jsonInput: {
     borderWidth: 1.5,

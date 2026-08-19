@@ -105,6 +105,7 @@ export function SavedScreen({
             {result.map((t, i) => {
               const cat = catById[t.categoryId ?? 'other'] ?? fallback;
               const income = t.type === 'income';
+              const transfer = t.type === 'transfer';
               return (
                 <View key={t.id} style={[styles.row, i > 0 && [styles.divider, { borderTopColor: colorTheme.line2 }]]}>
                   <CatBadge category={cat} size={36} />
@@ -112,7 +113,7 @@ export function SavedScreen({
                     <Text style={[styles.merchant, { color: colorTheme.ink }]} numberOfLines={1}>
                       {t.merchantRaw || cat.label}
                     </Text>
-                    <Text style={[styles.cat, { color: colorTheme.ink2 }]}>{cat.label}</Text>
+                    <Text style={[styles.cat, { color: colorTheme.ink2 }]}>{transfer ? 'Transfer' : cat.label}</Text>
                     {owedByTxn[t.id] > 0 && (
                       <View style={[styles.owedChip, { backgroundColor: theme.accentTint }]}>
                         <Icon name="gift" size={10} color={theme.accentInk} />
@@ -120,7 +121,7 @@ export function SavedScreen({
                       </View>
                     )}
                   </View>
-                  <Amount value={t.amount} size={14} weight={600} color={income ? theme.accent : colorTheme.ink} />
+                  <Amount value={t.amount} size={14} weight={600} color={income ? theme.accent : transfer ? colorTheme.ink2 : colorTheme.ink} />
                 </View>
               );
             })}

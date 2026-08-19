@@ -195,6 +195,113 @@ export function logReminderBody(daysSince: number | null): string {
   return `It has been ${daysSince} days since you logged anything. Your coverage is slipping.`;
 }
 
+// --- Recurring commitments (bills + DCA investments) ------------------------------------
+//
+// Unlike the log/owed ladders above, this is not one cadence stepped forward — it is a small,
+// capped set of one-shot nudges re-derived from whatever is currently unresolved, so the same
+// re-plan-on-foreground mechanism keeps it honest: paying a bill (or the month rolling over)
+// drops it from the next sync without anything having to be explicitly cancelled.
+
+export const COMMITMENT_DIGEST_TITLE = 'Bills this month';
+export const COMMITMENT_OVERDUE_TITLE = 'Overdue';
+
+/** How many months ahead to keep a digest armed for. */
+const COMMITMENT_DIGEST_MONTHS = 3;
+/** An overdue commitment is nudged this many days after its due date. */
+const COMMITMENT_OVERDUE_DELAY_DAYS = 2;
+/** Hard ceiling on individual overdue nudges — the OS caps total pending local notifications,
+ *  and the log + owed ladders already use up to 14 of that budget between them. */
+const COMMITMENT_OVERDUE_CAP = 5;
+
+export interface CommitmentReminderRow {
+  dueDate: string; // 'YYYY-MM-DD'
+  amount: number;
+  label: string;
+  status: 'scheduled' | 'paid' | 'late' | 'skipped';
+}
+
+export interface CommitmentReminderInput {
+  enabled: boolean;
+  occurrences: CommitmentReminderRow[];
+}
+
+/** `dayNumber` for a plain 'YYYY-MM-DD' string, read as a local calendar date. */
+function dayNumberOf(isoDate: string): number {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  return localDayNumber(new Date(y, m - 1, d, 12));
+}
+
+/** The next local `hour:minute` that is strictly after `now`, never earlier than `minDay` —
+ *  a fire time that would otherwise land in the past is pushed to the next day's slot instead
+ *  of being silently dropped, so a badly-overdue bill still gets a nudge on the next sync. */
+function nextSlotOnOrAfter(minDay: number, hour: number, minute: number, now: Date): Date {
+  let day = Math.max(minDay, localDayNumber(now));
+  let at = atLocalTime(day, hour, minute);
+  if (at.getTime() <= now.getTime()) {
+    day += 1;
+    at = atLocalTime(day, hour, minute);
+  }
+  return at;
+}
+
+/**
+ * When to nudge about recurring commitments (bills and DCA contributions): one monthly digest
+ * per month with anything still unpaid, plus one nudge per commitment that is currently overdue.
+ * A 'paid'/'late'/'skipped' occurrence never generates a nudge — only 'scheduled' rows do, so
+ * ticking a bill (or the app matching it to an existing transaction) retracts its reminder on
+ * the next re-plan the same way logging a transaction retracts the log nudge.
+ */
+export function planCommitmentReminders(input: CommitmentReminderInput, now: Date): ReminderPlanEntry[] {
+  if (!input.enabled) return [];
+  const unresolved = input.occurrences.filter((o) => o.status === 'scheduled');
+  if (unresolved.length === 0) return [];
+
+  const today = localDayNumber(now);
+  const out: ReminderPlanEntry[] = [];
+
+  const byMonth = new Map<string, CommitmentReminderRow[]>();
+  for (const o of unresolved) {
+    const mk = o.dueDate.slice(0, 7);
+    const rows = byMonth.get(mk);
+    if (rows) rows.push(o);
+    else byMonth.set(mk, [o]);
+  }
+  const months = [...byMonth.keys()].sort().slice(0, COMMITMENT_DIGEST_MONTHS);
+  for (const mk of months) {
+    const rows = byMonth.get(mk)!;
+    const earliestDueDay = Math.min(...rows.map((r) => dayNumberOf(r.dueDate)));
+    const at = nextSlotOnOrAfter(earliestDueDay - 1, REMINDER_HOUR, 0, now);
+    const total = rows.reduce((s, r) => s + r.amount, 0);
+    out.push({
+      at,
+      title: COMMITMENT_DIGEST_TITLE,
+      body: `${rows.length} bill${rows.length === 1 ? '' : 's'} due this month · RM ${fmt(total)}`,
+    });
+  }
+
+  const overdue = unresolved
+    .filter((o) => dayNumberOf(o.dueDate) < today)
+    .sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1))
+    .slice(0, COMMITMENT_OVERDUE_CAP);
+  for (const o of overdue) {
+    const at = nextSlotOnOrAfter(dayNumberOf(o.dueDate) + COMMITMENT_OVERDUE_DELAY_DAYS, REMINDER_HOUR, OWED_REMINDER_MINUTE, now);
+    out.push({
+      at,
+      title: COMMITMENT_OVERDUE_TITLE,
+      body: `${o.label} was due ${shortDaysAgo(dayNumberOf(o.dueDate), today)} · RM ${fmt(o.amount)}`,
+    });
+  }
+
+  return out;
+}
+
+function shortDaysAgo(dueDay: number, today: number): string {
+  const days = Math.max(0, today - dueDay);
+  if (days === 0) return 'today';
+  if (days === 1) return 'yesterday';
+  return `${days} days ago`;
+}
+
 /**
  * The owed nudge's copy, naming the biggest debt and counting the rest.
  *

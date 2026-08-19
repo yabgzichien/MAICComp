@@ -49,6 +49,7 @@ export function DashboardScreen({
   onOpenPassport = () => {},
   onOpenCoach = () => {},
   onOpenOwed = () => {},
+  onOpenCommitments = () => {},
 }: {
   onScan: () => void;
   onOpenAll: () => void;
@@ -60,12 +61,13 @@ export function DashboardScreen({
   onOpenPassport?: () => void;
   onOpenCoach?: () => void;
   onOpenOwed?: () => void;
+  onOpenCommitments?: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const theme = useAccent();
   const colorTheme = useThemeColors();
   const now = useNow();
-  const { transactions, catById, allocations, hasBudget, coverage, accounts, accountValues, openShares, tourActive, tourStepIndex, startTour } = useAppData();
+  const { transactions, catById, allocations, hasBudget, coverage, accounts, accountValues, openShares, commitmentOccurrences, tourActive, tourStepIndex, startTour } = useAppData();
   const nw = useMemo(() => netWorth(accounts, accountValues), [accounts, accountValues]);
   const { score, dataConfidence } = useCreditProfile();
   const activeTourAnchor = tourActive ? BORROWER_TOUR_STEPS[clampTourStep(tourStepIndex, BORROWER_TOUR_STEPS.length)].anchorId ?? null : null;
@@ -127,6 +129,20 @@ export function DashboardScreen({
       overdue: oldestDays >= AGING_DAYS,
     };
   }, [openShares]);
+
+  // Anything still unpaid: overdue rows regardless of month, plus this month's scheduled ones.
+  const commitmentsDue = useMemo(() => {
+    const cur = currentMonthKey();
+    const today = dayKey(new Date());
+    const unpaid = commitmentOccurrences.filter(
+      (o) => o.status === 'scheduled' && (o.dueDate < today || o.month === cur)
+    );
+    return {
+      count: unpaid.length,
+      total: unpaid.reduce((s, o) => s + o.amount, 0),
+      overdue: unpaid.some((o) => o.dueDate < today),
+    };
+  }, [commitmentOccurrences]);
 
   const empty = transactions.length === 0;
   const streak = useMemo(() => computeStreak(transactions), [transactions]);
@@ -197,6 +213,26 @@ export function DashboardScreen({
                     {owed.overdue
                       ? `${owed.oldestName} has owed you for ${owed.oldestDays} days. Worth a nudge.`
                       : `From ${owed.count} shared ${owed.count === 1 ? 'bill' : 'bills'}. Tap to settle up.`}
+                  </Text>
+                </View>
+                <Icon name="chevronRight" size={16} color={colorTheme.ink3} />
+              </Pressable>
+            )}
+
+            {/* Recurring bills and DCA investments still unpaid this month or overdue. */}
+            {commitmentsDue.count > 0 && (
+              <Pressable
+                onPress={onOpenCommitments}
+                style={({ pressed }) => [styles.owedRow, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft, opacity: pressed ? 0.9 : 1 }]}
+                accessibilityRole="button"
+              >
+                <Icon name="clock" size={17} color={theme.accent} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.owedTitle, { color: colorTheme.ink }]}>
+                    {commitmentsDue.count} {commitmentsDue.count === 1 ? 'bill' : 'bills'} · RM {fmt(commitmentsDue.total)}
+                  </Text>
+                  <Text style={[styles.owedSub, { color: colorTheme.ink2 }]}>
+                    {commitmentsDue.overdue ? 'Something is overdue. Tap to catch up.' : 'Due this month. Tap to tick off.'}
                   </Text>
                 </View>
                 <Icon name="chevronRight" size={16} color={colorTheme.ink3} />

@@ -9,11 +9,12 @@
 
 import type { ReminderPlanEntry } from '../lib/reminders';
 
-export type ReminderKind = 'log' | 'owed';
+export type ReminderKind = 'log' | 'owed' | 'commitment';
 
 export interface ReminderPlan {
   log: ReminderPlanEntry[];
   owed: ReminderPlanEntry[];
+  commitment: ReminderPlanEntry[];
 }
 
 export async function configureNotifications(): Promise<void> {

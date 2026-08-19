@@ -88,11 +88,43 @@ interface LLMAccount {
   currency?: unknown;
   as_of?: unknown;
   notes?: unknown;
+  quantity?: unknown;
+  cost?: unknown;
+}
+
+interface LLMTransfer {
+  date?: unknown;
+  description?: unknown;
+  amount?: unknown;
+  account?: unknown;
+}
+
+interface LLMOccurrence {
+  dueDate?: unknown;
+  status?: unknown;
+  paidOn?: unknown;
+  paidAmount?: unknown;
+}
+
+interface LLMCommitment {
+  label?: unknown;
+  kind?: unknown;
+  amount?: unknown;
+  dueDay?: unknown;
+  category?: unknown;
+  fromAccount?: unknown;
+  toAccount?: unknown;
+  startMonth?: unknown;
+  endMonth?: unknown;
+  occurrences?: LLMOccurrence[];
 }
 
 interface LLMOutput {
+  version?: unknown;
   transactions?: LLMTxn[];
+  transfers?: LLMTransfer[];
   accounts?: LLMAccount[];
+  commitments?: LLMCommitment[];
 }
 
 // Parsed account ready to commit to the DB.
@@ -105,6 +137,42 @@ export interface ParsedAccount {
   asOf: string;
   notes: string | null;
   include: boolean;
+  /** Cost basis / units, present only on a version-2 export. Cosmetic until the account also
+   *  carries a live-priced symbol (added separately, in Net Worth) — see isHolding() in
+   *  lib/prices.ts, which requires both. */
+  quantity: number | null;
+  cost: number | null;
+}
+
+/** A DCA/transfer contribution: neither income nor an expense (see TxnType in lib/types.ts),
+ *  so it is kept out of the `transactions` array entirely rather than encoded by sign. */
+export interface ParsedTransfer {
+  date: string | null;
+  description: string;
+  amount: number; // always positive
+  account: string | null;
+}
+
+export interface ParsedCommitmentOccurrence {
+  dueDate: string;
+  status: 'scheduled' | 'paid' | 'late' | 'skipped';
+  paidOn: string | null;
+  paidAmount: number | null;
+}
+
+// A recurring commitment ready to commit to the DB, account/category names unresolved (the
+// store resolves them against the live categories/accounts list at import time).
+export interface ParsedCommitment {
+  label: string;
+  kind: 'expense' | 'investment';
+  amount: number;
+  dueDay: number;
+  category: string | null;
+  fromAccount: string | null;
+  toAccount: string | null;
+  startMonth: string;
+  endMonth: string | null;
+  occurrences: ParsedCommitmentOccurrence[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -138,7 +206,13 @@ export function resolveClsId(rawType: string): string {
 export interface ParseResult {
   transactions: ExtractedTxn[];
   accounts: ParsedAccount[];
+  transfers: ParsedTransfer[];
+  commitments: ParsedCommitment[];
 }
+
+const OCCURRENCE_STATUSES = new Set(['scheduled', 'paid', 'late', 'skipped']);
+const ISO_DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const MONTH_KEY_RE = /^\d{4}-\d{2}$/;
 
 export function parseJSON(raw: string): ParseResult {
   const stripped = raw
@@ -188,6 +262,8 @@ export function parseJSON(raw: string): ParseResult {
     const asOf = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : today;
     const notes =
       typeof r.notes === 'string' && r.notes.trim() ? r.notes.trim() : null;
+    const quantity = typeof r.quantity === 'number' && Number.isFinite(r.quantity) ? r.quantity : null;
+    const cost = typeof r.cost === 'number' && Number.isFinite(r.cost) ? r.cost : null;
     return {
       name,
       cls: clsId,
@@ -197,8 +273,58 @@ export function parseJSON(raw: string): ParseResult {
       asOf,
       notes,
       include: true,
+      quantity,
+      cost,
     };
   });
 
-  return { transactions, accounts };
+  // ── Transfers (version 2) ──
+  const transferRows = Array.isArray(obj.transfers) ? obj.transfers : [];
+  const transfers: ParsedTransfer[] = transferRows.map((r): ParsedTransfer => {
+    const amount = Math.abs(typeof r.amount === 'number' ? r.amount : Number(r.amount ?? 0));
+    const description =
+      typeof r.description === 'string' && r.description.trim() ? r.description.trim() : '';
+    const rawDate = typeof r.date === 'string' ? r.date.trim() : '';
+    const date = ISO_DATE_ONLY.test(rawDate) ? rawDate : null;
+    const account =
+      typeof r.account === 'string' && r.account.trim() && r.account.trim().toLowerCase() !== 'unknown'
+        ? r.account.trim()
+        : null;
+    return { date, description, amount, account };
+  });
+
+  // ── Commitments (version 2) ──
+  const commitmentRows = Array.isArray(obj.commitments) ? obj.commitments : [];
+  const commitments: ParsedCommitment[] = commitmentRows
+    .map((r): ParsedCommitment | null => {
+      const label = typeof r.label === 'string' && r.label.trim() ? r.label.trim() : '';
+      if (!label) return null;
+      const kind = r.kind === 'investment' ? 'investment' : 'expense';
+      const amount = Math.abs(typeof r.amount === 'number' ? r.amount : Number(r.amount ?? 0));
+      const rawDay = typeof r.dueDay === 'number' ? r.dueDay : Number(r.dueDay ?? NaN);
+      const dueDay = Number.isFinite(rawDay) ? Math.min(31, Math.max(1, Math.round(rawDay))) : 1;
+      const category = typeof r.category === 'string' && r.category.trim() ? r.category.trim() : null;
+      const fromAccount = typeof r.fromAccount === 'string' && r.fromAccount.trim() ? r.fromAccount.trim() : null;
+      const toAccount = typeof r.toAccount === 'string' && r.toAccount.trim() ? r.toAccount.trim() : null;
+      const rawStart = typeof r.startMonth === 'string' ? r.startMonth.trim() : '';
+      const startMonth = MONTH_KEY_RE.test(rawStart) ? rawStart : todayISO().slice(0, 7);
+      const rawEnd = typeof r.endMonth === 'string' ? r.endMonth.trim() : '';
+      const endMonth = MONTH_KEY_RE.test(rawEnd) ? rawEnd : null;
+      const occRows = Array.isArray(r.occurrences) ? r.occurrences : [];
+      const occurrences: ParsedCommitmentOccurrence[] = occRows
+        .map((o): ParsedCommitmentOccurrence | null => {
+          const rawDue = typeof o.dueDate === 'string' ? o.dueDate.trim() : '';
+          if (!ISO_DATE_ONLY.test(rawDue)) return null;
+          const status = typeof o.status === 'string' && OCCURRENCE_STATUSES.has(o.status) ? (o.status as ParsedCommitmentOccurrence['status']) : 'scheduled';
+          const rawPaidOn = typeof o.paidOn === 'string' ? o.paidOn.trim() : '';
+          const paidOn = ISO_DATE_ONLY.test(rawPaidOn) ? rawPaidOn : null;
+          const paidAmount = typeof o.paidAmount === 'number' && Number.isFinite(o.paidAmount) ? o.paidAmount : null;
+          return { dueDate: rawDue, status, paidOn, paidAmount };
+        })
+        .filter((o): o is ParsedCommitmentOccurrence => o !== null);
+      return { label, kind, amount, dueDay, category, fromAccount, toAccount, startMonth, endMonth, occurrences };
+    })
+    .filter((c): c is ParsedCommitment => c !== null);
+
+  return { transactions, accounts, transfers, commitments };
 }

@@ -83,7 +83,7 @@ import { mergeLoanWithServicing, servicingWritePayload } from '../lib/servicingS
 import type { ServicingRecord } from '../lib/mergeServicing';
 import { getOrCreateKeypair, rotateKeypair } from '../crypto/keys';
 import type { CreditBand } from '../lib/creditScore';
-import { budgetHash, monthKey } from '../lib/budget';
+import { budgetHash, currentMonthKey, monthKey } from '../lib/budget';
 import { computeCoverage, type Coverage } from '../lib/coverage';
 import { getKyc, setKyc, type KycIdentity } from '../db/kycRepo';
 import { getOccupation, setOccupation as dbSetOccupation, type Occupation } from '../db/occupationRepo';
@@ -97,6 +97,24 @@ import { DEFAULT_SAVINGS_TARGET } from '../lib/savingsHabit';
 import { isReminderCadence, type ReminderCadence } from '../lib/reminders';
 import { GUIDE_CITIES, HOUSEHOLD_PROFILES, type GuideCityId, type HouseholdProfileId } from '../data/belanjawanku';
 import { syncStreakWidget } from '../widget/syncStreakWidget';
+import {
+  addCommitment as dbAddCommitment,
+  archiveCommitment as dbArchiveCommitment,
+  deleteCommitment as dbDeleteCommitment,
+  ensureOccurrences as dbEnsureOccurrences,
+  listCommitments as dbListCommitments,
+  listOccurrences as dbListOccurrences,
+  insertOccurrence as dbInsertOccurrence,
+  markOccurrencePaid as dbMarkOccurrencePaid,
+  resetOccurrence as dbResetOccurrence,
+  setOccurrenceUnits as dbSetOccurrenceUnits,
+  skipOccurrence as dbSkipOccurrence,
+  updateCommitment as dbUpdateCommitment,
+  type NewCommitment,
+} from '../db/commitmentsRepo';
+import { findCommitmentMatch, type Commitment, type CommitmentOccurrence, type CommitmentKind } from '../lib/commitments';
+import { matchSourceCategory } from '../lib/import';
+import type { ParsedCommitment } from '../lib/advancedImport';
 
 const ONBOARDING_KEY = 'onboarding_complete';
 const TOUR_ACTIVE_KEY = 'tour_active';
@@ -118,6 +136,7 @@ const SAVINGS_TARGET_KEY = 'savings_target';
 // surprise they would not think to look for.
 const REMINDER_CADENCE_KEY = 'reminder_cadence';
 const OWED_REMINDER_KEY = 'owed_reminder_on';
+const COMMITMENT_REMINDER_KEY = 'commitment_reminder_on';
 import { applyEffect, currentValue, RECEIVABLE_CLS, type LinkEffect } from '../lib/networth';
 import { holdingValue, isHolding, mergeAccountValues } from '../lib/prices';
 import { merchantKey } from '../lib/normalize';
@@ -284,7 +303,7 @@ interface AppData {
   writeOffShare: (shareId: string) => Promise<void>;
   saveTransactionEdits: (
     txn: Transaction,
-    edits: { amount: number; type: TxnType; categoryId: string; remark?: string | null }
+    edits: { amount: number; type: TxnType; categoryId: string | null; remark?: string | null }
   ) => Promise<void>;
   removeTransaction: (id: string) => Promise<void>;
   removeMany: (ids: string[]) => Promise<void>;
@@ -310,6 +329,10 @@ interface AppData {
   /** Whether to chase debts that have aged past `AGING_DAYS`, weekly. */
   owedReminderEnabled: boolean;
   setOwedReminderEnabled: (on: boolean) => Promise<void>;
+  /** Whether to nudge about recurring commitments (bills + DCA): a monthly digest plus a
+   *  once-off nudge for anything overdue. */
+  commitmentReminderEnabled: boolean;
+  setCommitmentReminderEnabled: (on: boolean) => Promise<void>;
   addAccount: (name: string, kind: AccountKind, cls: string, openingValue: number, asOf: string, icon?: string | null) => Promise<void>;
   /** Returns a default account id for the add flows, creating a "Cash" account if none exist. */
   ensureDefaultAccount: () => Promise<string>;
@@ -389,6 +412,40 @@ interface AppData {
   clearedByLenderNotice: string | null;
   /** Dismiss the reset notice banner. */
   dismissClearedByLenderNotice: () => void;
+
+  // --- Recurring commitments (bills + DCA investments) ---------------------------------
+  commitments: Commitment[];
+  /** Materialised due dates for every commitment — the monthly todo list's rows. */
+  commitmentOccurrences: CommitmentOccurrence[];
+  addCommitmentEntry: (input: {
+    label: string;
+    kind: CommitmentKind;
+    amount: number;
+    dueDay: number;
+    categoryId?: string | null;
+    fromAccountId?: string | null;
+    toAccountId?: string | null;
+    startMonth?: string;
+  }) => Promise<void>;
+  updateCommitmentEntry: (
+    id: string,
+    patch: Partial<Pick<Commitment, 'label' | 'amount' | 'categoryId' | 'fromAccountId' | 'toAccountId' | 'dueDay' | 'endMonth'>>
+  ) => Promise<void>;
+  archiveCommitmentEntry: (id: string) => Promise<void>;
+  deleteCommitmentEntry: (id: string) => Promise<void>;
+  /** Import commitments from a version-2 Advanced Import JSON (see advancedImport.ts). Skips
+   *  any commitment whose merchantKey + dueDay already exists locally. */
+  importParsedCommitments: (parsed: ParsedCommitment[]) => Promise<void>;
+  /** Read-only preview of the ledger row a tick would link, for a confirm-before-linking UI.
+   *  Null means the tick would create a new transaction instead. */
+  previewCommitmentMatch: (occurrenceId: string) => Transaction | null;
+  /** Tick an occurrence paid: matches an existing transaction first, creates one as fallback.
+   *  Returns whether an existing row was matched (vs. a new one created). */
+  payCommitment: (occurrenceId: string, opts?: { amount?: number; paidOn?: string }) => Promise<{ matched: boolean }>;
+  /** Untick: full reversal of whatever `payCommitment` did (see the function's own doc). */
+  unpayCommitment: (occurrenceId: string) => Promise<void>;
+  /** Mark a scheduled occurrence as not applicable this month. No ledger effect. */
+  skipCommitment: (occurrenceId: string) => Promise<void>;
 }
 
 const Ctx = createContext<AppData | null>(null);
@@ -433,6 +490,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [savingsTarget, setSavingsTargetState] = useState<number>(DEFAULT_SAVINGS_TARGET);
   const [reminderCadence, setReminderCadenceState] = useState<ReminderCadence>('off');
   const [owedReminderEnabled, setOwedReminderEnabledState] = useState(false);
+  const [commitmentReminderEnabled, setCommitmentReminderEnabledState] = useState(false);
+  const [commitments, setCommitments] = useState<Commitment[]>([]);
+  const [commitmentOccurrences, setCommitmentOccurrences] = useState<CommitmentOccurrence[]>([]);
   const [tourActive, setTourActive] = useState(false);
   const [tourPaused, setTourPaused] = useState(false);
   const [tourStepIndex, setTourStepIndexState] = useState(0);
@@ -441,7 +501,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const tourBranchRef = useRef<TourBranch | null>(null);
 
   const refreshAll = useCallback(async () => {
-    const [cats, txns, mem, income, alloc, snaps, accts, entries, cache, products, applications, allRepayments, repSummary, kycRow, onboardingFlag, tourActiveFlag, tourStepRaw, activeDemoProfileRaw, tourBranchRaw, householdRaw, cityRaw, savingsTargetRaw, reminderCadenceRaw, owedReminderRaw, peopleRows, splitRows, shareRows, paymentRows] =
+    const [cats, txns, mem, income, alloc, snaps, accts, entries, cache, products, applications, allRepayments, repSummary, kycRow, onboardingFlag, tourActiveFlag, tourStepRaw, activeDemoProfileRaw, tourBranchRaw, householdRaw, cityRaw, savingsTargetRaw, reminderCadenceRaw, owedReminderRaw, commitmentReminderRaw, peopleRows, splitRows, shareRows, paymentRows] =
       await Promise.all([
         listCategories(),
         listTransactions(),
@@ -467,6 +527,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         getMeta(SAVINGS_TARGET_KEY),
         getMeta(REMINDER_CADENCE_KEY),
         getMeta(OWED_REMINDER_KEY),
+        getMeta(COMMITMENT_REMINDER_KEY),
         dbListPeople(),
         dbListSplits(),
         dbListShares(),
@@ -489,6 +550,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     // failure mode for something that interrupts the user.
     setReminderCadenceState(isReminderCadence(reminderCadenceRaw) ? reminderCadenceRaw : 'off');
     setOwedReminderEnabledState(owedReminderRaw === 'true');
+    setCommitmentReminderEnabledState(commitmentReminderRaw === 'true');
     setOccupationState(await getOccupation());
     setKycState(kycRow);
     setOnboardingComplete(onboardingFlag === 'true');
@@ -536,6 +598,22 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       snaps[cur] = { income, allocations: alloc };
     }
     setSnapshots(snaps);
+
+    // Recurring commitments: top up the rolling occurrence window before reading it, so a
+    // month that just rolled over (or a commitment created since the last load) always has
+    // its todo-list rows ready. Kept out of the big Promise.all above — it's a write, and it
+    // has to happen before the read that follows it.
+    await dbEnsureOccurrences(new Date());
+    const [commitmentRows, occurrenceRows] = await Promise.all([dbListCommitments(), dbListOccurrences()]);
+    setCommitments(commitmentRows);
+    setCommitmentOccurrences(occurrenceRows);
+  }, []);
+
+  /** Targeted refresh after a commitment/occurrence mutation, mirroring `refreshLoanState`. */
+  const refreshCommitmentState = useCallback(async () => {
+    const [commitmentRows, occurrenceRows] = await Promise.all([dbListCommitments(), dbListOccurrences()]);
+    setCommitments(commitmentRows);
+    setCommitmentOccurrences(occurrenceRows);
   }, []);
 
   useEffect(() => {
@@ -721,11 +799,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const saveTransactionEdits = useCallback(
     async (
       txn: Transaction,
-      edits: { amount: number; type: TxnType; categoryId: string; remark?: string | null }
+      edits: { amount: number; type: TxnType; categoryId: string | null; remark?: string | null }
     ) => {
       await updateTransactionFields(txn.id, edits.amount, edits.type, edits.categoryId, edits.remark);
-      // Correcting a category re-teaches Pip for that merchant (expense or income), only if merchant is non-empty.
-      if (txn.merchantKey) {
+      // Correcting a category re-teaches Pip for that merchant (expense or income), only if
+      // merchant is non-empty. A transfer has no category, so there is nothing to teach.
+      if (txn.merchantKey && edits.categoryId) {
         await upsertMemory(txn.merchantKey, edits.categoryId);
       }
       const [txns, mem] = await Promise.all([listTransactions(), getMemoryMap()]);
@@ -897,6 +976,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setOwedReminderEnabledState(on);
   }, []);
 
+  const setCommitmentReminderEnabled = useCallback(async (on: boolean) => {
+    await setMeta(COMMITMENT_REMINDER_KEY, on ? 'true' : 'false');
+    setCommitmentReminderEnabledState(on);
+  }, []);
+
   const resetBudget = useCallback(async () => {
     await clearBudget();
     setIncome(0);
@@ -1051,7 +1135,309 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     const [cache, entries] = await Promise.all([getPriceCache(), listBalanceEntries()]);
     setPrices((prev) => ({ ...prev, ...Object.fromEntries(cache.map((q) => [q.symbol, q])) }));
     setBalanceEntries(entries);
-  }, []);
+
+    // A DCA tick into a holding with no cached price yet only moved `cost` at pay time (see
+    // `payCommitment`); now that a fresh quote exists, resolve the deferred unit count for any
+    // occurrence still waiting on one, so quantity does not permanently lag cost.
+    const pending = commitmentOccurrences.filter(
+      (o) => o.unitsAdded === null && (o.status === 'paid' || o.status === 'late') && o.paidAmount != null
+    );
+    if (pending.length > 0) {
+      const acctById: Record<string, Account> = Object.fromEntries(accts.map((a) => [a.id, a]));
+      const commitmentById: Record<string, Commitment> = Object.fromEntries(commitments.map((c) => [c.id, c]));
+      // Running quantity per account, not `target.quantity` read fresh each time: two pending
+      // occurrences resolving into the same holding in one pass would otherwise each base their
+      // write on the same pre-loop snapshot and the first unit count would be clobbered.
+      const runningQty: Record<string, number> = {};
+      let resolvedAny = false;
+      for (const occ of pending) {
+        const c = commitmentById[occ.commitmentId];
+        const target = c?.toAccountId ? acctById[c.toAccountId] : undefined;
+        if (!c || c.kind !== 'investment' || !target || !isHolding(target)) continue;
+        const quote = bySymbol[target.symbol as string];
+        if (!quote) continue;
+        const units = Math.round((occ.paidAmount! / quote.priceMYR) * 1e8) / 1e8;
+        const base = runningQty[target.id] ?? target.quantity ?? 0;
+        const next = base + units;
+        runningQty[target.id] = next;
+        await dbUpdateHoldingQuantity(target.id, next);
+        await dbSetOccurrenceUnits(occ.id, units, quote.priceMYR);
+        resolvedAny = true;
+      }
+      if (resolvedAny) {
+        const [finalAccts, occurrenceRows] = await Promise.all([listAccounts(), dbListOccurrences()]);
+        setAccounts(finalAccts);
+        setCommitmentOccurrences(occurrenceRows);
+      }
+    }
+  }, [commitmentOccurrences, commitments]);
+
+  // --- Recurring commitments (bills + DCA investments) -----------------------------------
+
+  const addCommitmentEntry = useCallback(
+    async (input: {
+      label: string;
+      kind: CommitmentKind;
+      amount: number;
+      dueDay: number;
+      categoryId?: string | null;
+      fromAccountId?: string | null;
+      toAccountId?: string | null;
+      startMonth?: string;
+    }): Promise<void> => {
+      await dbAddCommitment({
+        label: input.label,
+        merchantKey: merchantKey(input.label),
+        kind: input.kind,
+        amount: input.amount,
+        categoryId: input.kind === 'investment' ? null : input.categoryId ?? null,
+        fromAccountId: input.fromAccountId ?? null,
+        toAccountId: input.kind === 'investment' ? input.toAccountId ?? null : null,
+        dueDay: input.dueDay,
+        startMonth: input.startMonth ?? currentMonthKey(),
+      });
+      await dbEnsureOccurrences(new Date());
+      await refreshCommitmentState();
+    },
+    [refreshCommitmentState]
+  );
+
+  const updateCommitmentEntry = useCallback(
+    async (
+      id: string,
+      patch: Partial<Pick<Commitment, 'label' | 'amount' | 'categoryId' | 'fromAccountId' | 'toAccountId' | 'dueDay' | 'endMonth'>>
+    ) => {
+      await dbUpdateCommitment(id, patch);
+      await refreshCommitmentState();
+    },
+    [refreshCommitmentState]
+  );
+
+  /** Stops future occurrences; every occurrence already generated (and its paid history) is
+   *  untouched, so a discontinued bill keeps counting toward the on-time record. */
+  const archiveCommitmentEntry = useCallback(async (id: string) => {
+    await dbArchiveCommitment(id);
+    await refreshCommitmentState();
+  }, [refreshCommitmentState]);
+
+  const deleteCommitmentEntry = useCallback(async (id: string) => {
+    await dbDeleteCommitment(id);
+    await refreshCommitmentState();
+  }, [refreshCommitmentState]);
+
+  /**
+   * Import commitments parsed from a version-2 Advanced Import JSON (see advancedImport.ts).
+   * Idempotent: a commitment whose merchantKey + dueDay already exists is skipped rather than
+   * duplicated, so re-importing the same file (or the same file on a second device) is safe.
+   * Category/account names are resolved against what already exists locally on a best-effort
+   * basis — an unresolved account name leaves that side unset rather than guessing wrong, the
+   * same posture AdvancedImportScreen already takes for a transaction's account match.
+   */
+  const importParsedCommitments = useCallback(
+    async (parsed: ParsedCommitment[]) => {
+      const existingKeys = new Set(commitments.map((c) => `${c.merchantKey}::${c.dueDay}`));
+      const accountByName = new Map(accounts.map((a) => [a.name.trim().toLowerCase(), a.id]));
+      const resolveAccount = (name: string | null) =>
+        name ? accountByName.get(name.trim().toLowerCase()) ?? null : null;
+
+      for (const p of parsed) {
+        const key = `${merchantKey(p.label)}::${p.dueDay}`;
+        if (existingKeys.has(key)) continue;
+        existingKeys.add(key);
+
+        const categoryId = p.kind === 'investment' ? null : matchSourceCategory(p.category, categories, 'expense') ?? DEFAULT_EXPENSE_ID;
+        const created = await dbAddCommitment({
+          label: p.label,
+          merchantKey: merchantKey(p.label),
+          kind: p.kind,
+          amount: p.amount,
+          categoryId,
+          fromAccountId: resolveAccount(p.fromAccount),
+          toAccountId: p.kind === 'investment' ? resolveAccount(p.toAccount) : null,
+          dueDay: p.dueDay,
+          startMonth: p.startMonth,
+          endMonth: p.endMonth,
+        });
+        for (const occ of p.occurrences) {
+          await dbInsertOccurrence(created.id, {
+            dueDate: occ.dueDate,
+            amount: occ.paidAmount ?? p.amount,
+            status: occ.status,
+            paidOn: occ.paidOn,
+            paidAmount: occ.paidAmount,
+          });
+        }
+      }
+      await dbEnsureOccurrences(new Date());
+      await refreshCommitmentState();
+    },
+    [commitments, accounts, categories, refreshCommitmentState]
+  );
+
+  /** Transactions already linked to some occurrence, so a tick's match search never re-links
+   *  a row a different occurrence already claims. */
+  const linkedTxnIds = useMemo(
+    () => new Set(commitmentOccurrences.filter((o) => o.txnId).map((o) => o.txnId as string)),
+    [commitmentOccurrences]
+  );
+
+  const resolveCommitmentMatch = useCallback(
+    (occurrenceId: string): Transaction | null => {
+      const occurrence = commitmentOccurrences.find((o) => o.id === occurrenceId);
+      const commitment = occurrence ? commitments.find((c) => c.id === occurrence.commitmentId) : undefined;
+      if (!occurrence || !commitment) return null;
+      const wantType: TxnType = commitment.kind === 'investment' ? 'transfer' : 'expense';
+      const candidates = transactions.filter((t) => t.type === wantType);
+      const exclude = new Set(linkedTxnIds);
+      exclude.delete(occurrence.txnId ?? '');
+      return findCommitmentMatch(candidates, commitment, occurrence.dueDate, exclude);
+    },
+    [commitmentOccurrences, commitments, transactions, linkedTxnIds]
+  );
+
+  /** Read-only preview of what `payCommitment` would link, for a confirm-before-linking tick UI. */
+  const previewCommitmentMatch = resolveCommitmentMatch;
+
+  /**
+   * Tick a commitment occurrence as paid. Always tries to match an existing ledger row first
+   * (same merchant, amount within 5%, dated within a week of the due date) so a bill the user
+   * already logged manually — or one that lands via a later bank-statement import — never gets
+   * a duplicate row; only when nothing matches does this create one. A DCA (`kind: 'investment'`)
+   * commitment logs a `'transfer'`, not an expense, and moves the target account instead of
+   * spending it — see Phase 1's guard test for why that distinction has to hold.
+   */
+  const payCommitment = useCallback(
+    async (occurrenceId: string, opts?: { amount?: number; paidOn?: string }): Promise<{ matched: boolean }> => {
+      const occurrence = commitmentOccurrences.find((o) => o.id === occurrenceId);
+      const commitment = occurrence ? commitments.find((c) => c.id === occurrence.commitmentId) : undefined;
+      if (!occurrence || !commitment) return { matched: false };
+
+      const match = resolveCommitmentMatch(occurrenceId);
+      if (match) {
+        const paidOn = opts?.paidOn ?? match.date ?? match.createdAt.slice(0, 10);
+        const status = paidOn <= occurrence.dueDate ? 'paid' : 'late';
+        await dbMarkOccurrencePaid(occurrenceId, {
+          paidAmount: match.amount,
+          paidOn,
+          status,
+          txnId: match.id,
+          txnCreated: false,
+        });
+        await refreshCommitmentState();
+        return { matched: true };
+      }
+
+      const wantType: TxnType = commitment.kind === 'investment' ? 'transfer' : 'expense';
+      const paidAmount = opts?.amount ?? commitment.amount;
+      const paidOn = opts?.paidOn ?? todayKey();
+      const status = paidOn <= occurrence.dueDate ? 'paid' : 'late';
+
+      const created = await addTransactions([
+        {
+          merchantRaw: commitment.label,
+          merchantKey: commitment.merchantKey,
+          amount: paidAmount,
+          type: wantType,
+          date: paidOn,
+          categoryId: commitment.kind === 'investment' ? null : commitment.categoryId,
+          source: 'manual',
+        },
+      ]);
+      const txn = created[0];
+
+      if (commitment.fromAccountId) {
+        await recordBalanceLink(commitment.fromAccountId, paidAmount, 'subtract', paidOn);
+      }
+
+      let unitsAdded: number | null = null;
+      let priceMYR: number | null = null;
+      if (commitment.kind === 'investment' && commitment.toAccountId) {
+        const target = accounts.find((a) => a.id === commitment.toAccountId);
+        if (target && isHolding(target)) {
+          const quote = prices[target.symbol as string];
+          // A holding always moves cost basis; quantity only moves when a price is cached —
+          // offline or a brand-new symbol resolves its units later, in `refreshPrices` above.
+          if (quote) {
+            unitsAdded = Math.round((paidAmount / quote.priceMYR) * 1e8) / 1e8;
+            priceMYR = quote.priceMYR;
+            await dbUpdateHoldingQuantity(target.id, (target.quantity ?? 0) + unitsAdded);
+          }
+          await dbUpdateHoldingCost(target.id, (target.cost ?? 0) + paidAmount);
+        } else if (target) {
+          // Cost-only target (ASB, EPF, unit trusts, gold savings): no ticker to size units
+          // against, so the account's balance IS the invested-amount tracker.
+          await recordBalanceLink(target.id, paidAmount, 'add', paidOn);
+        }
+      }
+
+      await dbMarkOccurrencePaid(occurrenceId, {
+        paidAmount,
+        paidOn,
+        status,
+        txnId: txn.id,
+        txnCreated: true,
+        unitsAdded,
+        priceMYR,
+      });
+      setTransactions(await listTransactions());
+      await refreshCommitmentState();
+      return { matched: false };
+    },
+    [commitmentOccurrences, commitments, accounts, prices, resolveCommitmentMatch, recordBalanceLink, refreshCommitmentState]
+  );
+
+  /**
+   * Untick: full reversal, not just a status flip. If the tick created the ledger row, delete
+   * it and post a compensating balance entry on every account the tick moved; if the tick only
+   * linked a transaction the user already had, leave that row and its history untouched — there
+   * is nothing of this feature's making to undo.
+   */
+  const unpayCommitment = useCallback(
+    async (occurrenceId: string) => {
+      const occurrence = commitmentOccurrences.find((o) => o.id === occurrenceId);
+      const commitment = occurrence ? commitments.find((c) => c.id === occurrence.commitmentId) : undefined;
+      if (!occurrence || !commitment) return;
+      if (occurrence.status !== 'paid' && occurrence.status !== 'late') return;
+
+      if (occurrence.txnCreated) {
+        if (occurrence.txnId) await removeTransaction(occurrence.txnId);
+        const paidAmount = occurrence.paidAmount ?? occurrence.amount;
+        const today = todayKey();
+
+        if (commitment.fromAccountId) {
+          await recordBalanceLink(commitment.fromAccountId, paidAmount, 'add', today);
+        }
+
+        if (commitment.kind === 'investment' && commitment.toAccountId) {
+          const target = accounts.find((a) => a.id === commitment.toAccountId);
+          if (target && isHolding(target)) {
+            if (occurrence.unitsAdded != null) {
+              await dbUpdateHoldingQuantity(target.id, (target.quantity ?? 0) - occurrence.unitsAdded);
+            }
+            await dbUpdateHoldingCost(target.id, Math.max(0, (target.cost ?? 0) - paidAmount));
+          } else if (target) {
+            await recordBalanceLink(target.id, paidAmount, 'subtract', today);
+          }
+        }
+      }
+
+      await dbResetOccurrence(occurrenceId);
+      setTransactions(await listTransactions());
+      await refreshCommitmentState();
+    },
+    [commitmentOccurrences, commitments, accounts, removeTransaction, recordBalanceLink, refreshCommitmentState]
+  );
+
+  /** For a bill that genuinely did not apply this month — no ledger effect either way. */
+  const skipCommitment = useCallback(
+    async (occurrenceId: string) => {
+      const occurrence = commitmentOccurrences.find((o) => o.id === occurrenceId);
+      if (!occurrence || occurrence.status !== 'scheduled') return;
+      await dbSkipOccurrence(occurrenceId);
+      await refreshCommitmentState();
+    },
+    [commitmentOccurrences, refreshCommitmentState]
+  );
 
   const getCachedAdvice = useCallback(() => dbGetAdvice(), []);
 
@@ -1596,6 +1982,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setReminderCadence,
     owedReminderEnabled,
     setOwedReminderEnabled,
+    commitmentReminderEnabled,
+    setCommitmentReminderEnabled,
     addAccount,
     ensureDefaultAccount,
     updateAccount,
@@ -1622,6 +2010,17 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     syncLenderResets,
     clearedByLenderNotice,
     dismissClearedByLenderNotice,
+    commitments,
+    commitmentOccurrences,
+    addCommitmentEntry,
+    updateCommitmentEntry,
+    archiveCommitmentEntry,
+    deleteCommitmentEntry,
+    importParsedCommitments,
+    previewCommitmentMatch,
+    payCommitment,
+    unpayCommitment,
+    skipCommitment,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

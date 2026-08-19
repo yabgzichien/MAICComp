@@ -8,7 +8,10 @@ import {
   generateCSV,
   generateHTMLReport,
   generatePrintablePDFHtml,
+  generateAdvancedImportJSON,
 } from '../src/lib/financialExport';
+import { parseJSON } from '../src/lib/advancedImport';
+import type { Commitment, CommitmentOccurrence } from '../src/lib/commitments';
 import type { Account, BalanceEntry, Category, Transaction } from '../src/lib/types';
 
 function makeTxn(over: Partial<Transaction>): Transaction {
@@ -149,6 +152,147 @@ describe('generateHTMLReport', () => {
     expect(html).toContain('Income Statement (P&amp;L)');
     expect(html).toContain('Balance Sheet');
     expect(html).toContain('Itemized Transaction Ledger');
+  });
+});
+
+describe('generateAdvancedImportJSON', () => {
+  const txns = [
+    makeTxn({ type: 'income', categoryId: 'salary', amount: 4500, date: '2026-06-01', merchantRaw: 'Employer Sdn Bhd' }),
+    makeTxn({ type: 'expense', categoryId: 'food', amount: 500, date: '2026-06-05', merchantRaw: 'Grocer' }),
+  ];
+  const accounts = [
+    makeAcct({ id: 'a1', name: 'CIMB Bank', kind: 'asset', cls: 'cash' }),
+    makeAcct({ id: 'a2', name: 'Owed by Friends', kind: 'asset', cls: 'receivable' }),
+  ];
+  const entries = [
+    makeEntry({ accountId: 'a1', value: 6000, asOf: '2026-06-30' }),
+    makeEntry({ accountId: 'a2', value: 120, asOf: '2026-06-30' }),
+  ];
+  const period = buildReportPeriod('monthly', '2026-06');
+  const bundle = buildFinancialReportBundle(txns, mockCategories, accounts, entries, period, 'Nurul');
+
+  it('produces JSON that round-trips through the Advanced Import parser', () => {
+    const json = generateAdvancedImportJSON(bundle);
+    const { transactions, accounts: parsedAccounts } = parseJSON(json);
+
+    expect(transactions).toHaveLength(2);
+    expect(transactions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'income', amount: 4500, merchant: 'Employer Sdn Bhd' }),
+      expect.objectContaining({ type: 'expense', amount: 500, merchant: 'Grocer' }),
+    ]));
+
+    // The managed receivable ("Owed to me") balance must never round-trip
+    // back into a re-importable account.
+    expect(parsedAccounts).toHaveLength(1);
+    expect(parsedAccounts[0]).toMatchObject({ name: 'CIMB Bank', cls: 'cash', balance: 6000 });
+  });
+
+  it('stamps a version-2 payload', () => {
+    const json = generateAdvancedImportJSON(bundle);
+    expect(JSON.parse(json).version).toBe(2);
+  });
+});
+
+describe('generateAdvancedImportJSON — version 2 additions', () => {
+  const txns = [
+    makeTxn({ type: 'income', categoryId: 'salary', amount: 4500, date: '2026-06-01', merchantRaw: 'Employer Sdn Bhd' }),
+    makeTxn({ type: 'expense', categoryId: 'food', amount: 500, date: '2026-06-05', merchantRaw: 'Grocer' }),
+    makeTxn({ type: 'transfer', categoryId: null, amount: 200, date: '2026-06-15', merchantRaw: 'Stockbroker DCA', merchantKey: 'stockbroker-dca' }),
+  ];
+  const accounts = [
+    makeAcct({ id: 'a1', name: 'CIMB Bank', kind: 'asset', cls: 'cash' }),
+    makeAcct({ id: 'a2', name: 'S&P 500 ETF', kind: 'asset', cls: 'investments', sub: 'stock', symbol: 'VOO', ticker: 'VOO', quantity: 1.5, cost: 600 }),
+  ];
+  const entries = [
+    makeEntry({ accountId: 'a1', value: 4800, asOf: '2026-06-30' }),
+    makeEntry({ accountId: 'a2', value: 0, asOf: '2026-06-30' }),
+  ];
+  const period = buildReportPeriod('monthly', '2026-06');
+  const bundle = buildFinancialReportBundle(txns, mockCategories, accounts, entries, period, 'Nurul');
+
+  const commitment: Commitment = {
+    id: 'c1', label: 'S&P 500 DCA', merchantKey: 'stockbroker-dca', kind: 'investment', amount: 200,
+    categoryId: null, fromAccountId: 'a1', toAccountId: 'a2', dueDay: 15, startMonth: '2026-05',
+    endMonth: null, archived: false, createdAt: '2026-05-01T00:00:00.000Z',
+  };
+  const occurrences: CommitmentOccurrence[] = [
+    { id: 'o1', commitmentId: 'c1', dueDate: '2026-05-15', month: '2026-05', amount: 200, paidAmount: 200, paidOn: '2026-05-14', status: 'paid', txnId: null, txnCreated: true, unitsAdded: 1.5, priceMYR: 400, createdAt: '2026-05-01T00:00:00.000Z' },
+    { id: 'o2', commitmentId: 'c1', dueDate: '2026-06-15', month: '2026-06', amount: 200, paidAmount: null, paidOn: null, status: 'scheduled', txnId: null, txnCreated: false, unitsAdded: null, priceMYR: null, createdAt: '2026-06-01T00:00:00.000Z' },
+  ];
+
+  it('keeps a transfer out of the `transactions` array and puts it in `transfers` instead', () => {
+    const json = generateAdvancedImportJSON(bundle);
+    const payload = JSON.parse(json);
+    expect(payload.transactions).toHaveLength(2);
+    expect(payload.transactions.every((t: { description: string }) => t.description !== 'Stockbroker DCA')).toBe(true);
+    expect(payload.transfers).toEqual([
+      expect.objectContaining({ description: 'Stockbroker DCA', amount: 200 }),
+    ]);
+  });
+
+  it('a transfer round-trips through parseJSON as its own array, never as income', () => {
+    const json = generateAdvancedImportJSON(bundle);
+    const { transactions, transfers } = parseJSON(json);
+    expect(transactions.some((t) => t.merchant === 'Stockbroker DCA')).toBe(false);
+    expect(transfers).toEqual([
+      expect.objectContaining({ description: 'Stockbroker DCA', amount: 200, date: '2026-06-15' }),
+    ]);
+  });
+
+  it('exports quantity and cost on a holding account row', () => {
+    const json = generateAdvancedImportJSON(bundle);
+    const payload = JSON.parse(json);
+    const holding = payload.accounts.find((a: { name: string }) => a.name === 'S&P 500 ETF');
+    expect(holding).toMatchObject({ quantity: 1.5, cost: 600 });
+  });
+
+  it('quantity and cost round-trip through parseJSON', () => {
+    const json = generateAdvancedImportJSON(bundle);
+    const { accounts: parsedAccounts } = parseJSON(json);
+    const holding = parsedAccounts.find((a) => a.name === 'S&P 500 ETF');
+    expect(holding).toMatchObject({ quantity: 1.5, cost: 600 });
+  });
+
+  it('carries a commitment and its full occurrence history, resolving category/account names', () => {
+    const json = generateAdvancedImportJSON(bundle, { commitments: [commitment], occurrences });
+    const payload = JSON.parse(json);
+    expect(payload.commitments).toEqual([
+      expect.objectContaining({
+        label: 'S&P 500 DCA',
+        kind: 'investment',
+        amount: 200,
+        dueDay: 15,
+        fromAccount: 'CIMB Bank',
+        toAccount: 'S&P 500 ETF',
+        startMonth: '2026-05',
+        endMonth: null,
+      }),
+    ]);
+    expect(payload.commitments[0].occurrences).toHaveLength(2);
+    expect(payload.commitments[0].occurrences[0]).toMatchObject({ dueDate: '2026-05-15', status: 'paid', paidOn: '2026-05-14', paidAmount: 200 });
+  });
+
+  it('a commitment with its occurrence history round-trips through parseJSON', () => {
+    const json = generateAdvancedImportJSON(bundle, { commitments: [commitment], occurrences });
+    const { commitments: parsed } = parseJSON(json);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toMatchObject({
+      label: 'S&P 500 DCA',
+      kind: 'investment',
+      amount: 200,
+      dueDay: 15,
+      fromAccount: 'CIMB Bank',
+      toAccount: 'S&P 500 ETF',
+    });
+    expect(parsed[0].occurrences).toEqual([
+      { dueDate: '2026-05-15', status: 'paid', paidOn: '2026-05-14', paidAmount: 200 },
+      { dueDate: '2026-06-15', status: 'scheduled', paidOn: null, paidAmount: null },
+    ]);
+  });
+
+  it('omitting the commitments extra produces an empty commitments array, not an error', () => {
+    const json = generateAdvancedImportJSON(bundle);
+    expect(JSON.parse(json).commitments).toEqual([]);
   });
 });
 

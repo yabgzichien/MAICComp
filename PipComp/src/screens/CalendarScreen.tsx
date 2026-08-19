@@ -85,7 +85,7 @@ function computeMonthData(transactions: Transaction[], year: number, month: numb
     if (t.type === 'income') {
       byDay[dayStr].income += t.amount;
       totalIncome += t.amount;
-    } else {
+    } else if (t.type === 'expense') {
       byDay[dayStr].expense += t.amount;
       totalExpense += t.amount;
     }
@@ -223,13 +223,25 @@ function DayTransactionList({
           {dayData.txns.map((t) => (
             <View key={t.id} style={[styles.txnRow, { borderBottomColor: colorTheme.line2 }]}>
               <View style={styles.txnLeft}>
-                <View style={[styles.txnDot, { backgroundColor: t.type === 'income' ? theme.accent : colorTheme.red }]} />
+                <View
+                  style={[
+                    styles.txnDot,
+                    { backgroundColor: t.type === 'income' ? theme.accent : t.type === 'transfer' ? colorTheme.ink3 : colorTheme.red },
+                  ]}
+                />
                 <Text style={[styles.txnMerchant, { color: colorTheme.ink }]} numberOfLines={1}>
-                  {t.merchantRaw || (t.categoryId ? catById[t.categoryId]?.label : null) || (t.type === 'income' ? 'Income' : 'Expense')}
+                  {t.merchantRaw ||
+                    (t.categoryId ? catById[t.categoryId]?.label : null) ||
+                    (t.type === 'income' ? 'Income' : t.type === 'transfer' ? 'Transfer' : 'Expense')}
                 </Text>
               </View>
-              <Text style={[styles.txnAmount, { color: t.type === 'income' ? theme.accentInk : colorTheme.red }]}>
-                {t.type === 'income' ? '+' : '−'} RM {fmt(t.amount)}
+              <Text
+                style={[
+                  styles.txnAmount,
+                  { color: t.type === 'income' ? theme.accentInk : t.type === 'transfer' ? colorTheme.ink2 : colorTheme.red },
+                ]}
+              >
+                {t.type === 'income' ? '+' : t.type === 'transfer' ? '→' : '−'} RM {fmt(t.amount)}
               </Text>
             </View>
           ))}

@@ -21,7 +21,7 @@ type TestState = { status: 'idle' | 'busy' | 'ok' | 'fail'; message?: string };
 
 
 
-export function SettingsScreen({ onBack, onMigrate, onAdvancedImport, onOpenExport, onOpenAttacks = () => {}, onOpenCategories, onResetToOnboarding }: { onBack: () => void; onMigrate?: () => void; onAdvancedImport?: () => void; onOpenExport?: () => void; onOpenAttacks?: () => void; onOpenCategories?: () => void; onResetToOnboarding?: () => void }) {
+export function SettingsScreen({ onBack, onMigrate, onAdvancedImport, onOpenExport, onOpenAttacks = () => {}, onOpenCategories, onOpenCommitments, onResetToOnboarding }: { onBack: () => void; onMigrate?: () => void; onAdvancedImport?: () => void; onOpenExport?: () => void; onOpenAttacks?: () => void; onOpenCategories?: () => void; onOpenCommitments?: () => void; onResetToOnboarding?: () => void }) {
   const insets = useSafeAreaInsets();
   const theme = useAccent();
   const colorTheme = useThemeColors();
@@ -151,6 +151,13 @@ export function SettingsScreen({ onBack, onMigrate, onAdvancedImport, onOpenExpo
               </Text>
               <OwedReminderPicker />
             </Card>
+            <Card style={{ padding: 16, marginTop: 12 }}>
+              <Text style={[styles.providerName, { color: colorTheme.ink }]}>Recurring bills</Text>
+              <Text style={[styles.providerSub, { color: colorTheme.ink2, marginBottom: 12 }]}>
+                A monthly summary of what's due, plus a nudge for anything overdue.
+              </Text>
+              <CommitmentReminderPicker />
+            </Card>
           </>
         )}
 
@@ -217,10 +224,26 @@ export function SettingsScreen({ onBack, onMigrate, onAdvancedImport, onOpenExpo
         </Card>
 
         <Eyebrow style={{ marginTop: 26, marginBottom: 10 }}>Data</Eyebrow>
+        {onOpenCommitments && (
+          <Pressable
+            onPress={onOpenCommitments}
+            style={({ pressed }) => [styles.providerRow, styles.migrateRow, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line2 }, { opacity: pressed ? 0.9 : 1 }]}
+          >
+            <View style={[styles.providerBadge, { backgroundColor: theme.accentTint }]}>
+              <Icon name="clock" size={16} color={theme.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.providerName, { color: colorTheme.ink }]}>Recurring bills & investments</Text>
+              <Text style={[styles.providerSub, { color: colorTheme.ink2 }]}>Set up monthly bills or a DCA investment, and tick them off each time they're paid.</Text>
+            </View>
+            <Icon name="chevronRight" size={18} color={colorTheme.ink3} />
+          </Pressable>
+        )}
+
         {onOpenCategories && (
           <Pressable
             onPress={onOpenCategories}
-            style={({ pressed }) => [styles.providerRow, styles.migrateRow, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line2 }, { opacity: pressed ? 0.9 : 1 }]}
+            style={({ pressed }) => [styles.providerRow, styles.migrateRow, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line2 }, { marginTop: 12, opacity: pressed ? 0.9 : 1 }]}
           >
             <View style={[styles.providerBadge, { backgroundColor: theme.accentTint }]}>
               <Icon name="sliders" size={16} color={theme.accent} />
@@ -432,6 +455,33 @@ function OwedReminderPicker() {
           <Pressable
             key={String(value)}
             onPress={() => withPermission(value, () => setOwedReminderEnabled(value))}
+            style={[styles.modeBtn, on && { backgroundColor: theme.accentInk }]}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: on }}
+          >
+            <Text style={[styles.modeText, { color: colorTheme.ink2 }, on && styles.modeTextOn]}>
+              {value ? 'On' : 'Off'}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** Two-pill Off/On, same shape as OwedReminderPicker. */
+function CommitmentReminderPicker() {
+  const theme = useAccent();
+  const colorTheme = useThemeColors();
+  const { commitmentReminderEnabled, setCommitmentReminderEnabled } = useAppData();
+  return (
+    <View style={[styles.modeToggle, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line2 }]}>
+      {[false, true].map((value) => {
+        const on = commitmentReminderEnabled === value;
+        return (
+          <Pressable
+            key={String(value)}
+            onPress={() => withPermission(value, () => setCommitmentReminderEnabled(value))}
             style={[styles.modeBtn, on && { backgroundColor: theme.accentInk }]}
             accessibilityRole="radio"
             accessibilityState={{ selected: on }}

@@ -92,7 +92,17 @@ function IncomeHero({
 }) {
   const positive = net >= 0;
   return (
-    <View style={[styles.heroShadowWrap, positive ? styles.heroShadowPos : styles.heroShadowNeg]}>
+    <View
+      style={[
+        styles.heroShadowWrap,
+        positive ? styles.heroShadowPos : styles.heroShadowNeg,
+        // Android elevation needs an opaque backgroundColor to shadow correctly  without
+        // one, release/Hermes builds render the shadow-casting surface as a plain gray/
+        // white plate instead of a blurred shadow (matches the card's darkest gradient
+        // stop so no seam shows once `hero` fully covers it).
+        { backgroundColor: positive ? '#0e3d27' : '#4a0e19' },
+      ]}
+    >
       <View style={styles.hero}>
       <HeroGradient positive={positive} />
       <View style={styles.heroBlob} />

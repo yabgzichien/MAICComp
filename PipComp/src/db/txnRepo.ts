@@ -22,7 +22,7 @@ function toTxn(r: TxnRow): Transaction {
     merchantKey: r.merchant_key,
     amount: r.amount,
     currency: r.currency,
-    type: r.type === 'income' ? 'income' : 'expense',
+    type: r.type === 'income' ? 'income' : r.type === 'transfer' ? 'transfer' : 'expense',
     date: r.txn_date,
     categoryId: r.category_id,
     createdAt: r.created_at,
@@ -126,7 +126,7 @@ export async function updateTransactionFields(
   id: string,
   amount: number,
   type: TxnType,
-  categoryId: string,
+  categoryId: string | null,
   remark?: string | null
 ): Promise<void> {
   const db = await getDb();

@@ -15,11 +15,12 @@ import type { ReminderPlanEntry } from '../lib/reminders';
 /** Marks a scheduled notification as ours, so a re-sync never cancels anything else. */
 const PIP_REMINDER = 'pipReminder';
 
-export type ReminderKind = 'log' | 'owed';
+export type ReminderKind = 'log' | 'owed' | 'commitment';
 
 export interface ReminderPlan {
   log: ReminderPlanEntry[];
   owed: ReminderPlanEntry[];
+  commitment: ReminderPlanEntry[];
 }
 
 let configured = false;
@@ -86,6 +87,7 @@ export async function syncScheduledReminders(plan: ReminderPlan): Promise<void> 
   const entries: { kind: ReminderKind; entry: ReminderPlanEntry }[] = [
     ...plan.log.map((entry) => ({ kind: 'log' as const, entry })),
     ...plan.owed.map((entry) => ({ kind: 'owed' as const, entry })),
+    ...plan.commitment.map((entry) => ({ kind: 'commitment' as const, entry })),
   ];
 
   for (const { kind, entry } of entries) {

@@ -140,4 +140,72 @@ describe('AdvancedImport parseJSON', () => {
   it('throws if parsed root is not an object', () => {
     expect(() => parseJSON('"a string"')).toThrow('Not a JSON object.');
   });
+
+  it('defaults transfers, commitments, and account quantity/cost to empty/null when absent (a plain LLM reply never carries them)', () => {
+    const result = parseJSON(JSON.stringify({ transactions: [], accounts: [{ name: 'X', type: 'Cash', balance: 100 }] }));
+    expect(result.transfers).toEqual([]);
+    expect(result.commitments).toEqual([]);
+    expect(result.accounts[0].quantity).toBeNull();
+    expect(result.accounts[0].cost).toBeNull();
+  });
+
+  it('parses a quantity/cost pair on an account row (version 2)', () => {
+    const result = parseJSON(JSON.stringify({
+      accounts: [{ name: 'VOO', type: 'Investments', balance: 600, quantity: 1.5, cost: 600 }],
+    }));
+    expect(result.accounts[0]).toMatchObject({ quantity: 1.5, cost: 600 });
+  });
+
+  it('parses transfers as their own array, unsigned, separate from transactions', () => {
+    const result = parseJSON(JSON.stringify({
+      transfers: [{ date: '2026-06-15', description: 'Stockbroker DCA', amount: 200, account: 'CIMB Bank' }],
+    }));
+    expect(result.transactions).toEqual([]);
+    expect(result.transfers).toEqual([
+      { date: '2026-06-15', description: 'Stockbroker DCA', amount: 200, account: 'CIMB Bank' },
+    ]);
+  });
+
+  it('takes the absolute value of a negative transfer amount', () => {
+    const result = parseJSON(JSON.stringify({ transfers: [{ description: 'X', amount: -50 }] }));
+    expect(result.transfers[0].amount).toBe(50);
+  });
+
+  it('parses a commitment with its occurrence history', () => {
+    const result = parseJSON(JSON.stringify({
+      commitments: [{
+        label: 'Maxis Postpaid', kind: 'expense', amount: 89, dueDay: 5, category: 'Communications',
+        fromAccount: 'Touch \'n Go', toAccount: null, startMonth: '2026-06', endMonth: null,
+        occurrences: [{ dueDate: '2026-06-05', status: 'paid', paidOn: '2026-06-03', paidAmount: 89 }],
+      }],
+    }));
+    expect(result.commitments).toHaveLength(1);
+    expect(result.commitments[0]).toMatchObject({
+      label: 'Maxis Postpaid', kind: 'expense', amount: 89, dueDay: 5, category: 'Communications',
+      fromAccount: "Touch 'n Go", toAccount: null, startMonth: '2026-06', endMonth: null,
+    });
+    expect(result.commitments[0].occurrences).toEqual([
+      { dueDate: '2026-06-05', status: 'paid', paidOn: '2026-06-03', paidAmount: 89 },
+    ]);
+  });
+
+  it('drops a commitment with no label, and a malformed occurrence with no dueDate', () => {
+    const result = parseJSON(JSON.stringify({
+      commitments: [
+        { label: '', amount: 50, dueDay: 1 },
+        { label: 'Astro', amount: 100, dueDay: 3, occurrences: [{ status: 'paid' }, { dueDate: '2026-06-03', status: 'paid' }] },
+      ],
+    }));
+    expect(result.commitments).toHaveLength(1);
+    expect(result.commitments[0].label).toBe('Astro');
+    expect(result.commitments[0].occurrences).toHaveLength(1);
+  });
+
+  it('clamps an out-of-range dueDay and falls back to expense kind for an unrecognised kind', () => {
+    const result = parseJSON(JSON.stringify({
+      commitments: [{ label: 'X', amount: 10, dueDay: 45, kind: 'weird' }],
+    }));
+    expect(result.commitments[0].dueDay).toBe(31);
+    expect(result.commitments[0].kind).toBe('expense');
+  });
 });

@@ -60,6 +60,7 @@ export function savingsStepUp(habit: SavingsHabit, guideSuggestion: number | und
 function fullMonthNets(txns: Transaction[], currentMonth: string): { month: string; net: number }[] {
   const byMonth = new Map<string, number>();
   for (const t of txns) {
+    if (t.type === 'transfer') continue;
     const mk = txnMonthKey(t);
     if (!mk || mk >= currentMonth) continue;
     byMonth.set(mk, (byMonth.get(mk) ?? 0) + (t.type === 'income' ? t.amount : -t.amount));
@@ -89,6 +90,7 @@ export function computeSavingsHabit(
 
   let thisMonthSaved = 0;
   for (const t of txns) {
+    if (t.type === 'transfer') continue;
     if ((monthKey(t.date) ?? monthKey(t.createdAt)) !== currentMonth) continue;
     thisMonthSaved += t.type === 'income' ? t.amount : -t.amount;
   }

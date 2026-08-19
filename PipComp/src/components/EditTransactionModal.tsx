@@ -125,13 +125,15 @@ export function EditTransactionModal({ txn, onClose }: { txn: Transaction | null
       : Number.isFinite(n) && n >= 0
         ? Math.round(n * 100) / 100
         : txn.amount;
-    const categoryId = cat ?? (type === 'income' ? DEFAULT_INCOME_ID : DEFAULT_EXPENSE_ID);
+    const categoryId = type === 'transfer' ? null : cat ?? (type === 'income' ? DEFAULT_INCOME_ID : DEFAULT_EXPENSE_ID);
     await saveTransactionEdits(txn, { amount, type, categoryId, remark: remark.trim() || null });
     if (linkId) await recordBalanceLink(linkId, amount, linkEffect, txn.date ?? todayISO());
     onClose();
   };
 
-  const currentCatLabel = categories.find((c) => c.id === (cat ?? txn.categoryId))?.label ?? (txn.type === 'income' ? 'Income' : 'Expense');
+  const currentCatLabel =
+    categories.find((c) => c.id === (cat ?? txn.categoryId))?.label ??
+    (txn.type === 'income' ? 'Income' : txn.type === 'transfer' ? 'Transfer' : 'Expense');
 
   const confirmDelete = () => {
     const label = txn.merchantRaw || currentCatLabel;
@@ -156,30 +158,39 @@ export function EditTransactionModal({ txn, onClose }: { txn: Transaction | null
         </View>
 
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          {/* type toggle */}
-          <View style={[styles.toggle, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line2 }]}>
-            {(['expense', 'income'] as TxnType[]).map((k) => {
-              const on = type === k;
-              return (
-                <Pressable
-                  key={k}
-                  onPress={() => switchType(k)}
-                  style={[styles.toggleBtn, on && styles.toggleBtnOn, on && { backgroundColor: colorTheme.surface }]}
-                >
-                  <Text
-                    style={[
-                      styles.toggleText,
-                      { color: colorTheme.ink2 },
-                      on && styles.toggleTextOn,
-                      on && { color: colorTheme.ink },
-                    ]}
+          {/* type toggle — a transfer (e.g. a DCA contribution) can never be flipped into an
+              expense or income here; it moves money between two accounts, not into a category. */}
+          {type === 'transfer' ? (
+            <View style={[styles.toggle, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line2 }]}>
+              <View style={[styles.toggleBtn, styles.toggleBtnOn, { backgroundColor: colorTheme.surface }]}>
+                <Text style={[styles.toggleText, styles.toggleTextOn, { color: colorTheme.ink }]}>Transfer</Text>
+              </View>
+            </View>
+          ) : (
+            <View style={[styles.toggle, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line2 }]}>
+              {(['expense', 'income'] as TxnType[]).map((k) => {
+                const on = type === k;
+                return (
+                  <Pressable
+                    key={k}
+                    onPress={() => switchType(k)}
+                    style={[styles.toggleBtn, on && styles.toggleBtnOn, on && { backgroundColor: colorTheme.surface }]}
                   >
-                    {k === 'expense' ? 'Expense' : 'Income'}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+                    <Text
+                      style={[
+                        styles.toggleText,
+                        { color: colorTheme.ink2 },
+                        on && styles.toggleTextOn,
+                        on && { color: colorTheme.ink },
+                      ]}
+                    >
+                      {k === 'expense' ? 'Expense' : 'Income'}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
 
           <Text style={[styles.fieldLabel, { color: colorTheme.ink2 }]}>{split ? 'Your share' : 'Amount'}</Text>
           <View style={styles.amountRow}>
@@ -204,29 +215,33 @@ export function EditTransactionModal({ txn, onClose }: { txn: Transaction | null
             </Text>
           )}
 
-          <Text style={[styles.fieldLabel, { color: colorTheme.ink2, marginTop: 18 }]}>Category</Text>
-          <View style={styles.grid}>
-            {visible.map((c) => (
-              <View key={c.id} style={styles.gridCell}>
-                <CategoryChip category={c} selected={cat === c.id} suggested={false} onPress={() => setCat(c.id)} />
+          {type !== 'transfer' && (
+            <>
+              <Text style={[styles.fieldLabel, { color: colorTheme.ink2, marginTop: 18 }]}>Category</Text>
+              <View style={styles.grid}>
+                {visible.map((c) => (
+                  <View key={c.id} style={styles.gridCell}>
+                    <CategoryChip category={c} selected={cat === c.id} suggested={false} onPress={() => setCat(c.id)} />
+                  </View>
+                ))}
+                {expanded && (
+                  <View style={styles.gridCell}>
+                    <Pressable onPress={() => setAdding(true)} style={[styles.addChip, { borderColor: theme.accentSoft, backgroundColor: theme.accentTint }]}>
+                      <Icon name="plus" size={16} color={theme.accent} stroke={2.2} />
+                      <Text style={[styles.addChipText, { color: theme.accent }]}>New category</Text>
+                    </Pressable>
+                  </View>
+                )}
               </View>
-            ))}
-            {expanded && (
-              <View style={styles.gridCell}>
-                <Pressable onPress={() => setAdding(true)} style={[styles.addChip, { borderColor: theme.accentSoft, backgroundColor: theme.accentTint }]}>
-                  <Icon name="plus" size={16} color={theme.accent} stroke={2.2} />
-                  <Text style={[styles.addChipText, { color: theme.accent }]}>New category</Text>
+              {grid.length > 4 && (
+                <Pressable onPress={() => setExpanded((e) => !e)} style={styles.moreBtn} hitSlop={6}>
+                  <Text style={[styles.moreText, { color: theme.accent }]}>{expanded ? 'Show less' : `Show all ${grid.length}`}</Text>
+                  <View style={{ transform: [{ rotate: expanded ? '180deg' : '0deg' }] }}>
+                    <Icon name="chevronDown" size={16} color={theme.accent} />
+                  </View>
                 </Pressable>
-              </View>
-            )}
-          </View>
-          {grid.length > 4 && (
-            <Pressable onPress={() => setExpanded((e) => !e)} style={styles.moreBtn} hitSlop={6}>
-              <Text style={[styles.moreText, { color: theme.accent }]}>{expanded ? 'Show less' : `Show all ${grid.length}`}</Text>
-              <View style={{ transform: [{ rotate: expanded ? '180deg' : '0deg' }] }}>
-                <Icon name="chevronDown" size={16} color={theme.accent} />
-              </View>
-            </Pressable>
+              )}
+            </>
           )}
 
           <Text style={[styles.fieldLabel, { color: colorTheme.ink2, marginTop: 18 }]}>Remark (optional)</Text>

@@ -172,6 +172,7 @@ export function AllTransactionsScreen({
               {shown.map((t, i) => {
                 const cat = catById[t.categoryId ?? 'other'] ?? fallback;
                 const income = t.type === 'income';
+                const transfer = t.type === 'transfer';
                 const isSel = selected.has(t.id);
                 return (
                   <Pressable
@@ -192,7 +193,7 @@ export function AllTransactionsScreen({
                         {t.merchantRaw || cat.label}
                       </Text>
                       <Text style={[styles.sub, { color: colorTheme.ink2 }]}>
-                        {cat.label} · {shortDate(t.date ?? t.createdAt)}
+                        {transfer ? 'Transfer' : cat.label} · {shortDate(t.date ?? t.createdAt)}
                       </Text>
                       {t.remark ? (
                         <Text style={[styles.remark, { color: colorTheme.ink3 }]} numberOfLines={1}>
@@ -210,7 +211,7 @@ export function AllTransactionsScreen({
                         </View>
                       )}
                     </View>
-                    <Amount value={t.amount} size={15} weight={600} color={income ? theme.accent : colorTheme.ink} />
+                    <Amount value={t.amount} size={15} weight={600} color={income ? theme.accent : transfer ? colorTheme.ink2 : colorTheme.ink} />
                     {!selectMode && <Icon name="pencil" size={15} color={colorTheme.ink3} />}
                   </Pressable>
                 );

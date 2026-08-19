@@ -14,7 +14,7 @@
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { todayISO } from '../lib/duplicates';
-import { planLogReminders, planOwedReminders } from '../lib/reminders';
+import { planCommitmentReminders, planLogReminders, planOwedReminders } from '../lib/reminders';
 import { groupOpenSharesByPerson, oldestOverdueDays } from '../lib/split';
 import { lastActiveDay } from '../lib/streak';
 import { configureNotifications, syncScheduledReminders } from '../notifications';
@@ -26,7 +26,16 @@ import { useAppData } from './store';
  * degrades to doing nothing, and never surfaces an error to the user.
  */
 export function useReminderSync(): void {
-  const { ready, transactions, openShares, reminderCadence, owedReminderEnabled } = useAppData();
+  const {
+    ready,
+    transactions,
+    openShares,
+    reminderCadence,
+    owedReminderEnabled,
+    commitmentOccurrences,
+    commitments,
+    commitmentReminderEnabled,
+  } = useAppData();
 
   useEffect(() => {
     // Before the first load lands, `transactions` is still empty and would look like a user
@@ -44,6 +53,14 @@ export function useReminderSync(): void {
         const today = todayISO();
         const debts = groupOpenSharesByPerson(openShares, today);
 
+        const commitmentById = new Map(commitments.map((c) => [c.id, c]));
+        const commitmentRows = commitmentOccurrences
+          .map((o) => {
+            const c = commitmentById.get(o.commitmentId);
+            return c ? { dueDate: o.dueDate, amount: o.amount, label: c.label, status: o.status } : null;
+          })
+          .filter((r): r is NonNullable<typeof r> => r !== null);
+
         await syncScheduledReminders({
           log: planLogReminders(
             { cadence: reminderCadence, lastLoggedDay: lastActiveDay(transactions, now) },
@@ -55,6 +72,10 @@ export function useReminderSync(): void {
               oldestOverdueDays: oldestOverdueDays(openShares, today),
               debts,
             },
+            now
+          ),
+          commitment: planCommitmentReminders(
+            { enabled: commitmentReminderEnabled, occurrences: commitmentRows },
             now
           ),
         });
@@ -74,5 +95,14 @@ export function useReminderSync(): void {
       alive = false;
       sub.remove();
     };
-  }, [ready, transactions, openShares, reminderCadence, owedReminderEnabled]);
+  }, [
+    ready,
+    transactions,
+    openShares,
+    reminderCadence,
+    owedReminderEnabled,
+    commitmentOccurrences,
+    commitments,
+    commitmentReminderEnabled,
+  ]);
 }

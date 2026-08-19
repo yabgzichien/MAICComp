@@ -12,7 +12,8 @@ export type IconName =
   | 'camera' | 'image' | 'plus' | 'check' | 'sparkles' | 'x' | 'chevronRight' | 'chevronLeft'
   | 'chevronDown' | 'scan' | 'trending' | 'clock' | 'arrowRight' | 'search' | 'gallery' | 'wallet'
   | 'trash' | 'sliders' | 'gear' | 'alert' | 'pencil' | 'gift' | 'return' | 'percent'
-  | 'home' | 'scale' | 'signal' | 'book' | 'shield' | 'store' | 'download' | 'file' | 'table';
+  | 'home' | 'scale' | 'signal' | 'book' | 'shield' | 'store' | 'download' | 'file' | 'table'
+  | 'copy' | 'upload' | 'code';
 
 type RenderFn = (stroke: string, sw: number) => React.ReactNode;
 
@@ -299,6 +300,25 @@ const ICONS: Record<IconName, RenderFn> = {
       <Line x1={3} y1={15} x2={21} y2={15} />
       <Line x1={9} y1={3} x2={9} y2={21} />
       <Line x1={15} y1={3} x2={15} y2={21} />
+    </G>
+  ),
+  copy: (s, w) => (
+    <G fill="none" stroke={s} strokeWidth={w}>
+      <Rect x={8} y={8} width={13} height={13} rx={2} />
+      <Path d="M16 8V5a2 2 0 00-2-2H5a2 2 0 00-2 2v9a2 2 0 002 2h3" />
+    </G>
+  ),
+  upload: (s, w) => (
+    <G fill="none" stroke={s} strokeWidth={w}>
+      <Path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+      <Path d="M17 8l-5-5-5 5" />
+      <Line x1={12} y1={3} x2={12} y2={15} />
+    </G>
+  ),
+  code: (s, w) => (
+    <G fill="none" stroke={s} strokeWidth={w}>
+      <Path d="M8 6L3 12l5 6" />
+      <Path d="M16 6l5 6-5 6" />
     </G>
   ),
 };

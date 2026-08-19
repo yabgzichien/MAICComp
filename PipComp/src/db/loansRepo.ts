@@ -1,5 +1,6 @@
 // src/db/loansRepo.ts
 import { genId, getDb } from './db';
+import { addMonthsClamped } from '../lib/dates';
 import { installmentFor } from '../lib/loans';
 import type { Decision, LoanDecision, LoanProduct } from '../lib/loans';
 import type { DeclaredPurpose, PurposeCategory } from '../lib/loanPurpose';
@@ -308,18 +309,6 @@ export async function listApplications(): Promise<LoanApplication[]> {
 }
 
 // --- Repayments -------------------------------------------------------------
-
-/** Add `months` calendar months to an ISO 'YYYY-MM-DD' date, clamping to the target month's last day (handles e.g. Jan 31 + 1mo -> Feb 28). */
-function addMonthsClamped(isoDate: string, months: number): string {
-  const [y, m, d] = isoDate.split('-').map(Number);
-  const target = new Date(Date.UTC(y, m - 1 + months, 1));
-  const lastDayOfTargetMonth = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
-  target.setUTCDate(Math.min(d, lastDayOfTargetMonth));
-  const yyyy = target.getUTCFullYear();
-  const mm = String(target.getUTCMonth() + 1).padStart(2, '0');
-  const dd = String(target.getUTCDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-}
 
 /**
  * Generate and persist `tenorMonths` repayment rows for an approved application:

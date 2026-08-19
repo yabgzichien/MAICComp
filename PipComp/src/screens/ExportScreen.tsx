@@ -1,3 +1,4 @@
+import * as Clipboard from 'expo-clipboard';
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -19,6 +20,7 @@ import {
   type ReportPeriodType,
 } from '../lib/bookkeeping';
 import {
+  generateAdvancedImportJSON,
   generateCSV,
   generateExcelWorkbook,
   generateHTMLReport,
@@ -79,6 +81,15 @@ const FORMAT_OPTIONS: FormatOption[] = [
     fileExt: 'csv',
     mimeType: 'text/csv',
   },
+  {
+    id: 'json',
+    title: 'Advanced Import JSON',
+    sub: 'Same schema Advanced Import reads — copy or download, then re-import anytime.',
+    badge: 'Re-importable',
+    icon: 'code',
+    fileExt: 'json',
+    mimeType: 'application/json',
+  },
 ];
 
 const PERIOD_TABS: { type: ReportPeriodType; label: string }[] = [
@@ -98,7 +109,11 @@ export function ExportScreen({
   const insets = useSafeAreaInsets();
   const theme = useAccent();
   const themeColors = useThemeColors();
-  const { transactions, categories, accounts, balanceEntries, kyc } = useAppData();
+  const { transactions, categories, accounts, balanceEntries, kyc, commitments, commitmentOccurrences } = useAppData();
+  const commitmentExtra = useMemo(
+    () => ({ commitments, occurrences: commitmentOccurrences }),
+    [commitments, commitmentOccurrences]
+  );
 
   const now = useMemo(() => new Date(), []);
   const curY = now.getFullYear();
@@ -185,6 +200,10 @@ export function ExportScreen({
         content = generateHTMLReport(reportData);
         ext = 'html';
         mime = 'text/html';
+      } else if (selectedFormat === 'json') {
+        content = generateAdvancedImportJSON(reportData, commitmentExtra);
+        ext = 'json';
+        mime = 'application/json';
       } else {
         // PDF Printable HTML
         content = generatePrintablePDFHtml(reportData);
@@ -230,12 +249,32 @@ export function ExportScreen({
       setPreviewContent(htmlText);
       setPreviewTitle(`HTML Report Preview (${activePeriod.label})`);
       setPreviewVisible(true);
+    } else if (selectedFormat === 'json') {
+      const jsonText = generateAdvancedImportJSON(reportData, commitmentExtra);
+      setPreviewContent(jsonText);
+      setPreviewTitle(`Advanced Import JSON Preview (${activePeriod.label})`);
+      setPreviewVisible(true);
     } else {
       // PDF
       const pdfHtml = generatePrintablePDFHtml(reportData);
       setPreviewContent(pdfHtml);
       setPreviewTitle(`PDF Statement Preview (${activePeriod.label})`);
       setPreviewVisible(true);
+    }
+  };
+
+  // Copy the Advanced Import JSON straight to the clipboard.
+  const [copyingJson, setCopyingJson] = useState(false);
+  const handleCopyJSON = async () => {
+    setCopyingJson(true);
+    try {
+      const json = generateAdvancedImportJSON(reportData, commitmentExtra);
+      await Clipboard.setStringAsync(json);
+      notify('Copied', 'Advanced Import JSON copied to clipboard. Paste it into Advanced Import to re-import.');
+    } catch (err: any) {
+      notify('Copy Failed', err?.message || 'Unable to copy JSON to clipboard.');
+    } finally {
+      setCopyingJson(false);
     }
   };
 
@@ -252,7 +291,7 @@ export function ExportScreen({
       <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: insets.bottom + 48 }}>
         {/* TIMEFRAME SELECTOR */}
         <Eyebrow style={{ marginBottom: 10 }}>1. Reporting Period</Eyebrow>
-        <View style={styles.periodTabs}>
+        <View style={[styles.periodTabs, { backgroundColor: themeColors.surface2, borderColor: themeColors.line2 }]}>
           {PERIOD_TABS.map((tab) => {
             const active = periodType === tab.type;
             return (
@@ -261,7 +300,13 @@ export function ExportScreen({
                 onPress={() => setPeriodType(tab.type)}
                 style={[styles.periodTabBtn, active && { backgroundColor: theme.accentInk }]}
               >
-                <Text style={[styles.periodTabText, active && styles.periodTabTextActive]}>
+                <Text
+                  style={[
+                    styles.periodTabText,
+                    { color: themeColors.ink2 },
+                    active && styles.periodTabTextActive,
+                  ]}
+                >
                   {tab.label}
                 </Text>
               </Pressable>
@@ -272,7 +317,7 @@ export function ExportScreen({
         {/* MONTH PICKER */}
         {periodType === 'monthly' && (
           <Card style={{ padding: 14, marginTop: 10 }}>
-            <Text style={styles.subHeader}>Select Month</Text>
+            <Text style={[styles.subHeader, { color: themeColors.ink }]}>Select Month</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 {availableMonths.map((m) => {
@@ -288,10 +333,16 @@ export function ExportScreen({
                         styles.chipBtn,
                         active
                           ? { backgroundColor: theme.accent, borderColor: theme.accent }
-                          : { backgroundColor: colors.surface2, borderColor: colors.line2 },
+                          : { backgroundColor: themeColors.surface2, borderColor: themeColors.line2 },
                       ]}
                     >
-                      <Text style={[styles.chipText, active && { color: '#fff', fontWeight: '700' }]}>
+                      <Text
+                        style={[
+                          styles.chipText,
+                          { color: themeColors.ink },
+                          active && { color: '#fff', fontWeight: '700' },
+                        ]}
+                      >
                         {label}
                       </Text>
                     </Pressable>
@@ -305,7 +356,7 @@ export function ExportScreen({
         {/* YEAR PICKER */}
         {periodType === 'yearly' && (
           <Card style={{ padding: 14, marginTop: 10 }}>
-            <Text style={styles.subHeader}>Select Year</Text>
+            <Text style={[styles.subHeader, { color: themeColors.ink }]}>Select Year</Text>
             <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
               {availableYears.map((y) => {
                 const active = selectedYear === y;
@@ -317,10 +368,16 @@ export function ExportScreen({
                       styles.chipBtn,
                       active
                         ? { backgroundColor: theme.accent, borderColor: theme.accent }
-                        : { backgroundColor: colors.surface2, borderColor: colors.line2 },
+                        : { backgroundColor: themeColors.surface2, borderColor: themeColors.line2 },
                     ]}
                   >
-                    <Text style={[styles.chipText, active && { color: '#fff', fontWeight: '700' }]}>
+                    <Text
+                      style={[
+                        styles.chipText,
+                        { color: themeColors.ink },
+                        active && { color: '#fff', fontWeight: '700' },
+                      ]}
+                    >
                       Year {y}
                     </Text>
                   </Pressable>
@@ -333,26 +390,32 @@ export function ExportScreen({
         {/* CUSTOM RANGE PICKER */}
         {periodType === 'custom' && (
           <Card style={{ padding: 14, marginTop: 10 }}>
-            <Text style={styles.subHeader}>Date Range (YYYY-MM-DD)</Text>
+            <Text style={[styles.subHeader, { color: themeColors.ink }]}>Date Range (YYYY-MM-DD)</Text>
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.inputLabel}>From Date</Text>
+                <Text style={[styles.inputLabel, { color: themeColors.ink2 }]}>From Date</Text>
                 <TextInput
                   value={customStart}
                   onChangeText={setCustomStart}
                   placeholder="YYYY-MM-DD"
-                  placeholderTextColor={colors.ink3}
-                  style={styles.dateInput}
+                  placeholderTextColor={themeColors.ink3}
+                  style={[
+                    styles.dateInput,
+                    { color: themeColors.ink, borderColor: themeColors.line2, backgroundColor: themeColors.surface },
+                  ]}
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.inputLabel}>To Date</Text>
+                <Text style={[styles.inputLabel, { color: themeColors.ink2 }]}>To Date</Text>
                 <TextInput
                   value={customEnd}
                   onChangeText={setCustomEnd}
                   placeholder="YYYY-MM-DD"
-                  placeholderTextColor={colors.ink3}
-                  style={styles.dateInput}
+                  placeholderTextColor={themeColors.ink3}
+                  style={[
+                    styles.dateInput,
+                    { color: themeColors.ink, borderColor: themeColors.line2, backgroundColor: themeColors.surface },
+                  ]}
                 />
               </View>
             </View>
@@ -363,7 +426,7 @@ export function ExportScreen({
         <Eyebrow style={{ marginTop: 22, marginBottom: 10 }}>2. Statement Summary</Eyebrow>
         <Card style={{ padding: 16 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={styles.summaryTitle}>{activePeriod.label}</Text>
+            <Text style={[styles.summaryTitle, { color: themeColors.ink }]}>{activePeriod.label}</Text>
             <View style={[styles.badgePill, { backgroundColor: theme.accentTint }]}>
               <Text style={[styles.badgeText, { color: theme.accent }]}>
                 {reportData.incomeStatement.transactionCount} txns
@@ -373,30 +436,30 @@ export function ExportScreen({
 
           <View style={styles.statGrid}>
             <View style={styles.statBox}>
-              <Text style={styles.statLabel}>Revenue</Text>
+              <Text style={[styles.statLabel, { color: themeColors.ink2 }]}>Revenue</Text>
               <Amount value={isIncome} size={15} color="#15803d" />
             </View>
             <View style={styles.statBox}>
-              <Text style={styles.statLabel}>Expenses</Text>
+              <Text style={[styles.statLabel, { color: themeColors.ink2 }]}>Expenses</Text>
               <Amount value={isExpense} size={15} color="#b3261e" />
             </View>
             <View style={styles.statBox}>
-              <Text style={styles.statLabel}>Net Surplus</Text>
+              <Text style={[styles.statLabel, { color: themeColors.ink2 }]}>Net Surplus</Text>
               <Amount value={isNet} size={15} color={isNet >= 0 ? theme.accent : '#b3261e'} />
             </View>
             <View style={styles.statBox}>
-              <Text style={styles.statLabel}>Net Worth</Text>
+              <Text style={[styles.statLabel, { color: themeColors.ink2 }]}>Net Worth</Text>
               <Amount value={reportData.balanceSheet.netWorth} size={15} />
             </View>
           </View>
 
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: themeColors.line2 }]} />
 
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={styles.statSubText}>
-              Mean Monthly: <Text style={{ fontFamily: uiFont(700), color: colors.ink }}>RM {reportData.statistics.meanMonthlyIncome.toFixed(0)}</Text>
+            <Text style={[styles.statSubText, { color: themeColors.ink2 }]}>
+              Mean Monthly: <Text style={{ fontFamily: uiFont(700), color: themeColors.ink }}>RM {reportData.statistics.meanMonthlyIncome.toFixed(0)}</Text>
             </Text>
-            <Text style={styles.statSubText}>
+            <Text style={[styles.statSubText, { color: themeColors.ink2 }]}>
               Savings Rate: <Text style={{ fontFamily: uiFont(700), color: theme.accent }}>{reportData.incomeStatement.savingsRate}%</Text>
             </Text>
           </View>
@@ -413,6 +476,7 @@ export function ExportScreen({
                 onPress={() => setSelectedFormat(opt.id)}
                 style={({ pressed }) => [
                   styles.formatCard,
+                  { backgroundColor: themeColors.surface, borderColor: themeColors.line2 },
                   selected && { borderColor: theme.accent, backgroundColor: theme.accentTint },
                   pressed && { opacity: 0.9 },
                 ]}
@@ -420,29 +484,30 @@ export function ExportScreen({
                 <View
                   style={[
                     styles.formatIconWrap,
-                    { backgroundColor: selected ? theme.accent : colors.surface2 },
+                    { backgroundColor: selected ? theme.accent : themeColors.surface2 },
                   ]}
                 >
                   <Icon
                     name={opt.icon}
                     size={20}
-                    color={selected ? '#fff' : colors.ink2}
+                    color={selected ? '#fff' : themeColors.ink2}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={[styles.formatTitle, selected && { color: theme.accent }]}>
+                    <Text style={[styles.formatTitle, { color: themeColors.ink }, selected && { color: theme.accent }]}>
                       {opt.title}
                     </Text>
-                    <View style={styles.formatBadge}>
-                      <Text style={styles.formatBadgeText}>{opt.badge}</Text>
+                    <View style={[styles.formatBadge, { backgroundColor: themeColors.surface2, borderColor: themeColors.line2 }]}>
+                      <Text style={[styles.formatBadgeText, { color: themeColors.ink2 }]}>{opt.badge}</Text>
                     </View>
                   </View>
-                  <Text style={styles.formatSub}>{opt.sub}</Text>
+                  <Text style={[styles.formatSub, { color: themeColors.ink2 }]}>{opt.sub}</Text>
                 </View>
                 <View
                   style={[
                     styles.radioCircle,
+                    { borderColor: themeColors.line },
                     selected && { borderColor: theme.accent, backgroundColor: theme.accent },
                   ]}
                 >
@@ -476,10 +541,28 @@ export function ExportScreen({
             )}
           </Pressable>
 
+          {selectedFormat === 'json' && (
+            <Pressable
+              onPress={handleCopyJSON}
+              disabled={copyingJson}
+              style={({ pressed }) => [
+                styles.secondaryBtn,
+                { backgroundColor: themeColors.surface, borderColor: themeColors.line2 },
+                { opacity: copyingJson ? 0.6 : pressed ? 0.85 : 1 },
+              ]}
+            >
+              <Icon name="copy" size={16} color={theme.accent} />
+              <Text style={[styles.secondaryBtnText, { color: theme.accent }]}>
+                Copy JSON to Clipboard
+              </Text>
+            </Pressable>
+          )}
+
           <Pressable
             onPress={handlePreview}
             style={({ pressed }) => [
               styles.secondaryBtn,
+              { backgroundColor: themeColors.surface, borderColor: themeColors.line2 },
               { opacity: pressed ? 0.85 : 1 },
             ]}
           >
@@ -504,16 +587,28 @@ export function ExportScreen({
               title={previewTitle || 'Document Preview'}
               onClose={() => setPreviewVisible(false)}
               right={
-                <Pressable
-                  onPress={() => {
-                    setPreviewVisible(false);
-                    handleExport();
-                  }}
-                  style={styles.modalActionBtn}
-                >
-                  <Icon name="download" size={16} color={theme.accent} />
-                  <Text style={[styles.modalActionText, { color: theme.accent }]}>Export</Text>
-                </Pressable>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {selectedFormat === 'json' && (
+                    <Pressable
+                      onPress={handleCopyJSON}
+                      disabled={copyingJson}
+                      style={[styles.modalActionBtn, { backgroundColor: themeColors.surface2 }]}
+                    >
+                      <Icon name="copy" size={16} color={theme.accent} />
+                      <Text style={[styles.modalActionText, { color: theme.accent }]}>Copy</Text>
+                    </Pressable>
+                  )}
+                  <Pressable
+                    onPress={() => {
+                      setPreviewVisible(false);
+                      handleExport();
+                    }}
+                    style={[styles.modalActionBtn, { backgroundColor: themeColors.surface2 }]}
+                  >
+                    <Icon name="download" size={16} color={theme.accent} />
+                    <Text style={[styles.modalActionText, { color: theme.accent }]}>Export</Text>
+                  </Pressable>
+                </View>
               }
             />
           </View>
@@ -531,12 +626,12 @@ export function ExportScreen({
                 </View>
               ) : (
                 <Card style={{ padding: 14 }}>
-                  <Text style={styles.previewRawText}>{previewContent}</Text>
+                  <Text style={[styles.previewRawText, { color: themeColors.ink }]}>{previewContent}</Text>
                 </Card>
               )
             ) : (
               <Card style={{ padding: 14 }}>
-                <Text style={styles.previewRawText}>{previewContent}</Text>
+                <Text style={[styles.previewRawText, { color: themeColors.ink }]}>{previewContent}</Text>
               </Card>
             )}
           </ScrollView>

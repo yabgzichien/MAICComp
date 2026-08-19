@@ -45,6 +45,7 @@ import { CalendarScreen } from './src/screens/CalendarScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { AdvancedImportScreen } from './src/screens/AdvancedImportScreen';
 import { ExportScreen } from './src/screens/ExportScreen';
+import { CommitmentsScreen } from './src/screens/CommitmentsScreen';
 import { GlossaryModal } from './src/components/InfoButton';
 import { AppAlertModal } from './src/components/AppAlertModal';
 import { AccentProvider, useAccent } from './src/state/accent';
@@ -58,7 +59,7 @@ import { useReminderSync } from './src/state/useReminderSync';
 import { syncStreakWidget } from './src/widget/syncStreakWidget';
 import { platformShadow, uiFont } from './src/theme';
 
-type Screen = 'home' | 'add' | 'settings' | 'categories' | 'transactions' | 'breakdown' | 'budget' | 'recap' | 'networth' | 'credit' | 'loans' | 'passport' | 'coach' | 'attacks' | 'kyc' | 'calendar' | 'advancedImport' | 'owed' | 'export';
+type Screen = 'home' | 'add' | 'settings' | 'categories' | 'transactions' | 'breakdown' | 'budget' | 'recap' | 'networth' | 'credit' | 'loans' | 'passport' | 'coach' | 'attacks' | 'kyc' | 'calendar' | 'advancedImport' | 'owed' | 'export' | 'commitments';
 
 /**
  * Web-only: a global :focus-visible outline so keyboard users get a visible focus indicator
@@ -620,6 +621,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
             setOwedOrigin('home');
             setScreen('owed');
           }}
+          onOpenCommitments={() => setScreen('commitments')}
         />
       )}
       {screen === 'add' && (
@@ -642,6 +644,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
             setScreen('attacks');
           }}
           onOpenCategories={() => setScreen('categories')}
+          onOpenCommitments={() => setScreen('commitments')}
           onResetToOnboarding={() => setScreen('home')}
         />
       )}
@@ -669,6 +672,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
         />
       )}
       {screen === 'owed' && <OwedScreen onBack={() => setScreen(owedOrigin)} />}
+      {screen === 'commitments' && <CommitmentsScreen onBack={() => setScreen('home')} />}
       {screen === 'budget' && <BudgetScreen onBack={() => setScreen('home')} onOpenRecap={() => setScreen('recap')} />}
       {screen === 'recap' && (
         <RecapScreen

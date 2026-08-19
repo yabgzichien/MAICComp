@@ -1,7 +1,7 @@
 /* Shared domain types. */
 
 export type Direction = 'in' | 'out';
-export type TxnType = 'expense' | 'income';
+export type TxnType = 'expense' | 'income' | 'transfer';
 
 /** Where a transaction's data came from (drives data-confidence weighting). */
 export type TxnSource = 'extracted' | 'imported' | 'manual' | 'verified';

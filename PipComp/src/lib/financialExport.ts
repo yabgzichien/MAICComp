@@ -5,8 +5,9 @@ import * as XLSX from 'xlsx';
 import { Platform } from 'react-native';
 import { File, Paths } from 'expo-file-system';
 import type { FinancialReportData, MonthlyTrendItem } from './bookkeeping';
+import type { Commitment, CommitmentOccurrence } from './commitments';
 
-export type ExportFormat = 'xlsx' | 'csv' | 'html' | 'pdf';
+export type ExportFormat = 'xlsx' | 'csv' | 'html' | 'pdf' | 'json';
 
 /** Format a number into standard MYR currency string (e.g. RM 1,234.56). */
 export function formatCurrency(amount: number): string {
@@ -273,6 +274,103 @@ export function generateCSV(data: FinancialReportData): string {
   }
 
   return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// 2b. ADVANCED IMPORT JSON EXPORT
+// Same shape the Advanced Import screen's parseJSON() reads back (see
+// src/lib/advancedImport.ts), so an exported file can be re-imported as-is —
+// into this account or shared with someone else's.
+//
+// version 2 adds: a top-level `version` stamp (absent reads as 1), `quantity`/`cost` on
+// account rows (a holding's cost basis previously vanished on round trip), a separate
+// `transfers` array (a DCA contribution is neither income nor expense — see lib/types.ts's
+// TxnType — and folding it into `transactions`, which encodes direction by sign, would import
+// it back as income on an older build), and a `commitments` array carrying each recurring
+// bill/DCA's full occurrence history, so the on-time record survives a device change.
+// parseJSON's whitelist projection means every one of these is backward-compatible for free:
+// an old build simply never reads the new keys.
+// ---------------------------------------------------------------------------
+
+export interface CommitmentExportExtra {
+  commitments: Commitment[];
+  occurrences: CommitmentOccurrence[];
+}
+
+export function generateAdvancedImportJSON(data: FinancialReportData, extra?: CommitmentExportExtra): string {
+  const catMap = new Map<string, string>();
+  for (const c of data.categories) catMap.set(c.id, c.label);
+  const accountMetaById = new Map(data.accounts.map((a) => [a.id, a]));
+  const accountNameById = new Map(data.accounts.map((a) => [a.id, a.name]));
+
+  const transactions = data.transactions
+    .filter((t) => t.type !== 'transfer')
+    .map((t) => ({
+      date: t.date || null,
+      description: t.merchantRaw || t.merchantKey || null,
+      amount: Math.round((t.type === 'income' ? Math.abs(t.amount) : -Math.abs(t.amount)) * 100) / 100,
+      category: (t.categoryId ? catMap.get(t.categoryId) : null) || '?',
+      account: null as string | null,
+    }));
+
+  const transfers = data.transactions
+    .filter((t) => t.type === 'transfer')
+    .map((t) => ({
+      date: t.date || null,
+      description: t.merchantRaw || t.merchantKey || null,
+      amount: Math.round(Math.abs(t.amount) * 100) / 100,
+      account: null as string | null,
+    }));
+
+  // "Owed to me" is a managed receivable balance kept by the split-bill engine,
+  // not a real account — re-importing it would create a bogus Cash account.
+  const accounts = [...data.balanceSheet.assetGroups, ...data.balanceSheet.liabilityGroups]
+    .filter((g) => g.cls !== 'receivable')
+    .flatMap((g) => g.items.map((item) => {
+      const meta = accountMetaById.get(item.accountId);
+      return {
+        name: item.name,
+        type: g.clsLabel,
+        balance: Math.abs(item.value),
+        currency: 'MYR',
+        as_of: data.balanceSheet.asOfDate,
+        notes: item.ticker || item.symbol || null,
+        quantity: meta?.quantity ?? null,
+        cost: meta?.cost ?? null,
+      };
+    }));
+
+  const commitments = (extra?.commitments ?? []).map((c) => ({
+    label: c.label,
+    kind: c.kind,
+    amount: c.amount,
+    dueDay: c.dueDay,
+    category: c.categoryId ? catMap.get(c.categoryId) ?? null : null,
+    fromAccount: c.fromAccountId ? accountNameById.get(c.fromAccountId) ?? null : null,
+    toAccount: c.toAccountId ? accountNameById.get(c.toAccountId) ?? null : null,
+    startMonth: c.startMonth,
+    endMonth: c.endMonth,
+    occurrences: (extra?.occurrences ?? [])
+      .filter((o) => o.commitmentId === c.id)
+      .map((o) => ({ dueDate: o.dueDate, status: o.status, paidOn: o.paidOn, paidAmount: o.paidAmount })),
+  }));
+
+  const payload = {
+    version: 2,
+    statement: {
+      issuer: data.userName,
+      period: {
+        start: data.period.startDate || (data.transactions[data.transactions.length - 1]?.date ?? data.balanceSheet.asOfDate),
+        end: data.period.endDate || data.balanceSheet.asOfDate,
+      },
+    },
+    transactions,
+    transfers,
+    accounts,
+    commitments,
+  };
+
+  return JSON.stringify(payload, null, 2);
 }
 
 // ---------------------------------------------------------------------------

@@ -225,6 +225,7 @@ export function computeIncomeStatement(
   let totalExpense = 0;
 
   for (const t of filtered) {
+    if (t.type === 'transfer') continue;
     const catId = t.categoryId || (t.type === 'income' ? 'other-income' : 'other');
     const amt = Math.abs(t.amount);
     if (t.type === 'income') {
@@ -417,6 +418,7 @@ export function computeFinancialStatistics(
   const expenseCatMap = new Map<string, number>();
 
   for (const t of filtered) {
+    if (t.type === 'transfer') continue;
     const d = t.date || period.asOfDate;
     const mk = d.slice(0, 7); // YYYY-MM
     let entry = monthMap.get(mk);

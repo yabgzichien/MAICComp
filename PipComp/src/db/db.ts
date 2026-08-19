@@ -170,6 +170,36 @@ async function init(): Promise<SQLite.SQLiteDatabase> {
       account_id       TEXT,
       created_at       TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS commitments (
+      id              TEXT PRIMARY KEY NOT NULL,
+      label           TEXT NOT NULL,
+      merchant_key    TEXT NOT NULL,
+      kind            TEXT NOT NULL,
+      amount          REAL NOT NULL,
+      category_id     TEXT,
+      from_account_id TEXT,
+      to_account_id   TEXT,
+      due_day         INTEGER NOT NULL,
+      start_month     TEXT NOT NULL,
+      end_month       TEXT,
+      archived        INTEGER NOT NULL DEFAULT 0,
+      created_at      TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS commitment_occurrences (
+      id            TEXT PRIMARY KEY NOT NULL,
+      commitment_id TEXT NOT NULL,
+      due_date      TEXT NOT NULL,
+      month         TEXT NOT NULL,
+      amount        REAL NOT NULL,
+      paid_amount   REAL,
+      paid_on       TEXT,
+      status        TEXT NOT NULL DEFAULT 'scheduled',
+      txn_id        TEXT,
+      txn_created   INTEGER NOT NULL DEFAULT 0,
+      units_added   REAL,
+      price_myr     REAL,
+      created_at    TEXT NOT NULL
+    );
     CREATE INDEX IF NOT EXISTS idx_txn_created ON transactions (created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_split_txn ON splits (txn_id);
     CREATE INDEX IF NOT EXISTS idx_share_split ON split_shares (split_id);
@@ -178,6 +208,8 @@ async function init(): Promise<SQLite.SQLiteDatabase> {
     CREATE INDEX IF NOT EXISTS idx_balance_account ON balance_entries (account_id);
     CREATE INDEX IF NOT EXISTS idx_loan_app_status ON loan_applications (status);
     CREATE INDEX IF NOT EXISTS idx_repayment_application ON repayments (application_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_occ_unique ON commitment_occurrences (commitment_id, due_date);
+    CREATE INDEX IF NOT EXISTS idx_occ_month ON commitment_occurrences (month);
   `);
 
   // Migration: add the `kind` column for databases created before income
@@ -392,6 +424,8 @@ export async function resetAllData(): Promise<void> {
       DELETE FROM split_shares;
       DELETE FROM splits;
       DELETE FROM people;
+      DELETE FROM commitment_occurrences;
+      DELETE FROM commitments;
     `);
     await seedCategories(db);
     await seedProducts(db);

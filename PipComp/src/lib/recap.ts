@@ -31,7 +31,7 @@ export function monthlyIncomeStatement(txns: Transaction[], mk: string): IncomeS
   for (const t of txns) {
     if (txnMonthKey(t) !== mk) continue;
     if (t.type === 'income') income += t.amount;
-    else expenses += t.amount;
+    else if (t.type === 'expense') expenses += t.amount;
   }
   return { income, expenses, net: income - expenses };
 }
