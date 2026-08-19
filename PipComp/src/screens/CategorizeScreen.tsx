@@ -335,7 +335,7 @@ export function CategorizeScreen({
             <View style={[styles.banner, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]}>
               <View style={styles.bannerHead}>
                 <Icon name="alert" size={18} color={theme.accentInk} stroke={2} />
-                <Text style={[styles.bannerTitle, { color: theme.accentInk }]}>Possible duplicate</Text>
+                <Text style={[styles.bannerTitle, { color: theme.onTint }]}>Possible duplicate</Text>
               </View>
               <Text style={[styles.bannerText, { color: colorTheme.ink }]}>
                 You already logged <B>{item!.merchant}</B> for RM {fmt(item!.amount)} on {dupDay}. Record it again?
@@ -356,7 +356,7 @@ export function CategorizeScreen({
             <View style={[styles.banner, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]}>
               <View style={styles.bannerHead}>
                 <Icon name="gift" size={18} color={theme.accentInk} stroke={2} />
-                <Text style={[styles.bannerTitle, { color: theme.accentInk }]}>
+                <Text style={[styles.bannerTitle, { color: theme.onTint }]}>
                   {settlementHit!.partial ? 'Part of a repayment?' : 'Paying you back?'}
                 </Text>
               </View>

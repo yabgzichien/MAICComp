@@ -176,7 +176,7 @@ export function SplitSheet({
               {unpicked.map((p) => (
                 <Pressable key={p.id} onPress={() => toggle(p.id)} style={[styles.chip, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]}>
                   <Icon name="plus" size={13} color={theme.accent} stroke={2.4} />
-                  <Text style={[styles.chipText, { color: theme.accentInk }]}>{p.name}</Text>
+                  <Text style={[styles.chipText, { color: theme.onTint }]}>{p.name}</Text>
                 </Pressable>
               ))}
             </View>
@@ -210,7 +210,7 @@ export function SplitSheet({
               {picked.map((id) => (
                 <View key={id} style={[styles.personRow, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line }]}>
                   <View style={[styles.avatar, { backgroundColor: theme.accentSoft }]}>
-                    <Text style={[styles.avatarText, { color: theme.accentInk }]}>{(nameById[id] ?? '?').slice(0, 1).toUpperCase()}</Text>
+                    <Text style={[styles.avatarText, { color: theme.onTint }]}>{(nameById[id] ?? '?').slice(0, 1).toUpperCase()}</Text>
                   </View>
                   <Text style={[styles.personName, { color: colorTheme.ink }]} numberOfLines={1}>
                     {nameById[id] ?? 'Someone'}

@@ -104,7 +104,7 @@ export function OwedScreen({ onBack }: { onBack: () => void }) {
                       style={({ pressed }) => [styles.personRow, pressed && { backgroundColor: colorTheme.surface2 }]}
                     >
                       <View style={[styles.avatar, { backgroundColor: theme.accentSoft }]}>
-                        <Text style={[styles.avatarText, { color: theme.accentInk }]}>{p.name.slice(0, 1).toUpperCase()}</Text>
+                        <Text style={[styles.avatarText, { color: theme.onTint }]}>{p.name.slice(0, 1).toUpperCase()}</Text>
                       </View>
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <Text style={[styles.personName, { color: colorTheme.ink }]} numberOfLines={1}>
@@ -262,7 +262,7 @@ function SettleSheet({
                   on && { backgroundColor: theme.accentTint, borderColor: theme.accentSoft },
                 ]}
               >
-                <Text style={[styles.acctText, { color: colorTheme.ink2 }, on && { color: theme.accentInk }]} numberOfLines={1}>
+                <Text style={[styles.acctText, { color: colorTheme.ink2 }, on && { color: theme.onTint }]} numberOfLines={1}>
                   {a.name}
                 </Text>
               </Pressable>
@@ -276,7 +276,7 @@ function SettleSheet({
               acct === null && { backgroundColor: theme.accentTint, borderColor: theme.accentSoft },
             ]}
           >
-            <Text style={[styles.acctText, { color: colorTheme.ink2 }, acct === null && { color: theme.accentInk }]}>Not tracked</Text>
+            <Text style={[styles.acctText, { color: colorTheme.ink2 }, acct === null && { color: theme.onTint }]}>Not tracked</Text>
           </Pressable>
         </View>
         <Text style={[styles.acctNote, { color: colorTheme.ink3 }]}>

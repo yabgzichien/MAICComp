@@ -82,7 +82,7 @@ export function LenderRequirements({
           </Text>
         </View>
         <View style={[styles.rateChip, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]}>
-          <Text style={[styles.rateChipText, { color: theme.accentInk }]}>{aprRangeLabel(criteria)}</Text>
+          <Text style={[styles.rateChipText, { color: theme.onTint }]}>{aprRangeLabel(criteria)}</Text>
         </View>
         <Icon name={open ? 'chevronDown' : 'chevronRight'} size={15} color={colorTheme.ink3} />
       </Pressable>

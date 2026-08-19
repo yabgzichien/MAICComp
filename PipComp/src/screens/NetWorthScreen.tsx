@@ -718,7 +718,7 @@ function AddAccountModal({ visible, preset, onClose }: { visible: boolean; prese
               return (
                 <Pressable key={c.id} onPress={() => setCls(c.id)} style={[styles.classChip, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line }, on && [styles.classChipOn, { borderColor: theme.accent, backgroundColor: theme.accentTint }]]}>
                   <Icon name={c.icon as IconName} size={15} color={on ? theme.accent : colorTheme.ink3} />
-                  <Text style={[styles.classChipText, { color: colorTheme.ink2 }, on && { color: theme.accentInk }]}>{c.label}</Text>
+                  <Text style={[styles.classChipText, { color: colorTheme.ink2 }, on && { color: theme.onTint }]}>{c.label}</Text>
                 </Pressable>
               );
             })}
@@ -1089,7 +1089,7 @@ function AccountSheet({ account, onClose }: { account: Account | null; onClose: 
                   return (
                     <Pressable key={c.id} onPress={() => setCls(c.id)} style={[styles.classChip, { backgroundColor: colorTheme.surface, borderColor: colorTheme.line }, on && [styles.classChipOn, { borderColor: theme.accent, backgroundColor: theme.accentTint }]]}>
                       <Icon name={c.icon as IconName} size={15} color={on ? theme.accent : colorTheme.ink3} />
-                      <Text style={[styles.classChipText, { color: colorTheme.ink2 }, on && { color: theme.accentInk }]}>{c.label}</Text>
+                      <Text style={[styles.classChipText, { color: colorTheme.ink2 }, on && { color: theme.onTint }]}>{c.label}</Text>
                     </Pressable>
                   );
                 })}

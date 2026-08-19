@@ -345,7 +345,7 @@ export function PassportCoachScreen({
         <Card style={[styles.pipCard, { backgroundColor: theme.accentSoft }]}>
           <View style={styles.pipHead}>
             <CoinMascot size={34} float />
-            <Text style={[styles.pipTitle, { color: theme.accentInk }]}>Pip's take</Text>
+            <Text style={[styles.pipTitle, { color: theme.onTint }]}>Pip's take</Text>
             <View
               style={[
                 styles.provTag,

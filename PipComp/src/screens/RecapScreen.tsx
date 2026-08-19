@@ -443,7 +443,7 @@ export function RecapScreen({ onBack, onOpenCalendar, onOpenExport }: { onBack: 
               <View style={[styles.improveTab, { backgroundColor: theme.accent }]} />
               <Text style={[styles.sectionLabel, { color: colorTheme.ink2 }]}>Where to improve</Text>
               <View style={[styles.signalPill, { backgroundColor: theme.accentSoft }]}>
-                <Text style={[styles.signalText, { color: theme.accentInk }]}>{insights.length} signals</Text>
+                <Text style={[styles.signalText, { color: theme.onTint }]}>{insights.length} signals</Text>
               </View>
             </View>
             <Card style={styles.listCard}>
@@ -503,7 +503,7 @@ export function RecapScreen({ onBack, onOpenCalendar, onOpenExport }: { onBack: 
                     }}
                     style={[styles.monthOption, on && { backgroundColor: theme.accentTint }]}
                   >
-                    <Text style={[styles.monthOptionText, { color: colorTheme.ink }, on && { color: theme.accentInk, fontFamily: uiFont(700) }]}>{monthLabel(mk)}</Text>
+                    <Text style={[styles.monthOptionText, { color: colorTheme.ink }, on && { color: theme.onTint, fontFamily: uiFont(700) }]}>{monthLabel(mk)}</Text>
                     {on && (
                       <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
                         <Path d="M3 8.5l3.2 3.2L13 5" stroke={theme.accent} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />

@@ -124,7 +124,7 @@ function Option({
   return (
     <Pressable onPress={onPress} style={[styles.option, active && { backgroundColor: theme.accentTint }]}>
       {icon ? <Icon name={icon} size={16} color={active ? theme.accent : colorTheme.ink3} /> : <View style={styles.optionIconSpacer} />}
-      <Text style={[styles.optionText, { color: colorTheme.ink }, active && { color: theme.accentInk }]} numberOfLines={1}>
+      <Text style={[styles.optionText, { color: colorTheme.ink }, active && { color: theme.onTint }]} numberOfLines={1}>
         {label}
       </Text>
       {active && <Icon name="check" size={16} color={theme.accent} stroke={2.4} />}

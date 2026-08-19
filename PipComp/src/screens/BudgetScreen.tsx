@@ -150,7 +150,7 @@ export function BudgetScreen({ onBack, onOpenRecap = () => {} }: { onBack: () =>
         <Card style={[styles.adviceCard, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]}>
           <View style={styles.adviceHead}>
             <Pip size={34} expr="idle" />
-            <Text style={[styles.adviceTitle, { color: theme.accentInk }]}>Pip's budget tip</Text>
+            <Text style={[styles.adviceTitle, { color: theme.onTint }]}>Pip's budget tip</Text>
           </View>
           {advice ? <Text style={[styles.adviceText, { color: colorTheme.ink }]}>{advice}</Text> : <Text style={[styles.muted, { color: colorTheme.ink2 }]}>Tap for a quick take on your plan.</Text>}
           {adviceErr ? <Text style={[styles.muted, { color: STATUS_COLOR.over }]}>{adviceErr}</Text> : null}

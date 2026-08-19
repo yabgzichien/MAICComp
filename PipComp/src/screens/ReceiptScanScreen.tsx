@@ -277,7 +277,7 @@ export function ReceiptScanScreen({
             {unpicked.map((p) => (
               <Pressable key={p.id} onPress={() => setPicked((prev) => [...prev, p.id])} style={[styles.chip, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]}>
                 <Icon name="plus" size={13} color={theme.accent} stroke={2.4} />
-                <Text style={[styles.chipText, { color: theme.accentInk }]}>{p.name}</Text>
+                <Text style={[styles.chipText, { color: theme.onTint }]}>{p.name}</Text>
               </Pressable>
             ))}
           </View>
@@ -503,7 +503,7 @@ function PctRow({
         </View>
       ) : (
         <Pressable onPress={() => onChange(label === 'Service tax' ? 6 : 10)} style={[styles.pctAdd, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]} hitSlop={4}>
-          <Text style={[styles.pctAddText, { color: theme.accentInk }]}>Add</Text>
+          <Text style={[styles.pctAddText, { color: theme.onTint }]}>Add</Text>
         </Pressable>
       )}
       {on && (

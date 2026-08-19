@@ -215,7 +215,7 @@ function ControlCard({ control, state }: { control: ControlResult; state: CardSt
   return (
     <Card style={[styles.card, styles.controlCard, { borderColor: theme.accentTint }]}>
       <View style={styles.cardHead}>
-        <Text style={[styles.controlKicker, { color: theme.accentInk }]}>CONTROL · HONEST LEDGER</Text>
+        <Text style={[styles.controlKicker, { color: theme.onTint }]}>CONTROL · HONEST LEDGER</Text>
         <View style={[styles.verdictPill, { backgroundColor: `${resolved ? color : colorTheme.ink3}22` }]}>
           <Text style={[styles.verdictText, { color: resolved ? color : colorTheme.ink3 }]}>
             {resolved ? (control.passed ? 'Approved' : 'Refused') : state.stage === 'running' ? 'Running…' : 'Armed'}
@@ -375,7 +375,7 @@ function AttackCard({ result, state, baseline }: { result: AttackResult; state: 
         (report ? (
           <View style={[styles.report, { backgroundColor: theme.accentSoft }]}>
             <View style={styles.reportHead}>
-              <Text style={[styles.reportKicker, { color: theme.accentInk }]}>INCIDENT REPORT</Text>
+              <Text style={[styles.reportKicker, { color: theme.onTint }]}>INCIDENT REPORT</Text>
               <View style={[styles.provTag, report.ai ? [styles.provAi, { backgroundColor: theme.accentTint }] : { backgroundColor: colorTheme.surface }]}>
                 <Text style={[styles.provText, { color: report.ai ? theme.accent : colorTheme.ink3 }]}>{report.ai ? 'AI' : 'Summary'}</Text>
               </View>

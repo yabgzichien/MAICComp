@@ -279,7 +279,7 @@ export function BalanceScanScreen({ onClose }: { onClose: () => void }) {
                             onPress={() => setNewCls(c.id)}
                             style={[styles.classChip, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line }, on && { borderColor: theme.accent, backgroundColor: theme.accentTint }]}
                           >
-                            <Text style={[styles.classChipText, { color: colorTheme.ink2 }, on && { color: theme.accentInk }]}>{c.label}</Text>
+                            <Text style={[styles.classChipText, { color: colorTheme.ink2 }, on && { color: theme.onTint }]}>{c.label}</Text>
                           </Pressable>
                         );
                       })}

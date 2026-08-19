@@ -129,7 +129,7 @@ export function AttachScreen({
         {!hasKey && (
           <Pressable onPress={onManual} style={[styles.keyNotice, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]}>
             <Icon name="sparkles" size={18} color={theme.accentInk} />
-            <Text style={[styles.keyNoticeText, { color: theme.accentInk }]}>
+            <Text style={[styles.keyNoticeText, { color: theme.onTint }]}>
               Scanning isn't available right now. Enter a transaction manually instead.
             </Text>
             <Icon name="chevronRight" size={16} color={theme.accentInk} />

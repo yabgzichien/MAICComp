@@ -77,7 +77,7 @@ function LoanPackageCard({ pkg, onPress }: { pkg: LoanPackage; onPress: () => vo
         <View style={styles.pkgFooterRow}>
           <Amount value={pkg.principal} size={16} />
           <View style={[styles.statusPill, { backgroundColor: theme.accentTint }]}>
-            <Text style={[styles.statusPillText, { color: theme.accentInk }]}>Paid off</Text>
+            <Text style={[styles.statusPillText, { color: theme.onTint }]}>Paid off</Text>
           </View>
         </View>
       ) : (
@@ -534,7 +534,7 @@ export function LoansScreen({
                 <View style={styles.demoBadgeRow}>
                   <View style={[styles.demoBadge, { backgroundColor: theme.accentSoft }]}>
                     <Icon name="sparkles" size={12} color={theme.accentInk} />
-                    <Text style={[styles.demoBadgeText, { color: theme.accentInk }]}>Demo</Text>
+                    <Text style={[styles.demoBadgeText, { color: theme.onTint }]}>Demo</Text>
                   </View>
                   <Text style={[styles.demoTitle, { color: colorTheme.ink }]}>Simulate on-time repayment → score rises</Text>
                 </View>
@@ -677,7 +677,7 @@ export function LoansScreen({
               <Text style={styles.gateBtnText}>Apply with your passport</Text>
             </Pressable>
             <Pressable style={[styles.gateBtnSecondary, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]} onPress={onOpenCoach}>
-              <Text style={[styles.gateBtnSecondaryText, { color: theme.accentInk }]}>See what unlocks a loan</Text>
+              <Text style={[styles.gateBtnSecondaryText, { color: theme.onTint }]}>See what unlocks a loan</Text>
             </Pressable>
           </Card>
         )}

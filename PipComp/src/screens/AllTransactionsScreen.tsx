@@ -204,7 +204,7 @@ export function AllTransactionsScreen({
                       {owedByTxn[t.id] && (
                         <View style={[styles.owedChip, { backgroundColor: theme.accentTint }]}>
                           <Icon name="gift" size={10} color={theme.accentInk} />
-                          <Text style={[styles.owedChipText, { color: theme.accentInk }]}>
+                          <Text style={[styles.owedChipText, { color: theme.onTint }]}>
                             RM {fmt(owedByTxn[t.id].owed)} owed · split of RM {fmt(owedByTxn[t.id].gross)}
                           </Text>
                         </View>

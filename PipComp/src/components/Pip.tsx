@@ -2,7 +2,6 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, Easing } from 'react-native';
 import Svg, { Circle, Ellipse, Path, G } from 'react-native-svg';
 import { useAccent } from '../state/accent';
-import { useThemeColors } from '../state/colorScheme';
 
 export type PipExpr = 'idle' | 'happy' | 'think' | 'curious';
 
@@ -76,9 +75,11 @@ export function Pip({
   float?: boolean;
 }) {
   const theme = useAccent();
-  const colorTheme = useThemeColors();
-  const INK = colorTheme.ink;
   const fill = color ?? theme.accent;
+  // Eyes and mouth must always contrast against the green body; the structural ink
+  // flips to near-white in dark mode (unusable on a green fill), so derive a fixed
+  // dark shade from the accent instead.
+  const INK = shade(fill, 0.38);
   const ty = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {

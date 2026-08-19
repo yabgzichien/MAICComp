@@ -77,7 +77,7 @@ export function SavingsHabitCard({
           they can hold the smaller amount. Never auto-applied: raising it is their call. */}
       {stepUp !== null && !editing && (
         <View style={[styles.stepUp, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]}>
-          <Text style={[styles.stepUpText, { color: theme.accentInk }]}>
+          <Text style={[styles.stepUpText, { color: theme.onTint }]}>
             You have kept this up {habit.monthsKept} month{habit.monthsKept === 1 ? '' : 's'} in a
             row. The national guide suggests RM {fmt(stepUp)} for your household.
           </Text>

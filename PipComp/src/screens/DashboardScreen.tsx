@@ -476,7 +476,7 @@ function CashFlowView({
           <Text style={[styles.cashSub, { color: colorTheme.ink2 }]}>Income − Expenses · this month</Text>
         </View>
         <View style={[styles.incomeBadge, { backgroundColor: theme.accentSoft }]}>
-          <Text style={[styles.incomeAmt, { color: theme.accentInk }]}>RM {fmt(received)}</Text>
+          <Text style={[styles.incomeAmt, { color: theme.onTint }]}>RM {fmt(received)}</Text>
           <Text style={[styles.incomeLabel, { color: colorTheme.ink2 }]}>income</Text>
         </View>
       </View>
@@ -555,7 +555,7 @@ function NetWorthView({
           <Text style={[styles.cashSub, { color: colorTheme.ink2 }]}>Assets − Liabilities · today</Text>
         </View>
         <View style={[styles.incomeBadge, { backgroundColor: theme.accentSoft }]}>
-          <Text style={[styles.incomeAmt, { color: theme.accentInk }]}>RM {fmt(assets)}</Text>
+          <Text style={[styles.incomeAmt, { color: theme.onTint }]}>RM {fmt(assets)}</Text>
           <Text style={[styles.incomeLabel, { color: colorTheme.ink2 }]}>assets</Text>
         </View>
       </View>
@@ -613,14 +613,14 @@ function CreditCompactCard({
           <Text style={[styles.creditEyebrow, { color: colorTheme.ink2 }]}>Credit Score</Text>
           <View style={[styles.confChip, { backgroundColor: theme.accentTint }]}>
             <View style={[styles.confDot, { backgroundColor: theme.accent }]} />
-            <Text style={[styles.confText, { color: theme.accentInk }]}>{Math.round(confidence * 100)}% data confidence</Text>
+            <Text style={[styles.confText, { color: theme.onTint }]}>{Math.round(confidence * 100)}% data confidence</Text>
           </View>
         </View>
         <View style={styles.creditMain}>
           <View style={styles.creditScoreCol}>
             <Text style={[styles.creditScore, { color: colorTheme.ink }]}>{score}</Text>
             <View style={[styles.bandPill, { backgroundColor: theme.accentSoft }]}>
-              <Text style={[styles.bandPillText, { color: theme.accentInk }]}>{band}</Text>
+              <Text style={[styles.bandPillText, { color: theme.onTint }]}>{band}</Text>
             </View>
           </View>
           <View style={[styles.creditVDivider, { backgroundColor: colorTheme.line }]} />
@@ -680,7 +680,7 @@ function AskPipStrip({ onPress }: { onPress: () => void }) {
       <View style={[styles.askStrip, { backgroundColor: theme.accentSoft }]}>
         <CoinMascot size={44} float />
         <View style={{ flex: 1 }}>
-          <Text style={[styles.askTitle, { color: theme.accentInk }]}>Lift your score with Pip's tips.</Text>
+          <Text style={[styles.askTitle, { color: theme.onTint }]}>Lift your score with Pip's tips.</Text>
           <Text style={[styles.askSub, { color: colorTheme.ink2 }]}>Personalised, from your real data.</Text>
         </View>
         <Pressable

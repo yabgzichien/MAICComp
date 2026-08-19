@@ -52,9 +52,9 @@ export const LIGHT_COLORS: StructuralColors = {
  *  a hand-picked dark-surface pair in this brand's hue. Every value here (and every accent
  *  preset's `dark` variant in accentPresets.ts) is checked by tools/contrastAudit/audit.js. */
 export const DARK_COLORS: StructuralColors = {
-  bg: '#11231a',
-  surface: '#232f28',
-  surface2: '#1c2821',
+  bg: '#0a1810',
+  surface: '#192419',
+  surface2: '#111c14',
   ink: '#eaf3ee',
   ink2: '#99a79f',
   ink3: '#8a988f', // AA on surface (4.62:1)

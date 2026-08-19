@@ -1,13 +1,19 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { getMeta, setMeta } from '../db/metaRepo';
-import { useColorSchemeMode } from './colorScheme';
+import { useColorSchemeMode, useSetDarkSurfaces } from './colorScheme';
 import { ACCENT_PRESETS, DEFAULT_ACCENT_PRESET_ID, type AccentPreset } from './accentPresets';
+import { DARK_COLORS } from '../theme';
 
 export interface AccentTheme {
   accent: string;
   accentInk: string;
   accentSoft: string;
   accentTint: string;
+  /** Text color for copy drawn ON TOP OF accentSoft/accentTint (chips, badges, pills) — NOT a
+   *  fill. Equals accentInk in light mode (already verified >=4.5:1 there). In dark mode
+   *  accentSoft/accentTint are themselves dark washes, so accentInk-as-text would be dark-on-dark
+   *  (~2:1, fails WCAG AA); this is the structural near-white ink instead (~10-12:1). */
+  onTint: string;
 }
 
 /** Default green, light mode (matches theme.ts). */
@@ -17,8 +23,8 @@ export const GREEN_ACCENT: AccentTheme = ACCENT_PRESETS.find((p) => p.id === DEF
  *  same fill in both schemes (self-contained, same reasoning as the accent presets); only the
  *  tint/soft washes differ for dark mode. */
 const ALERT_ACCENT: { light: AccentTheme; dark: AccentTheme } = {
-  light: { accent: '#d98a00', accentInk: '#8a5a00', accentSoft: '#f6e3bf', accentTint: '#fdf4e3' },
-  dark: { accent: '#d98a00', accentInk: '#8a5a00', accentSoft: '#46360e', accentTint: '#312814' },
+  light: { accent: '#d98a00', accentInk: '#8a5a00', accentSoft: '#f6e3bf', accentTint: '#fdf4e3', onTint: '#8a5a00' },
+  dark: { accent: '#d98a00', accentInk: '#8a5a00', accentSoft: '#46360e', accentTint: '#312814', onTint: DARK_COLORS.ink },
 };
 
 const ACCENT_PRESET_KEY = 'accent_preset_id';
@@ -49,6 +55,7 @@ const Ctx = createContext<AccentCtx>({
  */
 export function AccentProvider({ children }: { children: React.ReactNode }) {
   const { resolvedScheme } = useColorSchemeMode();
+  const setDarkSurfaces = useSetDarkSurfaces();
   const [alert, setAlert] = useState(false);
   const [presetId, setPresetIdState] = useState(DEFAULT_ACCENT_PRESET_ID);
 
@@ -57,6 +64,15 @@ export function AccentProvider({ children }: { children: React.ReactNode }) {
       if (saved && ACCENT_PRESETS.some((p) => p.id === saved)) setPresetIdState(saved);
     });
   }, []);
+
+  useEffect(() => {
+    if (resolvedScheme !== 'dark') {
+      setDarkSurfaces(null);
+      return;
+    }
+    const preset = ACCENT_PRESETS.find((p) => p.id === presetId) ?? ACCENT_PRESETS[0];
+    setDarkSurfaces(preset.darkSurfaces);
+  }, [resolvedScheme, presetId, setDarkSurfaces]);
 
   const setPresetId = (id: string) => {
     setPresetIdState(id);

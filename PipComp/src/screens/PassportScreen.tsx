@@ -539,7 +539,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
                 <Path d="M7 1L1.5 4v5.2C1.5 12.8 3.9 15.2 7 16c3.1-.8 5.5-3.2 5.5-6.8V4L7 1z" fill={theme.accentSoft} stroke={theme.accent} strokeWidth={1.2} strokeLinejoin="round" />
                 <Path d="M4.5 8.5l2 2 3-3.5" stroke={theme.accent} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
-              <Text style={[styles.signedText, { color: theme.accentInk }]}>Cryptographically signed</Text>
+              <Text style={[styles.signedText, { color: theme.onTint }]}>Cryptographically signed</Text>
               <View style={[styles.algoChip, { backgroundColor: colorTheme.surface2, borderColor: colorTheme.line }]}><Text style={[styles.algoText, { color: colorTheme.ink2 }]}>Ed25519</Text></View>
             </View>
 
@@ -613,7 +613,7 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
           <View style={[styles.powerBox, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }, lenders.length > 0 && { marginTop: 16 }]}>
             <View style={styles.powerHeader}>
               <Text style={[styles.powerLabel, { color: colorTheme.ink2 }]}>Borrowing power</Text>
-              <Text style={[styles.powerAmount, { color: theme.accentInk }]}>
+              <Text style={[styles.powerAmount, { color: theme.onTint }]}>
                 RM{borrowing.available.toLocaleString('en-MY')}
                 <Text style={[styles.powerOf, { color: colorTheme.ink2 }]}> of RM{borrowing.limit.toLocaleString('en-MY')}</Text>
               </Text>
@@ -804,10 +804,10 @@ export function PassportScreen({ onBack, onOpenKyc = () => {}, onOpenLoans = () 
               <Text style={[styles.codeText, { color: colorTheme.ink2 }]} numberOfLines={1}>{shortCode}</Text>
             </View>
             <Pressable onPress={handleCopy} style={[styles.copyBtn, { backgroundColor: theme.accentInk }, [styles.copyBtnOutline, { borderColor: colorTheme.line }], copied && [styles.copyBtnDone, { backgroundColor: theme.accentSoft }]]}>
-              <Text style={[styles.copyText, [styles.copyTextOutline, { color: colorTheme.ink }], copied && [styles.copyTextDone, { color: theme.accentInk }]]}>{copied ? '✓ Copied' : 'Copy'}</Text>
+              <Text style={[styles.copyText, [styles.copyTextOutline, { color: colorTheme.ink }], copied && [styles.copyTextDone, { color: theme.onTint }]]}>{copied ? '✓ Copied' : 'Copy'}</Text>
             </Pressable>
             <Pressable onPress={handleShare} style={[styles.copyBtn, { backgroundColor: theme.accentInk }, shared && [styles.copyBtnDone, { backgroundColor: theme.accentSoft }]]}>
-              <Text style={[styles.copyText, shared && [styles.copyTextDone, { color: theme.accentInk }]]}>{shared ? '✓ Shared' : 'Share'}</Text>
+              <Text style={[styles.copyText, shared && [styles.copyTextDone, { color: theme.onTint }]]}>{shared ? '✓ Shared' : 'Share'}</Text>
             </Pressable>
           </View>
         </Card>

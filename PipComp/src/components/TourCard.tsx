@@ -68,7 +68,7 @@ function CelebrateFlash({ text }: { text: string }) {
   }, [fade]);
   return (
     <Animated.View style={[styles.celebrate, { backgroundColor: theme.accentTint, opacity: fade }]} accessibilityLiveRegion="polite">
-      <Text style={[styles.celebrateText, { color: theme.accentInk }]}>✓ {text}</Text>
+      <Text style={[styles.celebrateText, { color: theme.onTint }]}>✓ {text}</Text>
     </Animated.View>
   );
 }
@@ -180,7 +180,7 @@ export function TourCard({
         <ActMeter progress={progress} persona={persona} />
         {interactive && (
           <View style={[styles.turnPill, { backgroundColor: theme.accentTint }]}>
-            <Text style={[styles.turnPillText, { color: theme.accentInk }]}>{isHandoff ? 'SWITCH APPS' : completed ? 'DONE' : 'YOUR TASK'}</Text>
+            <Text style={[styles.turnPillText, { color: theme.onTint }]}>{isHandoff ? 'SWITCH APPS' : completed ? 'DONE' : 'YOUR TASK'}</Text>
           </View>
         )}
         <Text style={[styles.title, { color: colorTheme.ink }]} accessibilityRole="header" accessibilityLiveRegion="polite">

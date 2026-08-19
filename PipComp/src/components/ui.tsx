@@ -124,7 +124,7 @@ export function CategoryChip({
       {suggested && !selected && (
         <View style={[styles.learnedTag, { backgroundColor: theme.accentSoft }]}>
           <Icon name="sparkles" size={11} color={theme.accentInk} />
-          <Text style={[styles.learnedTagText, { color: theme.accentInk }]}>{suggested === 'guess' ? 'AI guess' : 'learned'}</Text>
+          <Text style={[styles.learnedTagText, { color: theme.onTint }]}>{suggested === 'guess' ? 'AI guess' : 'learned'}</Text>
         </View>
       )}
       {selected && (

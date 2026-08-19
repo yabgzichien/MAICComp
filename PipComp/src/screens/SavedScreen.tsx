@@ -74,7 +74,7 @@ export function SavedScreen({
             <Card style={[styles.learnCard, { backgroundColor: theme.accentTint, borderColor: theme.accentSoft }]}>
               <View style={styles.learnHead}>
                 <Icon name="sparkles" size={17} color={theme.accent} />
-                <Text style={[styles.learnTitle, { color: theme.accentInk }]}>
+                <Text style={[styles.learnTitle, { color: theme.onTint }]}>
                   Pip learned {newLearned.length} new merchant{newLearned.length > 1 ? 's' : ''}
                 </Text>
               </View>
@@ -116,7 +116,7 @@ export function SavedScreen({
                     {owedByTxn[t.id] > 0 && (
                       <View style={[styles.owedChip, { backgroundColor: theme.accentTint }]}>
                         <Icon name="gift" size={10} color={theme.accentInk} />
-                        <Text style={[styles.owedChipText, { color: theme.accentInk }]}>RM {fmt(owedByTxn[t.id])} owed to you</Text>
+                        <Text style={[styles.owedChipText, { color: theme.onTint }]}>RM {fmt(owedByTxn[t.id])} owed to you</Text>
                       </View>
                     )}
                   </View>

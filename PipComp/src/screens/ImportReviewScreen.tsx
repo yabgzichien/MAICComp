@@ -100,10 +100,10 @@ export function ImportReviewScreen({
                 <Pressable style={styles.rowMain} onPress={() => setEditing(i)}>
                   <CatBadge category={cat} size={36} />
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={[styles.merchant, { color: colorTheme.ink }]} numberOfLines={1}>{r.item.merchant || cat.label}</Text>
+                    <Text style={[styles.merchant, { color: colorTheme.ink }]} numberOfLines={1}>{cat.label}</Text>
                     <View style={styles.metaRow}>
                       <Text style={[styles.meta, { color: colorTheme.ink2 }]} numberOfLines={1}>
-                        {cat.label}{r.item.date ? ` · ${shortDate(r.item.date)}` : ''}
+                        {[r.item.merchant, r.item.date ? shortDate(r.item.date) : null].filter(Boolean).join(' · ')}
                       </Text>
                       {r.isDup && <Text style={styles.dupTag}>duplicate</Text>}
                     </View>
